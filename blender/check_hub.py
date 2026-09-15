@@ -17,6 +17,8 @@ LEVELS = os.path.join(ROOT, "src", "Shared", "LevelDefinitions.lua")
 APPEARANCE = os.path.join(ROOT, "src", "Shared", "MaterialAppearance.lua")
 LEVEL_SERVICE = os.path.join(ROOT, "src", "Server", "Services", "LevelService.lua")
 HUB_SERVICE = os.path.join(ROOT, "src", "Server", "Services", "HubService.lua")
+DIVE_SERVICE = os.path.join(ROOT, "src", "Server", "Services", "DiveFinaleService.lua")
+BOOTSTRAP = os.path.join(ROOT, "src", "Server", "Bootstrap.server.lua")
 
 failures = []
 
@@ -321,7 +323,77 @@ def check_level_fields():
                  % (name, field))
 
 
+# ---- THE DIVE FINALE, for any level that declares one.
+#
+# City Shore ends by jumping off a springboard at the top of the spiral into the sea seven
+# hundred studs below. Three things make that work and each fails silently on its own: the
+# platform has to be built somewhere, the kill plane has to leave the diver alone (it sits 680
+# studs above the water), and the old finish line has to stand down or the run completes at the
+# end of the route while the dive is still scenery.
+def check_dive_finale():
+    levels = read(LEVELS)
+    if 'finale = "dive"' not in levels:
+        return
+    if not os.path.exists(DIVE_SERVICE):
+        fail("DiveFinaleService", "a level declares `finale = \"dive\"` and the module is not "
+                                  "there, so that level has no ending at all.")
+        return
+    # CODE ONLY, for both. The module's own comment explains at length why a Touched event
+    # cannot work at dive speed, and the first version of the gate below fired on that comment.
+    # A gate that fails on its own documentation is one somebody learns to ignore -- and the
+    # presence checks are worth stripping too, since a line that survives only in a comment is
+    # not a line that runs.
+    def code_of(source):
+        return "\n".join(line.split("--", 1)[0] for line in source.splitlines())
+
+    dive, boot = code_of(read(DIVE_SERVICE)), code_of(read(BOOTSTRAP))
+
+    if "finishFrame =" not in read(LEVEL_SERVICE):
+        fail("LevelService", "no longer hands back finishFrame, so the dive platform has no "
+                             "frame to be built in.")
+    for needed, why in (
+        ("DiveFinaleService.start(", "nothing builds the platform"),
+        ("DiveFinaleService.ownsFall(player)",
+         "the kill plane catches every diver 680 studs above the water"),
+        ("DiveFinaleService.stop", "the diver watch keeps running after the level is gone"),
+        ("finishPart.CanTouch = false",
+         "the old finish line still completes the run at the end of the route"),
+        # BOTH WARNINGS, because the fallback when the dive cannot be built is the old finish
+        # line -- so a level that asks for a dive and silently does not get one is
+        # indistinguishable from a level that was never changed. That was reported once: no
+        # diving board, the run completed at the end of the route, and nothing in the Output.
+        ("if not DiveFinaleService then",
+         "it says nothing when it cannot build: with the module missing, the level quietly "
+         "finishes at the end of its route instead"),
+        ("elseif not levelInstance.finishFrame then",
+         "it says nothing when it cannot build: with an older LevelService there is no "
+         "finishFrame, and the level quietly finishes at the end of its route instead"),
+    ):
+        if needed not in boot:
+            fail("Bootstrap", "%s (`%s` is gone)." % (why, needed))
+
+    # THE SPLASH IS A HEIGHT TEST. A diver crosses about nine studs a frame, so a trigger part
+    # is skipped outright: the character is above it on one frame and under it on the next.
+    if "Touched" in dive:
+        fail("DiveFinaleService", "the splash is back on a Touched event. At dive speed a "
+                                  "trigger part is simply never touched.")
+    if "at.Y <= water" not in dive:
+        fail("DiveFinaleService", "the splash is no longer a height test against the sea's "
+                                  "own surface.")
+
+    # AND THE DIVE COLUMN STARTS OUTSIDE THE SPIRAL. The column begins at the deck's outer edge,
+    # and the widest thing the generator can put on the turn below is a 22-wide shaped chunk with
+    # a shelf beside it: about sixteen studs from the route's centreline. A deck narrower than
+    # thirty-four counts standing on that shelf as falling into the sea.
+    found = re.search(r"^local DECK_WIDE = ([\d.]+)", dive, re.M)
+    if found and float(found.group(1)) / 2 < 17:
+        fail("DiveFinaleService", "the deck is %g wide, so the dive column starts %.1f studs "
+             "from the route's centreline -- inside the spiral."
+             % (float(found.group(1)), float(found.group(1)) / 2))
+
+
 def main():
+    check_dive_finale()
     check_level_fields()
     check_headline_materials()
     check_level_origin()
