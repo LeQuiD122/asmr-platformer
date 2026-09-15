@@ -561,6 +561,16 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 		routeLegs = if pathLayout then routeLegs else nil,
 		-- Where the route runs out, facing the way it was going. The flume mouth goes here.
 		routeEnd = if pathLayout then placed * CFrame.new(0, 0, finishLength) else nil,
+		-- ===== WHERE THE RUN ENDS, ON EVERY LAYOUT =====
+		--
+		-- The far end of the last chunk, on its EXIT surface, facing the way the route was
+		-- going. `placed` sits at that chunk's entry height, so the lift is the rise it made.
+		--
+		-- On the spiral its X axis points away from the centre, because `placed` is built with
+		-- the outward radial as its right vector -- which is the one direction at the top of
+		-- the climb with nothing under it but sea. DiveFinaleService builds the high dive in
+		-- this frame; routeEnd stays path-only because the halls mean something narrower by it.
+		finishFrame = placed * CFrame.new(0, cursorY - (placed.Position.Y - base.Y), finishLength),
 	}
 end
 

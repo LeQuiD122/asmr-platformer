@@ -18,6 +18,13 @@ and 4 levels, chosen from a lobby. Sound is in for 7 materials; the rest are sti
 | ![Kinetic sand](screenshots/kinetic-sand.jpg) | ![Butter-wax](screenshots/butter-wax.jpg) |
 | **Kinetic sand** holding footprints and shedding clumps | **Butter-wax** coating cracking into shards |
 
+### Materials in motion
+
+| Soap | Butter-wax | Kinetic sand |
+|---|---|---|
+| ![Soap crumbling](screenshots/soap-crumble.gif) | ![Butter-wax cracking](screenshots/butter-wax-crack.gif) | ![Kinetic sand](screenshots/kinetic-sand.gif) |
+| Cubes break off and fall as debris, opening a hole you drop through | The wax coating cracks into shards and the butter keeps the dent | Footprints stay, and the surface sheds clumps from the rim |
+
 ## What's built
 
 The six original materials, and how each one works:

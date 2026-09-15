@@ -2006,4 +2006,20 @@ function BackdropService.build()
 	end
 end
 
+-- HOW HIGH THE SEA IS at a world position, or nil when there is no backdrop standing.
+--
+-- The sea is not flat: waveSurface gives a 72-stud range of swell, and the one thing that has
+-- to land ON it -- the dive that finishes City Shore -- would otherwise splash at a height the
+-- water only happens to be at in some places. The model is pivoted to (centre, BASE_Y, centre)
+-- with no rotation, so world and local differ by exactly that.
+function BackdropService.waterLevelAt(x: number, z: number): number?
+	local backdrop = workspace:FindFirstChild("Backdrop")
+	if not backdrop then
+		return nil
+	end
+	local pivot = backdrop:GetPivot().Position
+	local height = waveSurface(x - pivot.X, z - pivot.Z)
+	return pivot.Y + height
+end
+
 return BackdropService

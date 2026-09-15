@@ -178,6 +178,13 @@ LevelDefinitions.Level1 = {
 	-- starts with Honey for this level and for Level2 both, and two identical pads would
 	-- say the two levels are the same thing. Honey is this level's pacing spine.
 	backdrop = "cityShore",
+	-- ===== HOW IT ENDS =====
+	--
+	-- The spiral climbs seven hundred studs above the sea and the sea is the one thing you can
+	-- see the whole way up and never reach. So the run ends by reaching it: the last chunk runs
+	-- onto a tiled deck with a springboard out over the water, and the level completes when you
+	-- hit it. See DiveFinaleService, which builds the platform and owns the fall.
+	finale = "dive",
 	headlineMaterial = "Honey",
 	minChunks = 40,
 	maxChunks = 40,

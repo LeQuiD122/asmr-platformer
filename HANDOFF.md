@@ -9,7 +9,8 @@ chunks, there are four levels plus a Sandbox, and players choose a run in a lobb
 being dropped into a hardcoded level. See **Levels and the lobby** and **The Flooded Halls**
 below for the parts this file did not cover before.
 
-Last updated: 2026-09-14.
+Last updated: 2026-09-14. What is planned next (the City Shore finale, story mode, the levels
+still to come) is in `ROADMAP.md`.
 
 ## Where things are
 
@@ -33,8 +34,8 @@ ServerScriptService
   Bootstrap               (Script)
   Services                (Folder)
     BackdropService, BestTimeService, ChunkService, DeformationService,
-    FloodedHallsService, HubService, LeaderboardService, LevelService,
-    LightingService, PlayerStateService, TimerService                  (ModuleScripts)
+    DiveFinaleService, FloodedHallsService, HubService, LeaderboardService,
+    LevelService, LightingService, PlayerStateService, TimerService    (ModuleScripts)
 ReplicatedStorage
   Shared                  (Folder) -> 8 ModuleScripts: ChunkDefinitions, HallRoute,
                                       LevelDefinitions, MaterialAppearance, MaterialConfig,
@@ -372,11 +373,36 @@ in `docs/superpowers/specs/2026-08-28-lobby-hub-design.md` and
 
 | Level | Name | Shape | Chunks (Medium) | Setting |
 |---|---|---|---|---|
-| 1 | City Shore | spiral | 40 | the city, beach and waterpark horizon |
+| 1 | City Shore | spiral | 40 | the city, beach and waterpark horizon; ends on the high dive |
 | 2 | Open Sky | spiral | 44 | no horizon |
 | 3 | Far Water | spiral | 50 | no horizon, kept for a second backdrop |
 | 4 | Flooded Halls | path | 44 | inside a flooded tiled bathhouse, ending on a flume |
 | Sandbox | all materials | spiral | 82 | development route, its own pad |
+
+## City Shore's finale (Level 1)
+
+**State on 2026-09-15:** built, and `check_hub.py` passes. **Untested in Studio.** It lives in
+`src/Server/Services/DiveFinaleService.lua`, and the level asks for it with `finale = "dive"`.
+
+- **The platform.** The last chunk runs onto a tiled deck with a springboard cantilevered out
+  past its outer edge, rails round the sides that are not the way in, and a flag at the corner.
+  It is built in the frame `LevelService` now returns as `finishFrame`: the far end of the last
+  chunk, on its exit surface, with **+X pointing away from the spiral's centre** -- the one
+  direction at the top of the climb with nothing under it but sea.
+- **The dive.** The column of air past the deck's edge and below the board is the trigger, so
+  jumping off the board counts and walking off the deck does not. The fall is about 830 studs
+  and three seconds, through the backdrop's cloud layers.
+- **The finish is the sea.** The level completes on reaching the water, with spray, a spreading
+  ring and a splash; the diver is left standing chest-deep on a hidden floor until the lobby
+  takes them back four seconds later.
+- **Three things that each fail silently on their own**, so `check_hub.py` gates all three:
+  the splash is a HEIGHT TEST rather than a Touched (a diver crosses about nine studs a frame
+  and a trigger part is skipped outright); the kill plane must leave a diver alone, since it
+  sits 40 studs under the lowest chunk and 680 above the water, which Bootstrap does by asking
+  `DiveFinaleService.ownsFall`; and the old finish line must stand down, or the run completes at
+  the end of the route with the dive left as scenery.
+- The sea's height comes from `BackdropService.waterLevelAt`, because the swell has a 72-stud
+  range. With no backdrop standing it falls back to -700.
 
 ## The Flooded Halls (Level 4)
 

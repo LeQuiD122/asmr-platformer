@@ -128,6 +128,10 @@ local BackdropService = if backdropModule then require(backdropModule :: ModuleS
 -- has not imported these meshes should still run every other level.
 local hallsModule = Services:WaitForChild("FloodedHallsService", 5)
 local FloodedHallsService = if hallsModule then require(hallsModule :: ModuleScript) :: any else nil
+-- The high dive that finishes City Shore. Optional in exactly the way the two above are: a place
+-- without it still runs every level, that one finishing at the end of its route instead.
+local diveModule = Services:WaitForChild("DiveFinaleService", 5)
+local DiveFinaleService = if diveModule then require(diveModule :: ModuleScript) :: any else nil
 -- Undoes the halls' GLOBAL changes -- lighting, reverb, the caustic loop -- when a run
 -- ends. Left set, every other level would inherit a bathhouse.
 local hallsTeardown: (() -> ())? = nil
@@ -297,6 +301,72 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 		existingBackdrop:Destroy()
 	end
 
+	-- ===== THE HIGH DIVE =====
+	--
+	-- AFTER THE BACKDROP, because the platform's finish is the sea's surface and the sea is part
+	-- of the backdrop. Torn down first for the reason the halls are: a second run must never
+	-- build a second platform, and a level that does not want one must not inherit it.
+	--
+	-- The old finish line stands down when it builds. Both would otherwise fire: walking to the
+	-- end of the last chunk would complete the run, and the dive it leads to would be scenery.
+	if DiveFinaleService then
+		pcall(DiveFinaleService.stop)
+	end
+
+	-- ===== AND IF IT CANNOT BE BUILT, SAY SO =====
+	--
+	-- The fallback when any of this fails is the OLD FINISH LINE, which completes the run at the
+	-- end of the route and sends everyone to the lobby -- which is precisely the ending the dive
+	-- replaced. So a level that asks for a dive and does not get one looks exactly like a level
+	-- that was never changed, and all three ways it could happen used to be silent:
+	--
+	--   the module is not in Studio          (nothing is pasted, so nothing warns)
+	--   LevelService is an older copy        (no finishFrame, so there is nowhere to build)
+	--   the build itself threw               (warned, but only in the pcall's own words)
+	--
+	-- Reported as "there was no diving board and it completed anyway". Each one names the file to
+	-- paste now, and the success path prints where the platform went, so the Output always says
+	-- which of the four happened.
+	if level.finale == "dive" then
+		if not DiveFinaleService then
+			warn("Bootstrap: this level ends with a dive, and there is no "
+				.. "ServerScriptService.Services.DiveFinaleService in this place -- so it is "
+				.. "finishing at the end of its route instead, with no diving board. Paste "
+				.. "src/Server/Services/DiveFinaleService.lua in as a ModuleScript named exactly "
+				.. "DiveFinaleService.")
+		elseif not levelInstance.finishFrame then
+			warn("Bootstrap: this level ends with a dive, and LevelService handed back no "
+				.. "finishFrame -- so there is nowhere to put the platform and the run is "
+				.. "finishing at the end of its route instead. The LevelService in this place is "
+				.. "an older copy: re-paste src/Server/Services/LevelService.lua.")
+		else
+			local frame: CFrame = levelInstance.finishFrame
+			local diveOk, diveErr = pcall(function()
+				DiveFinaleService.start(
+					frame,
+					workspace:WaitForChild("Levels"),
+					if BackdropService then BackdropService.waterLevelAt else nil,
+					function(player: Player)
+						if finishRunFor then
+							finishRunFor(player)
+						end
+					end
+				)
+			end)
+			if diveOk then
+				-- THE OLD FINISH LINE STANDS DOWN. Both would otherwise fire, and the one at the
+				-- end of the route fires first: you would complete the level by walking up to the
+				-- board rather than by jumping off it.
+				if levelInstance.finishPart then
+					levelInstance.finishPart.CanTouch = false
+				end
+			else
+				warn("Bootstrap: the high dive failed to build, so this level is finishing at the "
+					.. "end of its route instead: " .. tostring(diveErr))
+			end
+		end
+	end
+
 	-- THE MODE COMES FROM THE PADS, and until now it did not come from anywhere.
 	--
 	-- The lobby has a chill pad and a hardcore pad and the player stands on one of them, but
@@ -414,6 +484,11 @@ HubService.setEnder(function()
 	local standing = workspace:FindFirstChild("Backdrop")
 	if standing then
 		standing:Destroy()
+	end
+	-- The dive platform is a child of Levels and goes with it, but the loop watching for divers
+	-- is not: left running it would be watching a level that no longer exists.
+	if DiveFinaleService then
+		pcall(DiveFinaleService.stop)
 	end
 	LevelService.endLevel()
 	levelInstance = nil
@@ -947,7 +1022,11 @@ game:GetService("RunService").Heartbeat:Connect(function()
 		-- call to the previous expression, and the whole script fails to compile.
 		local hrp: BasePart = found
 
-		if hrp.Position.Y < killY then
+		-- THE DIVE IS A FALL THIS DOES NOT OWN. City Shore finishes seven hundred studs below
+		-- the kill plane, in the sea, so a diver is exempt from the moment they leave the board
+		-- until the lobby takes them back.
+		if hrp.Position.Y < killY
+			and not (DiveFinaleService and DiveFinaleService.ownsFall(player)) then
 			local state = PlayerStateService.getState(player)
 			if not state then
 				continue
