@@ -7,6 +7,17 @@ feet, wax cracks and lets you sink into the butter underneath, bubble wrap pops.
 **Status:** in development, not yet published. 26 materials across 65 chunk templates
 and 4 levels, chosen from a lobby. Sound is in for 7 materials; the rest are still silent.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Lobby](screenshots/lobby.jpg) | ![Flooded Halls corridor](screenshots/flooded-halls.jpg) |
+| **The lobby**, where players vote on level, mode and run length | **The Flooded Halls**, a bathhouse level built along the platform route |
+| ![Flume chamber](screenshots/flume-chamber.jpg) | ![Soap crumbling](screenshots/soap.jpg) |
+| **The final chamber**, where the run ends on a water slide | **Soap** breaking into cubes under the player |
+| ![Kinetic sand](screenshots/kinetic-sand.jpg) | ![Butter-wax](screenshots/butter-wax.jpg) |
+| **Kinetic sand** holding footprints and shedding clumps | **Butter-wax** coating cracking into shards |
+
 ## What's built
 
 The six original materials, and how each one works:
