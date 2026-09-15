@@ -4,7 +4,12 @@ Roblox game from a locked GDD: a 3D platformer where every platform is a tactile
 ASMR-inspired material (honey, butter-wax, kinetic sand, slime, soap, bubble wrap), with
 template-based procedural level generation, chill/hardcore modes and a leaderboard.
 
-Last updated: 2026-08-08.
+It has grown well past those six. `MaterialConfig` now carries 26 material entries across 65
+chunks, there are four levels plus a Sandbox, and players choose a run in a lobby rather than
+being dropped into a hardcoded level. See **Levels and the lobby** and **The Flooded Halls**
+below for the parts this file did not cover before.
+
+Last updated: 2026-09-14.
 
 ## Where things are
 
@@ -24,19 +29,27 @@ errors nothing.
 ```
 ServerScriptService
   ChunkBuilder            (Script)
+  ChunkProps              (Script)
   Bootstrap               (Script)
   Services                (Folder)
-    ChunkService, DeformationService, LeaderboardService, LevelService,
-    PlayerStateService, TimerService, LightingService, BackdropService   (ModuleScripts)
+    BackdropService, BestTimeService, ChunkService, DeformationService,
+    FloodedHallsService, HubService, LeaderboardService, LevelService,
+    LightingService, PlayerStateService, TimerService                  (ModuleScripts)
 ReplicatedStorage
-  Shared                  (Folder) -> 6 ModuleScripts
+  Shared                  (Folder) -> 8 ModuleScripts: ChunkDefinitions, HallRoute,
+                                      LevelDefinitions, MaterialAppearance, MaterialConfig,
+                                      PlanShapes, SubRegionGrid, Types
   Assets/TileMeshes       (Folder) -> imported MeshParts, exact names below
   Assets/Backdrop         (Folder) -> horizon props, OPTIONAL (see below)
 StarterPlayerScripts
   Bootstrap               (LocalScript)
-  Services                (Folder) -> AudioService, DeformationRenderer,
-                                      InputService, UIService
+  Services                (Folder) -> AudioService, CloudService, DeathService,
+                                      DeformationRenderer, HubLeverService, HubVoteService,
+                                      InputService, PauseMenuService, ScreenEffects,
+                                      SeaService, UIService
 ```
+
+Line 2 of each file is the authority if this list and a file ever disagree.
 
 `RemoteEvents` and `RemoteFunctions` are created at runtime by `Bootstrap`; do not make
 them by hand. `Assets/Chunks` and `ServerStorage/ChunkTemplates` are created by
@@ -77,6 +90,22 @@ Honey ran with a single 16 x 18 rig for a long time, so `P4` and `C1` (both 16 x
 never deformed; the handoff called it deliberate, which was a rationalisation of a
 missing asset. `Honey_Platform_16x12` exists now. ChunkBuilder's rig audit is what
 surfaced it, as "Honey -- ONLY 1/3 slabs rigged".
+
+### The Flooded Halls kit (Level 4)
+
+`blender/gen_flooded_halls.py` builds the `Hall_*` meshes. They can go in `Assets/TileMeshes`
+or `Assets/Backdrop`; `FloodedHallsService` looks in both. Seven are placed:
+
+```
+Hall_Column   Hall_Cove   Hall_Steps   Hall_Dome   Hall_Hand   Hall_Rail   Hall_Ripple
+```
+
+`Hall_ArchWall`, `Hall_Slide`, `Hall_Vault` and `Hall_CurveWall` are still generated and no
+longer placed. The arch and the flume are built from parts in code now, because a stale or
+mirrored import of either broke the level for several rounds and nothing in game could tell
+that apart from a code bug. Every placed mesh is compared with the size the generator last built
+(`EXPECTED_SIZE` in the service, printed by the generator and mirrored in `kit_sizes.txt`), and a
+mismatch warns with the name of the file to re-import.
 
 ### Meshes to import into `Assets/Backdrop` (optional)
 
@@ -288,8 +317,11 @@ already exist, so without this you see the old geometry and conclude nothing wor
 Before pasting a geometry change, run `python blender/check_chunk_forms.py`. It catches the
 boring failures without a Studio round trip; see the chunk layout tools below.
 
-`Bootstrap` currently loads `LevelDefinitions.Sandbox`, a dev level with all six materials
-in a fixed order. Switch `CURRENT_LEVEL` to `LevelDefinitions.Level1` for the real one.
+For Level 4, run `python blender/check_halls.py` as well, and `python blender/plan_halls.py`
+if the route, the chamber or the pool changed.
+
+`Bootstrap` no longer builds a fixed level. Players spawn into the lobby (`HubService`) and a
+run is built from what they choose there; finishing or leaving returns everyone to the lobby.
 
 ## Where each material stands
 
@@ -325,6 +357,106 @@ What they have in common is that a mesh cut to the sub-region grid would fight t
 identity -- a tile
 mesh gets in the way of a footprint, and it draws a lattice across a surface whose
 deformation has nothing to do with cells.
+
+## Levels and the lobby
+
+The lobby is a permanent room; runs are built and torn down around it. It has one pad per level
+in `LevelDefinitions.All`, each made of that level's headline material, plus a pad for the
+Sandbox as a development route. There are also a mode pad (Chill or Hardcore), a run-length pad,
+a personal-best statue and a leaderboard board. Run length scales the level's chunk count by
+0.5 / 1 / 1.5 for Short / Medium / Long. Starting a run is voted on (`HubVoteService` and
+`HubLeverService` on the client). The run request is plain data on purpose, so a later
+private-server teleport can carry it; `check_hub.py` enforces that. The design and the plan are
+in `docs/superpowers/specs/2026-08-28-lobby-hub-design.md` and
+`docs/superpowers/plans/2026-08-28-lobby-hub.md`.
+
+| Level | Name | Shape | Chunks (Medium) | Setting |
+|---|---|---|---|---|
+| 1 | City Shore | spiral | 40 | the city, beach and waterpark horizon |
+| 2 | Open Sky | spiral | 44 | no horizon |
+| 3 | Far Water | spiral | 50 | no horizon, kept for a second backdrop |
+| 4 | Flooded Halls | path | 44 | inside a flooded tiled bathhouse, ending on a flume |
+| Sandbox | all materials | spiral | 82 | development route, its own pad |
+
+## The Flooded Halls (Level 4)
+
+**State on 2026-09-14:** built, and every static check passes. It has been through many rounds
+of in-Studio review; the latest interior pass (walls, ceiling, pool) and the open flume, gangway,
+entrance and dome detail before it **have not been seen in Studio yet**. Everything is in
+`src/Server/Services/FloodedHallsService.lua` plus `src/Shared/HallRoute.lua`.
+
+### How it fits together
+
+- **One shape, two readers.** `Shared/HallRoute` holds the route. `LevelService` lays chunks
+  along it and `FloodedHallsService` builds walls along it, so the corridor turns exactly where
+  the chunks do. The route zig-zags (left, right, right, left) and stays level
+  (`layout = "path"`).
+- **Corners turn on the `S2_Junction` chunk**: in by its main run and out by its arm for a left
+  turn, the other way round for a right, with a 5-stud jump in and out. Every corner is a
+  checkpoint. `LevelService` returns the real leg lengths as `routeLegs` and the halls are built
+  from those, so there are no gaps to fill and no fill-in platforms.
+- **The walkway is 56 studs above the flooded floor**, so a fall passes the kill plane instead
+  of landing a player alive in the water.
+- **The run ends on the flume.** Hold E at its mouth; the ride follows the helix down, runs off
+  the end over a 400-stud shaft, and the finish is at the bottom.
+
+### What is in it
+
+- **Corridor:** a colonnade in the shallows, transverse arches every third bay (built from
+  parts), rooflights over the walkway, one failing light, and a tall two-storey stretch with a
+  glazed roof.
+- **Walls:** a sea-green wainscot with cream tile above, and a dado, a teal stripe and a
+  two-step cornice on every wall in the level. Pilasters with capitals and plinths behind the
+  columns, and between them, alternately, a high window or a round-headed blind niche, with the
+  water-level light slots and blind doorways below.
+- **Ceiling:** coffered, with ribs down each leg on the column lines and beside the rooflights,
+  carried round the corners.
+- **Floor and pools:** a pool 40 studs deep down the middle of every leg under the walkway. It
+  has a coping, a gutter, a depth band, underwater lamps, lane ropes and lane stripes, and steps
+  down at the entrance end. It turns each corner as one pool. It is lined with the
+  `PoolTileBackdrop` MaterialVariant if Studio has one, and plain tile if not. There are also
+  sunken basins with steps along the walls, dry ledges and cubicle partitions.
+- **Water:** translucent plates with a slow swell, drip rings, drifting debris and caustic
+  lights, Bathroom reverb and water drips.
+- **Behind the start:** one more bay ending in a wall with a dry deck, an empty lifeguard chair,
+  a stopped clock, and a doorway into a flooded passage lit from a side room nobody can see
+  into.
+- **The last chamber:** a domed room with an oculus, ribs and a frame round the ceiling
+  opening, windows set into its walls, a timber gangway on trestles out to the flume, and a
+  pool ladder hanging into the shaft. The flume is an open, banked trough with a rolled lip and
+  flanges, built from parts along the ride's own curve and held up by a steel mast with a
+  bracket under every flange and a lamp on top.
+
+### Checking it
+
+- `python blender/check_halls.py` covers route/room agreement, the lane guard, arch clearance,
+  the corners, the flume and rider geometry (bank included), the gangway, the shaft, the
+  entrance, the dome, the dressed walls and the pool's fit. Every gate added since 2026-09 was
+  proven by putting its bug back and watching it fail.
+- `python blender/plan_halls.py` draws all three run lengths and a section into
+  `halls_plan.png`, and exits with an error if two legs' pools overlap.
+
+### Lessons from this level
+
+- **Part-built beats imported for anything the route touches.** A helix's handedness cannot be
+  verified through the FBX import, and a stale import looks exactly like a code bug.
+- **No Glass anywhere near translucent chunks.** Its refraction made slime, honey and jello
+  soda vanish from some angles. Water is SmoothPlastic, tiled into pieces no bigger than 320
+  studs so the transparency sort holds.
+- **Neon cannot fake light.** Light shafts and halos made of it read as solid slabs; light comes
+  from SurfaceLight and PointLight.
+- **Everything visibly supported.** Every floating light, lintel and platform came back as a bug
+  report.
+- **Lighting moves in small steps.** It has been called both too bright and too dark.
+  `ROOF_GLOW`, `OCULUS_BRIGHTNESS` and the pool lamps' `glow.Brightness` are the dials.
+
+### Open for this level
+
+- The latest round is untested in Studio (see State above).
+- Part count has grown a lot: the flume is about 900 parts and the interior pass adds a few
+  hundred more. Watch frame rate in the last chamber and on Long runs; `FLUME_SEGMENTS` is the
+  first thing to lower.
+- Four generated `Hall_*` meshes are unused (see the kit above).
 
 ## Chunk silhouette
 
@@ -380,6 +512,7 @@ Blender 5.2 at `C:\Program Files\Blender Foundation\Blender 5.2\blender.exe`. Ru
 | `gen_pbr.py` | Tiling PBR maps into `textures/`. Honey and slime. Uploaded and attached by hand. |
 | `gen_sea.py` | `Sea_Tile`, `Sea_Foam`, `Sea_Ring`, `Sea_Surf`. Prints the Luau wave constants BackdropService must match. |
 | `gen_backdrop.py` | The NINETEEN horizon props, each at two detail levels (34 files). Optional -- BackdropService falls back without them. |
+| `gen_flooded_halls.py` | The `Hall_*` kit for Level 4. Writes `kit_sizes.txt` and prints the `EXPECTED_SIZE` table the service needs. |
 | `gen_chunk_meshes.py` | Superseded platform-sized meshes; kept for reference |
 | `render_*.py` | PNG previews |
 
@@ -415,6 +548,9 @@ Same idea applied to geometry instead of meshes, because the Studio loop for a
 | `chunk_layout.py` | Parses `ChunkBuilder.server.lua` and reproduces the slab layout. Shared by the other two. |
 | `check_chunk_forms.py` | `python check_chunk_forms.py` — asserts the layout contract. No Blender needed. |
 | `check_lua.py` | `python check_lua.py` — eleven checks across `src/`, every one of them a bug that already shipped once: use-before-declaration, block balance, annotated fields, undeclared constants, undeclared calls, cross-module calls, a `local` declared twice in one scope, a field read off a constants table that has no such field, stage counts, staged effects that never read `ctx.stepCount`, and materials with no screen look. No Blender, no Luau needed. |
+| `check_hub.py` | `python check_hub.py` -- the lobby: every level has its own distinct headline material for its pad, every level in `All` gets a pad, pads are far enough apart to stand on, and a run request stays plain data that can survive a teleport. |
+| `check_halls.py` | `python check_halls.py` -- the Flooded Halls. See that section for what it covers. |
+| `plan_halls.py` | `python plan_halls.py` -- `halls_plan.png`: the three run lengths in plan plus a section. Needs matplotlib. |
 | `check_plan_shapes.py` | `python check_plan_shapes.py [--png]` — loads `PlanShapes.lua` into a real Lua interpreter (`pip install lupa`) and walks every outline at the cube grid each chunk actually builds: enterable, leavable, joined, no stranded floor, and no lane under 3.4 studs. `--png` writes `plan_shapes.png` (the vocabulary) and `chunk_shapes.png` (what each chunk builds). |
 | `render_chunk_forms.py` | `chunk_forms_top.png` (footprints) and `chunk_forms_persp.png` (tiers) |
 
@@ -754,12 +890,13 @@ The parser is strict on purpose and will raise rather than skip a field it does 
   The plate seams replace it: a gap needs no contrast trick to read, because it is
   darker for the physical reason that it is a hole with butter at the bottom. Soap still
   uses `addCrackNetwork` and still wants it.
-- **THE GAME HAS NO SOUND.** Every id in `AudioService.SOUND_ID_BY_EVENT` is an empty
-  string, so all six materials trigger silently. The wiring is finished -- per-material
-  events, per-part throttling, volume control -- it only needs uploaded asset ids. For an
-  ASMR platformer this is the largest single gap in the project, and it is not a code
-  task: upload the audio, paste the ids. Do NOT use `rbxassetid://0` as a placeholder;
-  Roblox retries it and logs a failure on every trigger.
+- **SOUND IS PARTLY IN.** Seven events in `AudioService.SOUND_IDS_BY_EVENT` have uploaded
+  takes: honey (2), butter-wax (1), kinetic sand (6), slime (1), soap (1), bubble wrap (3) and
+  the creamy keyboard (4). The other fifteen are empty lists, so those materials are still
+  silent: ice, jello soda, lamb's ear, foam, light switch, lego, charcoal, chocolate, clay,
+  cloud, salt, lava, oobleck, buttons and snow. `SOUND_BRIEF.md` says what each one wants.
+  The wiring is finished; this is upload and paste, not code. Do NOT use `rbxassetid://0` as a
+  placeholder; Roblox retries it and logs a failure on every trigger.
 - **Raise slime's ripple amplitude now that it has a rig.** `RippleProfiles.Slime` is
   still at 0.6, which was the ceiling for the per-tile fallback: edge-matched tiles at
   different heights tear a visible seam. The rig has overlapping bone influences and no
@@ -829,8 +966,8 @@ The parser is strict on purpose and will raise rather than skip a field it does 
 
 ## Picking this up cold
 
-Read this file, then `feedback-visual-iteration-style` and
-`reference-asmr-verification-tools` in the auto-loaded memory. The short version:
+Read this file, then the auto-loaded memory (`manual-studio-workflow`,
+`visibly-supported-geometry`, `flooded-halls-feedback`). The short version:
 
 1. **Run `python blender/check_chunk_forms.py` before pasting anything.** Nothing syncs
    to Studio and there is no Luau interpreter here, so it is the only thing standing
@@ -845,6 +982,9 @@ Read this file, then `feedback-visual-iteration-style` and
    rounds of tuning before the structure was addressed.
 4. **Every deviation that looks arbitrary has a comment saying what was tried.** Read it
    before overriding it.
+5. **For Level 4, run `check_halls.py` and look at `halls_plan.png`,** and end every change with
+   the exact list of files to paste. Most "it is still broken" reports on that level were a
+   paste or an import that had not landed.
 
 ## Reading the code
 

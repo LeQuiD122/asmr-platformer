@@ -4,10 +4,12 @@ A 3D platformer where every platform is a different tactile material. Each one r
 to the player in its own way: honey dents and slowly recovers, soap crumbles under your
 feet, wax cracks and lets you sink into the butter underneath, bubble wrap pops.
 
-**Status:** in development, not yet published. Six materials are playable. Sound is
-wired up but has no audio assets yet.
+**Status:** in development, not yet published. 26 materials across 65 chunk templates
+and 4 levels, chosen from a lobby. Sound is in for 7 materials; the rest are still silent.
 
 ## What's built
+
+The six original materials, and how each one works:
 
 | Material | How it works |
 |---|---|
@@ -18,15 +20,21 @@ wired up but has no audio assets yet.
 | Kinetic sand | Rig presses a bowl, a stamped sole sits inside it; cells collapse after 3 footsteps |
 | Bubble wrap | One bone per pocket; pockets under your foot pop flat |
 
-Other systems: procedural level generation from chunk templates, server/client split for
-deformation state, chill and hardcore modes, timer, and a leaderboard.
+Other systems:
+
+- **Lobby:** one pad per level, plus mode (Chill or Hardcore) and run length pads. Players
+  vote to start, and the server builds the run from their choices.
+- **Levels:** three spiral levels and the Flooded Halls, a bathhouse level whose corridor walls
+  are built along the same route the platforms follow, ending on a water slide.
+- **Procedural generation** from chunk templates, server/client split for deformation state,
+  a timer, personal bests and a leaderboard.
 
 ## Tech
 
 - **Luau** (Roblox) for all gameplay code in `src/`
 - **Python + Blender** scripts in `blender/` that generate every rigged mesh, validate
   the geometry before export, and render previews
-- **Python checkers** (`blender/check_lua.py`, `blender/check_chunk_forms.py`) that catch
+- **Python checkers** (`check_lua.py`, `check_chunk_forms.py`, `check_hub.py`, `check_halls.py` in `blender/`) that catch
   layout and code bugs without opening Roblox Studio
 
 ## Repo layout
