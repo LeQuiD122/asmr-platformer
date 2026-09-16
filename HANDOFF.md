@@ -9,7 +9,7 @@ chunks, there are four levels plus a Sandbox, and players choose a run in a lobb
 being dropped into a hardcoded level. See **Levels and the lobby** and **The Flooded Halls**
 below for the parts this file did not cover before.
 
-Last updated: 2026-09-14. What is planned next (the City Shore finale, story mode, the levels
+Last updated: 2026-09-16. What is planned next (the City Shore finale, story mode, the levels
 still to come) is in `ROADMAP.md`.
 
 ## Where things are
@@ -373,7 +373,7 @@ in `docs/superpowers/specs/2026-08-28-lobby-hub-design.md` and
 
 | Level | Name | Shape | Chunks (Medium) | Setting |
 |---|---|---|---|---|
-| 1 | City Shore | spiral | 40 | the city, beach and waterpark horizon; ends on the high dive |
+| 1 | City Shore | spiral | 40 | the city, beach and waterpark horizon; ends on the high dive; the whole 65-chunk kit, all three rhythms, no repeat within six picks |
 | 2 | Open Sky | spiral | 44 | no horizon |
 | 3 | Far Water | spiral | 50 | no horizon, kept for a second backdrop |
 | 4 | Flooded Halls | path | 44 | inside a flooded tiled bathhouse, ending on a flume |
@@ -381,7 +381,8 @@ in `docs/superpowers/specs/2026-08-28-lobby-hub-design.md` and
 
 ## City Shore's finale (Level 1)
 
-**State on 2026-09-15:** built, and `check_hub.py` passes. **Untested in Studio.** It lives in
+**State on 2026-09-16:** the board and the dive work in Studio. The splash, the blackout and
+the restart and early-finish fixes below are newer and **not yet seen in Studio**. It lives in
 `src/Server/Services/DiveFinaleService.lua`, and the level asks for it with `finale = "dive"`.
 
 - **The platform.** The last chunk runs onto a tiled deck with a springboard cantilevered out
@@ -392,9 +393,14 @@ in `docs/superpowers/specs/2026-08-28-lobby-hub-design.md` and
 - **The dive.** The column of air past the deck's edge and below the board is the trigger, so
   jumping off the board counts and walking off the deck does not. The fall is about 830 studs
   and three seconds, through the backdrop's cloud layers.
-- **The finish is the sea.** The level completes on reaching the water, with spray, a spreading
-  ring and a splash; the diver is left standing chest-deep on a hidden floor until the lobby
-  takes them back four seconds later.
+- **The finish is the sea.** On reaching the water: spray, a spreading ring and a splash; the
+  diver is anchored and sinks under the surface while the screen fades to black (`ScreenFade`
+  remote, `UIService.fadeToBlack`), "Level 1 Complete" reads on the black, the lobby takes them
+  four seconds later and the picture fades back.
+- **Roblox deletes anything below `Workspace.FallenPartsDestroyHeight`, default -500, and the sea
+  is at -700.** Every diver was destroyed in mid-air before this was handled. The dive moves the
+  floor 500 studs below the sea while armed and puts it back in `stop()`. Anything else that
+  lands below -500 will hit the same wall.
 - **Three things that each fail silently on their own**, so `check_hub.py` gates all three:
   the splash is a HEIGHT TEST rather than a Touched (a diver crosses about nine studs a frame
   and a trigger part is skipped outright); the kill plane must leave a diver alone, since it
@@ -403,6 +409,11 @@ in `docs/superpowers/specs/2026-08-28-lobby-hub-design.md` and
   the end of the route with the dive left as scenery.
 - The sea's height comes from `BackdropService.waterLevelAt`, because the swell has a 72-stud
   range. With no backdrop standing it falls back to -700.
+- **The dive holds its ground.** A restart was reported coming back with no board and with the
+  route's finish line live, so the run completed on arriving at the deck. So: the dive stands
+  down before a level is cleared, its watch puts the platform back if it finds it destroyed, it
+  keeps the old finish line disarmed, and the finish-line handler refuses to complete anyone while
+  `DiveFinaleService.isArmed()`. Each repair warns once. Every run prints which ending it armed.
 
 ## The Flooded Halls (Level 4)
 

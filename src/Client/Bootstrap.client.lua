@@ -44,6 +44,22 @@ task.spawn(CloudService.start)
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local LevelCompleted = RemoteEvents:WaitForChild("LevelCompleted")
 local SlimeLaunch = RemoteEvents:WaitForChild("SlimeLaunch")
+-- THE DIVE'S BLACKOUT. WaitForChild WITH A TIMEOUT and a nil guard, because a place whose server
+-- Bootstrap predates this remote would otherwise yield here forever -- and every line below this
+-- one would never run, which is the failure this file has already had once.
+local ScreenFade = RemoteEvents:WaitForChild("ScreenFade", 10) :: RemoteEvent?
+if ScreenFade then
+	ScreenFade.OnClientEvent:Connect(function(payload)
+		if typeof(payload) ~= "table" then
+			return
+		end
+		if payload.black then
+			UIService.fadeToBlack(payload.time)
+		else
+			UIService.fadeFromBlack(payload.time)
+		end
+	end)
+end
 
 -- Applied here, on the client, because this client owns the character assembly.
 -- The server decides when a launch happens; if it wrote the velocity itself the

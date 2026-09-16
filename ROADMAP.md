@@ -24,8 +24,8 @@ platform with a diving board, you jump off into the sea about 830 studs below, a
 water completes the level.
 
 What went in: the deck, the springboard on its clamp and roller, rails, a corner flag, the dive
-detection, a splash with spray and a spreading ring, and the diver left standing chest-deep in
-the sea until the lobby takes them back. The horizon turned out to need no change at all: the
+detection, a splash with spray and a spreading ring, and a fade to black under the completion
+banner as the diver sinks, before the lobby takes them back. The horizon turned out to need no change at all: the
 backdrop stopped following the player some rounds ago, so the sea was already really there.
 HANDOFF.md carries the details.
 

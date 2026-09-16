@@ -73,6 +73,11 @@ local HubVoteState = ensureRemoteEvent(remoteEventsFolder, "HubVoteState")
 -- velocity from the server onto a client-owned assembly gets discarded on the
 -- next physics replication, which is why the launch felt weak and inconsistent.
 local SlimeLaunch = ensureRemoteEvent(remoteEventsFolder, "SlimeLaunch")
+-- THE SCREEN GOING BLACK, for the one ending that asks for it. City Shore finishes by hitting
+-- the sea seven hundred studs down; the screen fades out as the water closes over you, the
+-- completion banner reads on the black, and it fades back once the lobby has you. Per player,
+-- both ways.
+local ScreenFade = ensureRemoteEvent(remoteEventsFolder, "ScreenFade")
 
 local RequestLeaderboardData = ensureRemoteFunction(remoteFunctionsFolder, "RequestLeaderboardData")
 local CanToggleMode = ensureRemoteFunction(remoteFunctionsFolder, "CanToggleMode")
@@ -189,6 +194,13 @@ local wireCheckpointing: ({ Player }) -> ()
 local finishRunFor: ((Player) -> ())? = nil
 
 local function startChosenLevel(level, players: { Player }, origin: Vector3)
+	-- THE DIVE STANDS DOWN FIRST, before the old level is cleared out from under it. Its watch
+	-- puts the platform back whenever it finds it destroyed, so a stop that came after the clear
+	-- would have it rebuilding a platform for a level that no longer exists, in the frame the
+	-- PREVIOUS run ended at.
+	if DiveFinaleService then
+		pcall(DiveFinaleService.stop)
+	end
 	levelInstance = LevelService.startLevel(level, players, origin)
 
 	-- AFTER the level, because the backdrop measures the level's extent to find the middle
@@ -309,10 +321,6 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 	--
 	-- The old finish line stands down when it builds. Both would otherwise fire: walking to the
 	-- end of the last chunk would complete the run, and the dive it leads to would be scenery.
-	if DiveFinaleService then
-		pcall(DiveFinaleService.stop)
-	end
-
 	-- ===== AND IF IT CANNOT BE BUILT, SAY SO =====
 	--
 	-- The fallback when any of this fails is the OLD FINISH LINE, which completes the run at the
@@ -327,6 +335,10 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 	-- Reported as "there was no diving board and it completed anyway". Each one names the file to
 	-- paste now, and the success path prints where the platform went, so the Output always says
 	-- which of the four happened.
+	-- ONE LINE PER RUN saying which ending this level armed. The dive's own warnings cover every
+	-- way it can fail once it is asked for; this covers the level never asking at all.
+	print(("Bootstrap: %s (level %s) ends %s."):format(tostring(level.name), tostring(level.levelId),
+		if level.finale == "dive" then "with the high dive" else "at the end of its route"))
 	if level.finale == "dive" then
 		if not DiveFinaleService then
 			warn("Bootstrap: this level ends with a dive, and there is no "
@@ -347,9 +359,18 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 					workspace:WaitForChild("Levels"),
 					if BackdropService then BackdropService.waterLevelAt else nil,
 					function(player: Player)
+						-- BLACK FIRST, so the fade is already running while the banner tweens up
+						-- on top of it rather than arriving over a view of the sea floor.
+						ScreenFade:FireClient(player, { black = true, time = 0.45 })
 						if finishRunFor then
 							finishRunFor(player)
 						end
+						-- AND BACK, on the far side of the return to the lobby. completeRun waits
+						-- four seconds after the banner before teleporting, so this is that plus
+						-- enough for the room to be there when the picture comes back.
+						task.delay(4.6, function()
+							ScreenFade:FireClient(player, { black = false, time = 0.7 })
+						end)
 					end
 				)
 			end)
@@ -850,6 +871,13 @@ function wireCheckpointing(players: { Player })
 
 	if levelInstance.finishPart then
 		levelInstance.finishPart.Touched:Connect(function(hit: BasePart)
+			-- NOT WHILE THE DIVE OWNS THE ENDING. Disarming the trigger's CanTouch was the only
+			-- thing stopping it, and a run was reported completing on arrival at the deck, before
+			-- the board -- which is exactly this trigger firing. The dive's watch keeps CanTouch
+			-- off as well; this is the guarantee that does not depend on it.
+			if DiveFinaleService and DiveFinaleService.isArmed() then
+				return
+			end
 			local character = hit:FindFirstAncestorOfClass("Model")
 			local player = character and Players:GetPlayerFromCharacter(character)
 			if player then
