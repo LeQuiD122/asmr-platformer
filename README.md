@@ -25,6 +25,16 @@ and 4 levels, chosen from a lobby. Sound is in for 7 materials; the rest are sti
 | ![Soap crumbling](screenshots/soap-crumble.gif) | ![Butter-wax cracking](screenshots/butter-wax-crack.gif) | ![Kinetic sand](screenshots/kinetic-sand.gif) |
 | Cubes break off and fall as debris, opening a hole you drop through | The wax coating cracks into shards and the butter keeps the dent | Footprints stay, and the surface sheds clumps from the rim |
 
+| Jello | Lego | Lava |
+|---|---|---|
+| ![Jello wobbling](screenshots/jello-wobble.gif) | ![Lego brick](screenshots/lego.gif) | ![Lava cracking](screenshots/lava.gif) |
+| Wobbles and ripples outward from each step | Studs press down under your feet | Crust cracks open to glowing lava beneath |
+
+| Honey | Memory foam |
+|---|---|
+| ![Honey footprints](screenshots/honey-prints.gif) | ![Memory foam](screenshots/memory-foam.gif) |
+| Footprints sink in and slowly flow closed | Presses in and holds the dent |
+
 ## What's built
 
 The six original materials, and how each one works:

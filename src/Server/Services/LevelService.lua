@@ -147,18 +147,34 @@ local function chunkMaterialsAreWhitelisted(chunkDef, allowedMaterials: { string
 	return true
 end
 
-local function pickChunkForSlot(token: string, level, rng: Random): string?
+local function pickChunkForSlot(token: string, level, rng: Random, recent: { string }): string?
 	local category = categoryForSlot(token)
 	local candidates = {}
 	for _, chunkId in ipairs(level.allowedChunkIds) do
 		local def = ChunkDefinitions[chunkId]
-		if def and def.category == category and chunkMaterialsAreWhitelisted(def, level.allowedMaterials) then
+		-- ONCE EACH, however many times a level's list happens to name it. A duplicate entry used
+		-- to double that chunk's odds, which is a weighting nobody chose.
+		if def and def.category == category and chunkMaterialsAreWhitelisted(def, level.allowedMaterials)
+			and not table.find(candidates, chunkId) then
 			table.insert(candidates, chunkId)
 		end
 	end
 	if #candidates == 0 then
 		warn(("LevelService: no eligible chunk for slot '%s' (category '%s') in level %d"):format(token, category, level.levelId))
 		return nil
+	end
+	-- NOT ONE OF THE LAST FEW, when the level asks and the slot has anything else to offer. Only
+	-- ever narrows the draw -- a slot whose every candidate was used recently still gets one.
+	if (level.avoidRecent or 0) > 0 and #recent > 0 then
+		local fresh = {}
+		for _, chunkId in ipairs(candidates) do
+			if not table.find(recent, chunkId) then
+				table.insert(fresh, chunkId)
+			end
+		end
+		if #fresh > 0 then
+			candidates = fresh
+		end
 	end
 	return candidates[rng:NextInteger(1, #candidates)]
 end
@@ -251,12 +267,20 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 	local cursorY = BASE_SURFACE_Y
 	local placed = CFrame.new()
 	local placedChunks = {}
+	-- The last few chunks picked, oldest first, for levels that declare avoidRecent.
+	local recentIds: { string } = {}
 
 	for slotIndex, token in ipairs(template) do
 		-- With a fixed sequence the entries ARE chunk ids, not slot tokens.
-		local chunkId = if fixedSequence then token else pickChunkForSlot(token, level, rng)
+		local chunkId = if fixedSequence then token else pickChunkForSlot(token, level, rng, recentIds)
 		if not chunkId then
 			continue
+		end
+		if (level.avoidRecent or 0) > 0 then
+			table.insert(recentIds, chunkId)
+			while #recentIds > level.avoidRecent do
+				table.remove(recentIds, 1)
+			end
 		end
 
 		-- Elevation profile. Chunks that rise internally (ramp, stairs) declare it; on top

@@ -293,9 +293,54 @@ function UIService.showTooltip(text: string)
 	end)
 end
 
+-- ===================================================================== the blackout
+--
+-- A full-screen black sheet the completion banner sits ON TOP of, for the one ending that needs
+-- the picture to go away: the dive at the end of City Shore, where the water closes over you.
+--
+-- ZIndex rather than creation order, because this ScreenGui is in Sibling mode: the sheet is
+-- above every HUD panel and the banner and its two labels are above the sheet. A blackout that
+-- covered the banner it exists to frame would be a blank screen with nothing on it.
+local BLACKOUT_ZINDEX = 5
+
+local blackout = Instance.new("Frame")
+blackout.Name = "Blackout"
+blackout.BackgroundColor3 = Color3.new(0, 0, 0)
+blackout.BackgroundTransparency = 1
+blackout.BorderSizePixel = 0
+blackout.Size = UDim2.new(1, 0, 1, 0)
+blackout.Visible = false
+blackout.ZIndex = BLACKOUT_ZINDEX
+blackout.Parent = screenGui
+
+local blackoutToken = 0
+
+function UIService.fadeToBlack(seconds: number?)
+	blackoutToken += 1
+	blackout.Visible = true
+	TweenService:Create(blackout, TweenInfo.new(seconds or 0.45, MOTION.style,
+		Enum.EasingDirection.Out), { BackgroundTransparency = 0 }):Play()
+end
+
+function UIService.fadeFromBlack(seconds: number?)
+	blackoutToken += 1
+	local token = blackoutToken
+	local over = seconds or 0.7
+	TweenService:Create(blackout, TweenInfo.new(over, MOTION.style, Enum.EasingDirection.Out),
+		{ BackgroundTransparency = 1 }):Play()
+	-- Hidden once it is clear, so a transparent sheet is not sitting over the HUD swallowing
+	-- nothing in particular for the rest of the session.
+	task.delay(over + 0.05, function()
+		if blackoutToken == token then
+			blackout.Visible = false
+		end
+	end)
+end
+
 -- ===================================================================== completion
 
 local completion = panel("CompletionBanner", screenGui)
+completion.ZIndex = BLACKOUT_ZINDEX + 1
 completion.Size = UDim2.new(0, 440, 0, 132)
 completion.AnchorPoint = Vector2.new(0.5, 0.5)
 completion.Position = UDim2.new(0.5, 0, 0.36, 0)
@@ -306,11 +351,13 @@ local completionStroke = completion:FindFirstChildOfClass("UIStroke") :: UIStrok
 completionStroke.Transparency = 1
 
 local completionTitle = newLabel(completion, TEXT.display, COLOUR.textPrimary, Enum.Font.GothamBold)
+completionTitle.ZIndex = BLACKOUT_ZINDEX + 2
 completionTitle.Size = UDim2.new(1, 0, 0, 44)
 completionTitle.Position = UDim2.new(0, 0, 0, SPACE.xl)
 completionTitle.TextTransparency = 1
 
 local completionSubtitle = newLabel(completion, TEXT.label, COLOUR.textSecondary, Enum.Font.Gotham)
+completionSubtitle.ZIndex = BLACKOUT_ZINDEX + 2
 completionSubtitle.Size = UDim2.new(1, 0, 0, 26)
 completionSubtitle.Position = UDim2.new(0, 0, 0, SPACE.xl + 46)
 completionSubtitle.TextTransparency = 1

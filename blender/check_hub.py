@@ -372,6 +372,44 @@ def check_dive_finale():
         if needed not in boot:
             fail("Bootstrap", "%s (`%s` is gone)." % (why, needed))
 
+    # THREE THINGS IN THE MODULE ITSELF, each of which leaves the dive looking like a level with
+    # no ending: the diver deleted in mid-air, the diver carried on through the water by their own
+    # client, and no blackout when the water closes over them.
+    # THE ASSIGNMENT, not the word: stop() names the same property when it puts the old value
+    # back, so a gate on the bare name passes with the fix deleted.
+    if not re.search(r"FallenPartsDestroyHeight\s*=\s*\w+\s*-\s*DESTROY_DROP", dive):
+        fail("DiveFinaleService", "the destroy floor is not moved below the sea any more. Roblox "
+                                  "destroys parts under -500 by default and the sea is at -700, "
+                                  "so the diver is deleted in mid-air 200 studs above the water "
+                                  "and the splash never happens.")
+    if "root.Anchored = true" not in dive:
+        fail("DiveFinaleService", "nothing holds the diver at the splash: the character is owned "
+                                  "by its own client, so a server that writes only a position is "
+                                  "overruled on the next physics frame.")
+    # BOTH WAYS, and the first version of this checked neither properly: it looked for the name
+    # `ScreenFade:FireClient` anywhere in the file, which the fade BACK satisfies on its own -- so
+    # the fade to black could be deleted with the gate still green.
+    if "{ black = true" not in boot:
+        fail("Bootstrap", "the dive no longer fades the screen to black at the splash.")
+    if "{ black = false" not in boot:
+        fail("Bootstrap", "nothing clears the blackout after the lobby takes the diver, so the "
+                          "screen stays black.")
+
+    # A RESTART AND AN EARLY FINISH, reported together and the same bug seen twice: a level that
+    # came back with no board and with its finish line live, so the run completed on arriving at
+    # the deck. Three things now hold the ending, and each is checked.
+    if "finale.model = buildPlatform" not in dive:
+        fail("DiveFinaleService", "the platform is not put back when the level is rebuilt under it, "
+                                  "so a restart comes back with no board.")
+    if "DiveFinaleService.isArmed()" not in boot:
+        fail("Bootstrap", "the finish line is not guarded while the dive is armed, so the end of the "
+                          "route can complete a run the dive is meant to finish.")
+    stop_at = boot.find("pcall(DiveFinaleService.stop)")
+    build_at = boot.find("LevelService.startLevel(")
+    if stop_at < 0 or build_at < 0 or stop_at > build_at:
+        fail("Bootstrap", "the dive does not stand down before the level is cleared, so its watch "
+                          "rebuilds a platform for the previous run.")
+
     # THE SPLASH IS A HEIGHT TEST. A diver crosses about nine studs a frame, so a trigger part
     # is skipped outright: the character is above it on one frame and under it on the next.
     if "Touched" in dive:

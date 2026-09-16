@@ -188,76 +188,56 @@ LevelDefinitions.Level1 = {
 	headlineMaterial = "Honey",
 	minChunks = 40,
 	maxChunks = 40,
+	-- ===== THE WHOLE KIT, ONCE EACH =====
+	--
+	-- City Shore is the level everybody plays first, and a forty-chunk climb kept coming back as the
+	-- same handful of shapes. Three causes, all of them in this table:
+	--
+	--   SIX CHUNKS WERE LISTED AND COULD NEVER BE PICKED. The four Needohs, the butter sticks and
+	--   the lava keyboard were here, but their materials were not in allowedMaterials, and a chunk
+	--   whose materials are not all whitelisted is never a candidate. They did nothing.
+	--   EIGHT WERE MISSING OUTRIGHT: the soap wave, bone, crescent and leaf, the lego ring, bone and
+	--   crescent, and the domed keypad.
+	--   TWO WERE LISTED TWICE, which quietly doubled their odds against everything else.
+	--
+	-- Every chunk in the kit is here now, once each. Grouped for reading only: each slot's category
+	-- is what picks from this, so the order does not matter.
 	allowedChunkIds = {
-		"S1_Straight",
-		"P1_HoneyCorridor",
-		"P2_ButterWaxCurve",
-		"P3_KineticSandRamp",
-		"P5_KeyboardRun",
-		-- Built from the imported asset packs. In every pool: these are ordinary pace
-		-- chunks on existing rigs, so there is no reason for one level to have them and
-		-- another not.
-		"P20_NeedohField",
-		"P21_KeyboardDusk",
-		"P22_KeyboardMint",
-		"P23_KeyboardLava",
-		"P24_ButterBlocks",
-		"P25_ButterStick",
-		"P26_NeedohBoulders",
-		"P27_NeedohGrid",
-		"P28_NeedohDrift",
-		"P6_JelloSoda",
-		"P7_LambsEar",
-		"P8_Foam",
-		"P9_LightSwitches",
-		"P10_ClayPress",
-		"R1_SlimeLaunch",
-		"R2_SoapBridge",
-		"R3_BubbleWrapStairs",
-		"R4_SoapStar",
-		"R5_SoapPebbles",
-		"R6_SoapHeart",
-		"R7_SandTurtle",
-		"R8_BubbleWrapGiant",
-		"R9_IceCrack",
-		"R10_LegoStuds",
-		"R11_CharcoalSnap",
-		"R12_ChocolateMelt",
-		"R13_CloudSink",
-		"R14_ChocolateSnap",
-		"P11_SaltFlat",
-		"P12_ButtonPad",
-		"R15_LavaCrust",
-		"R16_Oobleck",
-		"R17_MeltingSnow",
-		"R18_SoapRing",
-		"R23_LegoCross",
-		"P14_ButtonDense",
-"P18_HoneyComb",
-				"R32_LavaVent",
-		"R33_ChocolateSwirl",
-		"R34_SnowDrift",
-		"P17_ClayTerrace",
-		"R35_CharcoalSpine",
-		"R36_CloudSwell",
-		"P18_HoneyComb",
-		"P19_HoneyPool",
-		"R37_SlimeBlister",
-		"R38_SlimeChannel",
-		-- Honey and slime, the two that pour. Last because they are the ones whose forms
-		-- change the ROUTE rather than the surface.
-		"S1_Straight",
-		"S2_Junction",
-		"P4_PaceChain_H_KS",
-		"C1_SlimeToPace",
-		"C2_PaceToStable",
-		"C3_SoapWithWideLanding",
-		"C4_BubbleWrapToStable",
+		-- Stable landings.
+		"S1_Straight", "S2_Junction",
+		-- Pace.
+		"P1_HoneyCorridor", "P4_PaceChain_H_KS", "P18_HoneyComb", "P19_HoneyPool",
+		"P2_ButterWaxCurve", "P24_ButterBlocks", "P25_ButterStick",
+		"P3_KineticSandRamp", "R7_SandTurtle", "C2_PaceToStable",
+		"P5_KeyboardRun", "P21_KeyboardDusk", "P22_KeyboardMint", "P23_KeyboardLava",
+		"P20_NeedohField", "P26_NeedohBoulders", "P27_NeedohGrid", "P28_NeedohDrift",
+		"P6_JelloSoda", "P7_LambsEar", "P8_Foam", "P9_LightSwitches",
+		"P10_ClayPress", "P17_ClayTerrace", "P11_SaltFlat",
+		"P12_ButtonPad", "P14_ButtonDense", "P15_ButtonDome",
+		-- Risk.
+		"R1_SlimeLaunch", "R37_SlimeBlister", "R38_SlimeChannel", "C1_SlimeToPace",
+		"R2_SoapBridge", "R4_SoapStar", "R5_SoapPebbles", "R6_SoapHeart", "R18_SoapRing",
+		"R19_SoapWave", "R20_SoapBone", "R21_SoapCrescent", "R31_SoapLeaf", "C3_SoapWithWideLanding",
+		"R3_BubbleWrapStairs", "R8_BubbleWrapGiant", "C4_BubbleWrapToStable",
+		"R10_LegoStuds", "R23_LegoCross", "R24_LegoRing", "R29_LegoBone", "R30_LegoCrescent",
+		"R9_IceCrack", "R11_CharcoalSnap", "R35_CharcoalSpine",
+		"R12_ChocolateMelt", "R14_ChocolateSnap", "R33_ChocolateSwirl",
+		"R13_CloudSink", "R36_CloudSwell", "R15_LavaCrust", "R32_LavaVent",
+		"R16_Oobleck", "R17_MeltingSnow", "R34_SnowDrift",
 	},
-	allowedMaterials = { "Honey", "KineticSand", "ButterWax", "Slime", "Soap", "BubbleWrap", "CreamyKeyboard", "Ice", "JelloSoda", "LambsEar", "Foam", "LightSwitch", "Clay", "Lego", "Charcoal", "Chocolate", "Cloud", "ChocolateSolid", "Salt", "Lava", "Oobleck", "Buttons", "Snow" },
+	allowedMaterials = { "Honey", "KineticSand", "ButterWax", "Slime", "Soap", "BubbleWrap",
+		"CreamyKeyboard", "Ice", "JelloSoda", "LambsEar", "Foam", "LightSwitch", "Clay", "Lego",
+		"Charcoal", "Chocolate", "Cloud", "ChocolateSolid", "Salt", "Lava", "Oobleck", "Buttons",
+		"Snow", "Needoh", "ButterStick", "LavaKeys" },
+	-- NOTHING REPEATS WITHIN THE LAST SIX PICKS, whenever the slot has anything else to offer. A
+	-- plain random draw from sixty-odd chunks still lands the same one twice in quick succession
+	-- often enough to notice on a forty-chunk climb. LevelService honours this per level.
+	avoidRecent = 6,
 	parTime = 300,
 	baseSeed = 1001,
-	templates = { T1_PaceChainSlimeSafety },
+	-- ALL THREE RHYTHMS, one picked per run, rather than always the first. Each spaces its stable
+	-- landings and its risk slots differently, so the climb changes shape as well as material.
+	templates = { T1_PaceChainSlimeSafety, T2_BubbleWrapWindow, T3_ExtendedSoapPressure },
 }
 
 LevelDefinitions.Level2 = {
