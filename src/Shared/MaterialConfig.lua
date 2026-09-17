@@ -34,6 +34,76 @@ export type MaterialDef = {
 	-- judgement to make while walking on it rather than from the numbers.
 	sfxMinGap: number?,
 	deformationAnim: string,
+	-- A material that MOVES MATERIAL between cells rather than failing where it is stood on:
+	-- "squeeze" for clay, "brine" for salt. See DISPLACEMENT in DeformationService.
+	displacement: string?,
+	-- How many presses take a cell as far down as it goes.
+	displaceSteps: number?,
+	-- Pushes a salt plate takes before it lifts and tilts, and will not take a foot.
+	displaceTilt: number?,
+	-- Pushes a clay lip takes before it tears off, or a salt plate before it sinks.
+	displaceLimit: number?,
+	-- How far a salt cell has to be packed before packing it further pushes brine out sideways.
+	displaceFrom: number?,
+	-- Seconds a lifted, tilted salt plate floats before it sinks on its own.
+	sinkAfter: number?,
+	-- Seconds between the presses a player standing still gives the cell under them.
+	creepEvery: number?,
+	bounceCooldown: number?,
+	-- KEYPADS. What each of the three switches does to your walking speed, by the name
+	-- ChunkBuilder writes on the tile as `Switch`. See KEYPADS in DeformationService.
+	switchSpeeds: { [string]: number }?,
+	-- How long a clicky press's surge lasts, including after you have left the pad.
+	surgeLinger: number?,
+	-- Clicky presses in a row, each inside `streakWindow` seconds of the last, that make a combo,
+	-- and the surge a combo gives and how long it lasts.
+	comboAt: number?,
+	streakWindow: number?,
+	comboSpeed: number?,
+	comboLinger: number?,
+	-- The event to play while this material's own `sfxEvent` has no takes uploaded.
+	sfxFallback: string?,
+	-- THE NEEDOH SQUEEZE. Seconds of standing still before the dough starts to give, seconds
+	-- from there to fully squeezed, and your jump HEIGHT at full squeeze as a multiple of normal.
+	chargeAfter: number?,
+	chargeTime: number?,
+	chargeJump: number?,
+	-- A KEYPAD CIRCUIT: a clicky press in every row of the pad inside one streak. Its surge.
+	circuitSpeed: number?,
+	circuitLinger: number?,
+	-- A KEYPAD CAPACITOR, the violet switch. How many charges it stores, how long they hold from the
+	-- last violet press, what each one adds to the surge of the clicky press that spends them and to
+	-- how long it lasts, and the fastest any keypad surge can go.
+	capacitorMax: number?,
+	capacitorHold: number?,
+	dischargeSpeed: number?,
+	dischargeLinger: number?,
+	surgeCap: number?,
+	-- A KEYPAD SPRING, the pink switch. Your jump height on it as a multiple of normal, one entry per
+	-- level of a bounce chain, and the seconds after jumping off pink that landing on pink is a bounce.
+	springJump: { number }?,
+	springChain: number?,
+	-- CHARCOAL EMBERS. Seconds from a foot to the coal burning, how long it burns before it is ash
+	-- and gives way, when a burning coal tries to light each neighbour and the chance it does, how
+	-- much sooner a foot on burning coal makes it go, when an ash hole has a fresh coal in it, and
+	-- your walking speed on burning coal.
+	igniteAfter: number?,
+	burnFor: number?,
+	spreadAfter: number?,
+	spreadChance: number?,
+	stompBurn: number?,
+	regrowAfter: number?,
+	hotSpeed: number?,
+	-- OOBLECK WADING. How fast you sink standing and moving (a full wade per second), the speed
+	-- below which you count as standing, how much of your speed the deepest wade takes, the landing
+	-- speed that hardens the pool, how long it stays hard, and when a hole fills back in.
+	wadeStill: number?,
+	wadeMoving: number?,
+	wadeSlow: number?,
+	wadeDrag: number?,
+	shockFrom: number?,
+	shockTime: number?,
+	healAfter: number?,
 }
 
 local Materials: { [string]: MaterialDef } = {
@@ -83,7 +153,8 @@ local Materials: { [string]: MaterialDef } = {
 		-- long before four seconds are up. Kinetic sand does not fail because you stood
 		-- on it, it fails because it has been WORKED -- so the count below is the real
 		-- trigger and the clock is only the standing-still case.
-		dissolveTime = 3.0,
+		-- 2.3 (was 3.0): every chunk that can drop you now gives way faster.
+		dissolveTime = 2.3,
 		stepsToCollapse = 3,
 		sfxMinGap = 0.2,
 		sfxEvent = "kineticSandImprint",
@@ -110,7 +181,8 @@ local Materials: { [string]: MaterialDef } = {
 		-- under you the way ice does -- but it is a solid being crushed rather than a film,
 		-- so it still bites a little.
 		frictionOverride = 0.12,
-		dissolveTime = 2.5,
+		-- 1.9 (was 2.5): every chunk that can drop you now gives way faster.
+		dissolveTime = 1.9,
 		decayDuration = 7,
 		sfxMinGap = 0.2,
 		sfxEvent = "soapCrumble",
@@ -135,23 +207,42 @@ local Materials: { [string]: MaterialDef } = {
 		sfxEvent = "keyThock",
 		deformationAnim = "press",
 	},
-	-- SALT: the only surface that gets BETTER as you wreck it.
+	-- SALT: a crust over brine, better where you have been and worse where you have not.
 	--
-	-- Everything else here degrades under use -- it cracks, melts, crumbles or gives way.
-	-- Salt compacts. Each step crushes the crystals under it into a denser, flatter, harder
-	-- patch, and that patch is easier to cross than the loose stuff around it. It never
-	-- fails, so the reward for working it is permanent within a run.
+	-- Each step packs the crystals under you into a denser, flatter, faster patch, and that has
+	-- always been the material: the second visit to a cell is better than the first. What it was
+	-- missing is where the brine goes. Packing the crust squeezes the brine out from under it
+	-- into the loose crust beside it, and that crust HEAVES: one push cracks a plate, two lift
+	-- and tilt it, three break it and it sinks. A tilted plate breaks under a foot.
 	--
-	-- That inverts the game's whole bargain: on every other risk material the second visit
-	-- is worse than the first, and here it is better. The trodden path a player leaves is
-	-- also a route for the next one, which nothing else in the game does.
+	-- So a trail gets firmer with every pass while the crust either side of it breaks up, and a
+	-- player who stops packs themselves onto an island and has to jump off it. Nothing else in the
+	-- game breaks the cells you did NOT stand on. See DISPLACEMENT in DeformationService.
 	Salt = {
-		category = "pace",
-		-- Loose crystals roll under you. This is the starting figure; the renderer takes it
-		-- back toward 1 as a cell compacts, which is the whole mechanic.
+		-- Documentation, as sand's is: the chunk stays in PACE slots, because a steady crossing
+		-- is safe. Stopping, doubling back and crowding are what break the crust.
+		category = "risk",
+		-- Loose crystals roll under you. DeformationService takes this back toward 1 as the cell
+		-- you step onto is packed, which is the reward half of the material.
 		speedMultiplier = 0.88,
-		-- LONG. The path has to outlast the crossing or there is no point making it.
-		decayDuration = 25,
+		-- The session, like clay. The trail and the broken crust beside it are the record of who
+		-- crossed, and at twenty-five seconds a trail loosened again before anyone could use it.
+		decayDuration = 600,
+		displacement = "brine",
+		displaceSteps = 3,
+		-- NOT FROM THE FIRST STEP. The first crushes the loose crystals on top; it is packing the
+		-- cell harder that forces the brine out. Pushing from the first step broke a plate under
+		-- the second foot of an ordinary crossing: a player walking with a foot either side of a
+		-- cell line strains the next cell under that foot from behind AND from beside before it
+		-- lands. Measured in sim_displace, from DeformationService's own rules.
+		displaceFrom = 2,
+		displaceTilt = 2,
+		displaceLimit = 3,
+		-- A floating plate does not float for long.
+		sinkAfter = 8,
+		-- Standing on a cell packs it again this often. Two of these and the plates around you
+		-- are floating, and stepping off onto one of them is stepping into the brine.
+		creepEvery = 1.2,
 		sfxMinGap = 0.15,
 		sfxEvent = "saltCrunch",
 		deformationAnim = "compact",
@@ -175,43 +266,84 @@ local Materials: { [string]: MaterialDef } = {
 		sfxEvent = "lavaCrust",
 		deformationAnim = "crust",
 	},
-	-- NON-NEWTONIAN: solid if you are quick, liquid if you are not.
+	-- NON-NEWTONIAN: stamp it hard.
 	--
-	-- Shear-thickening is the one real-world material property that is already a platformer
-	-- mechanic, and it needs no translation at all: run and it holds you, hesitate and you
-	-- go through. `dissolveTime` is doing exactly what it says here -- a clock that only
-	-- runs while you are in continuous contact -- which is the mechanic verbatim.
+	-- It was "stand still and you sink", which the cloud, the foam and the Needoh all do in one form
+	-- or another. What only oobleck does is harden under a BLOW. So you WADE on it: every moment on the
+	-- pool you sink a little -- slowly while you keep moving, fast when you stop -- and it drags at
+	-- your legs the deeper you are. All the way in, and it has you.
 	--
-	-- NOT the cloud. Cloud sinks from the moment you land and nothing stops it; oobleck is
-	-- completely solid until you stop moving, so one punishes lingering and the other
-	-- punishes existing. The distinction is the whole reason both can be in the game.
+	-- LAND on it and the impact hardens the whole pool at once: everyone wading pops back up and walks
+	-- at full speed while it lasts. So the way across is to keep it struck. Hop, and every landing is
+	-- a floor for you and for anyone else out on it. A hole fills back in after `healAfter`.
 	Oobleck = {
 		category = "risk",
-		-- Under a second and a half of standing still. Long enough to cross at a walk,
-		-- short enough that stopping to line up a jump is a real decision.
-		dissolveTime = 1.4,
+		speedMultiplier = 1.0,
+		wadeStill = 1.1,
+		-- High enough that a crossing at a walk visibly wades (sim_round3: 0.32 never reached the first
+		-- step), low enough that it still gets across.
+		wadeMoving = 0.45,
+		wadeSlow = 8,
+		wadeDrag = 0.5,
+		-- A default jump lands at about fifty studs a second; walking off a step does not come close.
+		shockFrom = 28,
+		shockTime = 1.3,
+		healAfter = 3.5,
 		decayDuration = 5,
 		sfxMinGap = 0.2,
 		sfxEvent = "ooblSquelch",
 		deformationAnim = "shear",
 	},
-	-- CLICKY BUTTONS: the only surface that gives energy BACK.
+	-- CLICKY BUTTONS: an arcade keypad, and the one surface in the game where the route you pick
+	-- across it is written on it in light.
 	--
-	-- The keyboard depresses and returns; the switches latch. A button does neither -- it
-	-- bottoms out hard and then throws you off it, because that is what a spring under a cap
-	-- is for. It is the third material in a family that had two, and it is the only one of
-	-- the three you would ever choose to walk on for the movement rather than the sound.
+	-- It was one kind of button and it did nothing to you: every cap went down and came back and
+	-- the pad was a slab you crossed at normal speed with some violet dots on it. Now every cell
+	-- carries one of THREE SWITCHES, the way a switch tester has them, and each one moves your feet
+	-- differently. ChunkBuilder decides which cell carries which, symmetric about the pad's centre
+	-- and different per keypad, and writes it on the tile as `Switch`.
+	--
+	--   CLICKY, cyan: it snaps, and throws you forward. The surge carries off the pad.
+	--   LINEAR, violet: smooth, nothing to feel, and it leaves a surge you already have alone.
+	--   TACTILE, pink: a bump part way down its travel that you feel as drag. It costs your surge.
+	--
+	-- Three clicky presses in a row is a COMBO: a bigger surge for longer, and the whole pad lights
+	-- up in a wave from your foot. No launch anywhere -- the spring is in the cap, and a pad that
+	-- threw you upward was a trampoline.
 	Buttons = {
 		category = "pace",
 		speedMultiplier = 1.0,
-		-- NO microBounceHeight, and its absence is deliberate. It was 6, on the reasoning
-		-- that a spring under a cap should give something back -- but a platform that throws
-		-- you upward on every step is a trampoline, and it made the chunk impossible to
-		-- cross with any control. The spring is in the CAP, which travels and returns; the
-		-- player it is under stays exactly where they put themselves.
+		-- Tactile is no longer a drag (0.88) that cost you your surge: pink is the spring now.
+		switchSpeeds = { clicky = 1.22, linear = 1.0, tactile = 1.0 },
+		-- A SURGE THAT STOPPED AT THE EDGE would be over before anyone noticed it: a keypad is
+		-- twelve studs long. This is from the last clicky press, and a surge you carry off the
+		-- pad lasts this long unless another material takes your speed first.
+		surgeLinger = 1.4,
+		comboAt = 3,
+		streakWindow = 0.8,
+		comboSpeed = 1.34,
+		comboLinger = 2.4,
+		-- THE WHOLE LANE -- a clicky press in every row of the pad without the streak breaking -- is
+		-- a CIRCUIT: the pad overloads, and the surge is the biggest in the game.
+		circuitSpeed = 1.42,
+		circuitLinger = 3.2,
+		-- THE VIOLET CAPACITOR: three violet presses and then a clicky one is a surge as big as a
+		-- circuit's, for longer, off a single lane button.
+		capacitorMax = 3,
+		capacitorHold = 4,
+		dischargeSpeed = 0.06,
+		dischargeLinger = 0.5,
+		surgeCap = 1.6,
+		-- THE PINK SPRING: half as high again on the first pink button, and a bounce from pink to pink
+		-- inside springChain goes a level higher -- the top is the Needoh's full squeeze.
+		springJump = { 1.45, 1.8, 2.2 },
+		springChain = 1.0,
 		decayDuration = 2,
 		sfxMinGap = 0.12,
 		sfxEvent = "buttonClick",
+		-- UNTIL buttonClick HAS TAKES the keypad plays the keyboard's thock -- as a NOTE, pitched by
+		-- where the button sits, so a crossing plays a rising run. See the renderer.
+		sfxFallback = "keyThock",
 		deformationAnim = "press",
 	},
 	-- SNOW: it is melting whether you are there or not.
@@ -229,7 +361,8 @@ local Materials: { [string]: MaterialDef } = {
 		stepsToCollapse = 4,
 		-- AND a clock, because it is melting on its own. Long, so it is not the thing that
 		-- gets you -- it is the thing that reminds you the chunk is temporary.
-		dissolveTime = 7.0,
+		-- 5.5 (was 7.0): every chunk that can drop you now gives way faster.
+		dissolveTime = 5.5,
 		decayDuration = 9,
 		sfxMinGap = 0.18,
 		sfxEvent = "snowPack",
@@ -291,23 +424,36 @@ local Materials: { [string]: MaterialDef } = {
 		sfxEvent = "legoClick",
 		deformationAnim = "detach",
 	},
-	-- CHARCOAL: snaps rather than crumbles.
+	-- CHARCOAL: the grill that catches.
 	--
-	-- Sand is the material this has to stay away from, and the separation is in HOW it
-	-- fails. Sand loses cohesion: it is worked loose over three steps and slumps. Charcoal
-	-- is brittle in the way glass is brittle -- it holds completely, then breaks all at once
-	-- into angular pieces. Two steps, not three, and the second is the last.
+	-- It used to snap on the second step, which half the risk chunks already did in one form or
+	-- another. Charcoal is the one thing here that BURNS, and fire is the one hazard in the game that
+	-- moves on its own. So: a foot on cold charcoal lights it. The coal smoulders, then burns --
+	-- glowing cracks, sparks, smoke -- and while it burns it tries to light the coals beside it. When
+	-- it has burned out it is ash, and ash does not hold you. Nothing else here spreads.
+	--
+	-- A crossing at a walk is always ahead of its own fire: you light the grill behind you, not under
+	-- you. Stop, double back, or follow someone across, and the grill is burning out from under
+	-- you. Burning coal is hot to stand on, so you hurry on it; stamping on burning coal crushes the
+	-- embers and it goes sooner. A fresh coal drops into an ash hole after `regrowAfter`, so the grill
+	-- is never burned out for good.
 	Charcoal = {
 		category = "risk",
-		-- Draggy and loose. Charcoal crumbles under the ball of your foot, so you get less
-		-- back from every push-off -- the same reasoning as foam, arrived at from the
-		-- opposite direction: one is too soft to push against and one keeps breaking.
+		-- Draggy on cold coal: it crumbles under the ball of your foot.
 		speedMultiplier = 0.90,
-		stepsToCollapse = 2,
+		igniteAfter = 0.9,
+		burnFor = 1.9,
+		spreadAfter = 0.8,
+		-- Low enough that one crossing burns patches, not the whole grill: sim_round3 measured 11 of 20
+		-- coals at 0.4, and sometimes all of them.
+		spreadChance = 0.22,
+		stompBurn = 0.5,
+		regrowAfter = 5.5,
+		hotSpeed = 1.15,
 		decayDuration = 10,
 		sfxMinGap = 0.2,
 		sfxEvent = "charcoalSnap",
-		deformationAnim = "snap",
+		deformationAnim = "ember",
 	},
 	-- CHOCOLATE: the only material that changes STATE.
 	--
@@ -339,7 +485,8 @@ local Materials: { [string]: MaterialDef } = {
 		-- flash for a frame and then be gone -- a warning nobody could act on. Four steps
 		-- means all three are seen with a step left to use them.
 		stepsToCollapse = 4,
-		dissolveTime = 5.0,
+		-- 3.8 (was 5.0): every chunk that can drop you now gives way faster.
+		dissolveTime = 3.8,
 		decayDuration = 12,
 		sfxMinGap = 0.2,
 		sfxEvent = "chocolateSnap",
@@ -370,21 +517,33 @@ local Materials: { [string]: MaterialDef } = {
 		sfxEvent = "chocolateSnap",
 		deformationAnim = "snap",
 	},
-	-- CLAY: the visitor book.
+	-- CLAY: the visitor book, and the only surface that moves itself somewhere else.
 	--
-	-- Sand also holds a print, and sand's prints die with the cell that carried them -- it
-	-- is a risk material and it collapses. Clay never fails, so its prints have nothing to
-	-- interrupt them, and the decay is set past the length of a run on purpose: by the end
-	-- of a session a clay chunk is covered in every route every player took across it.
-	-- That is a record the level keeps of the people who walked it, and nothing else here
-	-- does anything like it.
+	-- Sand also holds a print, and sand's prints die with the cell that carried them. Clay keeps
+	-- every print for the session. What it was missing is the other half of pressing clay: what
+	-- goes down comes up somewhere. A step sinks the cell and squeezes that clay toward the nearest
+	-- side of the slab, so the middle of a trampled slab is a trench between ridges and its sides
+	-- grow a LIP that curls out over the edge. A lip that takes three squeezes tears off and drops
+	-- away with whoever is on it, and the next cell in is the edge.
+	--
+	-- Standing still keeps squeezing. The middle is safe to stand in; the edges are not, and
+	-- trampling the middle pushes ridges out toward them. See DISPLACEMENT in DeformationService.
 	Clay = {
-		category = "pace",
+		-- Documentation, as sand's is: the chunks stay in PACE slots, because a steady crossing
+		-- down the middle is safe.
+		category = "risk",
 		speedMultiplier = 0.93,
 		decayDuration = 600,
+		displacement = "squeeze",
+		-- A print bottoms out on the slab after three.
+		displaceSteps = 3,
+		displaceLimit = 3,
+		-- Standing on the edge cell tears it in three seconds; standing with a foot either side of
+		-- the edge line, in one and a half, because both feet are squeezing the same lip.
+		creepEvery = 1.5,
 		sfxMinGap = 0.2,
 		sfxEvent = "claySquish",
-		deformationAnim = "imprint",
+		deformationAnim = "squeeze",
 	},
 	-- CLOUD: no steps, no warning, just a floor that is always leaving.
 	--
@@ -400,7 +559,8 @@ local Materials: { [string]: MaterialDef } = {
 		-- Floaty. There is not enough under you to push against, which is the same fact the
 		-- continuous sink expresses -- this just puts it in your legs as well as your eyes.
 		speedMultiplier = 0.94,
-		dissolveTime = 1.6,
+		-- 1.15 (was 1.6): every chunk that can drop you now gives way faster.
+		dissolveTime = 1.15,
 		decayDuration = 7,
 		sfxMinGap = 0.2,
 		sfxEvent = "cloudHush",
@@ -539,17 +699,23 @@ local Materials: { [string]: MaterialDef } = {
 		sfxMinGap = 0.24,
 		deformationAnim = "press",
 	},
+	-- THE NEEDOH SQUEEZE, and the mini jumps are gone.
+	--
+	-- The bed used to throw you up a couple of studs on its own every second and a half while you
+	-- walked on it -- reported twice, first as too frequent and then still as not Needoh-like. A
+	-- Needoh does not throw anything. It GIVES, slowly, for as long as you squeeze it, and it only
+	-- pushes back when you let go.
+	--
+	-- So: walk across it and it is soft underfoot and nothing else. STAND STILL and the dough goes
+	-- on sinking under you, deeper and deeper, with the bed swelling up around the hollow; at full
+	-- squeeze it shivers and glows. JUMP out of the hollow and the dough gives the push back:
+	-- your jump is up to `chargeJump` times its normal height. The jump is always yours.
 	Needoh = {
 		category = "pace",
 		speedMultiplier = 0.90,
-		microBounceHeight = 2,
-		-- FAR RARER THAN THE SHARED 0.35s. A NeeDoh is dough: it gives, and what it gives
-		-- back it gives back slowly. At the default cadence a normal walking pace clears the
-		-- cooldown on nearly every stride, so the surface launched you continuously and the
-		-- chunk turned into a trampoline -- which is bubble wrap's job, not this one.
-		--
-		-- At 1.4s a bounce is an occasional punctuation rather than a gait.
-		bounceCooldown = 1.4,
+		chargeAfter = 0.25,
+		chargeTime = 1.1,
+		chargeJump = 2.2,
 		decayDuration = 5,
 		-- Borrowed from clay, and the right borrow: both are a dense soft mass taking a
 		-- print. Jello's wobble would be wrong here -- there is nothing in a Needoh that

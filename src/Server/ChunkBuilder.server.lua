@@ -546,60 +546,119 @@ local CAP_R = 0.36        -- of the cell's short side, and inside the well the m
 local CAP_H = 0.46        -- how tall the cap is
 -- HOW FAR IT STANDS PROUD of the plate. This is the number that makes a button look
 -- pressable: flush with its housing it reads as a disc set into a panel, and there is
--- nothing to suggest it moves. Its travel (Button.drop in the renderer) has to stay under
--- this plus the well's own depth or the cap disappears into the plate.
+-- nothing to suggest it moves. Its travel (Button.drop in the renderer) takes the cap down
+-- to about flush with its bezel, where the lit core still shows.
 local CAP_STAND = 0.26
 
+-- ===== AN ARCADE BUTTON, NOT A DISC =====
+--
+-- Every button was one violet cylinder, the plate's own colour lightened a little, sitting in a
+-- well of the same violet: from any distance a purple slab with paler dots on it. A button you
+-- want to press is three things. A dark BEZEL that frames it; a glossy, see-through CAP; and a lit
+-- CORE inside the cap, so the button glows from within and a pressed one can flash. The bezel
+-- stays put. The cap and the core travel together.
+local BEZEL_LIP = 0.15    -- of the cap's radius: how far the bezel ring shows beyond the cap
+local BEZEL_H = 0.14
+local BEZEL_SINK = 0.10   -- how far the bezel sits down into its well
+local BEZEL = Color3.fromRGB(26, 20, 38)
+local CORE_R = 0.58       -- of the cap's radius
+local CORE_H = 0.30       -- studs; its top sits just under the cap's
+local CORE_TOP = 0.04     -- how far under the cap's top face the core's top sits
 
--- A CELL CAN CARRY MORE THAN ONE BUTTON, and `div` is the whole difference between one
--- keypad and another: div x div caps per cell, on the same sub-lattice the mesh cuts its
--- wells on. The two agree because they are computed from the same numbers -- cell size over
--- div -- rather than because someone kept two tables in step.
+-- THREE SWITCHES, the way a switch tester has them. What each one does to your feet is
+-- `switchSpeeds` in MaterialConfig; what each one looks like is here. No red anywhere, which was
+-- asked for, and violet stays the family colour.
+local SWITCH_LOOK: { [string]: { cap: Color3, core: Color3 } } = {
+	clicky = { cap = Color3.fromRGB(156, 238, 255), core = Color3.fromRGB(56, 222, 255) },
+	linear = { cap = Color3.fromRGB(204, 176, 255), core = Color3.fromRGB(146, 92, 255) },
+	tactile = { cap = Color3.fromRGB(255, 184, 226), core = Color3.fromRGB(255, 92, 192) },
+}
+
+-- WHICH SWITCH A CELL CARRIES. Symmetric about the keypad's centre line, and a different route
+-- on each keypad:
+--   the pad and the dome run a clicky lane straight down the middle -- over the summit, on the
+--   dome -- with linear either side and tactile on the outside columns;
+--   the dense keypad BRAIDS its lane: on alternate rows the clicky cells step out either side of
+--   centre, so walking straight down the middle collects half of them and weaving collects all.
+local function switchFor(form: string?, col: number, row: number, cols: number): string
+	local centre = (cols + 1) / 2
+	local off = math.abs(col - centre)
+	if off >= centre - 1 then
+		return "tactile"
+	end
+	local lane = if form == "dense" and row % 2 == 1 then off >= 1 and off < 2 else off < 1
+	return if lane then "clicky" else "linear"
+end
+
+-- A CELL CAN CARRY MORE THAN ONE BUTTON, and `div` is the difference between one keypad and
+-- another: div x div buttons per cell, on the same sub-lattice the mesh cuts its wells on. The two
+-- agree because they are computed from the same numbers -- cell size over div -- rather than
+-- because someone kept two tables in step.
 --
--- SUBDIVIDING THE CELL rather than laying an independent pitch over the plate is what makes
--- the pattern come out symmetric about the platform's centre and leaves no half button at
--- any edge. Cells divide the slab evenly; an arbitrary pitch does not.
+-- SUBDIVIDING THE CELL rather than laying an independent pitch over the plate is what makes the
+-- pattern come out symmetric about the platform's centre and leaves no half button at any edge.
 --
--- Every cap is named "Cap". Duplicate names are legal in Roblox and the renderer collects
--- them by name, so a cell with four buttons presses all four together -- which is right:
--- what goes down is what your foot is on, and your foot is on a cell.
-local function attachCap(tile: BasePart, slab: BasePart, materialName: string, div: number)
-	local appearance = MaterialAppearance.Appearances[materialName]
+-- Every cap is named "Cap" and every core "CapLed". Duplicate names are legal in Roblox and the
+-- renderer collects them by name, so a cell with four buttons presses all four together -- which
+-- is right: what goes down is what your foot is on, and your foot is on a cell. The cell's switch
+-- is written on the tile as `Switch`, for DeformationService and the renderer both.
+local function attachCap(tile: BasePart, slab: BasePart, div: number, col: number, row: number, cols: number)
 	local pitchX, pitchZ = tile.Size.X / div, tile.Size.Z / div
 	local radius = math.min(pitchX, pitchZ) * CAP_R
+	local switch = switchFor(slab:GetAttribute("Form") :: string?, col, row, cols)
+	local look = SWITCH_LOOK[switch]
+	tile:SetAttribute("Switch", switch)
+	local top = tile.Size.Y / 2
+	-- Cylinders point along their own X, so this stands each one on its end.
+	local roll = CFrame.Angles(0, 0, math.rad(90))
 
 	for ix = 1, div do
 		for iz = 1, div do
+			-- In the TILE's frame, so up is the platform's own up -- which matters on the curved
+			-- parts of the spiral, where world up and platform up are not the same thing.
+			local at = tile.CFrame * CFrame.new((ix - (div + 1) / 2) * pitchX, 0, (iz - (div + 1) / 2) * pitchZ)
+			local lip = radius * BEZEL_LIP
+
+			local bezel = Instance.new("Part")
+			bezel.Name = "CapBezel"
+			bezel.Shape = Enum.PartType.Cylinder
+			bezel.Size = Vector3.new(BEZEL_H, (radius + lip) * 2, (radius + lip) * 2)
+			bezel.CFrame = at * CFrame.new(0, top - BEZEL_SINK + BEZEL_H / 2, 0) * roll
+			bezel.Color = BEZEL
+			bezel.Material = Enum.Material.SmoothPlastic
+			bezel.Reflectance = 0.22
+
 			local cap = Instance.new("Part")
 			cap.Name = "Cap"
 			cap.Shape = Enum.PartType.Cylinder
-			-- Cylinders point along their own X, so this stands one on its end.
 			cap.Size = Vector3.new(CAP_H, radius * 2, radius * 2)
-			-- The offsets are applied in the TILE's frame, before the roll, so up is the
-			-- platform's own up -- which matters on the curved parts of the spiral where
-			-- world up and platform up are not the same thing.
-			cap.CFrame = tile.CFrame
-				* CFrame.new(
-					(ix - (div + 1) / 2) * pitchX,
-					tile.Size.Y / 2 + CAP_STAND - CAP_H / 2,
-					(iz - (div + 1) / 2) * pitchZ
-				)
-				* CFrame.Angles(0, 0, math.rad(90))
-			cap.Anchored = true
-			-- The tile is the collider, as everywhere else. A collidable cap would fight it
-			-- and re-fire Touched every time one moved, which for a material that moves on
-			-- every step would be constant.
-			cap.CanCollide = false
-			cap.CanTouch = false
-			cap.CanQuery = false
-			cap.Parent = tile
-			-- Through apply(), so a MaterialVariant reaches it if one is ever authored --
-			-- the same route lego's bricks use.
-			MaterialAppearance.apply(cap, materialName)
-			if appearance then
-				-- Slightly brighter than the plate it sits in, so the cap reads as the thing
-				-- you press rather than as part of the housing.
-				cap.Color = appearance.color:Lerp(Color3.new(1, 1, 1), 0.12)
+			cap.CFrame = at * CFrame.new(0, top + CAP_STAND - CAP_H / 2, 0) * roll
+			cap.Color = look.cap
+			cap.Material = Enum.Material.SmoothPlastic
+			cap.Transparency = 0.3
+			cap.Reflectance = 0.16
+
+			local core = Instance.new("Part")
+			core.Name = "CapLed"
+			core.Shape = Enum.PartType.Cylinder
+			core.Size = Vector3.new(CORE_H, radius * 2 * CORE_R, radius * 2 * CORE_R)
+			core.CFrame = at * CFrame.new(0, top + CAP_STAND - CORE_TOP - CORE_H / 2, 0) * roll
+			core.Color = look.core
+			core.Material = Enum.Material.Neon
+			core.Transparency = 0.3
+
+			for _, piece in ipairs({ bezel, cap, core }) do
+				piece.Anchored = true
+				-- The tile's Floor is the collider, as everywhere else. A collidable cap would
+				-- fight it and re-fire Touched every time one moved, which for a material that
+				-- moves on every step would be constant.
+				piece.CanCollide = false
+				piece.CanTouch = false
+				piece.CanQuery = false
+				piece.CastShadow = false
+				piece.TopSurface = Enum.SurfaceType.Smooth
+				piece.BottomSurface = Enum.SurfaceType.Smooth
+				piece.Parent = tile
 			end
 		end
 	end
@@ -2021,7 +2080,7 @@ local function buildSubRegions(slab: BasePart, materialName: string)
 				-- Keypads vary by DENSITY instead: capDiv comes off the mesh spec, so the
 				-- caps sit on exactly the sub-lattice the wells were cut on.
 				local div = if skinnedSpec then skinnedSpec.capDiv or 1 else 1
-				attachCap(tile, slab, materialName, div)
+				attachCap(tile, slab, div, col, row, grid.cols)
 			end
 
 			if GRANULAR[materialName] then
@@ -2127,9 +2186,13 @@ local function makePlatform(
 	-- colliding while the slab underneath did not. The slab's top face sits 0.9 studs
 	-- below the walkable plane, so a player over a "hole" fell that 0.9 and landed on
 	-- solid concrete: standing on nothing, in mid-air, exactly as reported.
-	local dissolves = materialName ~= nil
-		and MaterialConfig.Materials[materialName] ~= nil
-		and MaterialConfig.Materials[materialName].dissolveTime ~= nil
+	-- EVERY WAY A CELL CAN OPEN, not only the clock. Ash from charcoal, a hole in oobleck, a torn clay
+	-- lip and a sunk salt plate are holes too, and a slab that still collided under any of them was a
+	-- 0.9-stud step down onto concrete.
+	local holeDef = if materialName then MaterialConfig.Materials[materialName] else nil
+	local dissolves = holeDef ~= nil
+		and (holeDef.dissolveTime ~= nil or holeDef.stepsToCollapse ~= nil or holeDef.displacement ~= nil
+			or holeDef.wadeStill ~= nil or holeDef.igniteAfter ~= nil)
 	--
 	-- A SHAPED BRICKED PLATFORM JOINS THEM, and for exactly the reason above. Cutting cells
 	-- out of a lego plate leaves the slab as the only thing under the gap, and a player over
