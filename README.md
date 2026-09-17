@@ -6,6 +6,7 @@ feet, wax cracks and lets you sink into the butter underneath, bubble wrap pops.
 
 **Status:** in development, not yet published. 26 materials across 65 chunk templates
 and 4 levels, chosen from a lobby. Sound is in for 7 materials, and the keypad has its own synthesized sound set waiting to be uploaded.
+See [Status](#status) for what has been tested, what is waiting for a test, and what is not built yet.
 
 ## Screenshots
 
@@ -67,7 +68,7 @@ Later materials go beyond denting under your feet. Each one changes how you have
 |---|---|
 | Clay | Each step squeezes clay into the cells around it; an edge lip that takes too much tears off and falls with whoever is on it |
 | Salt | Packing a cell pushes brine sideways, cracking, tilting and finally sinking the crust around you |
-| Arcade keypads | Three switch types: clicky buttons give a speed surge, linear buttons store charge that the next clicky press releases, tactile buttons act as springs for chained bounces |
+| Arcade keypads | Three switch types: clicky (cyan) buttons give a speed surge, linear (violet) buttons store charge that the next clicky press releases as a bigger surge, and tactile (pink) buttons raise your jump, higher with each bounce from pink to pink |
 | Needoh | Standing still squeezes the bed and charges a jump up to 2.2x normal height |
 | Charcoal | Stepping lights a coal; fire spreads to neighbours and burnt coal turns to ash and gives way |
 | Oobleck | Players slowly wade in unless they keep moving; a hard landing hardens the whole pool for everyone |
@@ -75,13 +76,66 @@ Later materials go beyond denting under your feet. Each one changes how you have
 Cracks on soap and charcoal now grow outward from the footstep that caused them, and every
 collapse drops the player immediately instead of waiting on the server.
 
+## Status
+
+Last updated: 2026-09-17. `ROADMAP.md` has the detail on everything not built yet.
+
+### Tested in Studio and working
+
+- **City Shore finale (level 1):** the diving board at the top of the spiral and the dive into the
+  sea. Landing inside the circle on the water completes the level, with the splash and the fade to
+  black.
+- **Flooded Halls finale (level 4):** the water slide down into the shaft that ends the level.
+
+### Built, waiting for a test in Studio
+
+Added on 2026-09-17. The client renderer failed to load right after these went in (Luau's limit of
+200 locals in one function, fixed the same day), so none of them has been seen in game yet.
+
+- **Keypads:** violet buttons store a charge that the next cyan press releases as a bigger speed
+  boost; pink buttons raise your jump, higher with each bounce from pink to pink; pink no longer
+  slows you down.
+- **Cracks that grow** out from your foot on soap and charcoal, instead of appearing all at once.
+- **Oobleck without cracks.**
+- **Clay's edge tearing off as one slab** again, back from the sagging version.
+- **The renderer loading again.** Every material's visuals depend on it.
+
+### Not built yet
+
+Game features:
+
+- **Story mode:** the levels played in order, starting with City Shore's dive leading into the
+  Flooded Halls.
+- **Level 2, Open Sky:** no background yet. Planned as Sky Pools, calm pools floating in the clouds.
+- **Level 3, Far Water:** no background yet. Planned as The Sunken City, with a sea monster below
+  the route.
+- **The Backrooms:** a secret level you fall into after too many falls in one run.
+- **Scares and secrets:** an eerie atmosphere, a monster that sends you back to spawn in Hardcore,
+  a rare scary face in a mirror, and small places to explore off the route at checkpoints.
+- **More worlds:** a kids' playground, office floors, a parking lot, a museum, an aquarium, a tiny
+  world of bugs, and more.
+
+Content and setup:
+
+- **Sound for 15 materials:** ice, jello soda, lamb's ear, foam, light switch, lego, charcoal,
+  chocolate, clay, cloud, salt, lava, oobleck, snow and Needoh are silent. `SOUND_BRIEF.md` says
+  what each one needs.
+- **The keypad's sounds** are made (`audio/buttons/`) but not uploaded, so it plays the keyboard's
+  sound until they are.
+- **Texture maps on the Buttons and ButterStick meshes:** each still needs a SurfaceAppearance
+  added in Studio.
+- **Soap giving way across the whole platform**, not only in the cells you stand on.
+- **A shared module for remote events**, so services stop depending on the order scripts start in.
+
 ## Tech
 
 - **Luau** (Roblox) for all gameplay code in `src/`
 - **Python + Blender** scripts in `blender/` that generate every rigged mesh, validate
   the geometry before export, and render previews
-- **Python checkers** (`check_lua.py`, `check_chunk_forms.py`, `check_hub.py`, `check_halls.py` in `blender/`) that catch
-  layout and code bugs without opening Roblox Studio
+- **Python checkers** in `blender/` (`check_lua.py`, `check_chunk_forms.py`, `check_plan_shapes.py`,
+  `check_hub.py`, `check_halls.py`) that catch layout and code bugs without opening Roblox Studio.
+  `check_lua.py` counts the locals live at once in every function the way Luau's compiler does, so
+  a module that would fail to load with "Out of local registers" fails the check first
 - **Python + NumPy/SciPy** in `audio/gen_button_sfx.py`, which synthesizes the keypad's sound
   effects instead of using stock audio
 
