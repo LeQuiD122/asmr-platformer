@@ -284,30 +284,229 @@ def check_block_balance(path, clean):
     return []
 
 
-# Luau allocates at most 200 local registers per function scope. A module's MAIN CHUNK is
-# a function like any other, so a long file full of top-level locals can simply stop
-# compiling -- and it fails at COMPILE time with "Out of local registers", which takes the
-# whole module and everything requiring it down at once.
+# Luau allows at most 200 locals LIVE AT ONCE in one function, and a module's MAIN CHUNK is a
+# function like any other. Past that it fails at COMPILE time -- "Out of local registers when
+# trying to allocate x: exceeded limit 200" -- which takes the whole module and everything
+# requiring it down at once, and the error names whichever local happened to be the straw.
 #
-# DeformationRenderer hit this twice while the creamy keyboard was being added. It is a
-# nasty one to diagnose from Studio, because the error names whichever local happened to be
-# the straw and says nothing about the other 199.
+# DeformationRenderer hit this twice while the creamy keyboard was being added, and a third time
+# with the keypads' capacitor and spring.
 #
-# Counted as a proxy: `local` declarations at indentation zero, which are exactly the main
-# chunk's. Nested locals belong to their own function's budget and are not the problem.
+# LIVE, NOT DECLARED AT THE TOP. A local inside a `do`, `if`, `for`, `while` or `repeat` block
+# counts for as long as the block runs, on top of every local of its function already in scope,
+# and so do a `for` loop's variables and a function's parameters. This check used to count only
+# `local` at indentation zero. That passed DeformationRenderer at 188 while Studio refused it: the
+# keypad section was a bare do-block, 205 locals were live inside it, and the module failed to
+# load at `for _, found in ...`. Counted as below, the check names that line and that `_`.
+#
+# Only a FUNCTION body starts a new 200. See the note above the creamy keyboard in
+# DeformationRenderer for how that file's sections are written because of it.
 REGISTER_LIMIT = 200
 REGISTER_WARN = 178
 
-TOP_LEVEL_LOCAL = re.compile(r"^local\s+(?:function\s+)?([A-Za-z_][\w.]*(?:\s*,\s*[A-Za-z_]\w*)*)")
+LOCALS_TOKEN = re.compile(
+    r"[A-Za-z_]\w*|\d[\w.]*|\.\.\.|\.\.=|//=|\.\.|==|~=|<=|>=|\+=|-=|\*=|/=|%=|\^=|//|->|::|\S")
+# Tokens an `if` can follow only as an EXPRESSION: `local x = if a then b else c` has no `end`, and
+# taking it for a statement would close a block early.
+IF_EXPRESSION_AFTER = {
+    "=", "(", "[", "{", ",", "return", "and", "or", "not", "..", "+", "-", "*", "/", "//", "%", "^",
+    "#", "==", "~=", "<", ">", "<=", ">=", "+=", "-=", "*=", "/=", "%=", "^=", "..=", "//=", "in",
+    "until",
+}
 
 
-def count_top_level_locals(text):
-    total = 0
-    for line in text.splitlines():
-        match = TOP_LEVEL_LOCAL.match(line)
-        if match:
-            total += len(match.group(1).split(","))
-    return total
+def code_with_strings_kept(text):
+    """Comments blanked and each string literal replaced by one placeholder word, newlines kept.
+
+    strip_noise blanks strings to nothing, which suits the checks above and not this one: after
+    `local texture = "..."` an `if` on the next line would read as `local texture = if ...`.
+    """
+    out = []
+    i, n = 0, len(text)
+    while i < n:
+        if text.startswith("--", i):
+            block = re.match(r"--\[(=*)\[", text[i:])
+            if block:
+                closer = "]" + "=" * len(block.group(1)) + "]"
+                end = text.find(closer, i)
+                end = n if end < 0 else end + len(closer)
+            else:
+                end = text.find("\n", i)
+                end = n if end < 0 else end
+            out.append(re.sub(r"[^\n]", " ", text[i:end]))
+            i = end
+            continue
+        if text[i] in "\"'`":
+            quote = text[i]
+            j = i + 1
+            while j < n and text[j] != quote and not (quote != "`" and text[j] == "\n"):
+                j += 2 if text[j] == "\\" else 1
+            j = min(j + 1, n)
+            out.append(" __str__ " + re.sub(r"[^\n]", "", text[i:j]))
+            i = j
+            continue
+        block = re.match(r"\[(=*)\[", text[i:])
+        if block:
+            closer = "]" + "=" * len(block.group(1)) + "]"
+            end = text.find(closer, i)
+            end = n if end < 0 else end + len(closer)
+            out.append(" __str__ " + re.sub(r"[^\n]", "", text[i:end]))
+            i = end
+            continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
+
+
+def peak_live_locals(text):
+    """The most locals live at once in any one function of a file, where that happens, and the first
+    local that would be allocated with REGISTER_LIMIT already live, as (line, name), or None.
+    Returns (peak, peak_line, over, lost) where `lost` is the line the block structure stopped
+    making sense at, or None."""
+    tokens = []
+    for number, line in enumerate(code_with_strings_kept(text).split("\n"), 1):
+        for match in LOCALS_TOKEN.finditer(line):
+            tokens.append((match.group(0), number))
+
+    def new_frame():
+        # scopes[0] is the function's own; every open block adds one, with the keyword that opened it.
+        return {"scopes": [["function", 0]], "loop": None, "ifexpr": []}
+
+    frames = [new_frame()]
+    peak, peak_line, over = 0, 0, None
+    previous, consumed = None, False
+
+    def allocate(names, line):
+        nonlocal peak, peak_line, over
+        scopes = frames[-1]["scopes"]
+        for name in names:
+            live = sum(scope[1] for scope in scopes)
+            if live >= REGISTER_LIMIT and over is None:
+                over = (line, name)
+            scopes[-1][1] += 1
+            if live + 1 > peak:
+                peak, peak_line = live + 1, line
+
+    def parameters(start):
+        """Names in the parameter list of the function whose `function` keyword is at `start`."""
+        cursor = start + 1
+        method = False
+        while cursor < len(tokens) and tokens[cursor][0] != "(":
+            method = method or tokens[cursor][0] == ":"
+            cursor += 1
+        names = ["self"] if method else []
+        depth = 0
+        while cursor < len(tokens):
+            piece = tokens[cursor][0]
+            if piece in "({[":
+                depth += 1
+            elif piece in ")}]":
+                depth -= 1
+                if depth == 0:
+                    break
+            elif depth == 1 and re.match(r"[A-Za-z_]\w*$", piece) and tokens[cursor - 1][0] in ("(", ","):
+                names.append(piece)
+            cursor += 1
+        return names
+
+    index = 0
+    while index < len(tokens):
+        word, line = tokens[index]
+        if not frames:
+            return peak, peak_line, over, line
+        frame = frames[-1]
+        was_consumed, consumed = consumed, False
+
+        if word == "local":
+            if index + 2 < len(tokens) and tokens[index + 1][0] == "function":
+                allocate([tokens[index + 2][0]], line)
+                frames.append(new_frame())
+                allocate(parameters(index + 1), line)
+                previous = "function"
+                index += 2
+                continue
+            names = []
+            cursor = index + 1
+            while cursor < len(tokens):
+                names.append(tokens[cursor][0])
+                name_line = tokens[cursor][1]
+                cursor += 1
+                if cursor < len(tokens) and tokens[cursor][0] == ":":
+                    depth = 0
+                    cursor += 1
+                    while cursor < len(tokens):
+                        piece, piece_line = tokens[cursor]
+                        if piece in "({[<":
+                            depth += 1
+                        elif piece in ")}]>":
+                            depth -= 1
+                        elif depth == 0 and (piece in (",", "=") or piece_line != name_line):
+                            break
+                        cursor += 1
+                if cursor < len(tokens) and tokens[cursor][0] == "," and tokens[cursor][1] == line:
+                    cursor += 1
+                    continue
+                break
+            allocate(names, line)
+            previous = tokens[cursor - 1][0]
+            index = cursor
+            continue
+
+        if word == "function":
+            frames.append(new_frame())
+            allocate(parameters(index), line)
+        elif word == "for":
+            names = []
+            cursor = index + 1
+            while cursor < len(tokens) and tokens[cursor][0] not in ("=", "in"):
+                if re.match(r"[A-Za-z_]\w*$", tokens[cursor][0]) and tokens[cursor - 1][0] in ("for", ","):
+                    names.append(tokens[cursor][0])
+                cursor += 1
+            frame["loop"] = names
+        elif word == "while":
+            frame["loop"] = []
+        elif word == "do":
+            names, frame["loop"] = frame["loop"], None
+            frame["scopes"].append(["do", 0])
+            if names:
+                allocate(names, line)
+        elif word == "repeat":
+            frame["scopes"].append(["repeat", 0])
+        elif word == "until":
+            if len(frame["scopes"]) < 2:
+                return peak, peak_line, over, line
+            frame["scopes"].pop()
+        elif word == "if":
+            if previous in IF_EXPRESSION_AFTER or (previous in ("then", "else") and was_consumed):
+                frame["ifexpr"].append("then")
+            else:
+                frame["scopes"].append(["if", 0])
+        elif word == "then":
+            if frame["ifexpr"] and frame["ifexpr"][-1] == "then":
+                frame["ifexpr"][-1] = "else"
+                consumed = True
+        elif word in ("elseif", "else"):
+            if frame["ifexpr"] and frame["ifexpr"][-1] == "else":
+                if word == "else":
+                    frame["ifexpr"].pop()
+                    consumed = True
+                else:
+                    frame["ifexpr"][-1] = "then"
+            elif len(frame["scopes"]) > 1:
+                # A new branch is a new scope: the last branch's locals are gone.
+                frame["scopes"][-1][1] = 0
+            else:
+                return peak, peak_line, over, line
+        elif word == "end":
+            if len(frame["scopes"]) > 1:
+                frame["scopes"].pop()
+            else:
+                frames.pop()
+        previous = word
+        index += 1
+
+    lost = None if len(frames) == 1 and len(frames[0]["scopes"]) == 1 else (tokens[-1][1] if tokens else 0)
+    return peak, peak_line, over, lost
 
 
 # A CONSTANT THAT IS USED AND NEVER DECLARED.
@@ -834,12 +1033,24 @@ def main():
         problems += check_shadowed_locals(path, clean)
         problems += check_constant_fields(path, clean)
 
-        used = count_top_level_locals(source)
-        if used >= REGISTER_WARN:
+        used, used_line, over, lost = peak_live_locals(source)
+        if over:
+            # A FAILURE: this is the compile error itself, at the line Studio will name.
+            problems.append(
+                f"  {path.name}:{over[0]}  allocates `{over[1]}` with {REGISTER_LIMIT} locals already "
+                f"live in its function: Luau refuses to compile the module (Out of local registers). "
+                f"Give the section its own function, or fold locals into a table."
+            )
+        elif lost:
+            problems.append(
+                f"  {path.name}:{lost}  the live-locals count lost track of the blocks here, so it "
+                f"cannot vouch for this file. Fix peak_live_locals in check_lua before trusting it."
+            )
+        elif used >= REGISTER_WARN:
             # A WARNING, NOT A FAILURE. Being near the ceiling is not a bug -- the file
             # compiles today -- so failing the run on it would leave every check red until
             # someone refactors, and a checker that is always red gets ignored.
-            crowded.append((path.name, used))
+            crowded.append((path.name, used, used_line))
 
     # Cross-file, so it runs once after the per-file loop rather than inside it.
     problems += check_stage_counts(files)
@@ -849,14 +1060,14 @@ def main():
 
     print(f"checked {len(files)} Luau sources")
 
-    for name, used in crowded:
+    for name, used, used_line in crowded:
         print(
-            f"  NOTE: {name} has {used} top-level locals, against Luau's "
-            f"{REGISTER_LIMIT}-register limit per scope."
+            f"  NOTE: {name} has {used} locals live at once at line {used_line}, against Luau's "
+            f"limit of {REGISTER_LIMIT} in one function."
         )
         print(
-            "        Collapse related ones into a single table before adding more, or the "
-            "module stops compiling."
+            "        Collapse related ones into a single table, or give a section its own "
+            "function, before adding more."
         )
 
     if problems:
