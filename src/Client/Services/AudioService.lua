@@ -141,7 +141,16 @@ local SOUND_IDS_BY_EVENT: { [string]: { string } } = {
 	saltCrunch = {},
 	lavaCrust = {},
 	ooblSquelch = {},
+	-- THE KEYPAD SET, synthesised by audio/gen_button_sfx.py into audio/buttons/. Upload each
+	-- button_<kind>_N.wav and paste its id into the matching list: clicky -> buttonClick, then
+	-- linear, tactile, release, combo and circuit. Until a list has an id, the keypad falls back to
+	-- buttonClick, then to the keyboard's thock.
 	buttonClick = {},
+	buttonLinear = {},
+	buttonTactile = {},
+	buttonRelease = {},
+	buttonCombo = {},
+	buttonCircuit = {},
 	snowPack = {},
 	keyThock = {
 		"rbxassetid://119301623227187",
@@ -279,29 +288,56 @@ function AudioService.setAmbientMusic(enabled: boolean)
 	end
 end
 
-function AudioService.playSfx(material: string, region: BasePart, mine: boolean?)
+-- True when an event has at least one uploaded take.
+function AudioService.hasTakes(event: string): boolean
+	local ids = usableIds[event]
+	return ids ~= nil and #ids > 0
+end
+
+-- For the few triggers that are not a plain footstep:
+--   `pitch` replaces the random playback-speed jitter, because a note that wanders is a wrong note;
+--   `gain` scales the volume;
+--   `event` plays a different event of the same material -- a keypad's release, or its combo;
+--   `force` skips the per-material gap, so a combo lands on top of the click that caused it.
+export type SfxOptions = { pitch: number?, gain: number?, event: string?, force: boolean? }
+
+function AudioService.playSfx(material: string, region: BasePart, mine: boolean?, options: SfxOptions?)
 	local matDef = Materials[material]
 	if not matDef then
 		return
 	end
+	local pitch = options and options.pitch
+	local gain = options and options.gain
 
 	-- Is there anything to play at all? Checked without picking, because picking has a
 	-- SIDE EFFECT and must not happen for a trigger that is about to be thrown away.
-	local ids = usableIds[matDef.sfxEvent]
+	--
+	-- The event asked for, else the material's own, else its stand-in (`sfxFallback`): a material
+	-- is not silent while its recordings are still to be made.
+	local event = matDef.sfxEvent
+	local asked = options and options.event
+	if asked and AudioService.hasTakes(asked) then
+		event = asked
+	elseif not AudioService.hasTakes(event) and matDef.sfxFallback then
+		event = matDef.sfxFallback
+	end
+	local ids = usableIds[event]
 	if not ids or #ids == 0 then
 		return -- no audio wired up for this material yet
 	end
 
 	local now = os.clock()
 
-	-- The material gate first: one sound per footfall, not one per cell touched.
+	-- The material gate first: one sound per footfall, not one per cell touched. A forced sound --
+	-- a keypad combo landing on the click that caused it -- goes through.
+	local forced = options ~= nil and options.force == true
 	local materialGap = matDef.sfxMinGap or 0.08
-	if now - (lastMaterialAt[material] or 0) < materialGap then
+	if not forced and now - (lastMaterialAt[material] or 0) < materialGap then
 		return
 	end
 
 	-- Then the per-region gate, for a single cell retriggering on re-contact.
-	if now - (lastTriggerTime[region] or 0) < 0.08 then
+	if not forced and now - (lastTriggerTime[region] or 0) < 0.08 then
 		return
 	end
 
@@ -321,7 +357,7 @@ function AudioService.playSfx(material: string, region: BasePart, mine: boolean?
 	--
 	-- A side-effecting function called speculatively is the bug in one line. Moved below
 	-- the gates, every advance of the picker corresponds to exactly one audible sound.
-	local soundId = pickSoundId(matDef.sfxEvent)
+	local soundId = pickSoundId(event)
 	if not soundId then
 		return
 	end
@@ -374,8 +410,8 @@ function AudioService.playSfx(material: string, region: BasePart, mine: boolean?
 	--
 	-- It matters most where there is one take: honey, sand, butter and slime each have a
 	-- single upload, so this is doing the work a second recording would.
-	sound.Volume = (volumeByMaterial[material] or 1) * rng:NextNumber(0.92, 1.0)
-	sound.PlaybackSpeed = rng:NextNumber(0.94, 1.06)
+	sound.Volume = (volumeByMaterial[material] or 1) * rng:NextNumber(0.92, 1.0) * (gain or 1)
+	sound.PlaybackSpeed = if pitch then pitch * rng:NextNumber(0.995, 1.005) else rng:NextNumber(0.94, 1.06)
 	if mine then
 		-- Parented to SoundService, which makes it 2D and ignores rolloff entirely.
 		sound.Parent = SoundService
