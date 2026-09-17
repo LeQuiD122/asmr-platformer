@@ -359,6 +359,174 @@ identity -- a tile
 mesh gets in the way of a footprint, and it draws a lattice across a surface whose
 deformation has nothing to do with cells.
 
+### Clay and salt move material
+
+Every other material answers a footfall on the cell you stepped on. **Clay and salt move material
+into the cells around it**, and that is where their risk comes from. The rules live in the
+DISPLACEMENT section of `DeformationService`; the numbers are `displacement`, `displaceSteps`,
+`displaceFrom`, `displaceTilt`, `displaceLimit`, `sinkAfter` and `creepEvery` in `MaterialConfig`.
+Standing still presses the cell under you again every `creepEvery` seconds. Both are still
+PACE-slot chunks (P10, P11, P17): a steady crossing is safe, and stopping, doubling back, hugging
+an edge and crowding are what break them.
+
+- **Clay squeezes out.** A step sinks the cell (up to three presses deep) and pushes one unit of
+  clay toward the nearest open side of the slab, split both ways down the exact middle. A cell with
+  neighbours on both sides takes it as a ridge; an edge cell takes it as a lip that bulges out and
+  droops over the side, shedding chips one squeeze before it goes. At three the lip TEARS OFF (a
+  clay slab swings out on a hinge and falls) with whoever is on it, and the next cell in becomes
+  the edge. Stepping on a ridge carries its clay on outward. Ridges and pits are physical: the
+  collider follows 80% of the shape.
+- **Salt sits on brine.** A step packs the cell (lower, firmer, and faster: walk speed goes from
+  0.88 back to 1.0 as it packs). From the SECOND packing on, the brine is squeezed sideways into
+  the unpacked crust around it: one push cracks a plate, two lift and tilt it (dark cracks,
+  bubbles, the collider tilts), three sink it. A tilted plate breaks under a foot and sinks on its
+  own after 8 seconds. Standing still for 2.4 seconds leaves you on an island of packed salt. A
+  sunk plate is the bed funnelling down with bubbles and pieces of crust going under -- there used
+  to be a translucent blue-grey "brine" part closing over the hole, and in play it read as dark blue
+  squares floating beside the salt, so it is gone.
+  Pushing from the first step broke a plate under the second foot of an ordinary crossing -- a
+  player walking with a foot either side of a cell line strains the next cell from behind and
+  from beside -- which `sim_displace.py` (scratch) found from the service's own rules.
+- **A taller sensor.** A ridge or a heaved plate lifts the collider above the thin tile that
+  senses footsteps, so every clay and salt cell gets a `Reach` part (1.8 below to 2.6 above the
+  surface) created at registration, and that is what fires Touched. No template rebuild needed.
+- The renderer draws both from the numbers each update carries (`depth`, `push`, `lean`,
+  `cause`), inside one do-block in `DeformationRenderer` so the module stays at 188 top-level
+  locals. A `push` update is a neighbour's weight arriving and plays no footstep.
+
+### The keypads: three switches
+
+The three button chunks (P12 Button Pad, P14 Dense Keypad, P15 Domed Keypad) are arcade keypads.
+**`ChunkBuilder` changed, so clear both chunk folders before playing** (see the run ritual).
+
+- **Every button is three parts**: a dark `CapBezel` that never moves, a see-through `Cap`, and a
+  Neon `CapLed` core inside it. Cap and core travel together, about flush with the bezel, where the
+  core still shows. Between presses every core breathes on a slow wave that runs along the route.
+- **Every cell is a switch**, written on the tile as the `Switch` attribute by `switchFor`, and all
+  three do something. CLICKY (cyan) is x1.22 walk speed and a SURGE that carries off the pad for
+  1.4 s. Three clicky presses in a row, each within 0.8 s of the last, is a COMBO: x1.34 for 2.4 s
+  and the whole pad lights up in a wave from your foot. The pad and the dome run a clicky lane down
+  the middle (over the summit on the dome); the dense keypad braids it, so weaving collects every
+  one. Numbers: `switchSpeeds`, `surgeLinger`, `comboAt`, `streakWindow`, `comboSpeed`,
+  `comboLinger`. Violet and pink no longer cost you a surge (pink used to be x0.88 and cleared it),
+  and a press never lowers a surge already running: it keeps whichever is bigger and lasts longer.
+- **LINEAR (violet) is a CAPACITOR.** Each violet press stores a charge (up to `capacitorMax` 3,
+  held `capacitorHold` 4 s from the last one); the next clicky press spends them all, +0.06 speed and
+  +0.5 s per charge (`dischargeSpeed`, `dischargeLinger`), capped at `surgeCap` x1.6. The charge arcs
+  up out of the violet button into you and you carry a violet crackle and glow that grows with each;
+  the discharge arcs out of you into the cyan button with a violet flash wave and a combo zap.
+  `sim_round4.py` (scratch): three violet then one cyan is x1.40 for 2.9 s, level with a straight
+  circuit (x1.42 for 3.2 s); weaving violet into the dense keypad's braid makes x1.48 for 3.7 s.
+- **TACTILE (pink) is a SPRING.** A pink button under you raises your jump to `springJump[1]`
+  (x1.45 height) through JumpHeight and JumpPower, like the Needoh. Jump off pink and land on pink
+  again within `springChain` (1 s) and it is a BOUNCE: x1.8, then x2.2. Walking off, landing on
+  anything else, or the window closing puts the jump back. A launch is announced as `cause` "spring"
+  with the level in `charge`: the caps fly up and ring down, a pink flash wave, sparks, a pink streak
+  under the jumper, and the release sound at full voice. The server calls an exit a launch when the
+  root is rising faster than `SPRING_RISING` (6) or is `SPRING_ABOVE` (6) studs over the button;
+  `sim_round4.py` checked every jump level with the exit grace and a late audit, and that walking up
+  onto the dome's raised violet cells (4.75 up at most) does not count.
+- **Each switch feels different**: clicky snaps down, rings its bezel with light and flashes a
+  point light; linear is smooth; tactile stops at a bump part way down and again on the way up.
+  Every press ripples light to the buttons around it.
+- **A CIRCUIT**: a clicky press in every row of the pad inside one streak. x1.42 for 3.2 s
+  (`circuitSpeed`, `circuitLinger`), and the pad OVERLOADS: two waves of light, two flash waves,
+  sparks off every clicky button and a camera shake for the player who did it (through
+  `Humanoid.CameraOffset`, which nothing else uses). A combo gets a smaller version.
+- **Electricity**: every clicky press throws sparks and an arc jumps to the next clicky button
+  along the route, which flashes -- where to put your next foot.
+- **Sounds.** `audio/gen_button_sfx.py` synthesises the keypad's set (numpy and scipy, no Blender)
+  into `audio/buttons/`: 4 clicky, 3 linear, 3 tactile, 3 release, 2 combo, 2 circuit. Every sound
+  is a pitch-dropping punch under an FM zap with a crackle tail, low-passed and tapered to silence.
+  **They are not uploaded yet.** Upload each WAV and paste its id into `SOUND_IDS_BY_EVENT` in
+  `AudioService.lua`: clicky -> `buttonClick`, then `buttonLinear`, `buttonTactile`,
+  `buttonRelease`, `buttonCombo`, `buttonCircuit`. Until then the keypad falls back to
+  `buttonClick`, then to the keyboard's thock, pitched up a pentatonic scale along the route; once
+  the zaps are in, they rise gently instead. `AudioService.playSfx` now takes an options table
+  (`pitch`, `gain`, `event`, `force`) and `AudioService.hasTakes(event)` exists.
+
+### The Needoh squeeze
+
+The mini jumps are gone (`microBounceHeight` and `bounceCooldown` removed). Walking on a Needoh bed
+is just soft. **Standing still squeezes it**: after `chargeAfter` (0.25 s) the hollow deepens over
+`chargeTime` (1.1 s) while the bed swells around it, and at full squeeze it shivers and glows teal.
+Jumping out of it jumps up to `chargeJump` (2.2x) the normal height -- the server raises JumpHeight
+and JumpPower in four steps and restores both the moment the player leaves the bed. Letting go
+pops the hollow back past its footprint. Charge reaches clients as `charge` on the cell's update.
+
+### The occupancy audit
+
+TouchEnded is not guaranteed, and a cell that never hears it keeps a ghost occupant: buttons held
+down with nobody on them (the most likely reason for a keypad whose middle buttons were missing in
+a screenshot), a clay cell squeezing itself, a Needoh charging for nobody, walk speed stuck at the
+last material's. Every 0.25 s `DeformationService` now checks each occupied cell's occupants are
+still within 2.5 studs of it (and 9 above or below), and walks anyone who is not out of the cell.
+
+### Charcoal: the grill that catches
+
+Charcoal no longer snaps on the second step. A foot on a cold coal lights it (`fire` =
+"smoulder"); after `igniteAfter` (0.9 s) it burns, with glowing cracks on the collider (see Growing
+cracks below), a flickering light, sparks and smoke; `spreadAfter` (0.8 s) into burning it lights each cold
+neighbour on a `spreadChance` (22%); `burnFor` (1.9 s) after it caught it is ash and gives way. A
+foot on burning coal takes `stompBurn` off it and kicks up embers; burning coal is `hotSpeed`
+(x1.15). A fresh coal settles into an ash hole after `regrowAfter` (5.5 s), through the new
+`restoreCell`. `sim_round3.py` (scratch): a crossing at a walk is always safe and burns about 7
+of the 20 coals, one player or two never burns the whole grill, standing still on it drops you
+at 3 s, and following someone along the same line 3 s behind drops you.
+
+### Oobleck: stamp it hard
+
+Oobleck no longer runs a dissolve clock. Every player on the pool WADES: `wadeStill` (1.1 a
+second) standing or under `wadeSlow` (8 studs/s), `wadeMoving` (0.45) moving, dragging speed by up
+to `wadeDrag`, and a full wade gives way under them (`healAfter` 3.5 s to fill back in). A landing
+faster than `shockFrom` (28 studs/s, remembered for 0.35 s because the landing itself zeroes it)
+hardens the whole pool for `shockTime` (1.3 s): every wade drains, and the pool pops up flat in a
+wave from the landing. **No cracks on oobleck**: they were removed on request, it is a liquid. Walking across at full speed gets you over with a visible wade,
+stopping puts you under in about a second, hopping keeps you up indefinitely -- and one player's
+landing is a floor for everyone. Oobleck cells get the tall `Reach` sensor, like clay and salt.
+
+### Clay: the sag was tried and reverted
+
+For one round an overloaded clay lip sagged for 0.65 s and then broke into rounded lumps. The user
+preferred the version before it, so it is back: the lip tears off at once and swings out as one slab
+on a hinge (`peelClay`, `tearClay` without `CLAY_SAG`). Do not bring the sag or the lumps back.
+
+### Growing cracks: soap and charcoal
+
+`Fissure` in `DeformationRenderer` (one table, after `canvasUV`) draws cracks that GROW instead of
+appearing whole in random places. A crack starts at the foot that made it (`Fissure.footOf`: your
+own foot, or another player's root), fans inward if that is near an edge, and runs out a 0.42-stud
+segment at a time; a surface holds 48 segments. It draws on the same `crackGuis` overlay as
+`addCrackNetwork`, so `clearCracks` still clears it. Calls: `grow`, `extend` (run the live tips on),
+`widen`, `tint`, `glow` and `flare` (breathing brightness, unlit overlays only), `shatter` (a piece
+of the surface falls out and takes its cracks, the rim opens up) and `heal` (fade and remove).
+
+- **Soap**: the first step on a cell starts 3 cracks from the foot; a later step runs those on and
+  adds a short pair under the new foot, instead of drawing nine more on top every time (it used to,
+  which is how a busy cell became a scribble). They run on with every cube that falls, every top
+  cube takes the cracks over it, and they fade as the bar mends. Numbers: `SOAP.CRACK_*`.
+- **Charcoal**: dull red hairlines creep out from where the coal was lit, or in from the side of the
+  burning coal that spread to it, over the ignite time; bursting into flame runs them on, opens them
+  and turns them orange with the glow breathing; white-hot 62% of the way into the burn as the last
+  warning; ash grey as it breaks. A stamp on burning coal splits new cracks out and flares them.
+  Numbers: the crack fields in `NEW_MATS.Charcoal`.
+- Salt, ice and wax are unchanged.
+
+### Faster to give way, faster to fall
+
+- **Every collapse under your own character drops you at once**: the renderer sees the cell go,
+  turns off its collider locally, puts you in free fall at 34 studs/s down and adds 1.1 g of extra
+  weight for 0.55 s (`NEW_MATS.Fall`). No more standing on a collider that is waiting for the
+  server's CanCollide to arrive.
+- **Clocks shortened**: soap 2.5 -> 1.9 s, kinetic sand 3.0 -> 2.3, chocolate 5.0 -> 3.8, snow
+  7.0 -> 5.5, cloud 1.6 -> 1.15 (and its visual sink rate raised to match). Step counts unchanged.
+- **Collapse animations faster**: sand 0.5 -> 0.26 s with less stagger, snow 0.35 -> 0.18, melting
+  chocolate 0.45 -> 0.24, sinking salt 0.9 -> 0.45, and cloud now actually drops out in a burst of
+  vapour when it gives way (it had no picture for that at all).
+- **Slabs under any hole-opening material no longer collide** (`ChunkBuilder`: step counts,
+  displacement, wading and embers join the dissolve clock), and a re-inflated bubble wrap cell
+  now gets its floor back -- it used to look whole and let you fall straight through.
+
 ## Levels and the lobby
 
 The lobby is a permanent room; runs are built and torn down around it. It has one pad per level
@@ -381,8 +549,9 @@ in `docs/superpowers/specs/2026-08-28-lobby-hub-design.md` and
 
 ## City Shore's finale (Level 1)
 
-**State on 2026-09-16:** the board and the dive work in Studio. The splash, the blackout and
-the restart and early-finish fixes below are newer and **not yet seen in Studio**. It lives in
+**State on 2026-09-16:** the board works in Studio. Diving was reported sending the player back
+to the route in a Short Chill run; the cause and the fix are below and **not yet seen in Studio**.
+It lives in
 `src/Server/Services/DiveFinaleService.lua`, and the level asks for it with `finale = "dive"`.
 
 - **The platform.** The last chunk runs onto a tiled deck with a springboard cantilevered out
@@ -390,17 +559,29 @@ the restart and early-finish fixes below are newer and **not yet seen in Studio*
   It is built in the frame `LevelService` now returns as `finishFrame`: the far end of the last
   chunk, on its exit surface, with **+X pointing away from the spiral's centre** -- the one
   direction at the top of the climb with nothing under it but sea.
-- **The dive.** The column of air past the deck's edge and below the board is the trigger, so
-  jumping off the board counts and walking off the deck does not. The fall is about 830 studs
-  and three seconds, through the backdrop's cloud layers.
-- **The finish is the sea.** On reaching the water: spray, a spreading ring and a splash; the
-  diver is anchored and sinks under the surface while the screen fades to black (`ScreenFade`
-  remote, `UIService.fadeToBlack`), "Level 1 Complete" reads on the black, the lobby takes them
-  four seconds later and the picture fades back.
-- **Roblox deletes anything below `Workspace.FallenPartsDestroyHeight`, default -500, and the sea
-  is at -700.** Every diver was destroyed in mid-air before this was handled. The dive moves the
-  floor 500 studs below the sea while armed and puts it back in `stop()`. Anything else that
-  lands below -500 will hit the same wall.
+- **The dive is two checks.** A player is diving once they have passed through the air just
+  under the board (out past the deck's edge, within 20 studs of it along the route, 3 to 70 studs
+  down) AND are over the **landing circle**: an invisible 600-stud-wide disc on the water in front
+  of the tower, `DiveLandingCircle` in the platform model, selectable in the Explorer. Its nearest
+  edge is 24 studs from the route's centreline, clear of the far corner of the longest chunk
+  (`R1_SlimeLaunch`, 38 long, reaches about 23). Leaving the circle -- steering back in towards the
+  tower -- ends the dive and the kill plane has you again. The circle alone would finish the level
+  for anyone who fell off a lower turn and drifted out, so both checks are needed.
+- **The finish is the sea, and the server carries the diver into it.** 400 studs above the water
+  (-300 at the sea's -700) the server anchors the diver and tweens them down at the speed they were
+  falling. On reaching the surface: spray, a spreading ring and a splash, the diver sinks, the
+  screen fades to black (`ScreenFade` remote, `UIService.fadeToBlack`), "Level 1 Complete" reads on
+  the black, the lobby takes them four seconds later and the picture fades back. A held diver is
+  let go once the lobby has moved them; if nothing has after 12 seconds they are put back on the
+  deck with a warning, never let go under the sea.
+- **`Workspace.FallenPartsDestroyHeight` CANNOT BE SET FROM A SCRIPT.** It is PluginSecurity: only
+  plugins, the command bar and the Properties window can write it. Roblox deletes a falling part
+  below it (default -500) and the sea is at -700, so the first fix moved it from the dive module --
+  and that line threw. `start()` died after building the board and before connecting the watch,
+  so nothing was ever watching for divers and the kill plane sent every one of them back. That is
+  the "dive and get teleported back" report. The engine never deletes an ANCHORED part (the
+  backdrop's sea sits at -700 because of that), which is why the server takes the diver over
+  above -500 instead. `check_hub.py` fails on any script under `src` that assigns the property.
 - **Three things that each fail silently on their own**, so `check_hub.py` gates all three:
   the splash is a HEIGHT TEST rather than a Touched (a diver crosses about nine studs a frame
   and a trigger part is skipped outright); the kill plane must leave a diver alone, since it
@@ -413,7 +594,13 @@ the restart and early-finish fixes below are newer and **not yet seen in Studio*
   route's finish line live, so the run completed on arriving at the deck. So: the dive stands
   down before a level is cleared, its watch puts the platform back if it finds it destroyed, it
   keeps the old finish line disarmed, and the finish-line handler refuses to complete anyone while
-  `DiveFinaleService.isArmed()`. Each repair warns once. Every run prints which ending it armed.
+  `DiveFinaleService.isArmed()`. Each repair warns once. Every run prints which ending it armed,
+  and a working dive prints `DiveFinaleService: high dive armed at ...` -- printed only after the
+  watch is connected, so its absence means the dive is not armed whatever the level looks like.
+- `sim_circle.py` (scratch, not in the repo) flew every combination of deck height, jump or step,
+  take-off point and held direction: every dive that does not steer back in lands inside the
+  circle except a pure sideways walk-off at the board's root, and the diver's own client stays
+  above -415 before the anchor reaches it.
 
 ## The Flooded Halls (Level 4)
 
@@ -925,8 +1112,8 @@ The parser is strict on purpose and will raise rather than skip a field it does 
   contrast, because high contrast turns any line into an object lying on the surface --
   but a SurfaceGui is unlit and has no depth, and depth is the whole point of a crack.
   The plate seams replace it: a gap needs no contrast trick to read, because it is
-  darker for the physical reason that it is a hole with butter at the bottom. Soap still
-  uses `addCrackNetwork` and still wants it.
+  darker for the physical reason that it is a hole with butter at the bottom. Soap and
+  charcoal now use `Fissure` (growing cracks); salt still uses `addCrackNetwork`.
 - **SOUND IS PARTLY IN.** Seven events in `AudioService.SOUND_IDS_BY_EVENT` have uploaded
   takes: honey (2), butter-wax (1), kinetic sand (6), slime (1), soap (1), bubble wrap (3) and
   the creamy keyboard (4). The other fifteen are empty lists, so those materials are still
