@@ -1,37 +1,46 @@
 --!strict
 -- ServerScriptService/Services/DiveFinaleService.lua
 -- The end of City Shore: a high-dive platform at the top of the spiral, a springboard out over
--- the open sea, and a finish that IS the sea.
+-- the open sea, and a landing circle on the water that finishes the run.
 --
 -- === What it is ===
 --
--- The run climbs a spiral seven hundred studs above the water for its whole length, and the
--- water is the one thing in the level you can see the entire time and never reach. So that is
--- how it ends. The last chunk runs onto a tiled deck with a springboard sticking out past its
--- edge; you walk to the end of the board, jump, fall through the cloud layers, and the level
--- completes the moment you hit the sea.
+-- The run climbs a spiral high over the sea, and the sea is the one thing you can see the whole
+-- way up and never reach. So that is how it ends. The last chunk runs onto a tiled deck with a
+-- springboard out past its edge; you walk to the end of the board and jump. Fall inside the
+-- landing circle and the water closes over you, the screen goes black, and the level is complete.
+-- Steer out of the circle and it was not a dive: the kill plane has you, as it would anywhere.
 --
--- === Why the finish is not a trigger part ===
+-- === Two checks ===
 --
--- A diver reaches the water at over five hundred studs a second, which at sixty frames is nine
--- studs a frame. A Touched event on a thin part is simply skipped at that speed -- the character
--- is above it on one frame and below it on the next and never "touched" anything. So the splash
--- is a height test on Heartbeat against the sea's own surface, which cannot be skipped.
+-- A diver is someone who has LEFT THE BOARD -- passed through the air just under it -- AND is
+-- over the LANDING CIRCLE. Neither is enough alone. The air under the board alone would count a
+-- fall that drifts back in over the spiral. The circle alone would count anyone who fell off a
+-- lower turn and drifted out over the same patch of sea, which is a way to finish the level
+-- without climbing it.
 --
--- === Why the kill plane has to be told ===
+-- === Why nothing here touches FallenPartsDestroyHeight ===
 --
--- Bootstrap's kill plane sits forty studs under the lowest chunk, which is nearly seven hundred
--- studs above the water. Every diver would be caught by it and sent back up a few frames into
--- the dive. So a player who has jumped off the board -- and a player standing in the sea after
--- the splash, still far below the plane -- belongs to this module, and Bootstrap asks ownsFall
--- before it catches anyone.
+-- Roblox deletes a falling part below Workspace.FallenPartsDestroyHeight: -500 by default, with
+-- the sea at -700. The first fix moved it from this module, and THAT LINE IS WHAT BROKE THE DIVE.
+-- The property is PluginSecurity -- a script can read it, and only plugins, the command bar and
+-- the Properties window can set it -- so the write threw. start() died after the platform was
+-- built and before the watch was connected: a board you could jump off, nothing watching for
+-- divers, and a kill plane with nobody to ask. Every dive was caught and sent back. check_hub
+-- refuses any script that assigns it.
+--
+-- So a diver never reaches -500 on their own. COMMIT_ABOVE over the water, the server takes them
+-- over: the character is anchored -- the engine does not delete anchored parts, which is how the
+-- backdrop's sea can sit at -700 at all -- and carried the rest of the way down at the speed they
+-- were already falling. The splash, the blackout and the completion land when they reach the
+-- surface.
 --
 -- === Coordinates ===
 --
--- Everything is laid out in the FINISH FRAME LevelService hands over: origin at the far end of
--- the last chunk on its walking surface, +Z the way the route was going, and +X pointing AWAY
--- from the spiral's centre, which is the way out over the sea. Every chunk of the spiral lies
--- at X of about 11 or less in this frame, so anything past the deck's outer edge is clear air.
+-- Everything is laid out in the FINISH FRAME LevelService hands over: origin at the far end of the
+-- last chunk on its walking surface, +Z the way the route was going, and +X pointing AWAY from the
+-- spiral's centre, which is the way out over the sea. No chunk on any turn of the spiral reaches
+-- further than about twenty-three studs out in this frame, so everything past that is open air.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -42,11 +51,9 @@ local DiveFinaleService = {}
 
 -- ===== THE PLATFORM =====
 --
--- WIDE ENOUGH THAT ITS EDGE CLEARS ANY CHUNK, which is what decides this rather than taste.
--- The dive column starts at the deck's outer edge, and a shaped chunk with a shelf on it reaches
--- about sixteen studs from the route's centreline -- so at thirty wide the column began one stud
--- INSIDE the widest chunk on the turn below, and standing on that chunk's shelf counted as
--- falling. Thirty-six puts the edge two studs clear of anything the generator can build.
+-- WIDE ENOUGH THAT ITS EDGE CLEARS ANY CHUNK, which is what decides this rather than taste. A
+-- shaped chunk with a shelf on it reaches about sixteen studs from the route's centreline, so
+-- thirty-six puts the deck's edge two studs clear of anything the generator can build.
 local DECK_WIDE = 36
 local DECK_DEEP = 30
 local DECK_THICK = 3
@@ -61,36 +68,48 @@ local FLAG_HEIGHT = 26
 
 -- ===== THE DIVE =====
 --
--- The column of air a jump off the board falls into. A player inside it is diving: out past the
--- deck's edge, three studs under the board's top and further down, so standing on the board
--- does not count and falling off it does.
-local ZONE_OUT = 95
-local ZONE_SIDE = 30
+-- CHECK ONE: THE AIR JUST UNDER THE BOARD, out past the deck's edge and no further along the route
+-- than ZONE_SIDE either side of the deck. From three studs below the board's top, so standing on
+-- it does not count and leaving it does, down to seventy. The kill plane is at least forty under
+-- the deck, so a diver is recognised long before they reach it.
+local ZONE_TOP = 3
 local ZONE_DOWN = 70
--- A diver who lands on something this far above the water did not reach it: they steered back
--- onto the spiral, and the kill plane is theirs again.
-local LANDED_ABOVE = 40
--- How far under the surface the splash leaves you standing: in the sea to the chest, then
--- sinking under it while the screen goes black.
+local ZONE_SIDE = 20
+-- CHECK TWO: THE LANDING CIRCLE, on the water in front of the tower. Its nearest edge is
+-- twenty-four studs out from the route's centreline: clear of the deck at eighteen and of the far
+-- corner of the longest chunk on any turn of the spiral (R1_SlimeLaunch, thirty-eight long, at
+-- about twenty-three). And it is big, six hundred studs across, because the only fall it exists to
+-- refuse is one that steers back in towards the tower. Simulated: every dive off the board that
+-- does not head back in lands inside it, and no fall from further back down the route counts.
+local CIRCLE_OUT = 324
+local CIRCLE_RADIUS = 300
+-- HOW HIGH OVER THE WATER THE SERVER TAKES OVER. At the sea's -700 that is -300: two hundred studs
+-- above the -500 where the engine deletes a falling character. That margin is for the server
+-- seeing the diver a little late, and the diver's own screen hearing about the anchor a little
+-- later still. check_hub keeps it at least a hundred clear.
+local COMMIT_ABOVE = 400
+-- The slowest the carry goes, for a diver who stepped off a low deck rather than jumping.
+local CARRY_SPEED = 350
+-- Where the diver ends up: through the surface, then sinking under it while the screen goes black.
 local SPLASH_SINK = 1.5
 local SINK_DEPTH = 7
 local SINK_TIME = 0.7
--- ===== WHY THE DESTROY FLOOR HAS TO MOVE =====
---
--- Roblox destroys any part that falls below Workspace.FallenPartsDestroyHeight, and the default
--- is -500. The sea is at -700. So the diver was deleted in mid-air TWO HUNDRED STUDS ABOVE THE
--- WATER, every single time: no splash, no completion, no UI, and a respawn that looks exactly
--- like the level having no ending at all. That was the report.
---
--- Moved below the sea while a dive is armed and put back in stop(), so it is this level's
--- setting rather than the place's. Everything else that falls is caught long before either
--- number: the kill plane sits forty studs under the lowest chunk.
-local DESTROY_DROP = 500
 -- The sea's level if the backdrop cannot say. BackdropService's BASE_Y.
 local FALLBACK_WATER = -700
--- A built-in water impact, present in every place with no upload. Slowed down, because this is
--- a body hitting the sea from a great height rather than a drip.
+-- A HELD DIVER IS LET GO once something has moved them this far from where they came to rest --
+-- the lobby taking them back -- and never before: a character let go under the sea is below the
+-- delete line and gone. If nothing has come for them after RELEASE_AFTER, nothing is coming, and
+-- they are put back on the deck rather than left in the water.
+local RELEASE_AWAY = 300
+local RELEASE_AFTER = 12
+-- A built-in water impact, present in every place with no upload. Slowed, because this is a body
+-- hitting the sea from a great height rather than a drip.
 local SPLASH_SOUND = "rbxasset://sounds/impact_water.mp3"
+-- How often the watch checks the platform is still there and the old finish line is still
+-- disarmed. Twice a second: a repair, not a control loop.
+local GUARD_EVERY = 0.5
+-- What LevelService calls the trigger at the end of the route.
+local FINISH_NAME = "FinishLine"
 
 local TILE = Color3.fromRGB(236, 240, 238)
 local TRIM = Color3.fromRGB(72, 150, 170)
@@ -103,28 +122,26 @@ local SPRAY = Color3.fromRGB(240, 250, 255)
 type Finale = {
 	frame: CFrame,
 	model: Model,
-	-- Kept so the platform can be put back if the level is rebuilt under it. See the watch below.
+	-- Kept so the platform can be put back if the level is rebuilt under it.
 	parent: Instance,
+	-- The landing circle's centre, on the water.
+	circle: Vector3,
 	waterAt: (number, number) -> number,
 	onSplash: (Player) -> (),
 }
 
--- How often the watch checks that the platform is still there and the old finish line is still
--- disarmed. Twice a second: this is a repair, not a control loop, and it must not cost a frame.
-local GUARD_EVERY = 0.5
--- What LevelService calls the trigger at the end of the route.
-local FINISH_NAME = "FinishLine"
+-- A diver the server has taken over: the root, where it comes to rest, and when it gets there.
+type Hold = { root: BasePart, rest: Vector3, settled: number }
 
 local current: Finale? = nil
 local diving: { [Player]: boolean } = {}
-local splashed: { [Player]: boolean } = {}
+local committed: { [Player]: boolean } = {}
+local held: { [Player]: Hold } = {}
 local connection: RBXScriptConnection? = nil
--- Roots held still in the water, so they can be let go again if the run ends early.
-local held: { [Player]: BasePart } = {}
-local savedDestroy: number? = nil
 local guardAt = 0
 local saidRebuilt = false
 local saidDisarmed = false
+local saidStranded = false
 
 local function part(parent: Instance, name: string, size: Vector3, cf: CFrame, colour: Color3,
 	material: Enum.Material, shape: Enum.PartType?): Part
@@ -160,13 +177,13 @@ local function railRun(parent: Instance, frame: CFrame, from: Vector3, to: Vecto
 	bar.Reflectance = 0.2
 end
 
-local function buildPlatform(frame: CFrame): Model
+local function buildPlatform(frame: CFrame, circle: Vector3): Model
 	local model = Instance.new("Model")
 	model.Name = "DiveFinale"
 	local middle = DECK_DEEP / 2
 
-	-- THE DECK, flush with the last chunk's walking surface, with a teal border on the three
-	-- sides that are not the way in, and a narrower block under it so it has some mass.
+	-- THE DECK, flush with the last chunk's walking surface, a teal border on the three sides that
+	-- are not the way in, and a narrower block under it so it has some mass.
 	part(model, "DiveDeck", Vector3.new(DECK_WIDE, DECK_THICK, DECK_DEEP),
 		frame * CFrame.new(0, -DECK_THICK / 2, middle), TILE, Enum.Material.CeramicTiles)
 	part(model, "DiveDeckBase", Vector3.new(DECK_WIDE - 8, 5, DECK_DEEP - 8),
@@ -180,9 +197,9 @@ local function buildPlatform(frame: CFrame): Model
 			Enum.Material.CeramicTiles)
 	end
 
-	-- THE SPRINGBOARD. Clamped at its back end, resting on a roller a third of the way along,
-	-- and cantilevered out past the deck's edge -- which is how a real one is held, so nothing
-	-- about it is hanging in the air. A gritted strip on top, the texture every diving board has.
+	-- THE SPRINGBOARD. Clamped at its back end, resting on a roller a third of the way along, and
+	-- cantilevered out past the deck's edge, which is how a real one is held. A gritted strip on
+	-- top, the texture every diving board has.
 	part(model, "DiveBoardClamp", Vector3.new(4, 0.9, BOARD_WIDE + 1),
 		frame * CFrame.new(BOARD_FROM + 2, 0.45, middle), STEEL, Enum.Material.Metal)
 	part(model, "DiveBoardRoller", Vector3.new(BOARD_WIDE + 1.4, 0.9, 0.9),
@@ -213,58 +230,46 @@ local function buildPlatform(frame: CFrame): Model
 	railRun(model, frame, Vector3.new(outer, 0, 0.4), Vector3.new(outer, 0, middle - gap))
 	railRun(model, frame, Vector3.new(outer, 0, middle + gap), Vector3.new(outer, 0, back))
 
-	-- A FLAG at the far inner corner. From the bottom of the spiral this is the one thing on the
-	-- skyline that says where the top is.
+	-- A FLAG at the far inner corner: from the bottom of the spiral, the one thing on the skyline
+	-- that says where the top is.
 	part(model, "DiveFlagPole", Vector3.new(FLAG_HEIGHT, 0.5, 0.5),
 		frame * CFrame.new(inner + 2, FLAG_HEIGHT / 2, back - 2) * CFrame.Angles(0, 0, math.pi / 2),
 		STEEL, Enum.Material.Metal, Enum.PartType.Cylinder)
 	part(model, "DiveFlag", Vector3.new(0.12, 2.6, 4.4),
 		frame * CFrame.new(inner + 2, FLAG_HEIGHT - 1.6, back - 4.4), PENNANT, Enum.Material.Fabric)
 
+	-- THE LANDING CIRCLE, on the water. Invisible, the way the target of any real high dive is: it
+	-- is a part at all so the circle the watch tests against can be selected in Studio's Explorer
+	-- and seen, size and place, rather than taken on trust.
+	local marker = part(model, "DiveLandingCircle", Vector3.new(2, CIRCLE_RADIUS * 2, CIRCLE_RADIUS * 2),
+		CFrame.new(circle) * CFrame.Angles(0, 0, math.pi / 2), SPRAY, Enum.Material.SmoothPlastic,
+		Enum.PartType.Cylinder)
+	marker.Transparency = 1
+	marker.CanCollide = false
+	marker.CanTouch = false
+	marker.CanQuery = false
+	marker.CastShadow = false
+
 	return model
 end
 
--- Inside the column of air under and beyond the board.
-local function inDive(frame: CFrame, at: Vector3): boolean
+-- CHECK ONE: in the air just under the board, out past the deck's edge.
+local function underBoard(frame: CFrame, at: Vector3): boolean
 	local p = frame:PointToObjectSpace(at)
-	return p.X > DECK_WIDE / 2 and p.X < DECK_WIDE / 2 + ZONE_OUT
-		and p.Z > -ZONE_SIDE and p.Z < DECK_DEEP + ZONE_SIDE
-		and p.Y < BOARD_TOP - 3 and p.Y > BOARD_TOP - ZONE_DOWN
+	return p.X > DECK_WIDE / 2 and p.Z > -ZONE_SIDE and p.Z < DECK_DEEP + ZONE_SIDE
+		and p.Y < BOARD_TOP - ZONE_TOP and p.Y > BOARD_TOP - ZONE_DOWN
 end
 
-local function splash(finale: Finale, player: Player, root: BasePart, water: number)
-	local at = root.Position
+-- CHECK TWO: over the landing circle, seen from above.
+local function inCircle(finale: Finale, at: Vector3): boolean
+	local dx, dz = at.X - finale.circle.X, at.Z - finale.circle.Z
+	return dx * dx + dz * dz <= CIRCLE_RADIUS * CIRCLE_RADIUS
+end
 
-	-- STOPPED, AND HELD IN THE SEA. Anchored rather than stood on a hidden floor: the character
-	-- is owned by its own client, so a server that only writes a position and a velocity is
-	-- overruled by the next physics frame it sends -- and at six hundred studs a second that is
-	-- a diver who keeps going. Anchored, they stay exactly where they landed.
-	--
-	-- Then they SINK. The screen is going black over the same three quarters of a second, so
-	-- what you see is the water closing over you rather than a character standing in the sea.
-	local look = root.CFrame.LookVector
-	local flat = Vector3.new(look.X, 0, look.Z)
-	local facing = if flat.Magnitude > 0.1 then flat.Unit else Vector3.new(0, 0, -1)
-	local standAt = Vector3.new(at.X, water - SPLASH_SINK, at.Z)
-	local under = standAt - Vector3.new(0, SINK_DEPTH, 0)
-	root.AssemblyLinearVelocity = Vector3.zero
-	root.CFrame = CFrame.lookAt(standAt, standAt + facing)
-	root.Anchored = true
-	held[player] = root
-	TweenService:Create(root, TweenInfo.new(SINK_TIME, Enum.EasingStyle.Sine,
-		Enum.EasingDirection.Out), { CFrame = CFrame.lookAt(under, under + facing) }):Play()
-	-- LET GO BEFORE THE LOBBY TAKES THEM, not after: a character that arrives in the hub still
-	-- anchored cannot walk, and nothing there would ever unanchor it.
-	task.delay(3.6, function()
-		if held[player] == root then
-			held[player] = nil
-			root.Anchored = false
-		end
-	end)
-
-	-- THE SPLASH: a column of spray, a ring spreading on the water, and the sound. Rate and
-	-- Enabled rather than Emit, because Emit called on the server does not reach anyone's screen.
-	local host = part(finale.model, "Splash", Vector3.new(1, 1, 1), CFrame.new(at.X, water + 0.5, at.Z),
+-- The splash: a column of spray, a ring spreading on the water, and the sound. Rate and Enabled
+-- rather than Emit, because Emit called on the server does not reach anyone's screen.
+local function splashEffects(finale: Finale, surface: Vector3)
+	local host = part(finale.model, "Splash", Vector3.new(1, 1, 1), CFrame.new(surface + Vector3.new(0, 0.5, 0)),
 		SPRAY, Enum.Material.SmoothPlastic)
 	host.Transparency = 1
 	host.CanCollide = false
@@ -297,7 +302,7 @@ local function splash(finale: Finale, player: Player, root: BasePart, water: num
 	end)
 
 	local ring = part(finale.model, "SplashRing", Vector3.new(0.6, 8, 8),
-		CFrame.new(at.X, water + 0.3, at.Z) * CFrame.Angles(0, 0, math.pi / 2), SPRAY,
+		CFrame.new(surface + Vector3.new(0, 0.3, 0)) * CFrame.Angles(0, 0, math.pi / 2), SPRAY,
 		Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
 	ring.CanCollide = false
 	ring.CanTouch = false
@@ -321,59 +326,79 @@ local function splash(finale: Finale, player: Player, root: BasePart, water: num
 	Debris:AddItem(ring, 2)
 end
 
+-- THE SERVER TAKES THE LAST OF THE FALL. Anchored, which the engine never deletes and the diver's
+-- own client cannot overrule, and carried down at the speed they were already falling, so the
+-- hand-over does not read as a stall. The splash, the blackout and the completion all land when
+-- the diver reaches the surface.
+local function commit(finale: Finale, player: Player, root: BasePart)
+	local at = root.Position
+	local water = finale.waterAt(at.X, at.Z)
+	local look = root.CFrame.LookVector
+	local flat = Vector3.new(look.X, 0, look.Z)
+	local facing = if flat.Magnitude > 0.1 then flat.Unit else Vector3.new(0, 0, -1)
+	local speed = math.max(-root.AssemblyLinearVelocity.Y, CARRY_SPEED)
+	local surface = Vector3.new(at.X, water - SPLASH_SINK, at.Z)
+	local rest = surface - Vector3.new(0, SINK_DEPTH, 0)
+	local carry = math.max(0.05, (at.Y - surface.Y) / speed)
+
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.Anchored = true
+	held[player] = { root = root, rest = rest, settled = os.clock() + carry + SINK_TIME }
+	TweenService:Create(root, TweenInfo.new(carry, Enum.EasingStyle.Linear), {
+		CFrame = CFrame.lookAt(surface, surface + facing),
+	}):Play()
+
+	task.delay(carry, function()
+		-- Still this run's diver: a level torn down mid-carry has nobody left to finish.
+		local hold = held[player]
+		if current ~= finale or not hold or hold.root ~= root then
+			return
+		end
+		TweenService:Create(root, TweenInfo.new(SINK_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			CFrame = CFrame.lookAt(rest, rest + facing),
+		}):Play()
+		splashEffects(finale, Vector3.new(at.X, water, at.Z))
+		finale.onSplash(player)
+	end)
+end
+
 -- Builds the platform at `finishFrame` under `parent` and starts watching for divers. `waterAt`
 -- gives the sea's surface height at a world X and Z; `onSplash` is the level's finish.
 function DiveFinaleService.start(finishFrame: CFrame, parent: Instance,
 	waterAt: ((number, number) -> number?)?, onSplash: (Player) -> ())
 	DiveFinaleService.stop()
+	saidRebuilt, saidDisarmed, saidStranded, guardAt = false, false, false, 0
 
-	saidRebuilt, saidDisarmed, guardAt = false, false, 0
-	local model = buildPlatform(finishFrame)
+	local function sea(x: number, z: number): number
+		local level = if waterAt then waterAt(x, z) else nil
+		return level or FALLBACK_WATER
+	end
+	local over = finishFrame * Vector3.new(CIRCLE_OUT, 0, DECK_DEEP / 2)
+	local circle = Vector3.new(over.X, sea(over.X, over.Z), over.Z)
+
+	local model = buildPlatform(finishFrame, circle)
 	model.Parent = parent
 	local finale: Finale = {
 		frame = finishFrame,
 		model = model,
 		parent = parent,
-		waterAt = function(x: number, z: number): number
-			local level = if waterAt then waterAt(x, z) else nil
-			return level or FALLBACK_WATER
-		end,
+		circle = circle,
+		waterAt = sea,
 		onSplash = onSplash,
 	}
 	current = finale
 
-	-- THE DESTROY FLOOR, moved below the sea for the length of this level. See DESTROY_DROP: at
-	-- Roblox's default the diver is deleted in mid-air before the water ever arrives.
-	local surface = finale.waterAt(finishFrame.Position.X, finishFrame.Position.Z)
-	savedDestroy = workspace.FallenPartsDestroyHeight
-	workspace.FallenPartsDestroyHeight = surface - DESTROY_DROP
-
-	-- ONE LINE OF PROOF. Everything about this feature is invisible until someone walks to the
-	-- end of a level, and its failure mode is the level ending the way it used to. If this line
-	-- is not in the Output, the platform was not built, whatever else the log says.
-	local at = finishFrame.Position
-	print(("DiveFinaleService: high dive built at (%d, %d, %d), %d parts. The sea is %d studs "
-		.. "below it, and the run finishes there rather than at the end of the route."):format(
-		at.X, at.Y, at.Z, #model:GetDescendants(),
-		math.floor(at.Y - finale.waterAt(at.X, at.Z))))
-
 	connection = RunService.Heartbeat:Connect(function()
 		-- ===== THE PLATFORM AND THE OLD FINISH LINE, BOTH HELD =====
 		--
-		-- Two things were reported together and they are the same bug seen twice: a level that
-		-- was rebuilt with the dive armed came back with NO BOARD, and with its finish line at
-		-- the end of the route live again -- so the run completed on arriving at the deck,
-		-- before anyone reached the board.
-		--
-		-- Arming the dive once, at the moment a run starts, assumes that is the only thing that
-		-- ever builds a level. Rather than trust that, the dive holds its ground: if its platform
-		-- has been destroyed while it is still watching, it puts it back, and it keeps the finish
-		-- line disarmed for as long as it owns the ending. Both are cheap, and both say so once.
+		-- A level rebuilt with the dive armed came back with no board and its finish line live,
+		-- so the dive holds its ground: it puts the platform back if it is destroyed, and keeps
+		-- the finish line disarmed for as long as it owns the ending. Each repair says so once.
 		local now = os.clock()
 		if now - guardAt > GUARD_EVERY then
 			guardAt = now
 			if not finale.model.Parent then
-				finale.model = buildPlatform(finale.frame)
+				finale.model = buildPlatform(finale.frame, finale.circle)
 				finale.model.Parent = finale.parent
 				if not saidRebuilt then
 					saidRebuilt = true
@@ -394,49 +419,81 @@ function DiveFinaleService.start(finishFrame: CFrame, parent: Instance,
 			end
 		end
 
+		-- ===== HELD DIVERS =====
+		--
+		-- Let go once the lobby has moved them. returnToHub teleports before it tears the run
+		-- down, so by the time stop() lets everyone go they are already standing in the room.
+		for player, hold in pairs(held) do
+			if not hold.root.Parent then
+				held[player] = nil
+			elseif now > hold.settled then
+				if (hold.root.Position - hold.rest).Magnitude > RELEASE_AWAY then
+					hold.root.Anchored = false
+					held[player] = nil
+				elseif now - hold.settled > RELEASE_AFTER then
+					hold.root.CFrame = finale.frame * CFrame.new(0, 3.5, DECK_DEEP / 2)
+					hold.root.Anchored = false
+					held[player] = nil
+					committed[player] = nil
+					if not saidStranded then
+						saidStranded = true
+						warn(("DiveFinaleService: %s reached the water and nothing took them to "
+							.. "the lobby within %d seconds, so they are back on the deck rather "
+							.. "than held under the sea. The run's completion did not send them "
+							.. "home: look for a completion that returned early."):format(
+							player.Name, RELEASE_AFTER))
+					end
+				end
+			end
+		end
+
+		-- ===== DIVERS =====
 		for _, player in ipairs(Players:GetPlayers()) do
-			if splashed[player] then
+			if committed[player] then
 				continue
 			end
 			local character = player.Character
 			local found = character and character:FindFirstChild("HumanoidRootPart")
-			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-			if not (found and found:IsA("BasePart") and humanoid) then
+			if not (found and found:IsA("BasePart")) then
 				diving[player] = nil
 				continue
 			end
 			local root: BasePart = found
 			local at = root.Position
-			if not diving[player] then
-				if inDive(finale.frame, at) then
+			if not inCircle(finale, at) then
+				-- OUTSIDE THE CIRCLE, whatever came before: not a dive, and the kill plane has them.
+				diving[player] = nil
+			elseif not diving[player] then
+				if underBoard(finale.frame, at) then
 					diving[player] = true
 				end
-				continue
-			end
-			local water = finale.waterAt(at.X, at.Z)
-			if humanoid.FloorMaterial ~= Enum.Material.Air and at.Y > water + LANDED_ABOVE then
+			elseif at.Y <= finale.circle.Y + COMMIT_ABOVE then
 				diving[player] = nil
-			elseif at.Y <= water + 2 then
-				diving[player] = nil
-				splashed[player] = true
-				splash(finale, player, root, water)
-				finale.onSplash(player)
+				committed[player] = true
+				commit(finale, player, root)
 			end
 		end
 	end)
+
+	-- ONE LINE OF PROOF, after the watch is connected. If this is not in the Output, the dive is
+	-- not armed, whatever the level looks like.
+	local top = finishFrame.Position
+	print(("DiveFinaleService: high dive armed at (%d, %d, %d), %d parts. Landing circle %d studs "
+		.. "across on the water %d studs below; the server takes divers over %d studs above it."):format(
+		math.floor(top.X), math.floor(top.Y), math.floor(top.Z), #model:GetDescendants(),
+		CIRCLE_RADIUS * 2, math.floor(top.Y - circle.Y), COMMIT_ABOVE))
 end
 
 -- True while a dive owns this level's ending. Bootstrap's finish-line handler asks before it
--- completes anyone, so the end of the route can never finish a run the dive is meant to finish --
--- whatever has happened to that trigger's CanTouch in the meantime.
+-- completes anyone, so the end of the route can never finish a run the dive is meant to finish.
 function DiveFinaleService.isArmed(): boolean
 	return current ~= nil
 end
 
--- True while this module is responsible for where the player is: falling from the board, or
--- standing in the sea after the splash. The kill plane leaves both alone.
+-- True while this module is responsible for where the player is: falling inside the circle, or
+-- taken over by the server after it. The kill plane leaves both alone.
 function DiveFinaleService.ownsFall(player: Player): boolean
-	return diving[player] == true or splashed[player] == true
+	return diving[player] == true or committed[player] == true
 end
 
 -- Safe to call when nothing is running, and twice.
@@ -445,15 +502,10 @@ function DiveFinaleService.stop()
 		connection:Disconnect()
 		connection = nil
 	end
-	-- PUT BACK WHAT WAS CHANGED OUTSIDE THIS MODULE. The destroy floor is a Workspace property,
-	-- so leaving it moved would quietly change every level that ran after this one.
-	if savedDestroy then
-		workspace.FallenPartsDestroyHeight = savedDestroy
-		savedDestroy = nil
-	end
-	for _, root in pairs(held) do
-		if root.Parent then
-			root.Anchored = false
+	-- AN ANCHORED CHARACTER STAYS ANCHORED wherever it goes, so every held diver is let go here.
+	for _, hold in pairs(held) do
+		if hold.root.Parent then
+			hold.root.Anchored = false
 		end
 	end
 	table.clear(held)
@@ -463,7 +515,7 @@ function DiveFinaleService.stop()
 	end
 	current = nil
 	table.clear(diving)
-	table.clear(splashed)
+	table.clear(committed)
 end
 
 return DiveFinaleService
