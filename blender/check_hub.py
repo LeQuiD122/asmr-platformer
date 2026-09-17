@@ -372,20 +372,25 @@ def check_dive_finale():
         if needed not in boot:
             fail("Bootstrap", "%s (`%s` is gone)." % (why, needed))
 
-    # THREE THINGS IN THE MODULE ITSELF, each of which leaves the dive looking like a level with
-    # no ending: the diver deleted in mid-air, the diver carried on through the water by their own
-    # client, and no blackout when the water closes over them.
-    # THE ASSIGNMENT, not the word: stop() names the same property when it puts the old value
-    # back, so a gate on the bare name passes with the fix deleted.
-    if not re.search(r"FallenPartsDestroyHeight\s*=\s*\w+\s*-\s*DESTROY_DROP", dive):
-        fail("DiveFinaleService", "the destroy floor is not moved below the sea any more. Roblox "
-                                  "destroys parts under -500 by default and the sea is at -700, "
-                                  "so the diver is deleted in mid-air 200 studs above the water "
-                                  "and the splash never happens.")
+    # NO SCRIPT SETS THE DESTROY HEIGHT. Workspace.FallenPartsDestroyHeight is PluginSecurity: a
+    # script can read it, and only plugins, the command bar and the Properties window can set it.
+    # The dive's first fix assigned it, the assignment threw, and start() died after building the
+    # board and before connecting the watch -- so every diver was caught by the kill plane and
+    # sent back. Checked across every script, because the same line anywhere does the same.
+    for folder, _, names in os.walk(os.path.join(ROOT, "src")):
+        for name in names:
+            if name.endswith(".lua"):
+                path = os.path.join(folder, name)
+                if re.search(r"FallenPartsDestroyHeight\s*=(?!=)", code_of(read(path))):
+                    fail(os.path.relpath(path, ROOT), "assigns Workspace.FallenPartsDestroyHeight, "
+                         "which is PluginSecurity: the line throws, and nothing after it in that "
+                         "function runs.")
+    # SO THE SERVER HOLDS THE DIVER INSTEAD, above the -500 delete line, and carries them in.
     if "root.Anchored = true" not in dive:
-        fail("DiveFinaleService", "nothing holds the diver at the splash: the character is owned "
-                                  "by its own client, so a server that writes only a position is "
-                                  "overruled on the next physics frame.")
+        fail("DiveFinaleService", "nothing holds the diver when the server takes over: the "
+                                  "character is owned by its own client, so a server that writes "
+                                  "only a position is overruled on the next physics frame, and the "
+                                  "diver falls on past -500 and is deleted.")
     # BOTH WAYS, and the first version of this checked neither properly: it looked for the name
     # `ScreenFade:FireClient` anywhere in the file, which the fade BACK satisfies on its own -- so
     # the fade to black could be deleted with the gate still green.
@@ -415,9 +420,41 @@ def check_dive_finale():
     if "Touched" in dive:
         fail("DiveFinaleService", "the splash is back on a Touched event. At dive speed a "
                                   "trigger part is simply never touched.")
-    if "at.Y <= water" not in dive:
-        fail("DiveFinaleService", "the splash is no longer a height test against the sea's "
-                                  "own surface.")
+    if "at.Y <= finale.circle.Y + COMMIT_ABOVE" not in dive:
+        fail("DiveFinaleService", "the dive no longer finishes on a height test over the landing "
+                                  "circle.")
+
+    # TWO CHECKS: off the board, and over the landing circle. The circle alone would finish the
+    # level for anyone who fell off a lower turn and drifted out over the same patch of sea.
+    if '"DiveLandingCircle"' not in dive or "inCircle(finale, at)" not in dive:
+        fail("DiveFinaleService", "the landing circle is gone, so any fall past the board counts "
+                                  "as a dive wherever it comes down.")
+    if "underBoard(finale.frame, at)" not in dive or "p.Z > -ZONE_SIDE" not in dive:
+        fail("DiveFinaleService", "a diver no longer has to have left the board, so falling off a "
+                                  "lower turn into the circle finishes the level.")
+    # NOT FloorMaterial: that is the diver's client's to report, and the server's copy lags it.
+    if "FloorMaterial" in dive:
+        fail("DiveFinaleService", "the dive reads Humanoid.FloorMaterial again. The server's copy "
+                                  "lags the diver's client, so it can drop a diver mid-fall and "
+                                  "hand them to the kill plane.")
+    commit = re.search(r"^local COMMIT_ABOVE = ([\d.]+)", dive, re.M)
+    water = re.search(r"^local FALLBACK_WATER = (-[\d.]+)", dive, re.M)
+    if not commit or not water:
+        fail("DiveFinaleService", "COMMIT_ABOVE or FALLBACK_WATER is gone, so nothing says where "
+                                  "the server takes a diver over.")
+    elif float(water.group(1)) + float(commit.group(1)) < -400:
+        fail("DiveFinaleService", "the server takes divers over at %g, less than a hundred studs "
+             "above the -500 where Roblox deletes a falling character, so a diver seen a little "
+             "late is deleted first." % (float(water.group(1)) + float(commit.group(1))))
+    out = re.search(r"^local CIRCLE_OUT = ([\d.]+)", dive, re.M)
+    radius = re.search(r"^local CIRCLE_RADIUS = ([\d.]+)", dive, re.M)
+    if not out or not radius:
+        fail("DiveFinaleService", "CIRCLE_OUT or CIRCLE_RADIUS is gone.")
+    elif float(out.group(1)) - float(radius.group(1)) < 23:
+        fail("DiveFinaleService", "the landing circle's nearest edge is %g studs from the route's "
+             "centreline, over the spiral: the far corner of R1_SlimeLaunch, the longest chunk, "
+             "reaches about twenty-three."
+             % (float(out.group(1)) - float(radius.group(1))))
 
     # AND THE DIVE COLUMN STARTS OUTSIDE THE SPIRAL. The column begins at the deck's outer edge,
     # and the widest thing the generator can put on the turn below is a 22-wide shaped chunk with
