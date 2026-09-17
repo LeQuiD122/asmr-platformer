@@ -4,24 +4,26 @@ What we are going to build, roughly in order. `HANDOFF.md` describes what exists
 what does not exist yet. Every idea is tagged with where it came from: **(you)** for your ideas
 and decisions, **(suggested)** for mine.
 
-Last updated: 2026-09-15.
+Last updated: 2026-09-17. The short version, with what is built and waiting for a test, is the
+Status section of `README.md`.
 
 ## Where the levels stand
 
 | Level | Name | Background today | Plan |
 |---|---|---|---|
-| 1 | City Shore | skyscrapers, beach and waterpark on the horizon | ending built (section 1), needs Studio testing |
+| 1 | City Shore | skyscrapers, beach and waterpark on the horizon | ending built and tested: the dive works (section 1) |
 | 2 | Open Sky | nothing | becomes Sky Pools (section 3) |
 | 3 | Far Water | nothing | becomes The Sunken City (section 4) |
-| 4 | Flooded Halls | built, ends on the flume into the shaft | finish Studio testing |
+| 4 | Flooded Halls | built, ends on the flume into the shaft | the slide ending is tested and works |
 
 ---
 
-## 1. City Shore finale -- BUILT 2026-09-15, untested in Studio
+## 1. City Shore finale -- BUILT 2026-09-15, TESTED 2026-09-17: works
 
 **Built as you asked (you):** no slide ride. At the top of the spiral the last chunk runs onto a
 platform with a diving board, you jump off into the sea about 830 studs below, and hitting the
-water completes the level.
+water completes the level. Since 2026-09-16 the finish is a landing circle on the water, 600 studs
+across, because divers were being sent back to the route **(you)**.
 
 What went in: the deck, the springboard on its clamp and roller, rails, a corner flag, the dive
 detection, a splash with spray and a spreading ring, and a fade to black under the completion
@@ -29,8 +31,8 @@ banner as the diver sinks, before the lobby takes them back. The horizon turned 
 backdrop stopped following the player some rounds ago, so the sea was already really there.
 HANDOFF.md carries the details.
 
-**Left to check in Studio:** whether the fall reads well from the board, whether the splash lands
-where it should, and whether the drop wants to be higher or the board longer.
+**Tested (you):** the diving board works. Still open to taste: whether the drop wants to be higher
+or the board longer.
 
 ## 2. Story mode
 

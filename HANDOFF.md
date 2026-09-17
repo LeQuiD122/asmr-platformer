@@ -391,8 +391,8 @@ an edge and crowding are what break them.
   senses footsteps, so every clay and salt cell gets a `Reach` part (1.8 below to 2.6 above the
   surface) created at registration, and that is what fires Touched. No template rebuild needed.
 - The renderer draws both from the numbers each update carries (`depth`, `push`, `lean`,
-  `cause`), inside one do-block in `DeformationRenderer` so the module stays at 188 top-level
-  locals. A `push` update is a neighbour's weight arriving and plays no footstep.
+  `cause`), in one section of `DeformationRenderer` with its own function (see "Luau's 200 locals"
+  under Open items). A `push` update is a neighbour's weight arriving and plays no footstep.
 
 ### The keypads: three switches
 
@@ -771,7 +771,7 @@ Same idea applied to geometry instead of meshes, because the Studio loop for a
 |---|---|
 | `chunk_layout.py` | Parses `ChunkBuilder.server.lua` and reproduces the slab layout. Shared by the other two. |
 | `check_chunk_forms.py` | `python check_chunk_forms.py` — asserts the layout contract. No Blender needed. |
-| `check_lua.py` | `python check_lua.py` — eleven checks across `src/`, every one of them a bug that already shipped once: use-before-declaration, block balance, annotated fields, undeclared constants, undeclared calls, cross-module calls, a `local` declared twice in one scope, a field read off a constants table that has no such field, stage counts, staged effects that never read `ctx.stepCount`, and materials with no screen look. No Blender, no Luau needed. |
+| `check_lua.py` | `python check_lua.py` — twelve checks across `src/`, every one of them a bug that already shipped once: use-before-declaration, block balance, annotated fields, undeclared constants, undeclared calls, cross-module calls, a `local` declared twice in one scope, a field read off a constants table that has no such field, stage counts, staged effects that never read `ctx.stepCount`, materials with no screen look, and locals live at once past Luau's 200 in any function (a NOTE from 178). No Blender, no Luau needed. |
 | `check_hub.py` | `python check_hub.py` -- the lobby: every level has its own distinct headline material for its pad, every level in `All` gets a pad, pads are far enough apart to stand on, and a run request stays plain data that can survive a teleport. |
 | `check_halls.py` | `python check_halls.py` -- the Flooded Halls. See that section for what it covers. |
 | `plan_halls.py` | `python plan_halls.py` -- `halls_plan.png`: the three run lengths in plan plus a section. Needs matplotlib. |
@@ -789,6 +789,25 @@ Both read the Luau rather than restating it, so editing a chunk needs no second 
 The parser is strict on purpose and will raise rather than skip a field it does not know.
 
 ## Open items
+
+What is not built yet, as a list, is the Status section of `README.md` and in `ROADMAP.md`. Tested
+and working as of 2026-09-17: the City Shore dive and the Flooded Halls slide. Built and not yet
+seen in Studio: the keypads' capacitor and spring, growing cracks, oobleck without cracks, the
+restored clay peel and the renderer's section fix.
+
+- **Luau's 200 locals, and why `DeformationRenderer`'s sections are functions.** Luau refuses to
+  compile a function with more than 200 locals LIVE AT ONCE, and a module's main chunk is a
+  function. A local inside a top-level `do` block still counts toward the main chunk for as long
+  as the block runs, on top of every top-level local above it, and so do `for` loop variables.
+  The keypad section was a bare `do` block: adding the capacitor and the spring put 205 locals
+  live inside it, the renderer failed to load ("Out of local registers when trying to allocate _",
+  line 5878), and with it every material's visuals. `check_lua` had counted only top-level
+  `local`s (188) and passed it. Now every section of the renderer that keeps locals is
+  `do local function section() ... end section() end`, whose body has its own 200, and the main
+  chunk peaks at 188; `check_lua` counts live locals per function the way the compiler does,
+  names the exact line and local Studio would, and fails the file. The renderer's top-level count
+  is still 188 of 200: a new section must be a function too, and new top-level locals should go
+  into an existing table.
 
 - **The backdrop is LOCKED TO THE PLAYER, and that is the whole idea.** It re-centres
   horizontally every frame, so walking a level closes the distance by nothing and the
@@ -1147,8 +1166,9 @@ The parser is strict on purpose and will raise rather than skip a field it does 
   rectangle test clips the outline, and the outer ring of the top layer sits 0.35 lower
   so the rim rolls off instead of ending in a vertical wall. The rim is by far the
   stronger cue; plan rounding only clips four cubes.
-- **Chunk shape variants (planned).** Regular bar, square, flower, animal, a Minecraft
-  item, and so on. Cost depends entirely on the material:
+- **Chunk shape variants: done for granular materials.** `PlanShapes.lua` has fourteen
+  outlines (heart, star, turtle, ring, cog, bone and more) and 29 chunk segments use one. Cost
+  still depends entirely on the material:
   GRANULAR materials are nearly free -- there are no size-locked assets, so an outline is
   just the test inside `attachGranules`; swap it for any other mask and the same loop
   builds a different shape.
@@ -1172,18 +1192,19 @@ The parser is strict on purpose and will raise rather than skip a field it does 
 - **`Soap_Tile.obj` is now unused** (`gen_tile_meshes.py` still builds it). Left alone
   rather than deleted, since it predates the granular rewrite.
 - **Platform-wide soap deterioration.** Cells still crumble independently; a cell only
-  starts when you stand on it. Spreading failure to neighbours is untouched.- **Soap deterioration.** Currently one tile dissolves at a time. The platform should
-  progressively degrade.
+  starts when you stand on it. The platform should progressively degrade, with failure spreading
+  to neighbours, and nothing does that yet.
 - **Chunk form variety, second pass.** Done once (see below), but two chunks came out of
   it as the same hourglass: `C2_PaceToStable` and `C4_BubbleWrapToStable` differ only in
   material and in one rising. `S1_Straight` and `S2_Junction` are still rectangles from
   above by design, so their only variety is the shelf. None of this is worth retuning
   before it has actually been played.
-- **Textures.** No PBR maps anywhere. Deliberately last: maps painted for one geometry
-  approach are wasted if the approach changes.
-- **Honey variants for 16x12 platforms.** The skinned rig is size-locked to 16x18
-  (`P1_HoneyCorridor`). The honey sections of `P4` and `C1` fall back to per-tile meshes
-  automatically, so both approaches are visible in one run.
+- **Texture maps: two templates left.** The maps exist (see PBR maps above), and in Studio every
+  mesh template that should carry them has its SurfaceAppearance except `Buttons` and
+  `ButterStick`, the only two `MaterialAppearance` still warns about at startup (Needoh has none
+  by design).
+- **Honey 16x12: done.** `Honey_Platform_16x12` and its comb and pool forms are rigs of their
+  own, so no honey chunk falls back to per-tile meshes any more.
 - **A `Shared/Remotes.lua` module.** Several modules do blocking `WaitForChild` at require
   time, so correctness depends on script execution order that Roblox does not guarantee.
   This already caused one deadlock. Worth doing before adding more services.
