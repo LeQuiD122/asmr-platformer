@@ -87,6 +87,126 @@ LightingService.palettes = {
 		haze = 1.1,
 		offset = 0.05,
 	},
+	-- ===== CITY SHORE: late afternoon over the water =====
+	--
+	-- The level is a spiral climbing seven hundred studs above a sea, and it ends by diving into
+	-- that sea. Mid-afternoon light (the default) puts the sun overhead, which is the one position
+	-- that gives a flat sea nothing to do: no long glitter on the water, no colour in the sky, and
+	-- a horizon that reads as a line rather than as distance. Dropping the sun to 16.9 lights the
+	-- whole level along its climb, throws the glitter across the water toward the camera, and
+	-- gives the towers a lit face and a shadowed one, which is what makes them look like objects
+	-- rather than cut-outs.
+	--
+	-- LESS HAZE THAN THE LEVEL HAS TODAY, not more. The lobby sets the atmosphere for the whole
+	-- game (see HubService) and the levels inherit it: density 0.32 with haze 1.6, tuned for a
+	-- room whose horizon is 400 studs away. Out here that sits over a sea that reaches 6200 and
+	-- turns it into one pale wash. This is a touch above the default and well under the room's.
+	--
+	-- The sun is also drawn LARGER. A low sun is in the picture on the dive, and Roblox's default
+	-- angular size is a pinprick that reads as a lens artefact rather than as the sun.
+	--
+	-- CLEARER STILL, after a screenshot. The level under the old air was a PINK WALL: everything
+	-- below the horizon -- sea, beach, the whole city -- went to one flat wash, because the
+	-- horizon colour was pink and density and haze were high enough to paint it over everything
+	-- 700 studs down. Density 0.2 and haze 0.45 keep the far skyline softening into warm light
+	-- without erasing the water; the horizon is a pale gold, so what fog there is reads as late
+	-- sun rather than as a coloured filter; and Offset 0.25 keeps distant silhouettes solid
+	-- against the sky instead of melting into it.
+	cityShore = {
+		sky = Color3.fromRGB(160, 196, 236),
+		horizon = Color3.fromRGB(255, 214, 176),
+		density = 0.2,
+		haze = 0.45,
+		offset = 0.25,
+		clock = 16.9,
+		brightness = 2.05,
+		exposure = -0.02,
+		ambient = Color3.fromRGB(40, 34, 42),
+		outdoor = Color3.fromRGB(130, 121, 126),
+		glare = 0.6,
+		sunSize = 18,
+		bloom = 0.55,
+		bloomThreshold = 1.0,
+		rays = 0.1,
+		tint = Color3.fromRGB(255, 246, 230),
+		saturation = 0.09,
+		contrast = 0.09,
+	},
+	-- ===== SKY POOLS: late morning above the clouds =====
+	--
+	-- The calm level, so the plainest light: the sun high and a little behind the morning, a clear
+	-- blue overhead fading to a pale one at the horizon, and very little haze, because the whole
+	-- view is the cloud sea and a haze thick enough to read would turn it grey. Offset keeps the
+	-- tower and the far pools solid against the sky rather than melting into it.
+	--
+	-- CLOSE TO THE DEFAULT on purpose. Brightness, exposure and bloom are within a step of what
+	-- every level already has; the pale clouds and white decks carry the brightness themselves, and
+	-- pushing the light as well would take them to white.
+	skyPools = {
+		sky = Color3.fromRGB(150, 194, 240),
+		horizon = Color3.fromRGB(214, 230, 248),
+		density = 0.18,
+		haze = 0.35,
+		offset = 0.22,
+		clock = 10.8,
+		brightness = 2.1,
+		exposure = -0.03,
+		ambient = Color3.fromRGB(36, 40, 50),
+		outdoor = Color3.fromRGB(124, 132, 146),
+		glare = 0.35,
+		sunSize = 14,
+		bloom = 0.45,
+		bloomThreshold = 1.05,
+		rays = 0.06,
+		tint = Color3.fromRGB(248, 252, 255),
+		saturation = 0.08,
+		contrast = 0.06,
+	},
+	-- ===== THE SUNKEN CITY: a grey afternoon over still water =====
+	--
+	-- The eerie level, and the eeriness is mostly AIR: a low grey-green sky and a real haze, so the
+	-- far towers and the crane come out of the mist rather than standing against a hard horizon, and
+	-- the city's edge is never seen. The sun is low and weak, so the water is dull rather than
+	-- glittering and the eye goes down into it instead of across it.
+	--
+	-- SMALL STEPS, as the Flooded Halls taught: brightness and exposure only a little under the
+	-- default, bloom and rays almost off, and the colour cooled and greyed by a few points. Dim, not
+	-- dark. The thing's darkening of the water is the client's (SunkenCityClient), on top of this.
+	sunkenCity = {
+		sky = Color3.fromRGB(150, 168, 170),
+		horizon = Color3.fromRGB(128, 146, 146),
+		density = 0.34,
+		haze = 1.3,
+		offset = 0.12,
+		clock = 16.2,
+		brightness = 1.75,
+		exposure = -0.08,
+		ambient = Color3.fromRGB(34, 40, 42),
+		outdoor = Color3.fromRGB(110, 120, 122),
+		glare = 0.1,
+		sunSize = 10,
+		bloom = 0.3,
+		bloomThreshold = 1.2,
+		rays = 0.02,
+		tint = Color3.fromRGB(232, 244, 240),
+		saturation = -0.08,
+		contrast = 0.08,
+	},
+	-- ===== THE LOBBY, and these numbers are HubService's =====
+	--
+	-- The room sets its own atmosphere while it builds, and says there why: the levels are meant
+	-- to be the same sky from lower down. That worked while nothing else touched it. Now City
+	-- Shore has a sky of its own, so the room needs a way to get its air BACK when a run ends,
+	-- and that is this. If the numbers here and the ones in HubService ever disagree, HubService
+	-- is the one that built the room and this is the copy to correct.
+	lobby = {
+		sky = Color3.fromRGB(226, 216, 232),
+		horizon = Color3.fromRGB(146, 140, 178),
+		density = 0.32,
+		haze = 1.6,
+		offset = 0.1,
+		glare = 0.15,
+	},
 }
 
 function LightingService.apply(region: string?)
@@ -94,7 +214,8 @@ function LightingService.apply(region: string?)
 	-- Mid-afternoon. A high sun flattens everything and a low one throws long shadows
 	-- across the whole level; this angle puts a readable specular streak on horizontal
 	-- glossy surfaces, which is where every material in this game lives.
-	Lighting.ClockTime = 14.5
+	local palette = LightingService.palettes[region or "default"] or LightingService.palettes.default
+	Lighting.ClockTime = palette.clock or 14.5
 	Lighting.GeographicLatitude = 12
 
 	-- === Exposure ===
@@ -102,13 +223,13 @@ function LightingService.apply(region: string?)
 	-- near the top of the range, so extra brightness and positive exposure have
 	-- nowhere to go but toward white: the honey went paler and peachier rather than
 	-- deeper. Headroom matters more than brightness when everything is light already.
-	Lighting.Brightness = 1.9
-	Lighting.ExposureCompensation = -0.05
+	Lighting.Brightness = palette.brightness or 1.9
+	Lighting.ExposureCompensation = palette.exposure or -0.05
 
 	-- Shadows stay coloured rather than grey, and are lifted well off black: a pastel
 	-- palette dies if its shadows go neutral and dark.
-	Lighting.Ambient = Color3.fromRGB(38, 36, 44)
-	Lighting.OutdoorAmbient = Color3.fromRGB(122, 120, 134)
+	Lighting.Ambient = palette.ambient or Color3.fromRGB(38, 36, 44)
+	Lighting.OutdoorAmbient = palette.outdoor or Color3.fromRGB(122, 120, 134)
 
 	Lighting.GlobalShadows = true
 	Lighting.ShadowSoftness = 0.32 -- Future only
@@ -141,30 +262,38 @@ function LightingService.apply(region: string?)
 	-- would work and would also throw away the sky gradient, since Color and Decay are what
 	-- paint blue overhead and pink at the horizon. The fog is therefore built out of
 	-- Density, Haze and Offset instead.
-	local palette = LightingService.palettes[region or "default"] or LightingService.palettes.default
 	local atmosphere = ensure("Atmosphere", "Atmosphere")
 	atmosphere.Density = palette.density
 	atmosphere.Offset = palette.offset
 	atmosphere.Color = palette.sky
 	atmosphere.Decay = palette.horizon
-	atmosphere.Glare = 0.4
+	atmosphere.Glare = palette.glare or 0.4
 	atmosphere.Haze = palette.haze
+
+	-- THE SUN ITSELF, for a level that puts it in frame. Left alone unless a palette asks, so the
+	-- lobby's own Sky (which sets the moon and the stars with it) is not overwritten by this.
+	if palette.sunSize then
+		local sky = Lighting:FindFirstChildOfClass("Sky")
+		if sky then
+			sky.SunAngularSize = palette.sunSize
+		end
+	end
 
 	-- === Bloom ===
 	-- Threshold just above 1 so only genuine highlights bloom. Lower and the whole
 	-- pastel palette glows, which reads as fog rather than as gloss.
 	local bloom = ensure("BloomEffect", "Bloom")
 	bloom.Enabled = true
-	bloom.Intensity = 0.45
+	bloom.Intensity = palette.bloom or 0.45
 	bloom.Size = 24
-	bloom.Threshold = 1.05
+	bloom.Threshold = palette.bloomThreshold or 1.05
 
 	-- === Sun rays ===
 	-- Very low. This is atmosphere, not a lens effect; at high intensity it washes the
 	-- screen whenever the sun clips the edge of frame.
 	local sunRays = ensure("SunRaysEffect", "SunRays")
 	sunRays.Enabled = true
-	sunRays.Intensity = 0.06
+	sunRays.Intensity = palette.rays or 0.06
 	sunRays.Spread = 0.55
 
 	-- === Grade ===
@@ -173,9 +302,9 @@ function LightingService.apply(region: string?)
 	local grade = ensure("ColorCorrectionEffect", "Grade")
 	grade.Enabled = true
 	grade.Brightness = 0.01
-	grade.Contrast = 0.08
-	grade.Saturation = 0.05
-	grade.TintColor = Color3.fromRGB(255, 252, 246)
+	grade.Contrast = palette.contrast or 0.08
+	grade.Saturation = palette.saturation or 0.05
+	grade.TintColor = palette.tint or Color3.fromRGB(255, 252, 246)
 
 	-- NO Technology CHECK HERE.
 	--

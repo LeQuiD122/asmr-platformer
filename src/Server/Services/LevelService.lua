@@ -90,6 +90,7 @@ local PACE_STEP_CHOICES = { 2, 3, 0, 2, 3, 1, 2 }
 -- studs, so Level 3 at 812 makes about one and a half.
 local SPIRAL_RADIUS = 90
 
+
 -- Chunks are islands, not a continuous walkway. Every chunk boundary is a jump.
 -- 5 studs against an 8.2-stud reach leaves margin for a mistimed or slowed
 -- takeoff, which matters because honey halves WalkSpeed and butter-wax
@@ -179,6 +180,42 @@ local function pickChunkForSlot(token: string, level, rng: Random, recent: { str
 	return candidates[rng:NextInteger(1, #candidates)]
 end
 
+-- ===== A RING, FOR A LEVEL THAT ASKS FOR ONE =====
+--
+-- The helix above is tight on purpose: City Shore climbs round and round a centre, and seeing the
+-- part you climbed ten chunks ago is the whole shape. A level with `ring` set (Sky Pools) wants the
+-- opposite -- one wide sweep that never passes over itself, going DOWN -- so its radius is worked
+-- out from the run's planned length: the template's slots at the average length of the chunks this
+-- level can put in each, plus the gaps, spread over `turn` of a circle. Short, medium and long runs
+-- all come out at the same fraction of a turn. Uses no random numbers, so it cannot shift any
+-- other level's draws.
+local function ringRadius(level, template: { string }): number
+	local ring = level.ring
+	if not ring then
+		return SPIRAL_RADIUS
+	end
+	local means: { [string]: number } = {}
+	local planned = 0
+	for _, token in ipairs(template) do
+		local category = categoryForSlot(token)
+		local mean = means[category]
+		if not mean then
+			local total, count = 0, 0
+			for _, chunkId in ipairs(level.allowedChunkIds) do
+				local def = ChunkDefinitions[chunkId]
+				if def and def.category == category and chunkMaterialsAreWhitelisted(def, level.allowedMaterials) then
+					total += select(1, ChunkService.getChunkMetrics(chunkId))
+					count += 1
+				end
+			end
+			mean = if count > 0 then total / count else 20
+			means[category] = mean
+		end
+		planned += mean + CHUNK_GAP
+	end
+	return math.max(SPIRAL_RADIUS, planned / (2 * math.pi * (ring.turn or 0.75)))
+end
+
 -- Sequentially places chunks south-to-north along +Z, using each chunk's
 -- Z footprint so adjacent chunks butt up cleanly.
 -- `origin` is where this level's spiral is centred, and it defaults to the world origin so
@@ -266,6 +303,11 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 	local angle = 0
 	local cursorY = BASE_SURFACE_Y
 	local placed = CFrame.new()
+	-- The ring's radius and direction, for a level that has one; the helix otherwise.
+	local radius = if pathLayout then SPIRAL_RADIUS else ringRadius(level, template)
+	local ringDef = level.ring
+	local stepSign = if ringDef and ringDef.descend then -1 else 1
+	local stepScale = if ringDef then ringDef.stepScale or 1 else 1
 	local placedChunks = {}
 	-- The last few chunks picked, oldest first, for levels that declare avoidRecent.
 	local recentIds: { string } = {}
@@ -295,7 +337,17 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 		if slotIndex > 1 and not flatLayout then
 			local isStable = ChunkDefinitions[chunkId] and ChunkDefinitions[chunkId].category == "stable"
 			local steps = if isStable then STEP_CHOICES else PACE_STEP_CHOICES
-			cursorY += steps[rng:NextInteger(1, #steps)]
+			-- DOWN on a descending ring, and bigger: a drop has no jump height to stay under.
+			cursorY += stepSign * stepScale * steps[rng:NextInteger(1, #steps)]
+			-- A SWELL, for a ring that asks for one (the Sunken City): the route rises and dips round
+			-- the ring like a road over low hills, down near the water and up away from it again.
+			-- Added as the change since the last slot, so it stacks with the steps and with any
+			-- chunk's own rise, and one slot never changes by more than height * 2pi / every.
+			local wave = ringDef and ringDef.wave
+			if wave then
+				cursorY += wave.height * (math.sin(2 * math.pi * slotIndex / wave.every)
+					- math.sin(2 * math.pi * (slotIndex - 1) / wave.every))
+			end
 		end
 
 		local length, rise = ChunkService.getChunkMetrics(chunkId)
@@ -422,7 +474,7 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 			out = Vector3.new(math.cos(angle), 0, math.sin(angle))
 			tangent = Vector3.new(-math.sin(angle), 0, math.cos(angle))
 			placed = CFrame.fromMatrix(
-				base + out * SPIRAL_RADIUS + Vector3.new(0, cursorY, 0),
+				base + out * radius + Vector3.new(0, cursorY, 0),
 				Vector3.new(0, 1, 0):Cross(tangent),
 				Vector3.new(0, 1, 0),
 				tangent
@@ -465,7 +517,7 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 			along += length + CHUNK_GAP
 			angle = legBase + along
 		else
-			angle += (length + CHUNK_GAP) / SPIRAL_RADIUS
+			angle += (length + CHUNK_GAP) / radius
 		end
 		-- A PATH STAYS LEVEL. The rise is what makes a spiral a climb, and a climb through a
 		-- building with a ceiling puts the last chunk through the roof.
@@ -524,7 +576,7 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 	-- fromLegs begin that way -- so eight studs along it IS eight studs up +Z.
 	local startPosition = if pathLayout
 		then base + Vector3.new(0, BASE_SURFACE_Y + 4, 8)
-		else base + Vector3.new(SPIRAL_RADIUS, BASE_SURFACE_Y + 4, 8)
+		else base + Vector3.new(radius, BASE_SURFACE_Y + 4, 8)
 
 	-- Spawn on the level, not on the baseplate. Bootstrap also teleports on
 	-- CharacterAdded, but a real SpawnLocation makes respawns land correctly
@@ -537,7 +589,7 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 	spawn.Size = Vector3.new(8, 1, 8)
 	spawn.CFrame = CFrame.new(if pathLayout
 		then base + Vector3.new(0, BASE_SURFACE_Y + 0.5, 8)
-		else base + Vector3.new(SPIRAL_RADIUS, BASE_SURFACE_Y + 0.5, 8))
+		else base + Vector3.new(radius, BASE_SURFACE_Y + 0.5, 8))
 	spawn.Neutral = true
 	spawn.Duration = 0
 	spawn.Parent = levelsFolder
@@ -569,6 +621,9 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 		spawn = spawn,
 		minSurfaceY = minSurfaceY,
 		killY = minSurfaceY - 40,
+		-- The route's centre and radius, for anything built round it (Sky Pools).
+		centre = base,
+		radius = if pathLayout then nil else radius,
 		-- ===== WHAT THE BUILDING NEEDS TO KNOW =====
 		--
 		-- Only meaningful on a path layout, and nil everywhere else so a caller that forgets

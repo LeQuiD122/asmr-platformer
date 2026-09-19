@@ -41,6 +41,23 @@ task.spawn(SeaService.start)
 local CloudService = require(Services:WaitForChild("CloudService"))
 task.spawn(CloudService.start)
 
+-- THE TWO LEVELS WITH MOVING PARTS OF THEIR OWN: Sky Pools' splashing pools and drifting toys, and
+-- the Sunken City's thing, whirlpool, buoys, fish and clock. Each is looked for WITH A TIMEOUT inside
+-- its own task, so a place that has not had one pasted in loses that level's moving water and
+-- nothing else -- a bare WaitForChild here would hold up every line below it forever.
+for _, name in ipairs({ "SkyPoolsClient", "SunkenCityClient" }) do
+	task.spawn(function()
+		local module = Services:WaitForChild(name, 30)
+		if module and module:IsA("ModuleScript") then
+			local service: any = require(module)
+			service.start()
+		else
+			warn(("[client] no StarterPlayerScripts.Services.%s; that level's water will not move. Paste "
+				.. "src/Client/Services/%s.lua in as a ModuleScript."):format(name, name))
+		end
+	end)
+end
+
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local LevelCompleted = RemoteEvents:WaitForChild("LevelCompleted")
 local SlimeLaunch = RemoteEvents:WaitForChild("SlimeLaunch")
