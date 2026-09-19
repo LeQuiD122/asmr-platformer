@@ -9,7 +9,7 @@ chunks, there are four levels plus a Sandbox, and players choose a run in a lobb
 being dropped into a hardcoded level. See **Levels and the lobby** and **The Flooded Halls**
 below for the parts this file did not cover before.
 
-Last updated: 2026-09-16. What is planned next (the City Shore finale, story mode, the levels
+Last updated: 2026-09-18. What is planned next (the City Shore finale, story mode, the levels
 still to come) is in `ROADMAP.md`.
 
 ## Where things are
@@ -35,11 +35,12 @@ ServerScriptService
   Services                (Folder)
     BackdropService, BestTimeService, ChunkService, DeformationService,
     DiveFinaleService, FloodedHallsService, HubService, LeaderboardService,
-    LevelService, LightingService, PlayerStateService, TimerService    (ModuleScripts)
+    LevelService, LightingService, PlayerStateService, SkyPoolsService,
+    SunkenCityService, TimerService                                   (ModuleScripts)
 ReplicatedStorage
-  Shared                  (Folder) -> 8 ModuleScripts: ChunkDefinitions, HallRoute,
+  Shared                  (Folder) -> 9 ModuleScripts: ChunkDefinitions, HallRoute,
                                       LevelDefinitions, MaterialAppearance, MaterialConfig,
-                                      PlanShapes, SubRegionGrid, Types
+                                      PlanShapes, SubRegionGrid, SunkenPath, Types
   Assets/TileMeshes       (Folder) -> imported MeshParts, exact names below
   Assets/Backdrop         (Folder) -> horizon props, OPTIONAL (see below)
 StarterPlayerScripts
@@ -47,7 +48,7 @@ StarterPlayerScripts
   Services                (Folder) -> AudioService, CloudService, DeathService,
                                       DeformationRenderer, HubLeverService, HubVoteService,
                                       InputService, PauseMenuService, ScreenEffects,
-                                      SeaService, UIService
+                                      SeaService, SkyPoolsClient, SunkenCityClient, UIService
 ```
 
 Line 2 of each file is the authority if this list and a file ever disagree.
@@ -319,7 +320,9 @@ Before pasting a geometry change, run `python blender/check_chunk_forms.py`. It 
 boring failures without a Studio round trip; see the chunk layout tools below.
 
 For Level 4, run `python blender/check_halls.py` as well, and `python blender/plan_halls.py`
-if the route, the chamber or the pool changed.
+if the route, the chamber or the pool changed. For Level 2, run `python blender/check_skypools.py`,
+and `python blender/plan_skypools.py` to see the result. For Level 3, run
+`python blender/check_sunkencity.py`, and `python blender/plan_sunkencity.py` to see it.
 
 `Bootstrap` no longer builds a fixed level. Players spawn into the lobby (`HubService`) and a
 run is built from what they choose there; finishing or leaving returns everyone to the lobby.
@@ -512,6 +515,95 @@ of the surface falls out and takes its cracks, the rim opens up) and `heal` (fad
   Numbers: the crack fields in `NEW_MATS.Charcoal`.
 - Salt, ice and wax are unchanged.
 
+### Nothing stays broken: every hole fills itself in
+
+`Constants.REGROW_DURATION` (30 s) is the promise: any cell that gives way comes back that long
+after it broke, and `decayDuration` is capped by it so dents go too. Clay and salt drop from 600 s
+(the whole session) to 30. Materials with their own faster return keep it: charcoal `regrowAfter`
+5.5 s, oobleck `healAfter` 3.5 s, bubble wrap on its decay timer.
+
+- **Why.** A clay lip tearing off at the one place a jump needs it made the level unfinishable for
+  the rest of the run, and the only way on was to restart: a punishment for playing with the
+  material the level is made of.
+- **Server.** `collapseCell` stamps `cell.regrowAt`; the heartbeat calls `restoreCell` when it is
+  due and `occupied(cell)` says nobody is in the hole (a repair under a falling player would push
+  them out of a fall they have already lost). `restoreCell` now also gives the SLAB back -- its
+  collision, and its visibility, which bubble wrap needs -- once that platform's last hole closes.
+- **Client.** `revive` in `DeformationRenderer` is generic and runs for every material before the
+  material's own pristine branch: it cancels the collapse's tweens, clears marks and cracks, rises
+  the surface and its collider back to rest with a little overshoot, and puffs. Three materials had
+  no picture for the way back at all (kinetic sand, solid chocolate, salt) and simply stayed as
+  holes while the server counted them whole.
+
+### The ending: no blackout, a banner per level
+
+The dive used to fade the screen to black at the splash. That threw away the best thing in the
+level at the one moment worth watching and left a small grey banner alone on an empty screen. The
+fade is gone from Bootstrap's dive callback (`ScreenFade` stays wired; nothing fires it), and
+`UIService.showCompletion` carries the ending instead:
+
+- `COMPLETION_LOOKS` is a look per level: its name, its accent colour, the panel's tint, and a line
+  about what you just did ("You made the dive", "Down the flume"). Anything unlisted falls back.
+- The banner rises 24 px as it fades in, the eyebrow, headline, rule and numbers arrive on four
+  beats inside half a second, one sweep of light crosses the panel, and the run's time sits in mono
+  at the right. Hardcore and chill colour the mode line.
+- A VIGNETTE instead of a blackout: two gradient bands darken the top and bottom of the screen
+  while the banner is up, so it reads against the sea with the level still playing behind it.
+- `check_hub` gates the reverse of what it used to: a fade to black re-added at the splash now
+  FAILS, and the dive's own callback must still call `finishRunFor`.
+
+### City Shore, second version: a pastel beach city
+
+A screenshot of the first version showed what it amounted to from the level: pale boxes in a pink
+wash, and white eggs floating in front of everything. `BackdropService` builds something else now
+(BACKDROP_VERSION 5, so a saved backdrop is replaced on the next run):
+
+- **The composition turns on the sun.** `sunBearing` reads `Lighting:GetSunDirection()` at build
+  time (the level's palette is applied first, in Bootstrap) and the city's centre line faces away
+  from it, so every tower is lit on the side you see and the sun sets over open water.
+- **A crescent of land**, 224 degrees round, from the bay's beach at 1150 out to 6000: a beach
+  ramping out of the water (WedgeParts, front toward the level), a promenade, and flat ground, in
+  4-degree slices of one-colour SmoothPlastic, so where slices overlap there is nothing to fight.
+  Harbour walls run straight out to sea at both ends. The first version curved the coast away into
+  headlands, and `plan_cityshore.py` showed the slices stepping out by hundreds of studs there --
+  a staircase with sea between the treads -- so the coast is one radius all the way round.
+- **The beachfront**: about twenty deco hotels (pastel blocks, white eyebrow ledges, a fin and a
+  mast) facing the bay behind the promenade, and palms along it sized from the palm mesh.
+- **The city**: 56 towers in three bands behind the hotels, on land, one in three a dark glass
+  curtain wall with light mullions; twelve parks; the facades. No drowned towers and no collars.
+- **The water**: the aquapark in the bay from 800 to 1080 -- clear of the dive's landing circle,
+  which reaches about 714 from the middle -- smaller than before; float rings and lane ropes on the
+  water; the giant objects and the sandbars out on the open sea only.
+- **Removed**: the cloud banks (500 opaque balls: the eggs), the vapour (126 translucent banks
+  between the level and the water: most of the pink soup; CloudService already returns when there
+  is no Clouds folder), the always-built primitive scatter and every primitive fallback (the white
+  ball and the glowing lamp), and the colonnade. A prop that has not been imported is now simply
+  absent.
+- **The air**: the cityShore palette is density 0.2, haze 0.45, offset 0.25, a pale gold horizon.
+  The pink came from a pink horizon colour at high density and haze.
+
+### The keypads already come back
+
+Every button springs back up the moment you step off it (the release on `decaying`), and the cell
+goes pristine two seconds later; nothing on a keypad can collapse, so the 30-second repair never
+applies to one. Charges run out after four seconds and a spring when you land anywhere but pink.
+
+### City Shore has its own light
+
+`LightingService.palettes` now carry the sun, exposure, ambient, bloom, rays and grade as well as
+the sky, and `Bootstrap` applies the palette named by the level's `backdrop` when a run starts.
+That had to move out of boot: the lobby sets the atmosphere for the whole game while it builds the
+room (HubService), so anything applied earlier was overwritten -- which is why City Shore has been
+running under the room's haze (density 0.32, haze 1.6, lilac decay) all along.
+
+- **cityShore**: ClockTime 16.9, a deeper blue overhead falling to warm amber at the horizon,
+  density 0.28 with haze 1.3 (less than the room's, more than the default), glare 0.6, a larger sun
+  (`sunSize` 18) because a low sun is in frame on the dive, slightly stronger bloom and a warmer
+  grade. A low sun also gives the towers a lit face and a shadowed one.
+- **lobby**: HubService's own numbers, mirrored, so the room gets its air back when the last runner
+  leaves. If the two ever disagree, HubService built the room and this is the copy to correct.
+- Small steps on purpose: these are a first pass over the level's look and meant to be tuned by eye.
+
 ### Faster to give way, faster to fall
 
 - **Every collapse under your own character drops you at once**: the renderer sees the cell go,
@@ -542,8 +634,8 @@ in `docs/superpowers/specs/2026-08-28-lobby-hub-design.md` and
 | Level | Name | Shape | Chunks (Medium) | Setting |
 |---|---|---|---|---|
 | 1 | City Shore | spiral | 40 | the city, beach and waterpark horizon; ends on the high dive; the whole 65-chunk kit, all three rhythms, no repeat within six picks |
-| 2 | Open Sky | spiral | 44 | no horizon |
-| 3 | Far Water | spiral | 50 | no horizon, kept for a second backdrop |
+| 2 | Sky Pools | ring, going down | 44 | pool terraces round a fountain tower over a cloud sea; ends on the slide into the final pool; the calm half of the kit |
+| 3 | The Sunken City | ring, flat with a swell | 50 | a drowned city round the route, a thing under it, an aquarium off a checkpoint; ends down the harbour drain |
 | 4 | Flooded Halls | path | 44 | inside a flooded tiled bathhouse, ending on a flume |
 | Sandbox | all materials | spiral | 82 | development route, its own pad |
 
@@ -601,6 +693,272 @@ It lives in
   take-off point and held direction: every dive that does not steer back in lands inside the
   circle except a pure sideways walk-off at the board's root, and the diver's own client stays
   above -415 before the anchor reaches it.
+
+## Sky Pools (Level 2)
+
+**State on 2026-09-18:** built, not yet seen in Studio. The calm level: no scares, water sounds
+only. `src/Server/Services/SkyPoolsService.lua` builds it, and the level asks for it with
+`backdrop = "skyPools"` and `finale = "slide"`. The picture is `blender/skypools_plan.png`.
+
+### How it fits together
+
+- **The ring (`LevelService`).** A level with `ring = { turn, descend, stepScale }` gets one wide
+  circle instead of the 90-stud helix. Its radius is the run's planned length (each slot at the
+  mean length of the chunks it can hold, plus the gaps) spread over `turn` of a circle, so short,
+  medium and long runs all sweep the same three quarters. That works out to about 100, 200 and 300
+  studs. `descend` turns every step down and `stepScale` makes the steps 1.6 times bigger.
+  `startLevel` hands back `centre` and `radius` for anything built round the route.
+- **The build (`SkyPoolsService.build(level, parent)`),** called by Bootstrap after the backdrop
+  block and parented under `Workspace.Levels`, so it goes when the level does. Every height comes
+  from `SkyPoolsService.heights(startY, killY)`: the clouds' top is 14 above the kill plane, the
+  final pool 220 under that, and the sea 520 under the pool. The tower tops out 90 above the start.
+  The pool never goes lower than 60 above `Workspace.FallenPartsDestroyHeight`, which is read at
+  build time: a long run goes down far enough that it would otherwise sit 11 studs above the -500
+  line where Roblox deletes a falling character.
+- **The slide (`attachSlide`)** works like the Flooded Halls flume. You hold E for 0.8 s at the
+  mouth. PlatformStand is set and the root's CFrame is written each frame. On arrival you stand in
+  the pool, and `finishRunFor` runs. Bootstrap sets the old finish line's CanTouch to false once
+  the slide is built, and `SkyPoolsService.ownsFall(player)` exempts the rider from the kill plane
+  while riding and for 15 s after landing. The return to the lobby waits 4 s.
+- **Light and banner:** LightingService's `skyPools` palette (late morning, little haze) and
+  UIService's level 2 look ("Sky Pools / Down through the clouds").
+
+### What is in it
+
+- Five **pool terraces**: at the start, and at the stable chunks nearest each fifth of the route.
+  Each steps off the outer side of its checkpoint, flush with the cap. A 9-stud neck, 7.4 deep,
+  swallows the straight chunk's side shelves. The terrace is 46 by 36, with a 22 by 14 pool you can
+  stand in, a spill channel, a waterfall to the sea and four columns to the sea. Its dressing is
+  loungers, a parasol, a towel, a ladder and, on one terrace, a diving board over the pool.
+- The **finale deck**: a walkway on from the last chunk, a pool terrace off its outer side, a rail
+  with an invisible guard along the inner side and the end, and an arch over the slide's mouth.
+- The **slide**: 0.85 of a turn from the mouth to 70 studs from the middle. It descends on a
+  smoothstep and is banked into the turn. The trough is floor plus two walls, 8 wide, and none of
+  it collides. Rods hang it from the tower. The ride runs at 70 studs/s by distance along the
+  slide, clamped to 8 to 15 s.
+- The **fountain tower** from the sea to its basin, with bands every 70 studs, a jet, and a curtain
+  of twelve falls from the basin into the final pool.
+- The **final pool**, 105 in radius, 3 deep, on a dish, 8 columns and the tower. Six falls go off
+  its rim to the sea, and the sea is nine 2048-stud plates.
+- The **cloud sea**: wide, low ellipsoids out to 2400 studs, with a bluer underside out to 900.
+- Eight **scenery pools**, 300 to 760 studs beyond the route.
+
+### Second pass (2026-09-18, same day)
+
+- **Water you can hear.** Each terrace's fall roars within 90 studs. Every fourth sheet of the
+  tower's curtain is heard faintly round the ring. The curtain landing in the final pool is the
+  loudest water in the level, and two of the final pool's falls roar too. There is a rush on the
+  slide rider and a splash sound on landing.
+- **Pools that answer** (`SkyPoolsClient`, new, on the client). Stepping into any pool splashes;
+  wading leaves spreading rings (twelve slivers, since Roblox has no ring shape) and a quieter
+  slosh. It works for your own character only. The pools are tagged `SkyPoolWater`.
+- **Pool toys.** A duck or a swim ring floats in most pools and three drift in the final pool. The
+  client makes them bob, turn and wander inside their pool. They are tagged `SkyPoolToy`.
+- **The pump room**, under the second terrace. The hatch is cut out of the inner deck, with its lid
+  standing open (STAFF ONLY) and a truss ladder down. The room is slung under the deck and holds
+  two pumps with pipes up into the pool, a downpipe to the sea for the overflow, a panel, a lamp,
+  a mop and bucket, and the log: "PUMP ROOM 2. Keep the water moving. Overflow runs to the sea.
+  The sea runs to the drain." That line points at the next level. That terrace has no parasol,
+  because its inner deck is where the hatch is.
+- `check_skypools.py` also holds these: the room clears the columns and sits under its hatch, the
+  hatch avoids everything standing on that deck, and the room stays above the clouds. It also
+  checks that toys cannot drift into a wall and that the client is started and follows every tag.
+
+### Third pass (2026-09-18): more to find
+
+- **The cabana** is on the fourth terrace (dressing `cabana`), 8 wide, on the deck beside the pool
+  with its door toward the water and a striped fascia. Inside is a running shower (spray, steam,
+  sound), three lockers with the middle one open (a hollow shell, so its towel and note show), a
+  bench, a robe on a hook and a ceiling lamp.
+- **The lifeguard's chair** is on the third terrace (dressing `lifeguard`), on the far side of the
+  pool from the board, facing the water. It has four posts, a seat you can stand on, a truss ladder
+  up the front, a shade, a NO RUNNING sign, and a lifebuoy on its own post.
+- **Hot air balloons**: three, orbiting 600 to 1000 beyond the route at 90 to 140 above the start,
+  so their baskets clear every scenery pool. They are tagged `SkyBalloon`, and the client moves them
+  on the server clock and flares their burners (real PointLights).
+- **Gulls**: two flocks of seven, made on the client from the level model's `TowerTop` and `Gulls`
+  attributes (tag `SkyPoolsLevel`). They wheel round the tower above the basin and above every
+  slide rod.
+- `check_skypools.py` holds these too. The cabana and the chair stay on their decks, out of the
+  pool and the overflow channel, and off everything else on their terrace. The baskets clear the
+  scenery pools, and the gulls clear the basin and every rod of the slide.
+
+### Checking it
+
+- `python blender/check_skypools.py` lays the ring the way LevelService does, for short, medium and
+  long runs over 300 seeds each. It checks that the terraces clear every neighbour and the route
+  never comes round onto itself. It checks that the slide and its rods hit no chunk, terrace or
+  column, that the slide clears the final pool's rim and lands between the curtain and the rim, and
+  that it stays under 42 degrees and 95 studs/s. It also checks that the heights are in order and
+  the wiring is present. A mutation run (12 cases) confirmed each gate fails when it should.
+- `python blender/plan_skypools.py [seed]` draws one medium run from the same Python
+  (`skypools_layout.py`).
+
+### Lessons from this level
+
+- **A Ball part cannot be flat.** Roblox forces a ball's three sizes equal. The flat clouds are
+  blocks with a sphere SpecialMesh, and the check fails on `PartType.Ball` in the file.
+- **Ride a long slide by distance, not by its parameter.** The ring is three times further round at
+  the top than the bottom, so stepping the parameter evenly made the ride fastest at the start.
+- **Model what is actually solid.** The first check treated each terrace as solid to the sea and
+  "found" the slide running into the start terrace on a short ring. Only the four columns go down,
+  and they are well clear.
+- **A new ending reuses the old one's words.** The slide's block also stands the finish line down
+  and calls `finishRunFor`. That quietly satisfied two of `check_hub.py`'s dive gates, which now
+  read only the dive's own block.
+
+### Open for this level
+
+- Nothing here has been seen in Studio: the terraces flush with their caps, the ride, the look of
+  the cloud sea, the light, and the cost of several hundred cloud parts.
+- The pool tile MaterialVariant (`PoolTileBackdrop`, shared with City Shore) is used on the pool
+  floors when it exists, taking its base material from the variant.
+
+## The Sunken City (Level 3)
+
+**State on 2026-09-18:** first version built, not yet seen in Studio. The eerie level. It was Far
+Water, a spiral with no background. `src/Server/Services/SunkenCityService.lua` builds it on the
+server, `src/Client/Services/SunkenCityClient.lua` moves its parts on each client, and the level
+asks for it with `backdrop = "sunkenCity"` and `finale = "drain"`. The picture is
+`blender/sunkencity_plan.png`.
+
+### How it fits together
+
+- **The ring (`LevelService`).** It uses the same ring as Sky Pools, but flat: `stepScale = 0` turns
+  the steps off, and the new `wave = { height, every }` adds a swell. The route rises and dips 3.5
+  studs either way over every ten chunks, never more than 2.2 from one chunk to the next. The ring
+  sweeps 0.8 of a turn, leaving a fifth open for the harbour.
+- **The pool** is slime, jello soda, ice and oobleck **(you)**, filled out with salt, foam, the
+  Needohs, two soap chunks and bubble wrap **(suggested)**, because jello soda is the only pace
+  chunk among the four. Nothing in it climbs or drops, so the route's height is the swell alone.
+  The headline material (the lobby pad) is Oobleck.
+- **Heights (`SunkenCityService.heights`).** The surface is 9 under the lowest chunk's origin, and
+  every chunk's underside clears it by 5. The kill plane is 31 under the surface, so a fall goes
+  visibly into the water first. The murk layer is at 35, the sea floor at 100, and the drain's
+  shaft ends 60 below the floor, well above -500.
+- **Bootstrap** builds the city after the backdrop block, parented under `Workspace.Levels`. It
+  attaches the drain with `SunkenCityService.attach`, sets the old finish line's CanTouch to false,
+  and exempts a rider from the kill plane with `SunkenCityService.ownsFall`. The undo runs before
+  the next run is built.
+- **The client** starts from the client Bootstrap with a timeout, as `SkyPoolsClient` does, so a
+  place without it loses only this level's moving parts.
+
+### What is in it
+
+- **The water.** The surface is glass plates with two round holes, one for the aquarium's tower and
+  one for the whirlpool. Each hole is cut square and its corners filled back with strips that stop
+  inside the hole's own wall band. Under the surface are a murk layer and the sea floor, and the
+  floor has a hole for the drain. Underwater parts are coloured darker and bluer by depth
+  (`drowned`), because glass does not dim what is behind it.
+- **The city.** Bands of lots in rings round a plaza, cut by eight avenues, with none outside the
+  ring in the harbour sector.
+  - Next to the boulevard, flats are flooded and roofless, their top storeys 2 to 3 studs under
+    the surface with the furniture still in them.
+  - Further out, apartments and offices break the surface, but only where the whole lot is
+    `EMERGE_CLEAR` (40) beyond the route's reach.
+  - Houses have pitched roofs made of two tilted slabs.
+  - The multi-storey car park has four decks, with its top deck of cars 4 under the surface.
+  - Ten lone towers stand out in the haze.
+  - Every part of the city is non-collidable, so a fall is never stranded on a submerged roof.
+- **The clock tower** stands in the plaza, stopped at 4:12. Every half minute the client moves all
+  four minute hands forward one minute and back.
+- **The boulevard** under the route has road-sign gantries whose signs hang 5 to 11 studs down.
+- **The harbour** has quay walls, a gantry crane standing out of the water, a fishing boat with its
+  bow out, and buoys chained to the floor that bob on the client.
+- **The thing.** It swims the boulevard against the route, 6 studs inside the centre line, at 12
+  studs/s, 24 to 34 under the surface. It swings 85 studs out round the harbour to stay clear of
+  the whirlpool. Its body is 18 segments with pale eyes, back fins and a fluke, drawn only on
+  clients from the attributes on the Sea model and the server clock.
+  - As it comes within 95 studs, the lapping and the wind fall away and a low rumble comes up.
+    Then the water darkens and a small colour shade comes in.
+  - A Hardcore fall while it is under you gets a deep thud and a darker moment. Chill never gets
+    the fall event, so it only watches.
+- **The aquarium** is off the checkpoint nearest two fifths of the way round.
+  - A landing leads to a round stair tower standing in the water, with a door and a sign.
+  - Inside, a stair spirals down 30-odd steps to the tunnel level, 22 under the surface and 9 above
+    the kill plane. It has three lamps and drips.
+  - A glass tunnel 64 long runs on pillars to the sea floor, with kelp and three shoals of fish
+    that the client makes and moves.
+  - The gallery at the end has a window onto the deep, a bench, and a PLEASE DO NOT TAP ON THE
+    GLASS sign.
+  - Tapping thuds (`ClickDetector`). Tap three times within 5 s as a Hardcore player, once a run,
+    and something taps back: a heavy thud, the glass shivers and the lamp stutters. In Chill
+    nothing answers.
+  - The client tints the view teal while you are in the tower below the water, the tunnel or the
+    gallery.
+- **The drain.**
+  - The pier runs on from the last chunk, with bollards, chains and an invisible guard along each
+    side, so the end is the only way off. It has a sign: HARBOUR DRAIN. KEEP CLEAR.
+  - The whirlpool starts 20 past the pier's end: a foam rim and five rings turning faster inward
+    (turned by the client), with the rush sound.
+  - Stepping off the end (inside 20 of the axis, below the pier) sets off the ride. It goes round
+    and in down the funnel, then straight down the current into the drain and 60 down a black
+    shaft, 6.5 s in all.
+  - `finishRunFor` runs at the bottom, in the dark, and the banner reads "The Sunken City / Pulled
+    down into the dark". There is no forced blackout: the darkness is the shaft.
+- **Sound** is `impact_water` everywhere, pitched per use. The thud is the character's own
+  `action_jump_land`, the one new built-in path. The ambience sits on a part at the city's middle,
+  never loose in the model, so the lobby does not hear the harbour.
+- **Light** comes from LightingService's `sunkenCity` palette: a grey-green afternoon with real
+  haze, a step under the default.
+
+### Checking it
+
+- `python blender/check_sunkencity.py` lays the ring for short, medium and long runs over 300 seeds
+  each. It checks that the route stays out of the water and that falls are seen and caught. It
+  checks that nothing breaks the surface near the route. It checks that the thing touches nothing:
+  boulevard, gantry legs and signs, the tower, the whirlpool, the buoys, quays, boat and crane. It
+  checks that the aquarium and the pier fit, and that the wiring is complete: every attribute the
+  server writes is read and every tag is followed. A mutation run (22 cases) confirmed each gate.
+- `sunkencity_layout.py` restates a few literals from inside the Luau (gantry legs, pier piles, the
+  crane's distance...). Each carries its exact Luau text, and the check fails if that text changes.
+- `python blender/plan_sunkencity.py [seed]` draws it from above and in section.
+
+### Second pass (2026-09-18, same day): the thing surfaces, the dry flat, the mirror
+
+- **`src/Shared/SunkenPath.lua` (new, ReplicatedStorage.Shared).** It holds where the thing is and
+  when it surfaces, used by both the server and every client, so a player can only be taken by a
+  surfacing they saw. The body constants moved here from the client.
+- **The surfacing.** It starts 45 s after the build, then every 80 s.
+  - The first 5 s are the warning: the sound drops, bubbles rise and a dark patch spreads.
+  - Then comes the heave: the body near the spot rises until its centre is 7 under the water. Its
+    back stays just under the surface and its fins come through, clear of the chunks' undersides.
+  - At 1.2 s the surge sprays over the route.
+  - It never surfaces in the harbour or within its heave's reach (plus 12) of a road sign. The
+    server writes the signs' angles as `QuietAngles`.
+  - The server (`attach`) takes, once per surfacing, every player who is Hardcore, above the water,
+    within 26 of the spot and not inside a `SunkenShelter` box (the aquarium, its tower, the flat).
+    It calls Bootstrap's new `sendBackToStart`, which runs the kill plane's Hardcore reset step for
+    step, and `check_sunkencity.py` holds the two to the same steps.
+- **The last dry flat**, off the checkpoint nearest 0.7 of the way round (never the aquarium's, never
+  in the harbour).
+  - A plank gangway with rope rails and guards leads in.
+  - The building stands from the sea floor, solid except for the stairwell's shaft (cut with the
+    same `subtract` the water uses). Its top floor is 24 by 26 by 9, with a door, a window and a
+    parapet roof with a water tank.
+  - The lamp by the door is on. Inside are a sofa facing the window, a radio, a counter, a kettle, a
+    fridge and the calendar.
+  - The stairwell has a railing with a guard. The spiral stair goes down to a landing 1.5 under the
+    water, where a doorway is blocked by a fallen wardrobe and the notice reads FLOODED. NO ACCESS.
+    The water laps and drips there.
+  - The bathroom has the sink, **the mirror** (tagged `SunkenMirror`), a tub of dark water, and a
+    cold lamp (tagged `SunkenMirrorLamp`) that stutters on its own every 12 to 30 s.
+- **The face in the mirror.** A Hardcore player who stands in the `SunkenMirrorZone` for 1.6 s
+  gets one 50% roll per run, while it has never happened on the server. `mirrorShown` is a
+  module-level flag, so it is once a server. On success the server stamps `MirrorFace` on the
+  player. That client stutters the lamp, shows a pale face with dark hollows on the mirror for half
+  a second over a low drone, then puts the light out for 0.8 s, and the face is gone. Chill players
+  never roll.
+- **The pier's lantern** hangs from its own post and arm at the far end: a warm PointLight.
+
+### Open for this level
+
+- Nothing is seen in Studio yet: the look of the water and the depth tinting, the parts count, the
+  thing's size and speed, the surfacing and whether it is fair, the stair, the tunnel, the flat,
+  the face in the mirror, the whirlpool ride and the light.
+- `WASH_RADIUS`, `SURFACE_EVERY` and `WARN` in `SunkenPath.lua`, and `MIRROR_CHANCE` in
+  `SunkenCityService.lua`, are the numbers to turn if the threat or the scare is too much or too
+  little.
 
 ## The Flooded Halls (Level 4)
 
@@ -775,6 +1133,14 @@ Same idea applied to geometry instead of meshes, because the Studio loop for a
 | `check_hub.py` | `python check_hub.py` -- the lobby: every level has its own distinct headline material for its pad, every level in `All` gets a pad, pads are far enough apart to stand on, and a run request stays plain data that can survive a teleport. |
 | `check_halls.py` | `python check_halls.py` -- the Flooded Halls. See that section for what it covers. |
 | `plan_halls.py` | `python plan_halls.py` -- `halls_plan.png`: the three run lengths in plan plus a section. Needs matplotlib. |
+| `plan_cityshore.py` | `python plan_cityshore.py` -- `cityshore_plan.png`: City Shore's backdrop from above and in section, placed by BackdropService's own rules and numbers (random draws differ). It is what caught the stair-stepped headlands. Needs matplotlib. |
+| `check_skypools.py` | `python check_skypools.py` -- Sky Pools. See that section for what it covers. |
+| `skypools_layout.py` | Lays the Sky Pools ring in Python the way LevelService and SkyPoolsService do. Shared by the check and the plan. |
+| `check_sunkencity.py` | `python check_sunkencity.py` -- the Sunken City. See that section for what it covers. |
+| `ring_layout.py` | Lays any level with a `ring` in Python the way LevelService does. Shared by the two layouts below. |
+| `sunkencity_layout.py` | The Sunken City's heights, aquarium, pier and the thing's path, from the Luau. Shared by its check and plan. |
+| `plan_sunkencity.py` | `python plan_sunkencity.py [seed]` -- `sunkencity_plan.png`: one medium run from above, and sections through the aquarium and the drain. Needs matplotlib. |
+| `plan_skypools.py` | `python plan_skypools.py [seed]` -- `skypools_plan.png`: one medium run of Sky Pools as built, from above and unrolled. Needs matplotlib. |
 | `check_plan_shapes.py` | `python check_plan_shapes.py [--png]` — loads `PlanShapes.lua` into a real Lua interpreter (`pip install lupa`) and walks every outline at the cube grid each chunk actually builds: enterable, leavable, joined, no stranded floor, and no lane under 3.4 studs. `--png` writes `plan_shapes.png` (the vocabulary) and `chunk_shapes.png` (what each chunk builds). |
 | `render_chunk_forms.py` | `chunk_forms_top.png` (footprints) and `chunk_forms_persp.png` (tiers) |
 
@@ -793,7 +1159,10 @@ The parser is strict on purpose and will raise rather than skip a field it does 
 What is not built yet, as a list, is the Status section of `README.md` and in `ROADMAP.md`. Tested
 and working as of 2026-09-17: the City Shore dive and the Flooded Halls slide. Built and not yet
 seen in Studio: the keypads' capacitor and spring, growing cracks, oobleck without cracks, the
-restored clay peel and the renderer's section fix.
+restored clay peel, the renderer's section fix, cells repairing themselves, the completion banner
+without its blackout, City Shore's own lighting palette and second version, all of Sky Pools
+(including its second pass), and all of the Sunken City. The Sunken City's open question, whether
+the thing should be a real threat, is in its section.
 
 - **Luau's 200 locals, and why `DeformationRenderer`'s sections are functions.** Luau refuses to
   compile a function with more than 200 locals LIVE AT ONCE, and a module's main chunk is a

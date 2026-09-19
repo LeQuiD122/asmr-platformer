@@ -53,12 +53,14 @@ Other systems:
 
 - **Lobby:** one pad per level, plus mode (Chill or Hardcore) and run length pads. Players
   vote to start, and the server builds the run from their choices.
-- **Levels:** three spiral levels and the Flooded Halls, a bathhouse level whose corridor walls
-  are built along the same route the platforms follow, ending on a water slide.
+- **Levels:** City Shore, a spiral climbing over a pastel beach city; Sky Pools, a ring going down
+  past pool terraces to a slide into the clouds; the Flooded Halls, a bathhouse level whose corridor
+  walls are built along the same route the platforms follow, ending on a water slide; and the
+  Sunken City, a ring just above a drowned city, ending down the harbour drain.
 - **Procedural generation** from chunk templates, server/client split for deformation state,
   a timer, personal bests and a leaderboard.
 - **Level 1 finale:** the run ends with a high dive off a springboard into the sea, followed by a
-  splash, a fade to black and a return to the lobby.
+  splash, the level's completion banner and a return to the lobby.
 
 ## Newer material mechanics
 
@@ -78,7 +80,7 @@ collapse drops the player immediately instead of waiting on the server.
 
 ## Status
 
-Last updated: 2026-09-17. `ROADMAP.md` has the detail on everything not built yet.
+Last updated: 2026-09-18. `ROADMAP.md` has the detail on everything not built yet.
 
 ### Tested in Studio and working
 
@@ -89,8 +91,59 @@ Last updated: 2026-09-17. `ROADMAP.md` has the detail on everything not built ye
 
 ### Built, waiting for a test in Studio
 
-Added on 2026-09-17. The client renderer failed to load right after these went in (Luau's limit of
-200 locals in one function, fixed the same day), so none of them has been seen in game yet.
+Added on 2026-09-18.
+
+- **Level 3 is the Sunken City.** The route circles a drowned city just above the water:
+  - Flooded flats you look down into, towers breaking the surface in the haze, a car park with its
+    cars just under the water, and a stopped clock tower.
+  - Something enormous swims under the route and never chases you. As it passes, the sound drops
+    away and the water darkens.
+  - Off one checkpoint, a stair tower leads down to a glass aquarium tunnel and a gallery with a
+    window you are asked not to tap on.
+  - The route ends on a pier over a whirlpool that pulls you down the harbour drain.
+  - `blender/plan_sunkencity.py` draws it and `blender/check_sunkencity.py` checks it.
+- **Sky Pools, second pass:** the waterfalls are heard, the pools splash and ripple when you walk
+  through them, toys drift in them, and there is a pump room behind a hatch under one terrace.
+- **Sky Pools, third pass:** a changing cabana with a running shower and a lost-property locker,
+  a lifeguard's chair to climb, hot air balloons drifting round the level, and gulls round the
+  tower.
+- **The Sunken City, second pass:**
+  - In Hardcore, the thing now surfaces every so often under the route and a surge takes anyone
+    standing there back to the start. It gives five seconds of warning, and in Chill it only
+    watches.
+  - A dry flat off a checkpoint has a stairwell into the flooded floor below and a bathroom mirror
+    that, once a server, shows a face (Hardcore only).
+  - A lantern marks the end of the pier.
+- **Level 2 is Sky Pools.** The route is one ring that goes down, past five pool terraces on
+  columns, with loungers, parasols, a ladder and a diving board into one pool. A fountain tower
+  stands in the middle of the ring and a flat cloud sea lies below. At the end you hold E on the
+  finale deck and a slide carries you round the tower and down through the clouds into the final
+  pool; the splash ends the level. It has its own late-morning light and finale banner.
+  `blender/plan_skypools.py` draws it, and `blender/check_skypools.py` checks it on short, medium
+  and long runs.
+- **City Shore, rebuilt as a pastel beach city.** A crescent of land round a bay, placed with its
+  back to the sun: a beach, a promenade of palms and a row of deco hotels facing the water, towers
+  rising behind them (one in three glass), and harbour walls where the crescent ends. The open sea
+  toward the sun holds the sandbars and the giant objects, and the aquapark stands in the bay. The
+  white eggs, the ball clouds, the placeholder shapes and the ring of columns are gone, and the pink
+  fog is replaced by clear golden air. `blender/plan_cityshore.py` draws it from above.
+
+Added on 2026-09-17.
+
+- **Chunks repair themselves.** Every hole a player opens fills back in within 30 seconds, and no
+  surface holds its dents for longer either. A clay lip that tore off where you needed the jump
+  used to be gone for the rest of the run, and the only way past it was to restart the level.
+- **The dive no longer cuts to black,** and the completion banner is the ending instead: the
+  level's name and colour, a line about what you just did, and the run's time under a rule that
+  draws itself in. The screen darkens a little at the top and bottom rather than going black, so
+  the dive stays on screen.
+- **City Shore has its own light:** late afternoon over the water, with the sun low and large
+  enough to be in the picture as you dive into it, and less haze than the level inherited from
+  the lobby. The lobby gets its own air back when the last player leaves a run.
+
+The rest of this list went in earlier the same day. The client renderer failed to load right after
+those went in (Luau's limit of 200 locals in one function, fixed since), so none of them has been
+seen in game yet.
 
 - **Keypads:** violet buttons store a charge that the next cyan press releases as a bigger speed
   boost; pink buttons raise your jump, higher with each bounce from pink to pink; pink no longer
@@ -106,9 +159,6 @@ Game features:
 
 - **Story mode:** the levels played in order, starting with City Shore's dive leading into the
   Flooded Halls.
-- **Level 2, Open Sky:** no background yet. Planned as Sky Pools, calm pools floating in the clouds.
-- **Level 3, Far Water:** no background yet. Planned as The Sunken City, with a sea monster below
-  the route.
 - **The Backrooms:** a secret level you fall into after too many falls in one run.
 - **Scares and secrets:** an eerie atmosphere, a monster that sends you back to spawn in Hardcore,
   a rare scary face in a mirror, and small places to explore off the route at checkpoints.
@@ -133,7 +183,7 @@ Content and setup:
 - **Python + Blender** scripts in `blender/` that generate every rigged mesh, validate
   the geometry before export, and render previews
 - **Python checkers** in `blender/` (`check_lua.py`, `check_chunk_forms.py`, `check_plan_shapes.py`,
-  `check_hub.py`, `check_halls.py`) that catch layout and code bugs without opening Roblox Studio.
+  `check_hub.py`, `check_halls.py`, `check_skypools.py`, `check_sunkencity.py`) that catch layout and code bugs without opening Roblox Studio.
   `check_lua.py` counts the locals live at once in every function the way Luau's compiler does, so
   a module that would fail to load with "Out of local registers" fails the check first
 - **Python + NumPy/SciPy** in `audio/gen_button_sfx.py`, which synthesizes the keypad's sound
