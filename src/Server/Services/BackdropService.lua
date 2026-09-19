@@ -38,12 +38,17 @@
 --
 -- === What it is made of ===
 --
--- A SEA 700 studs below, opaque and rippled, with sandbars breaking through. Standing in
--- it: a skyline of blank towers, colonnades receding past the fog,
--- slab facades with regular window grids, and ordinary objects at hundreds of studs tall.
--- Softly coloured, never dark. Liminal spaces are unsettling because they were made for
--- people and hold none; they are RESTFUL when they are also warm and quiet, which is the
--- line this palette walks.
+-- A PASTEL BEACH CITY AT GOLDEN HOUR, since the second version. A crescent of land holds the
+-- city, placed with its back to the sun: a beach sloping out of the bay, a promenade of palms,
+-- a row of deco hotels facing the water, and towers rising behind them into the haze. The
+-- other side is open sea toward the low sun, where the sandbars, the float rings and the
+-- ordinary objects at hundreds of studs tall stand in the glitter. The aquapark fills the bay
+-- round the level. Softly coloured, never dark.
+--
+-- The first version was a city standing IN the sea all the way round, with a ring of columns,
+-- 500 opaque balls for clouds and 126 banks of vapour between the level and the water. Seen
+-- from the level it came out as pale boxes in a pink wash with white eggs floating in front of
+-- them -- nothing said where the shore was, or which way anything faced.
 --
 -- The water is what makes the level feel airborne. Everything else here says "far away";
 -- only a floor a long way DOWN says "high up".
@@ -68,24 +73,42 @@ local BackdropService = {}
 -- roughly 680 studs before touching the water. It is scenery and stays scenery.
 local BASE_Y = -700
 
--- How far the base of anything standing in the sea sits BELOW the mean waterline.
+-- ===== THE COAST =====
 --
--- Comfortably more than the wave amplitude (22 studs either side of zero), so no trough
--- ever exposes a floating edge. This is what makes the towers read as rising out of the
--- water rather than as resting on it, and it is cheap: the same amount is added back to
--- their height, so nothing gets shorter.
-local SEA_DRAFT = 90
+-- The city stands on a CRESCENT of land and the sea comes right round the level in front of it,
+-- so the bay is the water under the spiral and the dive lands in it. At each end of the crescent
+-- a harbour wall runs straight out to sea, and past them is open water.
+--
+-- NO HEADLANDS. The coast first curved away into two capes, and the land is built in 4-degree
+-- slices from the level's centre: where the shoreline moved outward by hundreds of studs per
+-- slice, every slice's beach sat at a different distance and the capes came out as a staircase
+-- with sea showing between the treads. One radius all the way round is a smooth beach, and a
+-- straight quay is what a city coast ends in anyway.
+--
+-- Radii are from the level's centre, in the backdrop's own frame (the sea's mean surface is 0).
+local SHORE_NEAR = 1150 -- the bay: water under and around the level, out to the beach
+local LAND_FAR = 6000 -- where the land ends, just inside the sea's own reach
+-- Ground height over mean water. The swell reaches 36 either way, so the land stands clear of
+-- every crest and the beach ramps down under every trough.
+local LAND_TOP = 46
+local CITY_HALF = math.rad(112) -- land either side of the city's centre line
+local BEACH_WET, BEACH_DRY = 170, 170 -- the beach reaches this far into the water, and inland
+local PROMENADE = 90
+-- The city's centre line, facing AWAY from the sun: set at the start of every build, from where
+-- the sun actually is, so the towers are lit on the side you look at and the sun sets over
+-- open water. See sunBearing.
+local cityBearing = 0
 
--- Pulled from the references: swimming-pool mint, playplace pink, corridor cream, faded
--- lemon, dusty locker-room blue. Desaturated enough that the haze can take them the rest
--- of the way, and light enough that nothing in the distance ever reads as a threat.
+-- A beach city's pastels: pool mint, coral, cream, lemon, sky and lilac. A step richer than the
+-- first version's, which were chosen to be taken the rest of the way by a heavy haze -- and
+-- under clear late light they arrived as one pale pink.
 local PALETTE = {
-	Color3.fromRGB(168, 205, 190),
-	Color3.fromRGB(226, 196, 200),
-	Color3.fromRGB(232, 226, 206),
-	Color3.fromRGB(226, 219, 172),
-	Color3.fromRGB(180, 200, 212),
-	Color3.fromRGB(199, 190, 208),
+	Color3.fromRGB(164, 214, 194),
+	Color3.fromRGB(240, 178, 168),
+	Color3.fromRGB(240, 232, 214),
+	Color3.fromRGB(240, 222, 160),
+	Color3.fromRGB(166, 202, 228),
+	Color3.fromRGB(202, 186, 226),
 }
 
 -- Deterministic, so the horizon is the same place every session. A backdrop that
@@ -395,6 +418,197 @@ local function findClear(near: number, far: number, margin: number, tries: numbe
 	return nil, nil
 end
 
+-- ===== THE COAST, built =====
+--
+-- Where the sun is, as a bearing in plan, so the city can be put with its back to it. Read from
+-- Lighting at build time rather than assumed: the level's palette sets the clock before this runs
+-- (see Bootstrap), and working out Roblox's sun from ClockTime and latitude by hand is exactly the
+-- kind of guess that lands the city in its own shadow.
+local function sunBearing(): number
+	local ok, direction = pcall(function()
+		return game:GetService("Lighting"):GetSunDirection()
+	end)
+	if ok and typeof(direction) == "Vector3" and math.abs(direction.X) + math.abs(direction.Z) > 1e-3 then
+		return math.atan2(direction.Z, direction.X)
+	end
+	return 0
+end
+
+-- A bearing measured from the city's centre line, wrapped to -pi..pi.
+local function fromCity(angle: number): number
+	return (angle - cityBearing + math.pi) % (math.pi * 2) - math.pi
+end
+
+-- How far out the waterline is at this offset from the city's centre line, or nil over open sea.
+local function shoreAt(offset: number): number?
+	return if math.abs(offset) <= CITY_HALF then SHORE_NEAR else nil
+end
+
+-- True on land at least `behind` studs back from the waterline.
+local function onLand(x: number, z: number, behind: number): boolean
+	local shore = shoreAt(fromCity(math.atan2(z, x)))
+	return shore ~= nil and math.sqrt(x * x + z * z) >= shore + behind
+end
+
+-- A clear spot on land, `behind` studs back from the water.
+local function landSpot(near: number, far: number, behind: number, margin: number, tries: number): (number?, number?)
+	for _ = 1, tries do
+		local angle = cityBearing + rng:NextNumber(-CITY_HALF, CITY_HALF)
+		local out = math.sqrt(rng:NextNumber()) * (far - near) + near
+		local x, z = math.cos(angle) * out, math.sin(angle) * out
+		if onLand(x, z, behind) and clearOf(x, z, margin) then
+			return x, z
+		end
+	end
+	return nil, nil
+end
+
+-- A clear spot on the water, kept off the beach. `seaOnly` keeps it to the open sea beyond the
+-- harbour walls, for the things that belong out in the glitter rather than in the bay.
+local function waterSpot(near: number, far: number, margin: number, tries: number, seaOnly: boolean?): (number?, number?)
+	for _ = 1, tries do
+		local angle = rng:NextNumber(0, math.pi * 2)
+		local out = math.sqrt(rng:NextNumber()) * (far - near) + near
+		local shore = shoreAt(fromCity(angle))
+		local wet = if seaOnly then shore == nil else (shore == nil or out < shore - BEACH_WET * 0.5 - margin * 0.5)
+		if wet then
+			local x, z = math.cos(angle) * out, math.sin(angle) * out
+			if clearOf(x, z, margin) then
+				return x, z
+			end
+		end
+	end
+	return nil, nil
+end
+
+-- A wedge that is scenery like everything else here. Roblox's WedgePart slopes from its back top
+-- edge down to its FRONT (LookVector) bottom edge, so a ramp that rises away from the level is
+-- one whose front faces the level.
+local function ramp(parent: Instance, size: Vector3, cf: CFrame, colour: Color3): WedgePart
+	local part = Instance.new("WedgePart")
+	part.Size = size
+	part.CFrame = cf
+	part.Color = colour
+	part.Material = Enum.Material.SmoothPlastic
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanTouch = false
+	part.CanQuery = false
+	part.CastShadow = false
+	part.Parent = parent
+	return part
+end
+
+local SAND = Color3.fromRGB(240, 218, 178)
+local PROMENADE_STONE = Color3.fromRGB(242, 234, 220)
+local GROUND = Color3.fromRGB(214, 206, 194)
+local PARK = Color3.fromRGB(150, 190, 142)
+
+-- THE LAND: a beach ramping up out of the bay, the promenade along its top, and the ground the
+-- city stands on, in 4-degree slices round the crescent. Slices overlap a little so no seam of
+-- sea shows between them, and every face of the ground is flat SmoothPlastic in one colour --
+-- where two overlap they are the same surface, so there is nothing for them to fight over.
+local function land(parent: Instance)
+	local step = math.rad(4)
+	for index = 0, math.floor(CITY_HALF * 2 / step) do
+		local offset = -CITY_HALF + index * step
+		local shore = shoreAt(offset)
+		if not shore then
+			continue
+		end
+		local angle = cityBearing + offset
+		local out = Vector3.new(math.cos(angle), 0, math.sin(angle))
+		-- Wide enough at a radius to meet its neighbours, with a little to spare.
+		local function across(radius: number): number
+			return 2 * radius * math.sin(step / 2) * 1.08 + 4
+		end
+		local function facing(radius: number, y: number): CFrame
+			local at = out * radius + Vector3.new(0, y, 0)
+			return CFrame.lookAt(at, Vector3.new(0, y, 0))
+		end
+
+		-- The beach, from under the lowest trough to the top of the land.
+		local low = -40
+		ramp(parent, Vector3.new(across(shore + BEACH_DRY), LAND_TOP - low, BEACH_WET + BEACH_DRY),
+			facing(shore + (BEACH_DRY - BEACH_WET) / 2, (LAND_TOP + low) / 2), SAND)
+
+		-- The promenade, a step up and paler, so the beach has an edge to stop at.
+		local walk = shore + BEACH_DRY + PROMENADE / 2
+		piece(parent, Vector3.new(across(shore + BEACH_DRY + PROMENADE), 10, PROMENADE),
+			facing(walk, LAND_TOP - 3), PROMENADE_STONE, Enum.Material.SmoothPlastic)
+
+		-- The ground, in three rings so the slices do not have to be as wide at the back as
+		-- they need to be at the front.
+		local from = shore + BEACH_DRY + PROMENADE
+		for _, to in ipairs({ 2600, 4200, LAND_FAR }) do
+			if to > from then
+				piece(parent, Vector3.new(across(to), 80, to - from), facing((from + to) / 2, LAND_TOP - 40),
+					GROUND, Enum.Material.SmoothPlastic)
+				from = to
+			end
+		end
+	end
+end
+
+-- THE HARBOUR WALLS at the two ends of the crescent: a pale quay from the wet edge of the beach
+-- straight out to the far edge of the land, where the beach stops and the open sea starts. Laid
+-- a little seaward of the last slice's edge, so it also covers the corners the slices leave there.
+local QUAY = Color3.fromRGB(228, 222, 212)
+
+local function quays(parent: Instance)
+	local edge = CITY_HALF + math.rad(2)
+	for _, side in ipairs({ -1, 1 }) do
+		local angle = cityBearing + side * edge
+		local along = Vector3.new(math.cos(angle), 0, math.sin(angle))
+		-- Square to the wall and out toward the open sea, which lies at larger offsets either side.
+		local seaward = Vector3.new(-along.Z, 0, along.X) * side
+		local low, high = -70, LAND_TOP + 6
+		local from = SHORE_NEAR - BEACH_WET
+		while from < LAND_FAR do
+			local to = math.min(from + 600, LAND_FAR)
+			local mid = along * ((from + to) / 2) + seaward * 20 + Vector3.new(0, (low + high) / 2, 0)
+			piece(parent, Vector3.new(60, high - low, to - from + 4), CFrame.lookAt(mid, mid + along),
+				QUAY, Enum.Material.SmoothPlastic)
+			from = to
+		end
+	end
+end
+
+-- A DECO HOTEL on the promenade: a pastel block, white eyebrow ledges over every floor band, and
+-- a fin rising out of the middle of its front with a mast on top. The beachfront is the row that
+-- tells you this is a shore, and it is the one row of buildings near enough to have any detail.
+-- `at` stands at ground level with its front (LookVector) toward the bay.
+local DECO = {
+	Color3.fromRGB(244, 176, 164),
+	Color3.fromRGB(168, 220, 200),
+	Color3.fromRGB(166, 206, 232),
+	Color3.fromRGB(246, 226, 160),
+	Color3.fromRGB(204, 186, 230),
+	Color3.fromRGB(250, 204, 170),
+	Color3.fromRGB(246, 242, 234),
+}
+local TRIM = Color3.fromRGB(252, 250, 244)
+
+local function decoHotel(parent: Instance, at: CFrame, width: number, depth: number, height: number)
+	local body = DECO[rng:NextInteger(1, #DECO)]
+	useVariant(piece(parent, Vector3.new(width, height + 12, depth), at * CFrame.new(0, (height - 12) / 2, 0),
+		body, Enum.Material.Concrete), CONCRETE_VARIANT)
+	local floors = math.clamp(math.floor(height / 46), 3, 7)
+	for index = 1, floors do
+		piece(parent, Vector3.new(width * 1.04, 3, depth * 1.12),
+			at * CFrame.new(0, height * index / (floors + 1), -depth * 0.06), TRIM, Enum.Material.SmoothPlastic)
+	end
+	-- Dark glass between the eyebrows, down the whole front, so the ledges read as shading windows.
+	piece(parent, Vector3.new(width * 0.9, height * 0.82, 2),
+		at * CFrame.new(0, height * 0.46, -depth / 2 - 1), body:Lerp(Color3.fromRGB(40, 50, 70), 0.72),
+		Enum.Material.Glass)
+	local fin = height * rng:NextNumber(0.28, 0.45)
+	piece(parent, Vector3.new(width * 0.2, height + fin, depth * 0.5),
+		at * CFrame.new(0, (height + fin) / 2, -depth * 0.3), TRIM, Enum.Material.SmoothPlastic)
+	pillar(parent, math.max(4, width * 0.035), fin * 0.5,
+		at * CFrame.new(0, height + fin * 1.25, -depth * 0.3), TRIM, Enum.Material.Metal)
+end
+
 -- === Speed, not period ===
 --
 -- Every animated thing out here used to take a period straight out of a random range, and
@@ -552,18 +766,24 @@ local function tower(parent: Instance, at: CFrame, style: string, width: number,
 	-- density haze compresses everything toward the fog colour, so whatever contrast you
 	-- author is roughly what you have LEFT after it, not what you start with. The body
 	-- keeps its palette colour now and the ribs go most of the way to dark.
-	local body = pick():Lerp(Color3.fromRGB(236, 238, 244), 0.12)
-	local glass = body:Lerp(Color3.fromRGB(44, 52, 74), 0.78)
+	-- ONE IN THREE IS GLASS: a dark curtain wall with light mullions, which catches the low sun
+	-- and throws it back. A city of nothing but painted concrete reads as a model of a city.
+	local glassy = rng:NextNumber() < 0.34
+	local body = if glassy then Color3.fromRGB(66, 104, 124) else pick():Lerp(Color3.fromRGB(236, 238, 244), 0.12)
+	local glass = if glassy then Color3.fromRGB(226, 230, 236) else body:Lerp(Color3.fromRGB(44, 52, 74), 0.78)
 
 	local y = 0
 	local topWidth, topDepth = width, depth
 	for index, stage in ipairs(TOWER_STAGES[style]) do
 		local w, d, h = width * stage[1], depth * stage[2], height * stage[3]
-		-- Towers keep concrete. They are the shell around the park, not the park.
-		useVariant(
-			piece(parent, Vector3.new(w, h, d), at * CFrame.new(0, y + h / 2, 0), body, Enum.Material.Concrete),
-			CONCRETE_VARIANT
-		)
+		-- Towers keep concrete, unless they are glass. They are the shell around the park.
+		local stage = piece(parent, Vector3.new(w, h, d), at * CFrame.new(0, y + h / 2, 0), body,
+			if glassy then Enum.Material.Glass else Enum.Material.Concrete)
+		if glassy then
+			stage.Reflectance = 0.3
+		else
+			useVariant(stage, CONCRETE_VARIANT)
+		end
 
 		-- Ribs on the bottom stage only, and each rib spans the FULL DEPTH of the tower so
 		-- one part stripes both broad faces. Three parts per tower buys the mullion read
@@ -576,7 +796,7 @@ local function tower(parent: Instance, at: CFrame, style: string, width: number,
 					Vector3.new(w * 0.14, h * 0.96, d * 1.03),
 					at * CFrame.new((r - 2) * w * 0.31, y + h / 2, 0),
 					glass,
-					Enum.Material.Glass
+					if glassy then Enum.Material.Concrete else Enum.Material.Glass
 				)
 			end
 		end
@@ -605,116 +825,41 @@ local function tower(parent: Instance, at: CFrame, style: string, width: number,
 	end
 end
 
--- The skyline as a whole: a deep BAND rather than a ring.
+-- The skyline as a whole: a deep BAND rather than a ring, and ON LAND now.
 --
--- Depth is the entire point. Towers all at one radius read as a fence of posts, however
--- well modelled each one is; towers at scattered distances overlap each other, and the
--- overlaps are what say "city" -- you are seeing past the front row to more of it, and
--- the ones behind are already fading into the haze.
+-- Depth is the entire point. Towers all at one radius read as a fence of posts, however well
+-- modelled each one is; towers at scattered distances overlap each other, and the overlaps are
+-- what say "city" -- you are seeing past the front row to more of it, and the ones behind are
+-- already fading into the haze.
+--
+-- `behind` keeps each band back from the beach, so the promenade and the hotels stay the front
+-- row. The first version stood these in the sea, a fifth of them "drowned" to half their height;
+-- on a coast that reads as a flood rather than a city, so that is gone with the water under them.
 local function skyline(
 	parent: Instance,
 	count: number,
 	near: number,
 	far: number,
+	behind: number,
 	widthLow: number,
 	widthHigh: number,
 	heightLow: number,
 	heightHigh: number
 )
-	for i = 1, count do
-		-- JITTER WIDER THAN ONE SPOKE, deliberately: at +/- 1.6 spokes a tower can cross
-		-- its neighbour's slot, so the ring comes out CLUMPED -- runs of three or four
-		-- crowded together, then a gap. Tight jitter gives evenly spaced towers, which is
-		-- the one thing no real skyline has, and it reads as a fence however many you add.
-		local spoke = math.pi * 2 / count
-		local angle = (i / count) * math.pi * 2 + rng:NextNumber(-spoke * 1.6, spoke * 1.6)
-		local reach = rng:NextNumber(near, far)
-		local position = Vector3.new(math.cos(angle) * reach, 0, math.sin(angle) * reach)
-		-- Faced squarely at the middle, so the ribbed broad side is the side you see.
-		local at = CFrame.lookAt(position, Vector3.new(0, 0, 0))
+	for _ = 1, count do
 		local width = rng:NextNumber(widthLow, widthHigh)
+		local x, z = landSpot(near, far, behind, width * 0.8, 60)
+		if not x or not z then
+			continue
+		end
 		local height = rng:NextNumber(heightLow, heightHigh)
-
-		-- === Draft: how deep this one sits, and one in five is DROWNED ===
-		--
-		-- A uniform 90-stud draft is invisible on a 2000-stud tower -- 4% underwater reads
-		-- as a building that happens to touch the sea, which is what it looked like. What
-		-- says SUBMERGED is a waterline that cuts across buildings at obviously different
-		-- points: some barely wet, some with half their height gone. A drowned city is
-		-- irregular, and the irregularity is the whole signal.
-		--
-		-- Sinking a normal tower costs nothing because the draft is added back to its
-		-- height. A drowned one is not compensated -- losing the top is the point.
-		local drowned = rng:NextNumber() < 0.22
-		local draft = if drowned
-			then height * rng:NextNumber(0.4, 0.68)
-			else SEA_DRAFT * rng:NextNumber(0.7, 1.6)
-		tower(
-			parent,
-			at * CFrame.new(0, -draft, 0),
-			TOWER_STYLES[rng:NextInteger(1, #TOWER_STYLES)],
-			width,
-			width * rng:NextNumber(0.55, 1.0),
-			if drowned then height else height + draft
-		)
-
-		-- The collar, and it is doing more work than the draft is.
-		--
-		-- Nothing sitting in water meets it at a clean edge; there is always a disturbed
-		-- ring where the two argue. One translucent disc at the actual wave height, a
-		-- little wider than the footprint, is what turns "tower next to water" into "tower
-		-- standing in water" -- and unlike the draft it is visible no matter how tall the
-		-- building is.
-		-- The footprint is the tower's half-diagonal, so a mark cleared against it cannot
-		-- clip a corner.
-		occupy(position.X, position.Z, width * 0.72)
-
-		-- EVERY building gets one now. Applying it to 42% was meant to avoid a repeating
-		-- pattern, and it bought a worse problem: two identical towers standing in the same
-		-- water, one with a waterline and one without, reads as a missing piece rather than
-		-- as variety. Anything sitting in water HAS a waterline -- that is not the sort of
-		-- detail that is present on some objects and absent on others.
-		--
-		-- The variation moves into strength instead, over a much wider range than before.
-		-- At the faint end these are barely perceptible, which is the honest look for a
-		-- structure in calm water, and it gets the irregularity without the absences.
-		collar(parent, position.X, position.Z,
-			width * rng:NextNumber(1.1, 1.5), rng:NextNumber(0.62, 0.93))
-	end
-end
-
--- A colonnade: one ring of enormous square columns.
---
--- Columns rather than walls because a colonnade is READ THROUGH. You see gaps, and past
--- the gaps more columns, and past those the skyline -- which is what makes a space feel
--- endless rather than merely large. A solid ring at this distance would just be a wall
--- around the level, and would say "edge of the map" instead of "it keeps going".
-local function colonnade(parent: Instance, radius: number, count: number, height: number, width: number)
-	for i = 1, count do
-		-- Jittered off the exact spoke, so the ring does not read as a turntable of
-		-- evenly spaced posts when you move along it.
-		local angle = (i / count) * math.pi * 2 + rng:NextNumber(-0.03, 0.03)
-		local reach = radius + rng:NextNumber(-radius * 0.06, radius * 0.06)
-		local tall = height * rng:NextNumber(0.7, 1.3)
-		local x, z = math.cos(angle) * reach, math.sin(angle) * reach
-		-- Each column sunk by its own amount below its own bit of water, so the ring meets
-		-- the sea at a ragged line instead of a machined one.
-		local draft = SEA_DRAFT * rng:NextNumber(0.6, 1.8)
-		local waterY = waveSurface(x, z)
-		-- Concrete rather than SmoothPlastic now, so the colonnade can take the same variant
-		-- as everything else it stands beside. Without a variant the two look near enough
-		-- identical at this distance that the change costs nothing.
-		-- The colonnade is TILED. It stands in the water, so it is the part of the
-		-- structure a swimmer would touch, and that is where a pool is tiled.
-		useVariant(piece(
-			parent,
-			Vector3.new(width, tall + draft, width),
-			CFrame.new(x, waterY + tall / 2 - draft, z) * CFrame.Angles(0, -angle, 0),
-			pick(),
-			Enum.Material.Concrete
-		), POOLTILE_VARIANT)
+		-- Faced squarely at the middle, so the ribbed broad side is the side you see, and set a
+		-- little into the ground so no foundation line shows.
+		local base = LAND_TOP - 12
+		local at = CFrame.lookAt(Vector3.new(x, base, z), Vector3.new(0, base, 0))
+		tower(parent, at, TOWER_STYLES[rng:NextInteger(1, #TOWER_STYLES)], width,
+			width * rng:NextNumber(0.55, 1.0), height + 12)
 		occupy(x, z, width * 0.72)
-		collar(parent, x, z, width * rng:NextNumber(1.15, 1.5), rng:NextNumber(0.66, 0.93))
 	end
 end
 
@@ -723,12 +868,11 @@ end
 -- scale that implies floors, and therefore implies a building nobody is in.
 local function facade(parent: Instance, at: CFrame, width: number, height: number)
 	local body = pick()
-	local waterY = waveSurface(at.Position.X, at.Position.Z)
-	useVariant(piece(parent, Vector3.new(width, height + SEA_DRAFT, 42),
-		at * CFrame.new(0, waterY + height / 2 - SEA_DRAFT, 0), body, Enum.Material.Concrete),
+	-- Standing on the land now, sunk a little so no foundation line shows.
+	useVariant(piece(parent, Vector3.new(width, height + 12, 42),
+		at * CFrame.new(0, LAND_TOP - 12 + (height + 12) / 2, 0), body, Enum.Material.Concrete),
 		CONCRETE_VARIANT)
 	occupy(at.Position.X, at.Position.Z, width * 0.55)
-	collar(parent, at.Position.X, at.Position.Z, width * 1.18, 0.78)
 
 	-- Deliberately coarse. At this distance the haze eats anything finer, so extra panels
 	-- cost parts and buy nothing.
@@ -745,7 +889,7 @@ local function facade(parent: Instance, at: CFrame, width: number, height: numbe
 				piece(
 					parent,
 					Vector3.new(width / cols * 0.5, height / rows * 0.42, 8),
-					at * CFrame.new(-width / 2 + (c - 0.5) * (width / cols), (r - 0.35) * (height / rows), 24),
+					at * CFrame.new(-width / 2 + (c - 0.5) * (width / cols), LAND_TOP + (r - 0.35) * (height / rows), -24),
 					if lit then Color3.fromRGB(248, 244, 214) else panel,
 					if lit then Enum.Material.Neon else Enum.Material.Glass
 				)
@@ -1187,183 +1331,6 @@ local function propSpan(name: string): (number, number)
 	return math.max(template.Size.X, template.Size.Z), template.Size.Y
 end
 
--- === Objects at the wrong size ===
---
--- The architecture alone reads as "somewhere big and abandoned". These are what make it
--- DREAMLIKE: the wrongness is not that the space is empty, it is that the ordinary things
--- standing in it have the wrong size and nobody has remarked on it.
---
--- Each is authored at furniture PROPORTIONS and then multiplied. Getting the proportions
--- from the real object and the size from the dream is what keeps them legible -- a lounger
--- built to be huge just reads as a shape, while a correct lounger at the wrong scale is
--- unmistakably a lounger and unmistakably wrong.
---
--- All of these must stand on their own, because the modelled props above are OPTIONAL and
--- may never be imported. Everything below is what the horizon looks like with an empty
--- Assets/Backdrop folder, so it has to carry the variety by itself.
-
--- A standing lamp lighting nothing. Neon rather than a real light source: a PointLight
--- this far out costs a shadow pass and lands on nothing to illuminate.
-local function lamp(parent: Instance, at: CFrame, scale: number)
-	local stem = Color3.fromRGB(178, 176, 170)
-	pillar(parent, 30 * scale, 4 * scale, at * CFrame.new(0, 2 * scale, 0), stem, Enum.Material.Metal)
-	piece(parent, Vector3.new(3 * scale, 96 * scale, 3 * scale), at * CFrame.new(0, 48 * scale, 0), stem, Enum.Material.Metal)
-	pillar(parent, 40 * scale, 30 * scale, at * CFrame.new(0, 110 * scale, 0),
-		Color3.fromRGB(246, 238, 208), Enum.Material.Neon)
-end
-
--- A playplace ball, half-sunk as though it had always been there.
-local function ball(parent: Instance, at: CFrame, scale: number)
-	piece(parent, Vector3.new(70, 70, 70) * scale, at * CFrame.new(0, 22 * scale, 0),
-		pick(), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-end
-
--- A plinth with nothing on it: the quietest wrongness here. Every other object has a
--- purpose it is failing at; this one is a pedestal for an absence.
-local function plinth(parent: Instance, at: CFrame, scale: number)
-	local stone = Color3.fromRGB(216, 212, 202)
-	piece(parent, Vector3.new(58, 10, 58) * scale, at * CFrame.new(0, 5 * scale, 0), stone, Enum.Material.Marble)
-	piece(parent, Vector3.new(44, 84, 44) * scale, at * CFrame.new(0, 52 * scale, 0), stone, Enum.Material.Marble)
-	piece(parent, Vector3.new(56, 8, 56) * scale, at * CFrame.new(0, 98 * scale, 0), stone, Enum.Material.Marble)
-end
-
--- A door frame standing on its own, with nothing on either side of it. The wall it
--- belonged to is not missing so much as never mentioned.
-local function doorway(parent: Instance, at: CFrame, scale: number)
-	local frame = pick()
-	local wide, tall, thick = 62 * scale, 104 * scale, 9 * scale
-	piece(parent, Vector3.new(thick, tall, thick * 1.6), at * CFrame.new(-wide / 2, tall / 2, 0), frame, Enum.Material.WoodPlanks)
-	piece(parent, Vector3.new(thick, tall, thick * 1.6), at * CFrame.new(wide / 2, tall / 2, 0), frame, Enum.Material.WoodPlanks)
-	piece(parent, Vector3.new(wide + thick, thick * 1.4, thick * 1.6), at * CFrame.new(0, tall, 0), frame, Enum.Material.WoodPlanks)
-end
-
--- A diving board over no pool: from the drained-poolroom references, and the object that
--- most wants water underneath it.
-local function divingBoard(parent: Instance, at: CFrame, scale: number)
-	local metal = Color3.fromRGB(198, 202, 206)
-	local board = Color3.fromRGB(238, 236, 226)
-	piece(parent, Vector3.new(7 * scale, 74 * scale, 7 * scale), at * CFrame.new(-16 * scale, 37 * scale, 0), metal, Enum.Material.Metal)
-	piece(parent, Vector3.new(7 * scale, 74 * scale, 7 * scale), at * CFrame.new(16 * scale, 37 * scale, 0), metal, Enum.Material.Metal)
-	-- The board itself, cantilevered well past its supports and tilted a couple of degrees
-	-- under its own weight.
-	piece(parent, Vector3.new(30 * scale, 4 * scale, 120 * scale),
-		at * CFrame.new(0, 76 * scale, 44 * scale) * CFrame.Angles(-0.04, 0, 0), board, Enum.Material.WoodPlanks)
-	piece(parent, Vector3.new(4 * scale, 34 * scale, 4 * scale), at * CFrame.new(-15 * scale, 93 * scale, -22 * scale), metal, Enum.Material.Metal)
-	piece(parent, Vector3.new(4 * scale, 34 * scale, 4 * scale), at * CFrame.new(15 * scale, 93 * scale, -22 * scale), metal, Enum.Material.Metal)
-end
-
--- A lattice mast. Not a building, which is the point: it breaks a horizon of solid
--- rectangles with something you can see straight through.
-local function pylon(parent: Instance, at: CFrame, scale: number)
-	local metal = Color3.fromRGB(190, 192, 198)
-	local tall, spread, leg = 190 * scale, 30 * scale, 5 * scale
-	for _, corner in ipairs({ Vector2.new(1, 1), Vector2.new(1, -1), Vector2.new(-1, 1), Vector2.new(-1, -1) }) do
-		-- Legs lean inward, so the mast tapers instead of being a box of sticks.
-		piece(
-			parent,
-			Vector3.new(leg, tall, leg),
-			at * CFrame.new(corner.X * spread * 0.6, tall / 2, corner.Y * spread * 0.6)
-				* CFrame.Angles(corner.Y * 0.09, 0, -corner.X * 0.09),
-			metal,
-			Enum.Material.Metal
-		)
-	end
-	for i = 1, 4 do
-		local y = tall * (i / 5)
-		local width = spread * (1.5 - 0.22 * i)
-		piece(parent, Vector3.new(width, leg * 0.8, leg * 0.8), at * CFrame.new(0, y, spread * 0.55), metal, Enum.Material.Metal)
-		piece(parent, Vector3.new(leg * 0.8, leg * 0.8, width), at * CFrame.new(spread * 0.55, y, 0), metal, Enum.Material.Metal)
-	end
-	pillar(parent, leg * 1.2, tall * 0.2, at * CFrame.new(0, tall * 1.1, 0), metal, Enum.Material.Metal)
-end
-
--- Cloud banks at height, INSIDE the colonnades, so they read as being in the space rather
--- than as sky.
---
--- === Why the first two attempts came out as balloons ===
---
--- Version one was four to seven opaque balls of 90 to 170 studs, scattered at random. That
--- is a balloon cluster and looked like one. Version two fixed the MASSING -- flat base,
--- lobes shrinking with height, more of them -- and still read as spheres, because it left
--- the single number that actually decides this alone: each lobe was still about a THIRD of
--- the cloud's width. At that ratio every lobe is individually identifiable no matter how
--- they are arranged, and a shape you can count the parts of is not a cloud.
---
--- The fix is a ratio, not an arrangement. A lobe is now 5 to 13 per cent of the cloud's
--- width, and there are fifty of them instead of fourteen. Nothing about the silhouette is
--- decided by any one sphere any more, which is the whole trick -- and it is why real
--- volumetric clouds look the way they do at any scale.
---
--- === What the rest of it is doing ===
---
---   THE BASE IS FLAT. Cloud forms where rising air hits its condensation level, and that
---   level is a plane -- so every cumulus is sliced off underneath at the same height. Each
---   lobe's centre is held far enough above the base that its own underside cannot dip
---   below it. This does more work than anything else here.
---
---   LOBES SHRINK OUTWARD AND UPWARD. Big in the core, small at the surface and smaller
---   still at the crown. That gradient gives a finely lumpy outline where equal lobes give
---   a knobbly ball, and it is what makes cauliflower read as cauliflower.
---
---   IT LEANS. Real cumulus is asymmetric -- one side is growing and stands taller. The
---   crown is offset horizontally so no bank is a symmetrical mound.
---
---   IT IS TINTED BY HEIGHT, not lit. Cool grey at the base, near-white at the top. That
---   gradient is where a solid cloud gets its depth from, and it costs nothing.
-local CLOUD_LOBES = 50
-local CLOUD_WIDTH = 300      -- studs before `scale`, and everything below is a fraction of it
-local CLOUD_FLATNESS = 0.36  -- height as a fraction of width. Cumulus is wide, not tall.
-local CLOUD_LOBE_MIN = 0.05
-local CLOUD_LOBE_MAX = 0.13
-local CLOUD_SQUASH = 0.70    -- a lobe is wider than it is tall
-local CLOUD_LEAN = 0.22      -- how far the crown is offset from the base
-
-
-local function cloudBank(parent: Instance, at: CFrame, scale: number)
-	local width = CLOUD_WIDTH * scale
-	local height = width * CLOUD_FLATNESS
-	local depth = width * 0.72
-	-- The direction this one is growing in, so the crown leans off the base.
-	local leanAngle = rng:NextNumber(0, math.pi * 2)
-	local leanX, leanZ = math.cos(leanAngle), math.sin(leanAngle)
-
-	for _ = 1, CLOUD_LOBES do
-		-- `out` biased toward 1 puts more lobes near the surface than in the core, which is
-		-- where they are needed: the outline is the only part anyone sees.
-		local out = rng:NextNumber() ^ 0.55
-		local yaw = rng:NextNumber(0, math.pi * 2)
-		-- `up` biased LOW, because a cumulus is mostly base with a crown on top rather than
-		-- an even column.
-		local up = rng:NextNumber() ^ 1.6
-
-		-- Footprint pulls in as it rises, so the stack narrows into a dome.
-		local reach = out * (1 - up * 0.55)
-		local x = math.cos(yaw) * reach * width * 0.5 + leanX * up * width * CLOUD_LEAN
-		local z = math.sin(yaw) * reach * depth * 0.5 + leanZ * up * width * CLOUD_LEAN
-
-		-- Smaller at the surface and smaller again at the crown.
-		local radius = width * rng:NextNumber(CLOUD_LOBE_MIN, CLOUD_LOBE_MAX)
-			* (1 - out * 0.45) * (1 - up * 0.35)
-		local lobeH = radius * CLOUD_SQUASH
-
-		-- THE FLAT BASE. The centre is lifted by the lobe's own half-height so its underside
-		-- lands ON the base plane and never below it. Without this one line the bottom of
-		-- the cloud is as knobbly as the top and it stops reading as cumulus entirely.
-		local y = lobeH * 0.5 + up * height
-
-		local tint = Color3.fromRGB(206, 214, 230):Lerp(Color3.fromRGB(252, 253, 255),
-			math.min(1, up * 0.75 + 0.25))
-		piece(
-			parent,
-			Vector3.new(radius * 2, lobeH * 2, radius * 2 * rng:NextNumber(0.82, 1.0)),
-			at * CFrame.new(x, y, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0),
-			tint,
-			Enum.Material.SmoothPlastic,
-			Enum.PartType.Ball
-		)
-	end
-end
-
 -- Roblox's own volumetric clouds for the sky itself: one instance, effectively free, and
 -- it covers the whole sky in a way a few hundred spheres never could.
 local function ensureSkyClouds()
@@ -1406,112 +1373,16 @@ local function levelCentre(): Vector3
 	return Vector3.new((minX + maxX) / 2, 0, (minZ + maxZ) / 2)
 end
 
--- Scattered onto a ring, at an angle and distance, facing the middle. Every ring in here
--- wants the same four lines, and writing them out each time is how the jitter ends up
--- inconsistent between one ring and the next.
-local function ringSpot(near: number, far: number, index: number, count: number, jitter: number): (CFrame, number)
-	local angle = (index / count) * math.pi * 2 + rng:NextNumber(-jitter, jitter)
-	local reach = rng:NextNumber(near, far)
-	return CFrame.new(math.cos(angle) * reach, 0, math.sin(angle) * reach), angle
-end
-
--- ===== Vapour banks =====
---
--- THE MIDDLE OF THE WORLD WAS EMPTY, and that is the gap this fills. Terrain.Clouds
--- already puts a volumetric deck far overhead, and the sea is 700 studs down; between them
--- sat several hundred studs of flat blue with nothing in it, so the level read as floating
--- in a void rather than as being HIGH UP. Height is only legible when something occupies
--- the space you are above.
---
--- Roblox's own Clouds cannot do this: they render as a single deck at one altitude, above
--- everything, and cannot be layered or placed below the player. Banks of geometry can.
---
--- A BANK IS ONE MASS, NOT A CONSTELLATION. This is the thing two earlier attempts got
--- wrong. Puffs scattered across the bank's full width -- even a lot of them, even in three
--- size classes -- do not become a cloud; they stay a handful of separate balls with sky
--- between them, which is exactly what they looked like. Overlap is not decoration here, it
--- is the entire mechanism: the puffs must sit close enough that most of the bank is under
--- two or three of them at once, so their alphas accumulate into a soft interior while the
--- rim, covered by one, stays faint. That gradient is the cloud. Hence CLUSTER, which is
--- small, and the wide flat puffs that go with it.
-local CLOUD_HI = Color3.fromRGB(250, 248, 252)
-local CLOUD_LO = Color3.fromRGB(203, 216, 236)
-
--- How far from the bank centre a puff may sit, as a fraction of the bank's own span. Small
--- ON PURPOSE -- see above. At 0.55 the earlier version scattered them; at 0.22 they pile up.
-local CLOUD_CLUSTER = 0.22
-
-local function vapour(parent: Instance, bands: { number }, perBand: number, radius: number)
-	-- A folder of its own this time, and NOT routed through `animate`. The swell loop only
-	-- knows how to sway a part about a fixed origin; clouds have to travel and wrap, which
-	-- is CloudService's job, and it finds them here.
-	local folder = Instance.new("Folder")
-	folder.Name = "Clouds"
-	folder.Parent = parent
-
-	for index, height in ipairs(bands) do
-		-- Depth, 0 at the top band and 1 at the bottom. Lower banks are bluer and more
-		-- transparent -- aerial perspective, and the same rule the three skyline bands
-		-- already follow. Without it the lowest layer reads as being the nearest.
-		local depth = (index - 1) / math.max(1, #bands - 1)
-		local tint = CLOUD_HI:Lerp(CLOUD_LO, depth)
-
-		for _ = 1, perBand do
-			local angle = rng:NextNumber(0, math.pi * 2)
-			-- sqrt, so banks spread evenly over AREA. Sampling the radius uniformly piles
-			-- them up near the middle, which is the one place the player can see clearly.
-			local distance = 160 + (radius - 160) * math.sqrt(rng:NextNumber())
-			local cx = math.cos(angle) * distance
-			local cz = math.sin(angle) * distance
-			local cy = height + rng:NextNumber(-34, 34)
-
-			local span = rng:NextNumber(240, 420)
-			local yaw = rng:NextNumber(0, math.pi * 2)
-			local squash = rng:NextNumber(0.5, 0.85)
-
-			for _ = 1, rng:NextInteger(5, 7) do
-				-- All puffs are large and similar. A wide size range reintroduces the
-				-- problem the clustering solves: a small puff beside a big one reads as a
-				-- separate object rather than as part of the same mass.
-				local wide = span * rng:NextNumber(0.62, 0.88)
-				-- FLAT. A cloud is far wider than it is deep, and this is most of what
-				-- separates vapour from a ball: at a seventh of its width a puff has no
-				-- readable sphere silhouette left, only a soft horizontal mass.
-				local tall = wide * rng:NextNumber(0.11, 0.17)
-
-				local ra = rng:NextNumber(0, math.pi * 2)
-				local rr = span * CLOUD_CLUSTER * math.sqrt(rng:NextNumber())
-				local ox, oz = math.cos(ra) * rr, math.sin(ra) * rr * squash
-				local rx = ox * math.cos(yaw) - oz * math.sin(yaw)
-				local rz = ox * math.sin(yaw) + oz * math.cos(yaw)
-
-				local blob = piece(
-					folder,
-					Vector3.new(wide, tall, wide * rng:NextNumber(0.66, 1.0)),
-					CFrame.new(cx + rx, cy + rng:NextNumber(-tall * 0.7, tall * 0.7), cz + rz)
-						* CFrame.Angles(0, yaw + rng:NextNumber(-0.5, 0.5), 0),
-					tint,
-					Enum.Material.SmoothPlastic,
-					Enum.PartType.Ball
-				)
-				-- Very transparent, because several of them stack. A puff that looks right
-				-- on its own is far too solid once three overlap.
-				blob.Transparency = math.clamp(0.86 + depth * 0.03 + rng:NextNumber(-0.02, 0.02), 0, 0.97)
-				-- The client fades toward this as a cloud nears the wrap boundary, and
-				-- needs to know what to fade back TO.
-				blob:SetAttribute("BaseTransparency", blob.Transparency)
-			end
-		end
-	end
-end
 
 local function build(): Model
 	local model = Instance.new("Model")
 	model.Name = "Backdrop"
+	-- Footprints from any earlier build in this server would stand in for buildings that are gone.
+	table.clear(occupied)
 
 	-- Resolved before any ring is drawn. Held in an upvalue rather than passed down because
-	-- collars are raised from three different builders at three different depths, and
-	-- threading one optional template through all of them buys nothing.
+	-- collars are raised from several builders at several depths, and threading one optional
+	-- template through all of them buys nothing.
 	swellFolder = Instance.new("Folder")
 	swellFolder.Name = "Swell"
 	swellFolder.Parent = model
@@ -1519,106 +1390,95 @@ local function build(): Model
 	seaRing = propTemplate("Sea_Ring")
 	seaSurf = propTemplate("Sea_Surf")
 
-	-- THE CITY, IN THREE BANDS: 116 towers from 900 studs out to 5200.
-	--
-	-- One band at one distance was the mistake, and adding contrast to it was never going
-	-- to fix it. A city is a DEPTH, not a ring -- what makes it read as continuing forever
-	-- is near towers overlapping mid towers overlapping far ones, each band hazier than the
-	-- one in front. Thirty-four towers on a single ring gave about six in view at any time,
-	-- spaced like fence posts, and no amount of silhouette work saves that.
-	--
-	-- Nearer is safe. The level runs 344 studs end to end, so the closest tower is over 700
-	-- studs from anywhere you can stand, and there is no floor between here and there --
-	-- walking off the level drops you through the kill plane long before distance matters.
-	--
-	-- Each band is shorter and narrower than the one behind it, so the far band still reads
-	-- as the biggest thing out there even though it is the most dissolved by haze.
-	--
-	-- HEIGHTS ROUGHLY DOUBLED when the water went to -700, and this is the part that broke
-	-- on the first try. A 600-stud tower standing at -700 tops out 100 studs BELOW your
-	-- feet; the horizon is 6.7 degrees down, so the entire near band collapsed into a
-	-- sliver along it and the sea looked empty. Dropping the floor does not just move the
-	-- floor -- everything standing on it has to grow by the same amount or it sinks out of
-	-- the composition.
-	-- CUT FROM 116 TOWERS TO 46, and pushed back.
-	--
-	-- A skyline is made of repeated verticals, and 116 of them is a skyline whatever else is
-	-- standing between them -- the towers were not too tall or too plain, there were simply
-	-- too many for anything else to be the subject. They are the city AROUND the park now:
-	-- present at the back, thinned out in front, and the near band left almost empty for the
-	-- aquapark structures to occupy.
-	skyline(model, 8, 1400, 2400, 110, 190, 800, 1500)
-	skyline(model, 16, 2500, 3600, 150, 280, 1200, 2400)
-	skyline(model, 22, 3700, 5200, 190, 360, 1600, 3200)
+	-- THE CITY TURNS ITS BACK TO THE SUN, so every tower is lit on the side you see and the sun
+	-- goes down over open water, which is where the glitter is.
+	cityBearing = sunBearing() + math.pi
 
-	-- ONE colonnade now, not two, and pulled in front of the whole city. Its job was always
-	-- to be the thing you read the distance THROUGH; with 116 towers behind it, a second
-	-- ring buried in the middle band was just more rectangles.
-	-- TALLER THAN IT WAS. From 700 studs up, a 520-stud colonnade standing at the water
-	-- line tops out 180 below your feet -- the whole ring would sit under the horizon and
-	-- stop being something you read the distance THROUGH, which is its only job.
-	colonnade(model, 1400, 24, 1150, 140)
+	-- === The land, the beach and promenade along its edge, and the harbour walls at its ends ===
+	land(model)
+	quays(model)
 
-	-- Facades scattered through the near and middle bands, turned to face roughly inward.
-	for i = 1, 9 do
-		local at, angle = ringSpot(1500, 2700, i, 9, 0.3)
-		facade(model, at * CFrame.Angles(0, -angle + math.pi / 2, 0), rng:NextNumber(480, 900), rng:NextNumber(750, 1600))
+	-- Parks first, so the towers leave room for them: green in among the pastel, which is most of
+	-- what makes a skyline read as a place people live rather than a stack of blocks.
+	for _ = 1, 12 do
+		local wide = rng:NextNumber(220, 460)
+		local x, z = landSpot(1700, 4600, 480, wide * 0.6, 40)
+		if x and z then
+			pillar(model, wide, 6, CFrame.new(x, LAND_TOP + 2, z), PARK, Enum.Material.SmoothPlastic)
+			occupy(x, z, wide * 0.5)
+		end
 	end
 
-	-- The objects, scattered BETWEEN the rings so they are read against the architecture.
-	-- A lounger alone on a plain is just a lounger; one as tall as the colonnade standing
-	-- behind it is the whole idea.
+	-- === The beachfront: deco hotels in a row facing the bay, palms along the promenade ===
 	--
-	-- MODELLED FIRST, PRIMITIVE SECOND. Each entry names a prop and the primitive that
-	-- stands in when that prop has not been imported, so the ring is populated either way
-	-- and no two adjacent slots collapse to the same fallback shape.
-	-- TINTED, not palette-picked. The liminal props take a random pastel because any of
-	-- them could plausibly be any colour, but these six are recognisable BY colour as much
-	-- as by shape -- a butter block in mint green is a shed, and amber is doing half the
-	-- work of saying honey. Where a `tint` is present it overrides the random pick.
-	local HONEY = Color3.fromRGB(236, 190, 104)
-	local SLIME = Color3.fromRGB(166, 214, 158)
-	local SOAP = Color3.fromRGB(214, 226, 220)
-	local KEYCAP = Color3.fromRGB(206, 210, 224)
-	local METAL = Color3.fromRGB(150, 154, 164)
-	local WAX = Color3.fromRGB(240, 232, 212)
-	local FOAM = Color3.fromRGB(158, 190, 176)
+	-- Hotels every six degrees or so along the whole crescent, set back behind the promenade,
+	-- nudged in and out so the row is a street rather than a wall. Well below eye level: the level is 700 up, and these are 150 to 340 tall, so you
+	-- look DOWN at the beachfront and UP at the towers behind it.
+	local hotelStep = math.rad(5.8)
+	local hotelEdge = CITY_HALF - math.rad(4)
+	local offset = -hotelEdge
+	while offset <= hotelEdge do
+		local shore = shoreAt(offset)
+		if shore then
+			local width = rng:NextNumber(150, 240)
+			local depth = rng:NextNumber(110, 170)
+			local reach = shore + BEACH_DRY + PROMENADE + 50 + depth / 2 + rng:NextNumber(0, 60)
+			local angle = cityBearing + offset + rng:NextNumber(-0.012, 0.012)
+			local x, z = math.cos(angle) * reach, math.sin(angle) * reach
+			if clearOf(x, z, width * 0.5) then
+				decoHotel(model, CFrame.lookAt(Vector3.new(x, LAND_TOP, z), Vector3.new(0, LAND_TOP, 0)),
+					width, depth, rng:NextNumber(150, 340))
+				occupy(x, z, width * 0.6)
+			end
+		end
+		offset += hotelStep * rng:NextNumber(0.85, 1.15)
+	end
 
-	local objects = {
-		-- The ASMR set: the game's own materials, and the genre's own objects, standing in
-		-- the same field as the architecture.
-		{ mesh = "Backdrop_Keyboard", fallback = plinth, lift = 0, tint = KEYCAP },
-		{ mesh = "Backdrop_Microphone", fallback = lamp, lift = 0, tint = METAL },
-		{ mesh = "Backdrop_HoneyDipper", fallback = lamp, lift = 0, tint = HONEY },
-		{ mesh = "Backdrop_Soap", fallback = plinth, lift = 0, tint = SOAP },
-		{ mesh = "Backdrop_SlimeJar", fallback = ball, lift = 0, tint = SLIME },
-		{ mesh = "Backdrop_Candle", fallback = lamp, lift = 0, tint = WAX },
-		{ mesh = "Backdrop_Foam", fallback = plinth, lift = 0, tint = FOAM },
+	-- Palms on the seaward edge of the promenade, sized from the template so they come out about
+	-- 150 studs tall whatever size the mesh was exported at. Nothing is drawn if the palm has not
+	-- been imported.
+	local _, palmTall = propSpan("Backdrop_Palm")
+	if palmTall > 0 then
+		local palmEdge = CITY_HALF - math.rad(2)
+		local at = -palmEdge
+		while at <= palmEdge do
+			local shore = shoreAt(at)
+			if shore then
+				local reach = shore + BEACH_DRY + 24
+				local angle = cityBearing + at
+				prop(model, "Backdrop_Palm",
+					CFrame.new(math.cos(angle) * reach, LAND_TOP, math.sin(angle) * reach)
+						* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+					rng:NextNumber(130, 175) / palmTall, Color3.fromRGB(176, 212, 170))
+			end
+			at += math.rad(2.6) * rng:NextNumber(0.8, 1.2)
+		end
+	end
 
-		{ mesh = "Backdrop_Island", fallback = plinth, lift = 320 },
-		{ mesh = "Backdrop_Mushroom", fallback = lamp, lift = 0 },
-		{ mesh = "Backdrop_Statue", fallback = plinth, lift = 0 },
-		{ mesh = "Backdrop_Tree", fallback = doorway, lift = 0 },
-		{ mesh = "Backdrop_Slide", fallback = doorway, lift = 0 },
-		{ mesh = "Backdrop_Umbrella", fallback = lamp, lift = 0 },
-		{ mesh = "Backdrop_WaterTower", fallback = pylon, lift = 0 },
-		{ mesh = "Backdrop_Arch", fallback = doorway, lift = 0 },
-		{ mesh = "Backdrop_Island", fallback = ball, lift = 470 },
-		{ mesh = "Backdrop_Hoop", fallback = divingBoard, lift = 0 },
-		{ mesh = "Backdrop_Mushroom", fallback = ball, lift = 0 },
-		{ mesh = "Backdrop_Statue", fallback = plinth, lift = 0 },
-		{ mesh = "Backdrop_Tree", fallback = divingBoard, lift = 0 },
-		{ mesh = "Backdrop_Slide", fallback = pylon, lift = 0 },
-	}
-	-- RUN TWICE, over two different distance bands: once close in among the near towers and
-	-- once out among the middle ones. Two passes over one table rather than a table twice
-	-- as long, because what was thin was the SPACING, not the choice of objects -- sixteen
-	-- spread over a full circle is one every 22 degrees and you see about four at a time.
-	-- === The aquapark, in the space the towers used to fill ===
+	-- === The city behind them: three bands of towers, deeper and taller going back ===
 	--
-	-- Placed NEARER and LARGER than the scattered objects below, because these are the
-	-- subject now rather than decoration. A slide tower at 900 studs and eleven times scale
-	-- is 700 studs of spiralling tube, which is the single most legible silhouette out here.
+	-- Denser than the first version's 46 all the way round, because they only stand on the
+	-- crescent now: a skyline is its overlaps, and a thin one is a row of posts.
+	skyline(model, 14, 1500, 2500, 480, 110, 190, 700, 1300)
+	skyline(model, 20, 2500, 3800, 480, 150, 260, 1100, 2200)
+	skyline(model, 22, 3800, 5500, 480, 190, 340, 1500, 3000)
+
+	-- Facades among them, turned toward the bay.
+	for _ = 1, 9 do
+		local width = rng:NextNumber(480, 900)
+		local x, z = landSpot(1700, 3200, 520, width * 0.6, 40)
+		if x and z then
+			facade(model, CFrame.lookAt(Vector3.new(x, 0, z), Vector3.new(0, 0, 0)), width, rng:NextNumber(750, 1600))
+		end
+	end
+
+	-- === The aquapark, in the bay ===
+	--
+	-- In the water between the level and the beach, so it is the subject of the view straight
+	-- down, and smaller than it was out on the open sea: these stand in a bay 1150 studs across,
+	-- and at the old sizes three of them would have filled it. From 800 out, clear of the dive's
+	-- landing circle (about 414 out from the middle, 300 across the radius), so nobody splashes
+	-- down through a flume.
 	local aquapark = {
 		{ mesh = "Backdrop_SlideTower", tint = Color3.fromRGB(214, 232, 240) },
 		{ mesh = "Backdrop_Flume", tint = Color3.fromRGB(176, 214, 226) },
@@ -1626,169 +1486,105 @@ local function build(): Model
 		{ mesh = "Backdrop_SlideTower", tint = Color3.fromRGB(228, 206, 214) },
 		{ mesh = "Backdrop_LifeguardChair", tint = Color3.fromRGB(238, 232, 214) },
 		{ mesh = "Backdrop_Flume", tint = Color3.fromRGB(206, 224, 208) },
-		{ mesh = "Backdrop_SlideTower", tint = Color3.fromRGB(196, 220, 232) },
-		{ mesh = "Backdrop_SplashBucket", tint = Color3.fromRGB(220, 206, 226) },
-		{ mesh = "Backdrop_LifeguardChair", tint = Color3.fromRGB(232, 236, 228) },
-		{ mesh = "Backdrop_Flume", tint = Color3.fromRGB(214, 218, 236) },
 		{ mesh = "Backdrop_DivingPlatform", tint = Color3.fromRGB(222, 228, 232) },
 		{ mesh = "Backdrop_MushroomFountain", tint = Color3.fromRGB(210, 232, 234) },
-		{ mesh = "Backdrop_Palm", tint = Color3.fromRGB(178, 210, 176) },
-		{ mesh = "Backdrop_DivingPlatform", tint = Color3.fromRGB(232, 220, 210) },
-		{ mesh = "Backdrop_MushroomFountain", tint = Color3.fromRGB(230, 214, 222) },
-		{ mesh = "Backdrop_Palm", tint = Color3.fromRGB(192, 216, 190) },
 		{ mesh = "Backdrop_PlayStructure", tint = Color3.fromRGB(226, 208, 196) },
-		{ mesh = "Backdrop_RockFall", tint = Color3.fromRGB(206, 204, 198) },
 		{ mesh = "Backdrop_PirateShip", tint = Color3.fromRGB(206, 186, 164) },
 		{ mesh = "Backdrop_WaveSlide", tint = Color3.fromRGB(184, 220, 216) },
+		{ mesh = "Backdrop_SplashBucket", tint = Color3.fromRGB(220, 206, 226) },
 		{ mesh = "Backdrop_PlayStructure", tint = Color3.fromRGB(202, 216, 232) },
 		{ mesh = "Backdrop_WaveSlide", tint = Color3.fromRGB(224, 210, 216) },
-		{ mesh = "Backdrop_RockFall", tint = Color3.fromRGB(196, 192, 190) },
-		{ mesh = "Backdrop_Sandcastle", tint = Color3.fromRGB(234, 220, 184) },
 	}
 	for _, entry in ipairs(aquapark) do
-		local scale = rng:NextNumber(6.0, 13.0)
 		local wide = propSpan(entry.mesh)
-		-- Its own footprint, from the mesh rather than a guess, so a 100-stud flume and a
-		-- 25-stud ladder do not reserve the same circle.
-		local span = if wide > 0 then wide else 90
-		local radius = span * scale * 0.5
-
-		-- CLEARANCE CHECKED, not just recorded. Every one of these called occupy() to log
-		-- where it stood and none of them called clearOf() to ask first, so the footprint
-		-- registry was write-only -- which is why a slide tower's helix ran straight through
-		-- a butter block. Registering a footprint does nothing unless something reads it.
-		local x, z = findClear(750, 2600, radius, 40)
-		if x and z then
-			local spun = CFrame.new(x, 0, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
-			-- Measured from the BASE, so 8 to 34 studs against props 250 to 900 studs tall
-			-- is an ankle in the water, which is what a poolside structure should look like.
-			local placed = afloat(spun, rng:NextNumber(8, 34))
-			if prop(model, entry.mesh .. "_Detail", placed, scale, entry.tint)
-				or prop(model, entry.mesh, placed, scale, entry.tint)
-			then
-				occupy(x, z, radius)
+		if wide > 0 then
+			local scale = rng:NextNumber(3.5, 6.5)
+			local radius = wide * scale * 0.5
+			local x, z = waterSpot(800, 1080, radius, 40)
+			if x and z then
+				local spun = CFrame.new(x, 0, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+				local placed = afloat(spun, rng:NextNumber(6, 24))
+				if prop(model, entry.mesh .. "_Detail", placed, scale, entry.tint)
+					or prop(model, entry.mesh, placed, scale, entry.tint)
+				then
+					occupy(x, z, radius)
+					collar(model, x, z, wide * scale * rng:NextNumber(1.05, 1.3), rng:NextNumber(0.66, 0.9))
+				end
 			end
 		end
 	end
 
-	-- Float rings and lane ropes lie ON the water rather than standing in it, so they take
-	-- the wave surface and the same clearance the foam does.
-	--
-	-- These two are also the only props whose own height is near zero, which means placing
-	-- them by their base -- as prop() now does -- and placing them by their centre are very
-	-- nearly the same thing. That is why they looked right while the slide towers did not.
+	-- Float rings and lane ropes lie ON the water, in the bay and out to sea.
 	for _, spec in ipairs({
-		{ mesh = "Backdrop_FloatRing", count = 14, near = 700, far = 3200, low = 2.5, high = 6.0, width = 58 },
-		{ mesh = "Backdrop_LaneRope", count = 9, near = 900, far = 3600, low = 3.0, high = 7.5, width = 136 },
+		{ mesh = "Backdrop_FloatRing", count = 14, near = 820, far = 3200, low = 2.5, high = 6.0, width = 58 },
+		{ mesh = "Backdrop_LaneRope", count = 9, near = 860, far = 3600, low = 3.0, high = 7.5, width = 136 },
 	}) do
-		for i = 1, spec.count do
-			local at = ringSpot(spec.near, spec.far, i, spec.count, 0.5)
+		for _ = 1, spec.count do
 			local scale = rng:NextNumber(spec.low, spec.high)
-			prop(
-				model,
-				spec.mesh,
-				onWave(at.Position.X, at.Position.Z, rng:NextNumber(0, math.pi * 2),
-					clearance(spec.width * scale)),
-				scale,
-				pick()
-			)
+			local x, z = waterSpot(spec.near, spec.far, spec.width * scale * 0.5, 30)
+			if x and z then
+				prop(model, spec.mesh, onWave(x, z, rng:NextNumber(0, math.pi * 2), clearance(spec.width * scale)),
+					scale, pick())
+			end
 		end
 	end
 
-	local bands = {
-		-- The near band draws the HIGH-DETAIL meshes. A prop here can be 700 studs tall at
-		-- 950 studs away, which subtends about 40 degrees -- at that size a 10-segment dome
-		-- is visibly a polygon, and the low-poly budget that was right for the far horizon
-		-- stops being right for something filling a third of the screen.
-		{ near = 950, far = 1900, low = 5.5, high = 9.5, detail = true },
-		{ near = 2000, far = 3400, low = 8.0, high = 14.0, detail = false },
-	}
-	for _, band in ipairs(bands) do
-		for _, entry in ipairs(objects) do
-			local scale = rng:NextNumber(band.low, band.high)
-			local span = propSpan(entry.mesh)
-			local footprint = if span > 0 then span else 80
-			local radius = footprint * scale * 0.5
-			local ox, oz = findClear(band.near, band.far, radius, 30)
-			if not ox or not oz then
-				continue
-			end
-			local spun = CFrame.new(ox, 0, oz) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
-			-- Islands are LIFTED off the floor: a floating island resting on the ground is
-			-- just a hill, and the gap under it is the entire point of the shape.
-			-- === A prop's PROPORTIONS decide how it is placed ===
-			--
-			-- The giant keyboard was the thing that made this obvious: 95 studs long and 13
-			-- tall, scaled ten times, sunk a few studs like everything else -- and the
-			-- result was an 950-stud slab hanging in mid-air over open water with nothing
-			-- under it and no reason to be there.
-			--
-			-- Anything much wider than it is tall is not a building, it is an OBJECT LYING
-			-- DOWN, and a thing lying down belongs on the surface. Keyboard, soap, butter,
-			-- foam and the lounger all fall on that side; slide towers, palms and diving
-			-- platforms on the other. Measured rather than listed, so a new prop lands
-			-- correctly without anyone remembering to classify it.
-			local wide, tall = propSpan(entry.mesh)
-			local lyingDown = tall > 0 and tall < wide * 0.42
-
-			local placed
-			if entry.lift > 0 then
-				-- Floating islands, and only those.
-				placed = spun * CFrame.new(0, entry.lift, 0)
-			elseif lyingDown then
-				placed = onWave(
-					spun.Position.X,
-					spun.Position.Z,
-					rng:NextNumber(0, math.pi * 2),
-					clearance(wide * scale)
-				)
-			else
-				placed = afloat(spun, rng:NextNumber(6, 26) * scale / 7)
-			end
-			local tint = entry.tint or pick()
-
-			-- THREE WAYS DOWN, and none of them is required to exist. Detail mesh, then
-			-- plain mesh, then primitive. Props built only from boxes have no detail
-			-- variant at all -- there would be nothing to add -- so the miss here is
-			-- normal rather than a sign of a bad import.
-			local drawn = band.detail and prop(model, entry.mesh .. "_Detail", placed, scale, tint)
-			if not drawn then
-				drawn = prop(model, entry.mesh, placed, scale, tint)
-			end
-			if not drawn then
-				entry.fallback(model, spun, scale)
-			end
-			-- Roughly sized: these are 40 to 140 authored units across before scaling, so
-			-- half of 90 is a fair circle for all of them. Being generous costs a fleck or
-			-- two; being mean puts one inside a mushroom.
-			occupy(ox, oz, radius)
-		end
-	end
-
-	-- A SECOND SCATTER, primitives only and nearer in.
+	-- === Objects at the wrong size, out on the open sea ===
 	--
-	-- Not redundant with the fallbacks above: those disappear the moment the props are
-	-- imported, and if they were the only primitives then a successful import would empty
-	-- the middle distance of everything except architecture. These stay whatever happens.
-	-- No staircase. A flight of steps rising to nothing was a good liminal object and a
-	-- bad AQUAPARK one -- it read as ruined civic architecture, which is the note this
-	-- horizon is trying to stop hitting.
-	-- No chairs. A chair at the wrong size was a good dreamcore object and reads as
-	-- domestic furniture, which is the one thing a waterpark has none of.
-	local nearby = { divingBoard, doorway, ball, pylon, ball, doorway, divingBoard, lamp, plinth, divingBoard }
-	for _, band in ipairs({ { 800, 1500, 3.2, 6.0 }, { 1600, 2900, 5.0, 9.0 } }) do
-		for _, make in ipairs(nearby) do
-			local size = rng:NextNumber(band[3], band[4])
-			local radius = 40 * size
-			local nx, nz = findClear(band[1], band[2], radius, 30)
-			if nx and nz then
-				make(
-					model,
-					afloat(CFrame.new(nx, 0, nz) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
-						rng:NextNumber(10, 48) * size / 5),
-					size
-				)
-				occupy(nx, nz, radius)
+	-- The game's own things -- a keyboard, a microphone, a honey dipper, a bar of soap -- standing
+	-- in the glitter toward the sunset, where they are silhouettes against the brightest part of
+	-- the sky. MODELLED OR NOTHING: the primitive stand-ins that used to fill in for props that had
+	-- not been imported were the plain white balls and the glowing lamp in the middle of the view,
+	-- and a gap is better than a placeholder.
+	local HONEY = Color3.fromRGB(236, 190, 104)
+	local SLIME = Color3.fromRGB(166, 214, 158)
+	local SOAP = Color3.fromRGB(214, 226, 220)
+	local KEYCAP = Color3.fromRGB(206, 210, 224)
+	local METAL = Color3.fromRGB(150, 154, 164)
+	local WAX = Color3.fromRGB(240, 232, 212)
+	local FOAM = Color3.fromRGB(158, 190, 176)
+	local objects = {
+		{ mesh = "Backdrop_Keyboard", tint = KEYCAP },
+		{ mesh = "Backdrop_Microphone", tint = METAL },
+		{ mesh = "Backdrop_HoneyDipper", tint = HONEY },
+		{ mesh = "Backdrop_Soap", tint = SOAP },
+		{ mesh = "Backdrop_SlimeJar", tint = SLIME },
+		{ mesh = "Backdrop_Candle", tint = WAX },
+		{ mesh = "Backdrop_Foam", tint = FOAM },
+		{ mesh = "Backdrop_Island", lift = 320 },
+		{ mesh = "Backdrop_Statue" },
+		{ mesh = "Backdrop_Umbrella" },
+		{ mesh = "Backdrop_WaterTower" },
+		{ mesh = "Backdrop_Arch" },
+		{ mesh = "Backdrop_Hoop" },
+	}
+	for _, band in ipairs({ { near = 1400, far = 2600, low = 5.5, high = 9.5, detail = true },
+		{ near = 2600, far = 4200, low = 8.0, high = 13.0, detail = false } }) do
+		for _, entry in ipairs(objects) do
+			local wide, tall = propSpan(entry.mesh)
+			if wide > 0 then
+				local scale = rng:NextNumber(band.low, band.high)
+				local radius = wide * scale * 0.5
+				local ox, oz = waterSpot(band.near, band.far, radius, 30, true)
+				if ox and oz then
+					local spun = CFrame.new(ox, 0, oz) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+					-- A prop much wider than it is tall is an object LYING DOWN, and belongs on the
+					-- surface; islands float; everything else stands in the water.
+					local placed
+					if entry.lift then
+						placed = spun * CFrame.new(0, entry.lift, 0)
+					elseif tall < wide * 0.42 then
+						placed = onWave(ox, oz, rng:NextNumber(0, math.pi * 2), clearance(wide * scale))
+					else
+						placed = afloat(spun, rng:NextNumber(6, 26) * scale / 7)
+					end
+					local tint = entry.tint or pick()
+					if (band.detail and prop(model, entry.mesh .. "_Detail", placed, scale, tint))
+						or prop(model, entry.mesh, placed, scale, tint)
+					then
+						occupy(ox, oz, radius)
+					end
+				end
 			end
 		end
 	end
@@ -1797,24 +1593,10 @@ local function build(): Model
 	-- than scattered into open water.
 	local shores: { { x: number, z: number, radius: number } } = {}
 
-	-- === THE SEA IS BUILT LAST, and the order is the whole fix ===
-	--
-	-- It used to be first. Everything laid on the water -- flecks, sandbars, surf -- was
-	-- therefore placed before a single building existed, so `clearOf` would have had an
-	-- empty list to check against and the avoidance would have been a no-op that looked
-	-- like working code. Registering footprints is useless unless the things that consult
-	-- them are built afterwards.
-	--
-	-- Creation order has no bearing on how Roblox draws these, so this costs nothing.
-	for _ = 1, 16 do
+	-- Sandbars out on the open sea, beyond the harbour walls.
+	for _ = 1, 14 do
 		local diameter = rng:NextNumber(180, 460)
-		-- Cleared against the surf as well as the island: the crescents reach about 1.4
-		-- times the sandbar's own radius, and a sandbar that fits where its surf does not
-		-- is the same bug one step along.
-		-- The margin only has to clear the surf, which reaches about 0.7 of the sandbar's
-		-- own diameter. 90 tries because a sandbar is large and the sea is crowded, and one
-		-- missing island is more obvious than one missing fleck.
-		local x, z = findClear(900, 5200, diameter * 0.75, 90)
+		local x, z = waterSpot(1500, 5200, diameter * 0.75, 90, true)
 		if x and z then
 			sandbar(model, CFrame.new(x, 0, z), diameter)
 			occupy(x, z, diameter * 0.8)
@@ -1822,20 +1604,11 @@ local function build(): Model
 		end
 	end
 
-	-- === Poolside furniture goes ON THE SHORES ===
+	-- === Poolside furniture goes ON THE SANDBARS ===
 	--
-	-- Loungers, palms, ladders and cabanas were scattered on their own rings at random
-	-- bearings, which put sun loungers in open water hundreds of studs from anything. They
-	-- are small, and small things read by their CONTEXT rather than their silhouette -- a
-	-- lounger beside a beach is a lounger, and the same lounger alone in the sea is a
-	-- rectangle nobody can identify.
-	--
-	-- Clustered around the sandbars instead, at the edge rather than the middle, which is
-	-- where furniture actually ends up.
-	-- Poolside AND beach, mixed, because a sandbar is where the two meet. The beach half
-	-- is things somebody LEFT -- a board pushed into the sand, a hull turned over, a line of
-	-- flags -- against a poolside half of things that were installed. That contrast is most
-	-- of what makes a shore read as a shore rather than as more scenery.
+	-- Small things read by their CONTEXT rather than their silhouette -- a lounger beside a
+	-- beach is a lounger, and the same lounger alone in the sea is a rectangle nobody can
+	-- identify -- so they cluster on the wet edge of each sandbar.
 	local FURNITURE = {
 		"Backdrop_Lounger", "Backdrop_Palm", "Backdrop_PoolLadder",
 		"Backdrop_Cabana", "Backdrop_Lounger", "Backdrop_Umbrella",
@@ -1848,16 +1621,10 @@ local function build(): Model
 		for _ = 1, rng:NextInteger(4, 9) do
 			local name = FURNITURE[rng:NextInteger(1, #FURNITURE)]
 			local angle = rng:NextNumber(0, math.pi * 2)
-			-- Just outside the sand, on the wet edge.
 			local out = shore.radius * rng:NextNumber(0.75, 1.25)
 			local x, z = shore.x + math.cos(angle) * out, shore.z + math.sin(angle) * out
 			local scale = rng:NextNumber(2.0, 4.5)
 			local wide, tall = propSpan(name)
-			-- Hoisted out of the condition below. An if-EXPRESSION inside an if-STATEMENT
-			-- puts two `if`s and two `then`s on one line, and the second `then` belongs to
-			-- the first `if` only by precedence -- check_lua paired them the other way and
-			-- reported the block's `end` as orphaned. It was right to: nobody should have to
-			-- work that out mid-line.
 			local footprint = if wide > 0 then wide else 40
 			if not clearOf(x, z, footprint * scale * 0.5) then
 				continue
@@ -1872,24 +1639,22 @@ local function build(): Model
 		end
 	end
 
-	-- The wave mesh is looked up ONCE here rather than per tile, and nil is fine: sea()
-	-- falls back to flat plates.
+	-- The wave mesh is looked up ONCE here rather than per tile, and nil is fine: sea() falls
+	-- back to flat plates. The sea runs under the land too; the land hides it.
 	sea(model, 6200, 1600, propTemplate("Sea_Tile"), propTemplate("Sea_Foam"))
 
-	for i = 1, 10 do
-		local at = ringSpot(900, 3600, i, 10, 0.5)
-		-- Measured from the water, so these have to clear 700 studs before they are even
-		-- level with you. Cloud banks below the horizon are sea foam.
-		cloudBank(model, at * CFrame.new(0, rng:NextNumber(900, 1900), 0), rng:NextNumber(2.0, 4.5))
-	end
+	-- NO CLOUD BANKS AND NO VAPOUR. The banks were fifty opaque balls each, and from the level
+	-- the near ones were the white eggs floating in front of everything; the vapour was 126 flat
+	-- translucent masses stacked between the level and the water, which is most of why the sea
+	-- came out as a pink soup. Height reads from seeing the water far below clearly, not from
+	-- things in the way of it. Terrain.Clouds still carries the sky.
 
 	-- AN EXPLICIT PIVOT, and its absence is what once made the backdrop invisible.
 	--
 	-- Model:PivotTo with no PrimaryPart pivots about the model's BOUNDING BOX CENTRE. The
-	-- towers rise to 1900 studs, so that centre sits roughly 900 up -- and pivoting it to
-	-- BASE_Y would drive the entire backdrop about 900 studs further down than intended,
-	-- burying it where nothing can see it. A zero-size anchor at the origin makes the
-	-- pivot mean what the code says it means.
+	-- towers rise to 3000 studs, so that centre sits far up -- and pivoting it to BASE_Y would
+	-- drive the entire backdrop that much further down than intended. A zero-size anchor at the
+	-- origin makes the pivot mean what the code says it means.
 	local anchor = Instance.new("Part")
 	anchor.Name = "Origin"
 	anchor.Size = Vector3.new(1, 1, 1)
@@ -1902,25 +1667,6 @@ local function build(): Model
 	anchor.CastShadow = false
 	anchor.Parent = model
 	model.PrimaryPart = anchor
-
-	-- FOUR BANDS BETWEEN THE WATER AND THE LEVEL. Local Y here is height above the
-	-- waterline (the model is pivoted to BASE_Y afterwards), and the lowest walkable
-	-- surface sits near 700 -- so 160 to 580 fills the gap without ever putting vapour
-	-- where the player is standing. Layered rather than one deck on purpose: what makes
-	-- altitude read is passing SEVERAL strata, which is exactly the trick Minecraft's
-	-- cloud layer plays at a much simpler fidelity.
-	-- FIVE BANDS, TEN BANKS EACH, OUT TO 4600. Local Y here is height above the waterline
-	-- (the model is pivoted to BASE_Y afterwards), and the lowest walkable surface sits
-	-- near 700 -- so 150 to 620 fills the gap without ever putting vapour where the player
-	-- is standing. Layered rather than one deck: what makes altitude read is passing
-	-- SEVERAL strata, the trick Minecraft's cloud layer plays at much simpler fidelity.
-	-- SEVEN BANDS, EIGHTEEN BANKS EACH. Up from five and ten, because at that density the
-	-- strata were far enough apart to be countable -- you could see the gap between one
-	-- layer and the next, which turns "flying through weather" back into "passing some
-	-- props". Nearly two and a half times the banks closes those gaps, and the two extra
-	-- heights fill the thinnest part of the range without going above 700, where the player
-	-- actually stands.
-	vapour(model, { 660, 570, 490, 410, 330, 240, 150 }, 18, 4600)
 
 	return model
 end
@@ -1937,7 +1683,7 @@ end
 -- Stamping the model and comparing on build turns "delete workspace.Backdrop by hand and
 -- remember to do it every time" into something that happens on its own. Same trap as
 -- ServerStorage.ChunkTemplates, and the same fix.
-local BACKDROP_VERSION = 4
+local BACKDROP_VERSION = 5
 
 -- Built once per server, AFTER the level exists so its centre can be measured. Safe to call
 -- more than once: a second call with a matching version is a no-op rather than a second
