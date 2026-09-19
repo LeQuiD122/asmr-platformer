@@ -137,6 +137,19 @@ local FloodedHallsService = if hallsModule then require(hallsModule :: ModuleScr
 -- without it still runs every level, that one finishing at the end of its route instead.
 local diveModule = Services:WaitForChild("DiveFinaleService", 5)
 local DiveFinaleService = if diveModule then require(diveModule :: ModuleScript) :: any else nil
+-- Sky Pools' terraces, tower, clouds and slide. Optional in exactly the way the three above are: a
+-- place without it still runs Level 2, as a bare ring finishing at the end of its route.
+local skyModule = Services:WaitForChild("SkyPoolsService", 5)
+local SkyPoolsService = if skyModule then require(skyModule :: ModuleScript) :: any else nil
+-- Disconnects the slide's prompt. The pools themselves are parented under Workspace.Levels, so the
+-- level's own teardown takes them; this is for the one connection that would outlive them.
+local skyTeardown: (() -> ())? = nil
+-- The Sunken City's drowned city, aquarium and drain. Optional in the same way: a place without it
+-- still runs Level 3, as a bare flat ring finishing at the end of its route.
+local sunkenModule = Services:WaitForChild("SunkenCityService", 5)
+local SunkenCityService = if sunkenModule then require(sunkenModule :: ModuleScript) :: any else nil
+-- Disconnects the drain's watch and the aquarium glass. The city itself goes with Workspace.Levels.
+local sunkenTeardown: (() -> ())? = nil
 -- Undoes the halls' GLOBAL changes -- lighting, reverb, the caustic loop -- when a run
 -- ends. Left set, every other level would inherit a bathhouse.
 local hallsTeardown: (() -> ())? = nil
@@ -192,6 +205,11 @@ local wireCheckpointing: ({ Player }) -> ()
 -- Re-entry is not a concern. The first thing it does is check hasCompletedLevel, so a rider who
 -- also brushes the trigger completes once.
 local finishRunFor: ((Player) -> ())? = nil
+-- THE HARDCORE RESET, for things that are not falls: the Sunken City's thing taking a Hardcore player
+-- off the route when it surfaces. Forward-declared for the reason finishRunFor is (the level is wired
+-- above the code it needs), assigned beside restartRunFor, and the same five steps as the kill plane's
+-- Hardcore branch, which blender/check_sunkencity.py holds the two to.
+local sendBackToStart: ((Player) -> ())? = nil
 
 local function startChosenLevel(level, players: { Player }, origin: Vector3)
 	-- THE DIVE STANDS DOWN FIRST, before the old level is cleared out from under it. Its watch
@@ -301,6 +319,19 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 		end
 	end
 
+	-- THE LEVEL'S OWN LIGHT, before anything of it is built, so the first frame is already lit
+	-- the way the rest of the run will be. Each level names a palette through its `backdrop`
+	-- (LightingService.palettes); a level with no palette of its own falls back to the default.
+	--
+	-- This has to happen HERE rather than once at boot, because the lobby sets the atmosphere for
+	-- the whole game while it builds the room -- so a palette applied before that is overwritten
+	-- by the lobby's, which is why City Shore has been running under the room's haze.
+	local levelLightOk, levelLightErr = pcall(LightingService.apply, level.backdrop)
+	if not levelLightOk then
+		warn("Bootstrap: lighting for this level failed, continuing with whatever is set: "
+			.. tostring(levelLightErr))
+	end
+
 	local existingBackdrop = workspace:FindFirstChild("Backdrop")
 	if level.backdrop == "cityShore" then
 		if BackdropService then
@@ -337,8 +368,15 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 	-- which of the four happened.
 	-- ONE LINE PER RUN saying which ending this level armed. The dive's own warnings cover every
 	-- way it can fail once it is asked for; this covers the level never asking at all.
-	print(("Bootstrap: %s (level %s) ends %s."):format(tostring(level.name), tostring(level.levelId),
-		if level.finale == "dive" then "with the high dive" else "at the end of its route"))
+	local ending = "at the end of its route"
+	if level.finale == "dive" then
+		ending = "with the high dive"
+	elseif level.finale == "slide" then
+		ending = "with the slide into the clouds"
+	elseif level.finale == "drain" then
+		ending = "down the harbour drain"
+	end
+	print(("Bootstrap: %s (level %s) ends %s."):format(tostring(level.name), tostring(level.levelId), ending))
 	if level.finale == "dive" then
 		if not DiveFinaleService then
 			warn("Bootstrap: this level ends with a dive, and there is no "
@@ -359,18 +397,16 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 					workspace:WaitForChild("Levels"),
 					if BackdropService then BackdropService.waterLevelAt else nil,
 					function(player: Player)
-						-- BLACK FIRST, so the fade is already running while the banner tweens up
-						-- on top of it rather than arriving over a view of the sea floor.
-						ScreenFade:FireClient(player, { black = true, time = 0.45 })
+						-- NO BLACKOUT, and that was the mistake worth naming. The dive is the best
+						-- thing in this level, the water closing over you says "that was the end"
+						-- on its own, and cutting to black threw the picture away at exactly that
+						-- moment -- leaving a small grey banner alone on an empty screen. The
+						-- banner carries the ending now, over the sea, in the level's own colours
+						-- (UIService.showCompletion). `ScreenFade` stays wired for whatever wants
+						-- it later; nothing fires it today.
 						if finishRunFor then
 							finishRunFor(player)
 						end
-						-- AND BACK, on the far side of the return to the lobby. completeRun waits
-						-- four seconds after the banner before teleporting, so this is that plus
-						-- enough for the room to be there when the picture comes back.
-						task.delay(4.6, function()
-							ScreenFade:FireClient(player, { black = false, time = 0.7 })
-						end)
 					end
 				)
 			end)
@@ -384,6 +420,96 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 			else
 				warn("Bootstrap: the high dive failed to build, so this level is finishing at the "
 					.. "end of its route instead: " .. tostring(diveErr))
+			end
+		end
+	end
+
+	-- ===== SKY POOLS =====
+	--
+	-- The terraces, the tower, the cloud sea and the slide, built round the ring LevelService just
+	-- laid. The last run's slide prompt is disconnected first; its parts went with its level.
+	--
+	-- Like the dive, the slide IS the ending, so the old finish line stands down once it is built:
+	-- otherwise stepping onto the finale deck would complete the run before the slide it leads to.
+	-- And like the dive, every way this can fail falls back to that finish line and says so.
+	if skyTeardown then
+		skyTeardown()
+		skyTeardown = nil
+	end
+	if level.backdrop == "skyPools" then
+		if not SkyPoolsService then
+			warn("Bootstrap: this level is Sky Pools, and there is no "
+				.. "ServerScriptService.Services.SkyPoolsService in this place -- so it is a bare ring of "
+				.. "chunks finishing at the end of its route, with no pools and no slide. Paste "
+				.. "src/Server/Services/SkyPoolsService.lua in as a ModuleScript named exactly SkyPoolsService.")
+		else
+			local built: Model? = nil
+			local skyOk, skyErr = pcall(function()
+				built = SkyPoolsService.build(levelInstance, workspace:WaitForChild("Levels"))
+			end)
+			if not skyOk then
+				warn("Bootstrap: SkyPoolsService.build failed, so this level is finishing at the end of its "
+					.. "route instead: " .. tostring(skyErr))
+			elseif built then
+				local unride = SkyPoolsService.attachSlide(built :: Model, function(player: Player)
+					if finishRunFor then
+						finishRunFor(player)
+					end
+				end)
+				if levelInstance.finishPart then
+					levelInstance.finishPart.CanTouch = false
+				end
+				skyTeardown = function()
+					if typeof(unride) == "function" then
+						pcall(unride)
+					end
+				end
+			end
+		end
+	end
+
+	-- ===== THE SUNKEN CITY =====
+	--
+	-- The drowned city round the ring, the aquarium off a checkpoint, and the drain the route runs out
+	-- to. Like the slide, the drain IS the ending, so the old finish line stands down once it is
+	-- attached, and every way this can fail falls back to that finish line and says so.
+	if sunkenTeardown then
+		sunkenTeardown()
+		sunkenTeardown = nil
+	end
+	if level.backdrop == "sunkenCity" then
+		if not SunkenCityService then
+			warn("Bootstrap: this level is The Sunken City, and there is no "
+				.. "ServerScriptService.Services.SunkenCityService in this place -- so it is a bare ring of "
+				.. "chunks finishing at the end of its route, with no city and no drain. Paste "
+				.. "src/Server/Services/SunkenCityService.lua in as a ModuleScript named exactly SunkenCityService.")
+		else
+			local built: Model? = nil
+			local cityOk, cityErr = pcall(function()
+				built = SunkenCityService.build(levelInstance, workspace:WaitForChild("Levels"))
+			end)
+			if not cityOk then
+				warn("Bootstrap: SunkenCityService.build failed, so this level is finishing at the end of its "
+					.. "route instead: " .. tostring(cityErr))
+			elseif built then
+				local undo = SunkenCityService.attach(built :: Model, function(player: Player)
+					if finishRunFor then
+						finishRunFor(player)
+					end
+				end, function(player: Player)
+					-- Taken by the surfacing: Hardcore only, which SunkenCityService checks before calling.
+					if sendBackToStart then
+						sendBackToStart(player)
+					end
+				end)
+				if levelInstance.finishPart then
+					levelInstance.finishPart.CanTouch = false
+				end
+				sunkenTeardown = function()
+					if typeof(undo) == "function" then
+						pcall(undo)
+					end
+				end
 			end
 		end
 	end
@@ -864,6 +990,20 @@ function wireCheckpointing(players: { Player })
 		-- moment the whole run was for.
 		task.delay(4, function()
 			HubService.returnToHub(player)
+			-- AND THE ROOM GETS ITS AIR BACK, once nobody is left out on the level. Lighting is
+			-- one setting for the whole server, so this waits for the LAST runner: re-lighting on
+			-- the first would drop the lobby's sky over everyone still climbing.
+			local running = false
+			for _, other in ipairs(Players:GetPlayers()) do
+				local otherState = if other ~= player then PlayerStateService.getState(other) else nil
+				if otherState and not otherState.hasCompletedLevel then
+					running = true
+					break
+				end
+			end
+			if not running then
+				pcall(LightingService.apply, "lobby")
+			end
 		end)
 	end
 
@@ -948,6 +1088,20 @@ local function restartRunFor(player: Player)
 	end
 
 	restarting = false
+end
+
+sendBackToStart = function(player: Player)
+	local character = player.Character
+	local found = character and character:FindFirstChild("HumanoidRootPart")
+	if not levelInstance or not found or not found:IsA("BasePart") then
+		return
+	end
+	local hrp: BasePart = found
+	TimerService.resetTimer(player)
+	syncTimer(player)
+	PlayerFell:FireClient(player)
+	restartRunFor(player)
+	hrp.CFrame = CFrame.new(levelInstance.startPosition + Vector3.new(0, 3, 0))
 end
 
 -- ===== Fail-state handling =====
@@ -1052,9 +1206,13 @@ game:GetService("RunService").Heartbeat:Connect(function()
 
 		-- THE DIVE IS A FALL THIS DOES NOT OWN. City Shore finishes seven hundred studs below
 		-- the kill plane, in the sea, so a diver is exempt from the moment they leave the board
-		-- until the lobby takes them back.
+		-- until the lobby takes them back. Sky Pools' slide is the same: it ends in a pool under the
+		-- clouds, far below the plane that catches an ordinary fall into them. And the Sunken City's
+		-- drain, which ends at the bottom of a shaft under the harbour floor.
 		if hrp.Position.Y < killY
-			and not (DiveFinaleService and DiveFinaleService.ownsFall(player)) then
+			and not (DiveFinaleService and DiveFinaleService.ownsFall(player))
+			and not (SkyPoolsService and SkyPoolsService.ownsFall(player))
+			and not (SunkenCityService and SunkenCityService.ownsFall(player)) then
 			local state = PlayerStateService.getState(player)
 			if not state then
 				continue

@@ -339,80 +339,238 @@ end
 
 -- ===================================================================== completion
 
+-- THE END OF A RUN IS THE ONE MOMENT THIS GAME GETS TO SAY SOMETHING, and it used to say "Level 1
+-- Complete" in a grey box over a screen that had just cut to black. Both halves were wrong: the
+-- blackout threw away the dive at the moment it was worth watching, and the banner said nothing
+-- about the run it was ending.
+--
+-- So the blackout is gone (see the dive callback in Bootstrap) and the banner belongs to the level
+-- it ends: that level's name, its own colour, a line about what you actually just did, and the
+-- run's numbers under a rule that draws itself in. A LOOK PER LEVEL, with a fallback, so a new
+-- level gets a sensible banner before anybody writes it one.
+local COMPLETION_LOOKS: { [number]: any } = {
+	[1] = { name = "City Shore", line = "You made the dive",
+		accent = Color3.fromRGB(255, 206, 128), tint = Color3.fromRGB(31, 45, 72) },
+	-- The slide's lavender over a morning-sky blue: the last thing you saw was the slide, and the
+	-- first thing under the banner is the pool and the clouds.
+	[2] = { name = "Sky Pools", line = "Down through the clouds",
+		accent = Color3.fromRGB(200, 190, 255), tint = Color3.fromRGB(30, 46, 76) },
+	-- Sea-glass green on a tint that is nearly black: the banner comes up at the bottom of the shaft.
+	[3] = { name = "The Sunken City", line = "Pulled down into the dark",
+		accent = Color3.fromRGB(150, 226, 210), tint = Color3.fromRGB(8, 20, 24) },
+	[4] = { name = "Flooded Halls", line = "Down the flume",
+		accent = Color3.fromRGB(142, 214, 200), tint = Color3.fromRGB(22, 41, 45) },
+}
+local COMPLETION_FALLBACK: any = { line = "Route cleared", accent = COLOUR.gold,
+	tint = COLOUR.surfaceRaised }
+
+-- A VIGNETTE INSTEAD OF A BLACKOUT. The top and bottom of the screen darken a little while the
+-- banner is up, so it reads against the sea instead of competing with it, and the level is still
+-- there behind it. Two bands rather than four: Roblox has no radial gradient, and the sides would
+-- be twice the parts for a difference nobody would name.
+local VIGNETTE_DEPTH = 0.26 -- of the screen, top and bottom
+local VIGNETTE_DARK = 0.55 -- transparency at the very edge
+
+local function vignetteBand(name: string, top: boolean): Frame
+	local band = Instance.new("Frame")
+	band.Name = name
+	band.BackgroundColor3 = Color3.fromRGB(8, 6, 12)
+	band.BackgroundTransparency = 1
+	band.BorderSizePixel = 0
+	band.Size = UDim2.new(1, 0, VIGNETTE_DEPTH, 0)
+	band.Position = if top then UDim2.new(0, 0, 0, 0) else UDim2.new(0, 0, 1 - VIGNETTE_DEPTH, 0)
+	band.ZIndex = BLACKOUT_ZINDEX
+	band.Visible = false
+	band.Parent = screenGui
+
+	local fade = Instance.new("UIGradient")
+	fade.Rotation = 90
+	-- Solid at the screen edge, gone by the inner edge of the band.
+	fade.Transparency = if top
+		then NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
+		else NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0) })
+	fade.Parent = band
+	return band
+end
+
+local vignetteTop = vignetteBand("VignetteTop", true)
+local vignetteBottom = vignetteBand("VignetteBottom", false)
+
+local function showVignette(on: boolean, seconds: number)
+	for _, band in ipairs({ vignetteTop, vignetteBottom }) do
+		if on then
+			band.Visible = true
+		end
+		TweenService:Create(band, TweenInfo.new(seconds, MOTION.style, Enum.EasingDirection.Out),
+			{ BackgroundTransparency = if on then VIGNETTE_DARK else 1 }):Play()
+	end
+end
+
 local completion = panel("CompletionBanner", screenGui)
 completion.ZIndex = BLACKOUT_ZINDEX + 1
-completion.Size = UDim2.new(0, 440, 0, 132)
+completion.Size = UDim2.new(0, 520, 0, 172)
 completion.AnchorPoint = Vector2.new(0.5, 0.5)
 completion.Position = UDim2.new(0.5, 0, 0.36, 0)
 completion.BackgroundTransparency = 1
 completion.Visible = false
+-- For the sweep of light below, which is a child sliding across the panel.
+completion.ClipsDescendants = true
 
 local completionStroke = completion:FindFirstChildOfClass("UIStroke") :: UIStroke
 completionStroke.Transparency = 1
+completionStroke.Thickness = 1.5
+
+-- The panel's own colour is the level's, and this only shades it downward, so the banner reads as
+-- one lit object rather than a flat rectangle.
+local completionDepth = Instance.new("UIGradient")
+completionDepth.Rotation = 90
+completionDepth.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 150, 150)),
+})
+completionDepth.Parent = completion
+
+local completionShine = Instance.new("Frame")
+completionShine.Name = "Shine"
+completionShine.BackgroundColor3 = Color3.new(1, 1, 1)
+completionShine.BackgroundTransparency = 0.88
+completionShine.BorderSizePixel = 0
+completionShine.Size = UDim2.new(0.22, 0, 1, 0)
+completionShine.Position = UDim2.fromScale(-0.3, 0)
+completionShine.ZIndex = BLACKOUT_ZINDEX + 2
+completionShine.Parent = completion
+
+local completionShineFade = Instance.new("UIGradient")
+completionShineFade.Transparency = NumberSequence.new({
+	NumberSequenceKeypoint.new(0, 1),
+	NumberSequenceKeypoint.new(0.5, 0),
+	NumberSequenceKeypoint.new(1, 1),
+})
+completionShineFade.Parent = completionShine
+
+local completionEyebrow = newLabel(completion, TEXT.caption, COLOUR.gold, Enum.Font.GothamBold)
+completionEyebrow.ZIndex = BLACKOUT_ZINDEX + 3
+completionEyebrow.Size = UDim2.new(1, -SPACE.xl * 2, 0, 16)
+completionEyebrow.Position = UDim2.new(0, SPACE.xl, 0, SPACE.xl)
+completionEyebrow.TextXAlignment = Enum.TextXAlignment.Left
+completionEyebrow.TextTransparency = 1
 
 local completionTitle = newLabel(completion, TEXT.display, COLOUR.textPrimary, Enum.Font.GothamBold)
-completionTitle.ZIndex = BLACKOUT_ZINDEX + 2
-completionTitle.Size = UDim2.new(1, 0, 0, 44)
-completionTitle.Position = UDim2.new(0, 0, 0, SPACE.xl)
+completionTitle.ZIndex = BLACKOUT_ZINDEX + 3
+completionTitle.Size = UDim2.new(1, -SPACE.xl * 2, 0, 40)
+completionTitle.Position = UDim2.new(0, SPACE.xl, 0, SPACE.xl + 20)
+completionTitle.TextXAlignment = Enum.TextXAlignment.Left
 completionTitle.TextTransparency = 1
 
-local completionSubtitle = newLabel(completion, TEXT.label, COLOUR.textSecondary, Enum.Font.Gotham)
-completionSubtitle.ZIndex = BLACKOUT_ZINDEX + 2
-completionSubtitle.Size = UDim2.new(1, 0, 0, 26)
-completionSubtitle.Position = UDim2.new(0, 0, 0, SPACE.xl + 46)
-completionSubtitle.TextTransparency = 1
+-- IT DRAWS ITSELF IN, left to right, under the headline. One moving element is what makes the
+-- banner read as an announcement arriving rather than a box switched on.
+local completionRule = Instance.new("Frame")
+completionRule.Name = "Rule"
+completionRule.BackgroundColor3 = COLOUR.gold
+completionRule.BorderSizePixel = 0
+completionRule.Size = UDim2.fromOffset(0, 2)
+completionRule.Position = UDim2.new(0, SPACE.xl, 0, SPACE.xl + 68)
+completionRule.ZIndex = BLACKOUT_ZINDEX + 3
+completionRule.BackgroundTransparency = 1
+completionRule.Parent = completion
+
+local completionMode = newLabel(completion, TEXT.label, COLOUR.textSecondary, Enum.Font.Gotham)
+completionMode.ZIndex = BLACKOUT_ZINDEX + 3
+completionMode.Size = UDim2.new(0.5, -SPACE.xl, 0, 26)
+completionMode.Position = UDim2.new(0, SPACE.xl, 0, SPACE.xl + 84)
+completionMode.TextXAlignment = Enum.TextXAlignment.Left
+completionMode.TextTransparency = 1
+
+local completionTime = newLabel(completion, TEXT.mono, COLOUR.textPrimary, Enum.Font.GothamBold)
+completionTime.ZIndex = BLACKOUT_ZINDEX + 3
+completionTime.AnchorPoint = Vector2.new(1, 0)
+completionTime.Size = UDim2.new(0.5, -SPACE.xl, 0, 30)
+completionTime.Position = UDim2.new(1, -SPACE.xl, 0, SPACE.xl + 82)
+completionTime.TextXAlignment = Enum.TextXAlignment.Right
+completionTime.TextTransparency = 1
 
 local completionToken = 0
+local COMPLETION_HOLD = 3.6
 
 function UIService.showCompletion(levelId: number?, time: number?)
 	completionToken += 1
 	local token = completionToken
+	local look: any = (levelId and COMPLETION_LOOKS[levelId]) or COMPLETION_FALLBACK
 
-	completionTitle.Text = if levelId then ("Level %d Complete"):format(levelId) else "Level Complete"
+	completionEyebrow.Text = if levelId and look.name
+		then ("LEVEL %d   %s"):format(levelId, string.upper(look.name))
+		elseif levelId then ("LEVEL %d"):format(levelId)
+		else "RUN COMPLETE"
+	completionTitle.Text = look.line
+	completionMode.Text = if time then "Hardcore run" else "Chill run"
 	if time then
 		local minutes = math.floor(time / 60)
-		completionSubtitle.Text = ("Hardcore  ·  %d:%05.2f"):format(minutes, time - minutes * 60)
-		completionStroke.Color = COLOUR.hardcore
+		completionTime.Text = ("%d:%05.2f"):format(minutes, time - minutes * 60)
 	else
-		completionSubtitle.Text = "Chill run"
-		completionStroke.Color = COLOUR.chill
+		completionTime.Text = ""
 	end
 
+	completion.BackgroundColor3 = look.tint
+	completionStroke.Color = look.accent
+	completionEyebrow.TextColor3 = look.accent
+	completionRule.BackgroundColor3 = look.accent
+	completionMode.TextColor3 = if time then COLOUR.hardcore else COLOUR.chill
+
+	-- Set low and blank, then brought up: the panel rises the last 24 pixels as it fades in.
 	completion.Visible = true
-	completion.Size = UDim2.new(0, 408, 0, 122)
+	completion.Position = UDim2.new(0.5, 0, 0.36, 24)
 	completion.BackgroundTransparency = 1
 	completionStroke.Transparency = 1
-	completionTitle.TextTransparency = 1
-	completionSubtitle.TextTransparency = 1
+	completionRule.Size = UDim2.fromOffset(0, 2)
+	completionRule.BackgroundTransparency = 1
+	completionShine.Position = UDim2.fromScale(-0.3, 0)
+	for _, label in ipairs({ completionEyebrow, completionTitle, completionMode, completionTime }) do
+		label.TextTransparency = 1
+	end
+	showVignette(true, MOTION.slow)
 
-	local info = tweenIn(MOTION.slow)
-	TweenService:Create(completion, info, {
-		Size = UDim2.new(0, 440, 0, 132),
-		BackgroundTransparency = 0.06,
+	local rise = tweenIn(MOTION.slow)
+	TweenService:Create(completion, rise, {
+		Position = UDim2.new(0.5, 0, 0.36, 0),
+		BackgroundTransparency = 0.05,
 	}):Play()
-	TweenService:Create(completionStroke, info, { Transparency = 0.25 }):Play()
-	TweenService:Create(completionTitle, info, { TextTransparency = 0 }):Play()
-	-- STAGGERED BY 90ms. The subtitle arriving a beat after the headline is what makes the
-	-- banner read as one considered announcement instead of two labels switched on
-	-- together -- the same reason list rows stagger below.
-	task.delay(0.09, function()
-		if completionToken == token then
-			TweenService:Create(completionSubtitle, info, { TextTransparency = 0 }):Play()
-		end
-	end)
+	TweenService:Create(completionStroke, rise, { Transparency = 0.3 }):Play()
 
-	task.delay(3.4, function()
+	-- STAGGERED, through each tween's own delay rather than a chain of task.delay: the eyebrow,
+	-- then the headline, then the rule drawing itself, then the numbers. Four beats inside half a
+	-- second, which reads as one considered announcement instead of five things switched on.
+	local function arrive(target: Instance, goal: { [string]: any }, delay: number, seconds: number?)
+		TweenService:Create(target, TweenInfo.new(seconds or MOTION.slow, MOTION.style,
+			Enum.EasingDirection.Out, 0, false, delay), goal):Play()
+	end
+	arrive(completionEyebrow, { TextTransparency = 0 }, 0.02)
+	arrive(completionTitle, { TextTransparency = 0 }, 0.1)
+	arrive(completionRule, { Size = UDim2.fromOffset(152, 2), BackgroundTransparency = 0.15 }, 0.18, 0.45)
+	arrive(completionMode, { TextTransparency = 0 }, 0.26)
+	arrive(completionTime, { TextTransparency = 0 }, 0.3)
+	-- And one sweep of light across the panel, once, behind the text.
+	arrive(completionShine, { Position = UDim2.fromScale(1.1, 0) }, 0.16, 0.8)
+
+	task.delay(COMPLETION_HOLD, function()
 		if completionToken ~= token then
 			return
 		end
 		local out = tweenOut(MOTION.slow)
-		TweenService:Create(completion, out, { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(completion, out, {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0.5, 0, 0.36, -16),
+		}):Play()
 		TweenService:Create(completionStroke, out, { Transparency = 1 }):Play()
-		TweenService:Create(completionTitle, out, { TextTransparency = 1 }):Play()
-		TweenService:Create(completionSubtitle, out, { TextTransparency = 1 }):Play()
+		TweenService:Create(completionRule, out, { BackgroundTransparency = 1 }):Play()
+		for _, label in ipairs({ completionEyebrow, completionTitle, completionMode, completionTime }) do
+			TweenService:Create(label, out, { TextTransparency = 1 }):Play()
+		end
+		showVignette(false, MOTION.slow)
 		task.delay(MOTION.slow, function()
 			if completionToken == token then
 				completion.Visible = false
+				vignetteTop.Visible = false
+				vignetteBottom.Visible = false
 			end
 		end)
 	end)

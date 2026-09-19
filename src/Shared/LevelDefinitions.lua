@@ -242,81 +242,77 @@ LevelDefinitions.Level1 = {
 
 LevelDefinitions.Level2 = {
 	levelId = 2,
-	name = "Open Sky",
-	description = "The same spiral with no horizon behind it. A backdrop goes here when there is one to put.",
-	-- The bubble wrap windows are what this level is FOR; honey is only the pacing around
-	-- them, and it is Level1's headline already.
-	backdrop = "none",
+	name = "Sky Pools",
+	description = "Pool decks going down through the sky round a fountain tower, and a slide into the clouds.",
+	-- ===== SKY POOLS =====
+	--
+	-- Calm, bright and silent apart from water: the one level with no scares at all. The route is
+	-- one wide ring that goes DOWN -- the only level that does -- past pool decks standing on columns
+	-- that rise out of a sea of cloud, round a fountain tower in the middle. It ends on a slide that
+	-- spirals down through the clouds into the pool at the tower's foot. SkyPoolsService builds all
+	-- of it round the route LevelService lays; see ROADMAP section 3 for the layout and
+	-- blender/plan_skypools.py for the picture.
+	backdrop = "skyPools",
+	finale = "slide",
+	-- ===== THE RING =====
+	--
+	-- Read by LevelService. `turn` is how much of a full circle the route sweeps: the radius is
+	-- worked out from the run's planned length so that a short, medium and long run all come out
+	-- at the same three quarters of a turn -- a fixed radius would wrap a long run past its own
+	-- start, and a route that passes over itself is a route you can fall onto a later part of.
+	-- `descend` turns every step down instead of up, and `stepScale` makes them bigger, because
+	-- going down is what this level is about and the climb's steps were sized for climbing.
+	ring = { turn = 0.76, descend = true, stepScale = 1.6 },
+	-- The bubble wrap windows are what this level is FOR.
 	headlineMaterial = "BubbleWrap",
 	minChunks = 44,
 	maxChunks = 44,
+	-- ===== THE CALM HALF OF THE KIT =====
+	--
+	-- Cloud, foam, bubble wrap and soap lead; honey, slime, jello, lamb's ear, the Needohs and the
+	-- keypads round them out. None of the fierce ones -- no lava, no burning coal, no salt or clay
+	-- tearing under you -- and none of the three chunks that climb inside themselves (the sand
+	-- ramp, the bubble wrap stairs and its landing), which would put a step UP into the one route
+	-- that goes down. The only stable chunk is the straight one, because every stable chunk here
+	-- may be a pool deck's checkpoint, and a deck is laid along a straight side.
 	allowedChunkIds = {
 		"S1_Straight",
 		"P1_HoneyCorridor",
-		"P2_ButterWaxCurve",
-		"P3_KineticSandRamp",
+		"P18_HoneyComb",
+		"P19_HoneyPool",
 		"P5_KeyboardRun",
-		-- Built from the imported asset packs. In every pool: these are ordinary pace
-		-- chunks on existing rigs, so there is no reason for one level to have them and
-		-- another not.
-		"P20_NeedohField",
 		"P21_KeyboardDusk",
 		"P22_KeyboardMint",
-		"P23_KeyboardLava",
-		"P24_ButterBlocks",
-		"P25_ButterStick",
-		"P26_NeedohBoulders",
-		"P27_NeedohGrid",
-		"P28_NeedohDrift",
 		"P6_JelloSoda",
 		"P7_LambsEar",
 		"P8_Foam",
-		"P9_LightSwitches",
-		"P10_ClayPress",
+		"P12_ButtonPad",
+		"P14_ButtonDense",
+		"P15_ButtonDome",
+		"P20_NeedohField",
+		"P26_NeedohBoulders",
+		"P27_NeedohGrid",
+		"P28_NeedohDrift",
 		"R1_SlimeLaunch",
+		"R37_SlimeBlister",
+		"R38_SlimeChannel",
+		"C1_SlimeToPace",
 		"R2_SoapBridge",
-		"R3_BubbleWrapStairs",
 		"R4_SoapStar",
 		"R5_SoapPebbles",
 		"R6_SoapHeart",
-		"R7_SandTurtle",
-		"R8_BubbleWrapGiant",
-		"R9_IceCrack",
-		"R10_LegoStuds",
-		"R11_CharcoalSnap",
-		"R12_ChocolateMelt",
-		"R13_CloudSink",
-		"R14_ChocolateSnap",
-		"P11_SaltFlat",
-		"P12_ButtonPad",
-		"R15_LavaCrust",
-		"R16_Oobleck",
-		"R17_MeltingSnow",
 		"R18_SoapRing",
-		"R23_LegoCross",
-		"P14_ButtonDense",
-"P18_HoneyComb",
-				"R32_LavaVent",
-		"R33_ChocolateSwirl",
-		"R34_SnowDrift",
-		"P17_ClayTerrace",
-		"R35_CharcoalSpine",
-		"R36_CloudSwell",
-		"P18_HoneyComb",
-		"P19_HoneyPool",
-		"R37_SlimeBlister",
-		"R38_SlimeChannel",
-		-- Honey and slime, the two that pour. Last because they are the ones whose forms
-		-- change the ROUTE rather than the surface.
-		"S1_Straight",
-		"S2_Junction",
-		"P4_PaceChain_H_KS",
-		"C1_SlimeToPace",
-		"C2_PaceToStable",
+		"R19_SoapWave",
+		"R20_SoapBone",
+		"R21_SoapCrescent",
+		"R31_SoapLeaf",
 		"C3_SoapWithWideLanding",
-		"C4_BubbleWrapToStable",
+		"R8_BubbleWrapGiant",
+		"R13_CloudSink",
+		"R36_CloudSwell",
 	},
-	allowedMaterials = { "Honey", "KineticSand", "ButterWax", "Slime", "Soap", "BubbleWrap", "CreamyKeyboard", "Ice", "JelloSoda", "LambsEar", "Foam", "LightSwitch", "Clay", "Lego", "Charcoal", "Chocolate", "Cloud", "ChocolateSolid", "Salt", "Lava", "Oobleck", "Buttons", "Snow" },
+	allowedMaterials = { "Honey", "Slime", "Soap", "BubbleWrap", "CreamyKeyboard", "JelloSoda", "LambsEar",
+		"Foam", "Cloud", "Buttons", "Needoh" },
 	parTime = 330,
 	baseSeed = 1002,
 	templates = { T2_BubbleWrapWindow },
@@ -324,79 +320,57 @@ LevelDefinitions.Level2 = {
 
 LevelDefinitions.Level3 = {
 	levelId = 3,
-	name = "Far Water",
-	description = "The same spiral, no horizon. Reserved for whatever the second backdrop turns out to be.",
-	backdrop = "none",
-	headlineMaterial = "Soap",
+	name = "The Sunken City",
+	description = "A ring just above the sea, round a drowned city, with something enormous under it.",
+	-- ===== THE SUNKEN CITY =====
+	--
+	-- The route runs round a drowned city, just above the water: streets, a clock tower, a car park
+	-- and flooded apartment blocks you can look down into. Something enormous swims the boulevard
+	-- under the route and never chases you; when it passes beneath, the water darkens and the sound
+	-- drops. The ending is the harbour drain: the route runs out onto a pier, and the whirlpool past
+	-- its end pulls you down into the dark. SunkenCityService builds all of it round the route
+	-- LevelService lays; ROADMAP section 4 has the plan and blender/plan_sunkencity.py the picture.
+	backdrop = "sunkenCity",
+	finale = "drain",
+	-- ===== THE RING =====
+	--
+	-- Flat, not climbing: stepScale 0 turns the steps off, so the route stays near the water all
+	-- the way round, and the swell lifts and lowers it 3.5 studs either way over every ten chunks,
+	-- a road over low hills. `turn` leaves a fifth of the circle open for the harbour, where the
+	-- pier and the whirlpool are. See LevelService.ringRadius and the swell in startLevel.
+	ring = { turn = 0.8, stepScale = 0, wave = { height = 3.5, every = 10 } },
+	headlineMaterial = "Oobleck",
 	minChunks = 50,
 	maxChunks = 50,
+	avoidRecent = 4,
+	-- ===== THE WET HALF OF THE KIT =====
+	--
+	-- The four this level is about (you): slime, jello soda, ice and oobleck. Only jello soda has a
+	-- pace chunk, so the pace slots are filled out with the sea's own materials (suggested): salt
+	-- flats, sea foam and the Needohs; and the risk slots with two soap chunks and bubble wrap, for
+	-- the bubbles. Nothing that climbs inside itself and nothing that drops (the slime-to-pace
+	-- chunk steps down two studs), so the route's height is the swell and nothing else, and it can
+	-- never sink into the water. The only stable chunk is the straight one, which the aquarium's
+	-- landing and the pier are laid along.
 	allowedChunkIds = {
 		"S1_Straight",
-		"P1_HoneyCorridor",
-		"P2_ButterWaxCurve",
-		"P3_KineticSandRamp",
-		"P5_KeyboardRun",
-		-- Built from the imported asset packs. In every pool: these are ordinary pace
-		-- chunks on existing rigs, so there is no reason for one level to have them and
-		-- another not.
+		"P6_JelloSoda",
+		"P8_Foam",
+		"P11_SaltFlat",
 		"P20_NeedohField",
-		"P21_KeyboardDusk",
-		"P22_KeyboardMint",
-		"P23_KeyboardLava",
-		"P24_ButterBlocks",
-		"P25_ButterStick",
 		"P26_NeedohBoulders",
 		"P27_NeedohGrid",
 		"P28_NeedohDrift",
-		"P6_JelloSoda",
-		"P7_LambsEar",
-		"P8_Foam",
-		"P9_LightSwitches",
-		"P10_ClayPress",
 		"R1_SlimeLaunch",
-		"R2_SoapBridge",
-		"R3_BubbleWrapStairs",
-		"R4_SoapStar",
-		"R5_SoapPebbles",
-		"R6_SoapHeart",
-		"R7_SandTurtle",
-		"R8_BubbleWrapGiant",
-		"R9_IceCrack",
-		"R10_LegoStuds",
-		"R11_CharcoalSnap",
-		"R12_ChocolateMelt",
-		"R13_CloudSink",
-		"R14_ChocolateSnap",
-		"P11_SaltFlat",
-		"P12_ButtonPad",
-		"R15_LavaCrust",
-		"R16_Oobleck",
-		"R17_MeltingSnow",
-		"R18_SoapRing",
-		"R23_LegoCross",
-		"P14_ButtonDense",
-"P18_HoneyComb",
-				"R32_LavaVent",
-		"R33_ChocolateSwirl",
-		"R34_SnowDrift",
-		"P17_ClayTerrace",
-		"R35_CharcoalSpine",
-		"R36_CloudSwell",
-		"P18_HoneyComb",
-		"P19_HoneyPool",
 		"R37_SlimeBlister",
 		"R38_SlimeChannel",
-		-- Honey and slime, the two that pour. Last because they are the ones whose forms
-		-- change the ROUTE rather than the surface.
-		"S1_Straight",
-		"S2_Junction",
-		"P4_PaceChain_H_KS",
-		"C1_SlimeToPace",
-		"C2_PaceToStable",
-		"C3_SoapWithWideLanding",
-		"C4_BubbleWrapToStable",
+		"R9_IceCrack",
+		"R16_Oobleck",
+		"R2_SoapBridge",
+		"R19_SoapWave",
+		"R8_BubbleWrapGiant",
 	},
-	allowedMaterials = { "Honey", "KineticSand", "ButterWax", "Slime", "Soap", "BubbleWrap", "CreamyKeyboard", "Ice", "JelloSoda", "LambsEar", "Foam", "LightSwitch", "Clay", "Lego", "Charcoal", "Chocolate", "Cloud", "ChocolateSolid", "Salt", "Lava", "Oobleck", "Buttons", "Snow" },
+	allowedMaterials = { "Slime", "JelloSoda", "Ice", "Oobleck", "Salt", "Foam", "Needoh", "Soap", "BubbleWrap" },
 	parTime = 375,
 	baseSeed = 1003,
 	templates = { T3_ExtendedSoapPressure },

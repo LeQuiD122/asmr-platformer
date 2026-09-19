@@ -78,14 +78,18 @@ def check_level_origin():
         fail("LevelService", "startLevel takes no origin parameter. The hub cannot place a "
                              "run beside itself without one.")
 
+    # POSITIONS, not every mention. Since Sky Pools the route's radius is a per-level `radius`
+    # worked out from SPIRAL_RADIUS, so a line that only computes a radius is not a position and
+    # is not checked -- but any line that BUILDS one from either name must add the origin.
     for number, line in enumerate(text.splitlines(), 1):
-        if "SPIRAL_RADIUS" not in line or line.strip().startswith("--"):
+        code = line.split("--")[0]
+        if not re.search(r"\b(SPIRAL_RADIUS|radius)\b", code):
             continue
-        if "local SPIRAL_RADIUS" in line or "angle +=" in line:
+        if "Vector3.new(" not in code and "out *" not in code:
             continue
-        if "base" not in line:
+        if "base" not in code:
             fail("LevelService:%d" % number,
-                 "positions from SPIRAL_RADIUS without the origin: %s" % line.strip())
+                 "positions from the route radius without the origin: %s" % line.strip())
 
 
 # A RUN HAS TO BE DESTROYABLE, or the second one stacks on the first.
@@ -347,6 +351,14 @@ def check_dive_finale():
         return "\n".join(line.split("--", 1)[0] for line in source.splitlines())
 
     dive, boot = code_of(read(DIVE_SERVICE)), code_of(read(BOOTSTRAP))
+    # THE DIVE'S OWN BLOCK of Bootstrap, from where it starts the dive to where the next ending (Sky
+    # Pools) or the run's modes begin. Sky Pools stands the old finish line down and finishes runs
+    # too, so a gate searching past the dive's block passes on the slide's lines while the dive does
+    # neither -- which it did, the day the slide went in.
+    started = boot.find("DiveFinaleService.start(")
+    ends = [at for at in (boot.find("if skyTeardown then", started), boot.find("HubService.getRequest()", started))
+            if started >= 0 and at > started]
+    dive_block = boot[started:min(ends)] if ends else boot[started:started + 1800] if started >= 0 else ""
 
     if "finishFrame =" not in read(LEVEL_SERVICE):
         fail("LevelService", "no longer hands back finishFrame, so the dive platform has no "
@@ -356,8 +368,6 @@ def check_dive_finale():
         ("DiveFinaleService.ownsFall(player)",
          "the kill plane catches every diver 680 studs above the water"),
         ("DiveFinaleService.stop", "the diver watch keeps running after the level is gone"),
-        ("finishPart.CanTouch = false",
-         "the old finish line still completes the run at the end of the route"),
         # BOTH WARNINGS, because the fallback when the dive cannot be built is the old finish
         # line -- so a level that asks for a dive and silently does not get one is
         # indistinguishable from a level that was never changed. That was reported once: no
@@ -371,6 +381,9 @@ def check_dive_finale():
     ):
         if needed not in boot:
             fail("Bootstrap", "%s (`%s` is gone)." % (why, needed))
+    if "finishPart.CanTouch = false" not in dive_block:
+        fail("Bootstrap", "the old finish line still completes the run at the end of the route "
+                          "(`finishPart.CanTouch = false` is gone from the dive's block).")
 
     # NO SCRIPT SETS THE DESTROY HEIGHT. Workspace.FallenPartsDestroyHeight is PluginSecurity: a
     # script can read it, and only plugins, the command bar and the Properties window can set it.
@@ -391,14 +404,20 @@ def check_dive_finale():
                                   "character is owned by its own client, so a server that writes "
                                   "only a position is overruled on the next physics frame, and the "
                                   "diver falls on past -500 and is deleted.")
-    # BOTH WAYS, and the first version of this checked neither properly: it looked for the name
-    # `ScreenFade:FireClient` anywhere in the file, which the fade BACK satisfies on its own -- so
-    # the fade to black could be deleted with the gate still green.
-    if "{ black = true" not in boot:
-        fail("Bootstrap", "the dive no longer fades the screen to black at the splash.")
-    if "{ black = false" not in boot:
-        fail("Bootstrap", "nothing clears the blackout after the lobby takes the diver, so the "
-                          "screen stays black.")
+    # THE BLACKOUT IS GONE ON PURPOSE, and this gate is the reverse of the one it replaces. Fading
+    # to black at the splash cut the picture at the one moment worth watching and left the banner
+    # alone on an empty screen; the completion banner is the ending now. A fade re-added here is a
+    # regression, and exactly the kind someone reintroduces by restoring an older Bootstrap.
+    if "{ black = true" in boot:
+        fail("Bootstrap", "the dive fades the screen to black at the splash again, which throws "
+                          "away the dive itself. The completion banner is the ending now: see "
+                          "UIService.showCompletion.")
+    # AND THE SPLASH STILL HAS TO FINISH THE RUN, blackout or no blackout. Scoped to the dive's own
+    # callback: the route's ending calls finishRunFor too, so a file-wide search passes while the
+    # dive finishes nothing, which is the shape of the bug this whole section exists for.
+    if "finishRunFor(player)" not in dive_block:
+        fail("Bootstrap", "the dive's splash no longer finishes the run, so hitting the water "
+                          "does nothing at all.")
 
     # A RESTART AND AN EARLY FINISH, reported together and the same bug seen twice: a level that
     # came back with no board and with its finish line live, so the run completed on arriving at
