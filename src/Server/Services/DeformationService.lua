@@ -677,6 +677,11 @@ local function collapseCell(platform: BasePart, cell, who: Player?)
 		slabTransparency = (slabPart and slabPart:IsA("BasePart")) and slabPart.Transparency or nil,
 	}
 	cell.state = "exhausted"
+	-- AND IT COMES BACK. Every hole in the game fills itself in: `regrowAfter` for a material with
+	-- its own faster return, REGROW_DURATION for all the rest. Nothing a player breaks can strand
+	-- them for the rest of the run any more. Cleared by restoreCell; ticked in the heartbeat.
+	local regrowDef = platformStates[platform] and Materials[platformStates[platform].material]
+	cell.regrowAt = os.clock() + ((regrowDef and regrowDef.regrowAfter) or Constants.REGROW_DURATION)
 	-- A collapsed cell stops being floor: CanCollide off drops anyone standing on
 	-- it. Previously only CanTouch was cleared, so the tile "dissolved" visually but
 	-- still held your weight.
@@ -1152,7 +1157,10 @@ local function onPlayerExitCell(platform: BasePart, state, cell, player: Player)
 	end
 	if cell.count == 0 and cell.state == "deformed" then
 		cell.state = "decaying"
-		cell.decayTimer = matDef and matDef.decayDuration or Constants.DECAY_DURATION
+		-- CAPPED BY REGROW_DURATION, so "nothing stays broken for more than thirty seconds" covers
+		-- dents as well as holes, however long a material asks to hold its shape.
+		cell.decayTimer = math.min(matDef and matDef.decayDuration or Constants.DECAY_DURATION,
+			Constants.REGROW_DURATION)
 		-- A LAUNCH off a spring goes out as one, with its level, so the pad throws the jumper up.
 		cell.charge = sprang
 		replicate(platform, cell, player, if sprang then "spring" else nil)
@@ -1229,8 +1237,23 @@ local function restoreCell(platform: BasePart, cell, whole: boolean)
 		if floorPart and floorPart:IsA("BasePart") and saved.floorCollide ~= nil then
 			floorPart.CanCollide = saved.floorCollide
 		end
+		-- THE SLAB COMES BACK WITH THE LAST HOLE. A collapse switches the whole slab off -- no
+		-- collision, and invisible for bubble wrap, whose slab IS the thing you see -- because the
+		-- other holes in it still need it out of the way. With cells healing on their own
+		-- (REGROW_DURATION), a platform that has closed every hole has no such need, and leaving it
+		-- off left a repaired bubble wrap sheet floating over an invisible body.
 		local slabPart = cell.part.Parent
-		if whole and slabPart and slabPart:IsA("BasePart") then
+		local lastHole = true
+		if not whole then
+			local state = platformStates[platform]
+			for _, other in pairs(state and state.cells or {}) do
+				if other ~= cell and other.state == "exhausted" then
+					lastHole = false
+					break
+				end
+			end
+		end
+		if (whole or lastHole) and slabPart and slabPart:IsA("BasePart") then
 			if saved.slabCollide ~= nil then
 				slabPart.CanCollide = saved.slabCollide
 			end
@@ -1280,6 +1303,27 @@ end
 --
 -- Restoring in place harms nobody: another player mid-run gets their floor back, which is
 -- the one side effect that cannot be a complaint.
+-- SOMEONE IS IN THE HOLE. A cell filling itself back in under a player falling through it would
+-- push them out of a fall they have already lost, or catch them halfway down. The repair waits
+-- instead, which costs a few frames and never looks like a bug.
+local function occupied(cell): boolean
+	local half = cell.part.Size * 0.5
+	for _, player in ipairs(Players:GetPlayers()) do
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if root and root:IsA("BasePart") then
+			local at = cell.part.CFrame:PointToObjectSpace(root.Position)
+			-- In the mouth of the hole or just under it. The lower bound lets go of anyone who has
+			-- fallen past saving, so one lost player cannot hold a platform open for everybody else.
+			if math.abs(at.X) <= half.X + 1 and math.abs(at.Z) <= half.Z + 1
+				and at.Y < half.Y + 3 and at.Y > -60 then
+				return true
+			end
+		end
+	end
+	return false
+end
+
 function DeformationService.restoreAll()
 	for platform, state in pairs(platformStates) do
 		state.hardUntil = nil
@@ -1535,7 +1579,12 @@ RunService.Heartbeat:Connect(function(dt: number)
 					collapseCell(platform, cell, nil)
 				end
 			end
-			if cell.state == "decaying" then
+			-- THE HOLE FILLS ITSELF IN, on the clock set when the cell gave way, and not while anyone
+			-- is inside it. Charcoal and oobleck reach their own faster repairs first; this is the
+			-- floor under all of them.
+			if cell.state == "exhausted" and cell.regrowAt and now >= cell.regrowAt and not occupied(cell) then
+				restoreCell(platform, cell, false)
+			elseif cell.state == "decaying" then
 				cell.decayTimer -= dt
 				if cell.decayTimer <= 0 and cell.pristine then
 					-- A CELL THAT GAVE WAY AND IS COMING BACK -- only bubble wrap takes this road -- gets
