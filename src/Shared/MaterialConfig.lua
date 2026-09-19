@@ -225,9 +225,11 @@ local Materials: { [string]: MaterialDef } = {
 		-- Loose crystals roll under you. DeformationService takes this back toward 1 as the cell
 		-- you step onto is packed, which is the reward half of the material.
 		speedMultiplier = 0.88,
-		-- The session, like clay. The trail and the broken crust beside it are the record of who
-		-- crossed, and at twenty-five seconds a trail loosened again before anyone could use it.
-		decayDuration = 600,
+		-- Thirty seconds, down from the whole session (600). The trail and the broken crust beside
+		-- it are the record of who crossed, and at twenty-five seconds a trail loosened again
+		-- before anyone could use it -- but a record that outlasts the run is also what left a
+		-- player stranded on a crust they could no longer cross. See REGROW_DURATION.
+		decayDuration = 30,
 		displacement = "brine",
 		displaceSteps = 3,
 		-- NOT FROM THE FIRST STEP. The first crushes the loose crystals on top; it is packing the
@@ -533,7 +535,9 @@ local Materials: { [string]: MaterialDef } = {
 		-- down the middle is safe.
 		category = "risk",
 		speedMultiplier = 0.93,
-		decayDuration = 600,
+		-- Thirty seconds, down from the whole session (600): ridges and squeezed cells flatten out
+		-- again instead of holding the shape of the last crossing for good. See REGROW_DURATION.
+		decayDuration = 30,
 		displacement = "squeeze",
 		-- A print bottoms out on the slab after three.
 		displaceSteps = 3,
@@ -747,6 +751,19 @@ local Constants = {
 	AUDIO_MAX_POLYPHONY = 4,
 	SUBREGION_CELL_SIZE = 2.5,
 	DECAY_DURATION = 7,
+	-- NOTHING STAYS BROKEN LONGER THAN THIS. Every cell that gives way -- a torn clay lip, a
+	-- crumbled soap cell, a coal gone to ash -- comes back this many seconds later, and no
+	-- material holds its dents for longer either (DeformationService caps decayDuration by it).
+	--
+	-- A level used to be able to strand you: a clay lip tears off at the one place a jump needs
+	-- it, that hole is permanent for the rest of the run, and the only way on is to restart the
+	-- level -- a punishment for playing with the material the level is made of. Thirty seconds is
+	-- long enough that a hole is a real obstacle to route around, and short enough that waiting
+	-- is never worse than restarting.
+	--
+	-- Materials with their own FASTER return keep it: charcoal regrows at `regrowAfter` (5.5 s),
+	-- oobleck fills in at `healAfter` (3.5 s), bubble wrap re-inflates on its decay timer.
+	REGROW_DURATION = 30,
 }
 
 return {

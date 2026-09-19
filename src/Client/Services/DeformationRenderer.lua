@@ -7031,6 +7031,32 @@ Effects.BubbleWrap = function(ctx: Ctx)
 	end)
 end
 
+-- A CELL THAT HAS COME BACK. Every hole fills itself in now (REGROW_DURATION in MaterialConfig), and
+-- three of the materials that can open one had no picture for the way back at all: kinetic sand, solid
+-- chocolate and salt stayed as holes on screen while the server had already counted them whole.
+--
+-- So the return is generic and runs for every material: the collapse's tweens are cancelled, the
+-- surface and its collider rise back to rest with a little overshoot, the marks and cracks of whatever
+-- broke it go, and the material puffs as it closes. Anything a material wants to add to that -- soap
+-- putting its cubes back, a lego brick dropping into its socket, ice refreezing -- still runs
+-- afterwards in its own effect. Collision comes back from the server, which owns it.
+local function revive(tile: BasePart, material: string?)
+	cancelTweens(tile)
+	clearMarks(tile)
+	Fissure.heal(tile, 0.25)
+	local info = TweenInfo.new(0.55, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	local bone = boneFor(tile)
+	if bone then
+		-- setResidual, not driveBone: a collapsed cell is holding a RESIDUAL offset, and that is the
+		-- thing that has to be cleared, or the surface comes back to the bottom of its own hole.
+		setResidual(tile, bone, info, 0)
+	else
+		moveTile(tile, info, 0, 1, 1)
+	end
+	local look = material and MaterialAppearance.Appearances[material]
+	puff(tile, if look then look.color else Color3.fromRGB(230, 230, 235), 0.45, 3, 5, 9)
+end
+
 -- === Entry point ===
 
 function DeformationRenderer.onDeformationUpdate(payload)
@@ -7041,7 +7067,12 @@ function DeformationRenderer.onDeformationUpdate(payload)
 
 	local material = payload.material
 	local state = payload.state
+	-- BACK FROM A HOLE. Read before the repeat guard and before lastState is overwritten below.
+	local mended = lastState[tile] == "exhausted" and state == "pristine"
 	remember(tile)
+	if mended then
+		revive(tile, material)
+	end
 
 	-- THE FLOOR GOES AND YOU GO WITH IT, AT ONCE, on every material that can drop you. When a cell
 	-- gives way under this client's own character, the character goes straight into free fall with a
