@@ -12,8 +12,8 @@ Status section of `README.md`.
 | Level | Name | Background today | Plan |
 |---|---|---|---|
 | 1 | City Shore | a pastel beach city round a bay, open sea toward the sun (second version, untested) | ending built and tested: the dive works (section 1) |
-| 2 | Sky Pools | pool terraces round a fountain tower over a cloud sea (built, untested) | ends on the slide into the final pool; needs a Studio test (section 3) |
-| 3 | The Sunken City | a drowned city round a flat ring, a thing under it, an aquarium (first version, untested) | ends down the harbour drain; needs a Studio test (section 4) |
+| 2 | Sky Pools | pool terraces down a meander over a cloud sea (built, fourth pass untested) | ends on the slide into the final pool; needs a Studio test (section 3) |
+| 3 | The Sunken City | a drowned city either side of a boulevard, with something patrolling under it (built, ninth pass untested) | ends on the harbour drain; needs a Studio test (section 4) |
 | 4 | Flooded Halls | built, ends on the flume into the shaft | the slide ending is tested and works |
 
 ---
@@ -58,25 +58,36 @@ Calm, bright, silent apart from water: the one level with no scares at all. The 
 `blender/skypools_plan.png` (run `python blender/plan_skypools.py`). It is drawn by the same Python
 that `blender/check_skypools.py` tests, so it shows the level as built, not a proposal.
 
-**The route: one ring, going down (suggested).** The level's 44 chunks (its `T2_BubbleWrapWindow`
-template) run once round a ring. That makes it the only level that goes down: from 24 at the start
-to about -116 at the end on a medium run, taking steps 1.6 times the climb's size. The ring's radius
-is worked out from the run's planned length, so short, medium and long runs all sweep about three
-quarters of a turn and never come round onto themselves. The radius is about 100 studs for a short
-run, 200 for medium and 300 for long.
+**The route: a meander, going down (yours).** The level's 44 chunks (its `T2_BubbleWrapWindow`
+template) follow a path that sweeps from side to side on a long sine and goes down the whole way:
+from 24 at the start to about -116 at the end on a medium run, taking steps 1.6 times the climb's
+size. It was a ring, and from inside it the level read as a lap -- most of the view was route you
+had already run, and on a short run the next terrace round stood a hundred studs away with its
+columns up past your deck. The meander never crosses itself and never comes back on itself, and it
+bends no harder than the ring did at any one chunk, so what is ahead of you is somewhere you have
+not been.
 
 **Pool terraces beside the checkpoints (you).** There are five: at the start, and at the
-checkpoints nearest a fifth, two fifths, three fifths and four fifths of the way. Each steps off
-the outer side of its checkpoint, flush with it. A terrace is a deck 46 by 36 with a pool you can
-stand in, and it holds loungers, a parasol, a towel left on the edge and a ladder. One terrace has a
-diving board out over its pool **(you)**. Each stands on four COLUMNS that go all the way down to the
-sea, and each pool spills off its outer edge in a waterfall that also reaches the sea **(you)**.
-Nothing floats.
+checkpoints nearest a fifth, two fifths, three fifths and four fifths of the way. Each steps off its
+checkpoint flush with it, taking ALTERNATING SIDES of the route so no two of them crowd each other.
+
+A terrace is not a square: a narrow walk off the checkpoint, shoulders where it flares, a wide
+middle with a sun deck either side of the pool, and a rounded prow past the pool that the water goes
+over. The pool is nine deep and filled with terrain water, so you SWIM in it; four steps at the
+inner end walk you in and back out, and there is a ladder at the deep end, a band of darker tile at
+the waterline and two lights set into the walls under the surface. On the deck: loungers with slats
+and a back on its hinge, a ribbed parasol, a towel somebody left, and on different terraces a
+pergola, stone planters, a changing cabana, a lifeguard's chair or a diving board out over the water
+**(you)**. Each terrace stands on nine COLUMNS to the sea -- under the pool's four corners, under
+both sun decks and under the prow -- and each pool spills off the prow in a waterfall that also
+reaches the sea **(you)**. Nothing floats.
 
 This differs from the layout: the terraces sit BESIDE the route rather than being chunks in it.
 That needed no new chunk, so ChunkBuilder is unchanged and the chunk folders need no clearing.
 
-**The fountain tower (suggested)** stands in the middle of the ring. It runs from the sea, through
+**The fountain tower (suggested)** stands beside the slide's mouth at the end of the route, a
+hundred and fifty studs off it -- beside, not ahead, because a slide round it is an arc and an arc
+leaves its mouth across its radius. It runs from the sea, through
 the final pool and the clouds, to a basin 90 studs above the start with a jet in it. The basin
 overflows all the way round, and that curtain of water is what fills the final pool.
 
@@ -89,12 +100,18 @@ arch over the slide's mouth. You hold E to ride. The slide goes 0.85 of a turn r
 down through the clouds, and into the final pool 220 studs under the cloud top. On the longest
 runs the pool sits a little higher, to stay well above the -500 line where Roblox deletes a
 falling character. It is hung from the
-tower on rods. The ride moves at 70 studs a second and takes 8 to 15 seconds depending on the ring.
+tower on rods. The ride moves at 70 studs a second and takes 8 to 15 seconds depending on how the
+run came out.
+
+You ride it in a SLED you sit in, rather than being slid along standing up. The server sits you in
+it and keeps the clock; your own client draws every frame of the ride from the shared path in
+`ReplicatedStorage/Shared/SkyPath.lua`, which is why it is smooth. Nothing is built within sixteen
+studs of the trough ahead of the mouth.
 The splash ends the level, and the final pool drains over its rim into the sea, 520 studs further
 down **(you)**.
 
-**Around it:** eight smaller pool terraces out in the sky, 300 to 760 studs beyond the route, on
-their own columns, each with its waterfall.
+**Around it:** six smaller pool terraces out in the sky on their own columns, each with its
+waterfall, each placed at least 300 studs from every chunk of the route.
 
 **Light (suggested):** late morning (clock 10.8), a clear blue sky fading to pale blue at the
 horizon, and very little haze. It is LightingService's `skyPools` palette and stays within a step
@@ -205,6 +222,35 @@ place, because the server and the clients work it out from one shared schedule.
 
 **A lantern at the end of the pier** is the one warm light in the harbour. You see it from along
 the route before you see the pier.
+
+**Ninth pass (2026-09-25), from you:** the serpent mesh for the thing under the route, and the code
+made to run better with its bugs fixed. Built as described in HANDOFF.
+
+**Eighth pass (2026-09-25), from you:** better and higher quality all round, Blender models for
+the animals, new chunks with meshes of their own, and the crash at build. Built as described in
+HANDOFF **(suggested: the Ferris wheel, the kelp canopy, and the jellyfish as the material the new
+chunks are made of)**.
+
+**Seventh pass (2026-09-24), from play (you):** roofs higher than the water with no flicker, bigger
+cars, a less barren sea and city, the water swimmable past FLOODED. NO ACCESS., a whirlpool that
+moves like water, the animals visible, the buildings' details under the water, more life and decor,
+and a countdown that ticks evenly. Built as described in HANDOFF **(suggested: dolphins, gulls,
+turtles surfacing, the tram and the street furniture, and what is in the flooded flat)**.
+
+**Sixth pass (2026-09-24), from play (you):** tap the glass enough and it breaks, the aquarium
+floods, and you are washed back to your checkpoint in Chill and to the start in Hardcore. Built with
+warning steps first (a crack at three taps, a spreading, weeping crack at five, the break at seven)
+and the glass whole again afterwards **(suggested: the thresholds and the timings)**. Also from play:
+kelp that is detailed and moves, animals you can actually see, the stair out of the tunnel's way, a
+better aquarium.
+
+**Fifth pass (2026-09-23), from play (you):** buildings that are not hollow, better lanterns,
+skyscrapers, clock tower and containers, better water, animals that swim like characters, rain,
+eerie sounds, and something scary far out in the water. Built as: every block roofed; a clock tower
+whose bell tolls on its own; rays, turtles, jellyfish, eels and groupers in the street; showers on a
+shared schedule; a handful of windows lit on and off; strange sounds from out in the city; and a
+back like a range of hills that comes up on the horizon every few minutes and goes down again
+**(suggested: the form each of those takes)**.
 
 **What to test (open):**
 

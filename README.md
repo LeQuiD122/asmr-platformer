@@ -53,7 +53,7 @@ Other systems:
 
 - **Lobby:** one pad per level, plus mode (Chill or Hardcore) and run length pads. Players
   vote to start, and the server builds the run from their choices.
-- **Levels:** City Shore, a spiral climbing over a pastel beach city; Sky Pools, a ring going down
+- **Levels:** City Shore, a spiral climbing over a pastel beach city; Sky Pools, a meander going down
   past pool terraces to a slide into the clouds; the Flooded Halls, a bathhouse level whose corridor
   walls are built along the same route the platforms follow, ending on a water slide; and the
   Sunken City, a ring just above a drowned city, ending down the harbour drain.
@@ -107,6 +107,46 @@ Added on 2026-09-18.
 - **Sky Pools, third pass:** a changing cabana with a running shower and a lost-property locker,
   a lifeguard's chair to climb, hot air balloons drifting round the level, and gulls round the
   tower.
+- **The chunks lost their dry lanes.** The stable and honey chunks used to carry a ledge each side;
+  it let you walk past the honey and caught you when you stepped off the Needoh field. Gone.
+- **The Sunken City, ninth pass:** the thing under the route is a sea serpent mesh that bends along
+  its whole length; three bugs fixed (the mesh thing never moving, a bone turning right round
+  rolling over, jellyfish tentacles stretched into the sea); and the client does much less every
+  frame.
+- **The Sunken City, eighth pass:** the animals, fish, gulls and kelp as rigged meshes that swim
+  by bending (the part-built ones stay as the fallback); kelp canopies streaming down the street; a
+  drowned Ferris wheel turning off the street with one cabin still lit; and jellyfish, a new
+  material you bounce across, in two new chunks. Fixes the build crash from the seventh pass.
+- **The Sunken City, seventh pass:** no more flickering roofs at the waterline; the street's buildings
+  stand; facades all the way down; life-size vehicles, a tram, street furniture and a reef on the
+  road; dolphins leaping, turtles surfacing, jellyfish, coloured shoals and gulls where you can see
+  them; the flat's flooded floor to swim down into; a whirlpool that flows; and the lobby countdown
+  ticking on the second.
+- **The Sunken City, sixth pass:** ice no longer vanishes over the water; the aquarium's stair ends
+  beside the tunnel instead of across it; its glass lets the water show, cracks when tapped and
+  breaks, flooding the aquarium and washing you out; kelp that sways, coral, a diver's helmet, animals
+  over the tunnel and something that looks in at the window; animals, shoals, kelp and flotsam in the
+  street where you can see them.
+- **The Sunken City, fifth pass:** the empty frames standing in the sky were facades drawn ninety
+  studs above their buildings, now fixed; the odd square of water by the aquarium is gone; every
+  block has a roof; real lanterns, skyscraper tops and a clock tower with a bell that tolls on its
+  own; rippling water; rays, turtles, jellyfish, eels and groupers swimming the street; rain showers,
+  lit windows that should not be, strange sounds, and something enormous surfacing on the horizon.
+- **The Sunken City, fourth pass:** buildings with storeys, sills and windows set into the wall,
+  rust and fallen render, weed at the waterline and ivy up the walls, and the sandbags, scaffolding,
+  pumps and floodlights of a city that was fighting the water and has not quite stopped.
+- **Every level ends in its own language:** the completion banner takes the level's gradient and
+  draws a motif inside it -- a sun setting, cloud, caustics, tile -- with one thing moving.
+- **The Sunken City, third pass:** the route runs down the drowned boulevard instead of round the
+  city, the blocks stand either side of it with their frontages on the kerb, shoals of fish swim in
+  the water and something long turns in the haze at the back of it, the aquarium's glass can be
+  tapped and answers, and the drain ends in a sluice chamber rather than a black shaft.
+- **The Flooded Halls, fixed:** the flume no longer teleports you onto a platform part way down,
+  and the halls' own weather and rooms no longer follow you back to the lobby.
+- **Sky Pools, fourth pass:** the route follows a meander down instead of going round a ring, the
+  terraces take alternating sides of it and are no longer squares, the pools are terrain water you
+  really swim in with steps to walk in down, and the slide is a sled you sit in and your own client
+  draws, so it no longer stutters.
 - **The Sunken City, second pass:**
   - In Hardcore, the thing now surfaces every so often under the route and a surge takes anyone
     standing there back to the start. It gives five seconds of warning, and in Chill it only
@@ -114,7 +154,7 @@ Added on 2026-09-18.
   - A dry flat off a checkpoint has a stairwell into the flooded floor below and a bathroom mirror
     that, once a server, shows a face (Hardcore only).
   - A lantern marks the end of the pier.
-- **Level 2 is Sky Pools.** The route is one ring that goes down, past five pool terraces on
+- **Level 2 is Sky Pools.** The route is a meander that goes down, past five pool terraces on
   columns, with loungers, parasols, a ladder and a diving board into one pool. A fountain tower
   stands in the middle of the ring and a flat cloud sea lies below. At the end you hold E on the
   finale deck and a slide carries you round the tower and down through the clouds into the final

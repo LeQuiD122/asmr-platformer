@@ -535,6 +535,15 @@ after it broke, and `decayDuration` is capped by it so dents go too. Clay and sa
   no picture for the way back at all (kinetic sand, solid chocolate, salt) and simply stayed as
   holes while the server counted them whole.
 
+### The ending: a banner in the level's own language
+
+Each level's completion banner now carries the SHAPE of its level as well as its colours: the panel
+takes the level's own gradient, the vignette its colour, and a MOTIF is drawn inside it with one
+thing moving. City Shore gets a sun going down behind a horizon; Sky Pools cloud along the bottom
+edge and a ripple under the headline; the Sunken City caustics drifting over a panel that is nearly
+black; the Flooded Halls tile and a dado line drawing itself along the wall. All of it is frames and
+gradients -- nothing to import -- and `check_skypools.py` holds all four motifs in place.
+
 ### The ending: no blackout, a banner per level
 
 The dive used to fade the screen to black at the splash. That threw away the best thing in the
@@ -631,10 +640,16 @@ private-server teleport can carry it; `check_hub.py` enforces that. The design a
 in `docs/superpowers/specs/2026-08-28-lobby-hub-design.md` and
 `docs/superpowers/plans/2026-08-28-lobby-hub.md`.
 
+**Where a pad's name and look come from:** the name is the level's `name` in `LevelDefinitions`
+(ReplicatedStorage.Shared), and the window and label come from the level's `backdrop` in
+HubService's `THEME_LOOKS`. If the lobby shows Open Sky or Far Water, the place's LevelDefinitions is
+an older copy. Bootstrap prints `the lobby's levels are ...` at startup and warns when level 2 or 3
+still has an old name. `check_hub.py` fails if a level's backdrop has no look.
+
 | Level | Name | Shape | Chunks (Medium) | Setting |
 |---|---|---|---|---|
 | 1 | City Shore | spiral | 40 | the city, beach and waterpark horizon; ends on the high dive; the whole 65-chunk kit, all three rhythms, no repeat within six picks |
-| 2 | Sky Pools | ring, going down | 44 | pool terraces round a fountain tower over a cloud sea; ends on the slide into the final pool; the calm half of the kit |
+| 2 | Sky Pools | meander, going down | 44 | pool terraces on alternating sides of a route that sweeps down through a cloud sea; ends on a slide round a fountain tower into the final pool; the calm half of the kit |
 | 3 | The Sunken City | ring, flat with a swell | 50 | a drowned city round the route, a thing under it, an aquarium off a checkpoint; ends down the harbour drain |
 | 4 | Flooded Halls | path | 44 | inside a flooded tiled bathhouse, ending on a flume |
 | Sandbox | all materials | spiral | 82 | development route, its own pad |
@@ -785,12 +800,18 @@ only. `src/Server/Services/SkyPoolsService.lua` builds it, and the level asks fo
 
 ### Checking it
 
-- `python blender/check_skypools.py` lays the ring the way LevelService does, for short, medium and
-  long runs over 300 seeds each. It checks that the terraces clear every neighbour and the route
-  never comes round onto itself. It checks that the slide and its rods hit no chunk, terrace or
-  column, that the slide clears the final pool's rim and lands between the curtain and the rim, and
-  that it stays under 42 degrees and 95 studs/s. It also checks that the heights are in order and
-  the wiring is present. A mutation run (12 cases) confirmed each gate fails when it should.
+- `python blender/check_skypools.py` lays the route the way LevelService does, for short, medium and
+  long runs over 300 seeds each. It checks that the meander bends no harder than the ring it
+  replaces and never comes back on itself, that the terraces clear every neighbour and each other,
+  that every column stands under deck or under the pool it carries, that everything standing on a
+  deck stands on it and clear of everything else, that the pool is deep enough to swim in and its
+  steps shallow enough to walk out of, that the slide and its rods hit no chunk, terrace or column,
+  that the mouth has nothing in front of it, that the slide clears the final pool's rim and lands
+  between the curtain and the rim, and that it stays under 42 degrees and 95 studs/s. It also checks
+  the heights are in order and the wiring is present, including the ride's remote, the shared path
+  and the terrain water being cleared. A mutation run (25 cases) confirmed each gate fails when it
+  should: the four it missed the first time are what the restatement guard and the read of the
+  finale terrace's length were added for.
 - `python blender/plan_skypools.py [seed]` draws one medium run from the same Python
   (`skypools_layout.py`).
 
@@ -800,6 +821,22 @@ only. `src/Server/Services/SkyPoolsService.lua` builds it, and the level asks fo
   blocks with a sphere SpecialMesh, and the check fails on `PartType.Ball` in the file.
 - **Ride a long slide by distance, not by its parameter.** The ring is three times further round at
   the top than the bottom, so stepping the parameter evenly made the ride fastest at the start.
+- **Do not move a character from the server every frame.** That is a whole assembly replicated sixty
+  times a second and it stutters, because the client is being corrected to where the server just put
+  it. Sit the rider in a seat, hand that one part to their own client, and let it draw the ride from
+  numbers both sides have. Keep the clock and the landing on the server, and nothing is trusted that
+  should not be.
+- **An arc leaves its mouth sideways.** The tangent of a circle is across its radius, so building a
+  spiral slide round a tower placed straight ahead of the mouth sends the first stud of the ride off
+  the side of the deck. The tower belongs beside the mouth.
+- **Terrain is not part of the level.** Water filled for a level does not go when the level's model
+  is destroyed, and neither does the terrain's global water colour; both have to be put back by
+  hand, which is what `clearWater` is for.
+- **A check that RESTATES the Luau only checks itself.** `skypools_layout.terrace_plan` is a copy of
+  the terrace's geometry in Python; moving the loungers in the Luau alone broke nothing that the
+  check could see. The mutation run is what found that, and the fix is the list of exact source
+  lines in `check_skypools.py` that must still be in `SkyPoolsService.lua` -- the same trick the
+  `heights` formula already used. Anything the Python restates needs one.
 - **Model what is actually solid.** The first check treated each terrace as solid to the sea and
   "found" the slide running into the start terrace on a short ring. Only the four columns go down,
   and they are well clear.
@@ -807,10 +844,103 @@ only. `src/Server/Services/SkyPoolsService.lua` builds it, and the level asks fo
   and calls `finishRunFor`. That quietly satisfied two of `check_hub.py`'s dive gates, which now
   read only the dive's own block.
 
+### Fourth pass (2026-09-22): seen in Studio, and rebuilt from what it looked like
+
+Played, and it showed. The route read as a lap, the terraces were squares with a square pool in the
+middle, the water was a sheet of glass you walked through, neighbouring terraces' columns stood past
+the deck you were on, and the slide stuttered and rode standing up. All of that is what this pass is.
+
+- **The route is a MEANDER, not a ring** (`layout = "meander"`, `meander = { amplitude = 0.7,
+  wavelength = 900, descend = true, stepScale = 1.6 }`). `LevelService` walks it in 2-stud steps
+  (`MEANDER_STEP`), because the heading is a function of distance travelled and there is no closed
+  form to jump to: the heading swings `amplitude` radians either side of straight ahead on a sine
+  of `wavelength` studs. The route never crosses itself and never comes back on itself, so what is
+  ahead of you is somewhere you have not been. `startLevel` returns `radius = nil` and
+  `layout = "meander"`; anything built along the route is placed from the chunks and the finish
+  frame, which every layout has.
+- **Terraces take alternating sides** of the route (`terraceBeside` now takes the outward direction
+  rather than a centre). That is the fix for the columns standing past a deck: on a short ring the
+  next terrace round was barely a hundred studs away and its columns rose right beside yours.
+- **The terrace is not a square.** A narrow walk off the checkpoint, shoulders where it flares, a
+  wide middle with a sun deck either side of the pool, and a rounded prow past the pool that the
+  water goes over. Nine columns to the sea: four under the pool's corners, four under the sun decks
+  and one under the prow. The walk in needs none -- it is a short span between the neck, which is
+  part of the chunk, and the pool block, which is on columns.
+- **The water is Roblox terrain water, and you swim in it** -- the terrace pools and the final pool
+  the slide lands in, which is ten deep now instead of waist deep. The terrace pool is 9 deep with four steps
+  at the inner end to walk in down and back out of, a ladder at the deep end, a waterline band and
+  two lights set into the walls under the surface. `fillWater` remembers every region and
+  `SkyPoolsService.clearWater()` takes it all out again -- terrain is global and does not go when
+  the level's model does, so Bootstrap's teardown calls it and `build` calls it first. The terrain's
+  own water colour and waves are saved and put back the same way the lighting is. What is left where
+  the water is, is an invisible marker part still tagged `SkyPoolWater`, so the client's splash and
+  ripples and the floating toys still know where the surface is.
+- **Better things on the deck.** Loungers are a frame on feet with slats, a back on its hinge with a
+  prop and a pillow, and a folded towel; the parasol has eight ribs, eight two-tone panels with
+  scallops, a vent and a finial. New: a pergola with a climber up one post, stone planters with
+  small trees, and a rinse shower over the queue at the slide's mouth. The sun side of a deck holds
+  either the loungers and what goes with them or the cabana, never both; the shade side holds one of
+  the pergola, the board or the lifeguard's chair.
+- **The waterfalls are three sheets, not one**: bright and nearly solid at the lip, wider and softer
+  behind, widening as they fall, with a rolled lip of foam, spray off it and mist drifting back up
+  in the long ones.
+- **The slide's shape and timing are shared** in `src/Shared/SkyPath.lua`, because both sides now
+  work the ride out from the same numbers. The trough has a film of water running down it, a rolled
+  lip along each wall, hoops with pennants and the rods that hang it off the tower.
+- **The ride is a sled you sit in.** The server sits you in a Seat, keeps the clock, and hands the
+  sled to your own client over the new `SkyRide` remote; from then on your client writes the sled's
+  CFrame every frame from `SkyPath` and the start time, which is smooth and replicates nothing. If
+  your client never answers -- the file is not pasted in, or it is loading -- the server drives the
+  sled itself and the ride is the same length and ends in the same place. The server decides where
+  you land whatever the client did with the sled.
+- **The tower stands beside the slide's mouth** (`TOWER_ASIDE = 150`), not ahead of it. An arc's
+  tangent is across its radius, so a tower straight ahead would have thrown the first stud of the
+  ride sideways off the end of the deck. The mouth is kept clear: nothing may stand within
+  `MOUTH_CLEAR` of the trough ahead of it, the terrace off the walkway stops eight studs short, and
+  the arch stands behind the mouth and wider than the trough.
+- **Scenery pools keep off the route.** They used to be laid at a radius outside the ring, which a
+  route that wanders has no equivalent of, so each one is now tried at a few angles until it finds
+  one at least 300 studs from every chunk.
+
+### Sixth pass (2026-09-23): what play found
+
+- **The flanking shelves are gone from the chunk kit** (`ChunkBuilder`, `S1_Straight`,
+  `P1_HoneyCorridor`, and `C1_SlimeToPace`'s honey landing). They were five and four studs of dry
+  ground each side, a stud below the top, and they did two things nobody wanted: the stable chunk's
+  shelf ran level with its neighbour, so you could walk alongside the honey instead of over it, and
+  stepping off the Needoh field landed you on the next chunk's shelf instead of falling. The
+  butter-wax bend keeps its catch on the outside of the turn and the soap chunk keeps its flanks
+  (soap dissolves; the chunk has to stay crossable). `check_chunk_forms.py` holds the rest out.
+  **This changes the chunk templates, so ChunkBuilder has to be re-run in Studio.**
+- **The pump room's hatch is six studs, not four**, its ladder runs past the deck rather than up to
+  it, and there is a grab rail either side of the opening. At four studs through a ten-deep deck it
+  was a shaft you got stuck in.
+- **You can lie on the loungers and sit in the lifeguard's chair.** Both were blocks shaped like
+  furniture; the cushion and the seat are Seats now, and the lounger's is tipped back with the bed.
+- **Translucent chunks seen from ABOVE.** They read from the side and from underneath and vanished
+  from overhead, which is the signature of a reflection rather than a transparency: the whole lower
+  hemisphere of this level is white cloud, so a glossy top face was mirroring white onto white. Two
+  small steps: the `skyPools` palette turns `EnvironmentSpecularScale` down to 0.5 (it is per-palette
+  now), and the cloud sea is two steps off paper white with no reflectance of its own. If it is
+  still washing out, the next lever is this level's own transparency on the glass materials.
+
+### Fifth pass (2026-09-22): the water moves and the ride says something
+
+- **The falls fall.** Three sheets of glass is the right shape and none of the motion, so: streaks
+  thrown off the lip that live long enough to travel the fall and squash into lines as they gather
+  speed; a landing at the bottom with foam, a boil and spray going back up; and, on each client, a
+  bright band travelling down every sheet (tag `SkyFall`, `SkyPoolsClient.moveFalls`). The shower
+  heads over the queue at the slide's mouth are falls too, so a fall narrower than four studs
+  leaves out the foam and the mist.
+- **The ride has something on screen.** Eight to fifteen seconds of slide used to be silent. Now
+  the edges draw in, two soft bands give the speed somewhere to read, one line counts the drop down
+  to the water, and the splash flashes white as you hit it. It is built and torn down by
+  `SkyPoolsClient` alone, and it is gone before the completion banner comes up.
+
 ### Open for this level
 
-- Nothing here has been seen in Studio: the terraces flush with their caps, the ride, the look of
-  the cloud sea, the light, and the cost of several hundred cloud parts.
+- The fourth pass has not been seen in Studio: the meander's shape from inside it, swimming in the
+  terrace pools, the new ride, and whether the terrain water's edges read well against the tiling.
 - The pool tile MaterialVariant (`PoolTileBackdrop`, shared with City Shore) is used on the pool
   floors when it exists, taking its base material from the variant.
 
@@ -902,7 +1032,21 @@ asks for it with `backdrop = "sunkenCity"` and `finale = "drain"`. The picture i
 - **Light** comes from LightingService's `sunkenCity` palette: a grey-green afternoon with real
   haze, a step under the default.
 
-### Checking it
+### Checking it (third pass)
+
+- `python blender/check_sunkencity.py` lays the street the way LevelService does, for short, medium
+  and long runs over 120 seeds each. It checks that the meander bends no harder than the ring it
+  replaces and never comes back on itself; that every block's frontage is on the kerb and nothing
+  that may break the surface stands within EMERGE_CLEAR of the route's reach; that the thing's body
+  and its wander stay inside the street, clear of the gantry legs, the lamp posts, the aquarium's
+  tower and the dry flat, under the road signs, and that it turns back long before the whirlpool;
+  that the aquarium and the dry flat clear their neighbours and stay out of the harbour; and that
+  the wiring is there, including the drain's remote, the shared path, and the prompt on the glass
+  being connected to something. A mutation run (23 cases) confirmed each gate fails when it should.
+- `python blender/plan_sunkencity.py [seed]` draws one medium run: every lot as the ground it stands
+  on, the street through them, the thing's patrol, and sections through the aquarium and the drain.
+
+### Checking it (first pass, for the record)
 
 - `python blender/check_sunkencity.py` lays the ring for short, medium and long runs over 300 seeds
   each. It checks that the route stays out of the water and that falls are seen and caught. It
@@ -951,11 +1095,426 @@ asks for it with `backdrop = "sunkenCity"` and `finale = "drain"`. The picture i
   never roll.
 - **The pier's lantern** hangs from its own post and arm at the far end: a warm PointLight.
 
+### Ninth pass (2026-09-25): the thing as a serpent, and the client made cheaper
+
+**The thing under the route is one body now** (`blender/gen_serpent.py`, `Sea_Serpent`): a blunt
+skull, heavy brows over the pale eyes, barbels hanging from the jaw, gill grooves, a body of faint
+rings with a keel down the back, a scalloped crest of raked spines that fades toward the tail, and a
+fluke. Eighteen bones, one per segment, and the client lays them through the same nineteen points
+SunkenPath gives the part-built body, so it is where it always was; it bends along its length
+instead of hinging at eighteen joints. The eyes are still the client's pale parts, carried on the
+posed head. Where it doubles back at each end of its patrol it turns about UP (`SeaRig.follow`'s
+`level`) rather than the shortest way, which would have rolled it onto its back. Part-built, as
+before, when the mesh is not imported.
+
+It is held to exactly the envelope the part-built body had. No pectoral fins, because the body
+turns up to 0.42 radians off the path and a fin swept back off its side would swing out past the
+2.7 studs the dry flat leaves; the fluke's reach under that turn is measured by the generator
+(`side_reach`) and `monster_reach` uses it; the crest stays under 1.3 girths and the barbels over
+0.75 under. The checker also holds the generator's joints, spacing and girth to SunkenPath's and
+the service's.
+
+**Bugs fixed.**
+- `step()` only moved the thing when it had part-built segments, so a mesh-drawn serpent would
+  never have moved, and the mood would never have darkened as it came near.
+- `SeaRig.follow`'s shortest turn had no answer for a bone pointing back the way it came: it did
+  nothing, or rolled the bone over. A half-turn about UP is taken there now.
+- The slime effect, which the jellyfish share, stretches the platform mesh 2.6 times its height
+  while you stand on it; on a bell that plunged the tentacles twenty studs into the sea. The
+  jellyfish no longer stretch.
+
+**Cheaper to run.**
+- The thing's nineteen points are worked out together (`SunkenPath.body`), the surfacing once a
+  frame instead of nineteen times.
+- The mood (the shade, the rumble, every plate of the sea and every ambient sound) was written
+  every frame, and found the ambient sounds with `GetTagged`, a new table a frame. It is written
+  only when it moves by a two-hundredth, and the sounds are kept by their tag.
+- Lit windows and aviation lights were written every frame whatever their state; now only when it
+  changes.
+- Nothing is animated far from the camera (`SEEN`): swimmers and shoals past 420 studs under the
+  water, gulls past 700, the harbour's whirlpool, its water and its buoys past 700, the caustics,
+  the shafts and the lanterns past 500, the tank's panes unless you are in the aquarium. All of it
+  runs on the clock, so it is exactly where it should be when it comes back into range.
+- The mesh fish move together (`BulkMoveTo`), and each kelp strand reuses one joint table.
+- The checker now fails if any function the frame runs searches the game (`GetTagged` or
+  `GetDescendants`), or if the mood is written whether it has changed or not.
+
+Mutation-tested: 9 new, and the eighth pass's 23 again, all caught.
+
+### Eighth pass (2026-09-25): the animals as meshes, a Ferris wheel, and jellyfish to bounce on
+
+**The crash first.** `SunkenCityService:1536: attempt to perform arithmetic (add) on number and table`
+was the seventh pass's street table: it was declared `local STREET = { vehicleLane, furnitureAt }`,
+and a second top-level `local STREET` silently shadows the first one for everything after it, so
+`BLOCK + STREET` (the city's grid pitch, where `STREET` is the 26-stud gap between blocks) added a
+table. It is `ROADSIDE` now. `check_lua.py` fails on any name declared twice at a file's top level
+(a `local` or a `type`), which is the check that would have caught it.
+
+**The animals are meshes** (`blender/gen_sealife.py`), rigged and bent by their bones on the client:
+a shark whose body waves to the tail, a pod of dolphins beating up and down, a grouper with a
+spiny dorsal, an eel that wriggles along its own length, a ray whose wing tips ripple a beat behind
+the roots, a turtle (shell and body) rowing and flapping its front flippers and lifting its head
+out to breathe, a jellyfish whose bell pulls in and lets go, fish that beat their tails (a large
+one for the street's shoals, a small one for the tank's and the flat's), and gulls whose wing tips
+follow the roots. Each kind is drawn from the mesh when it is imported and from the parts it has
+always had when it is not, so importing goes one mesh at a time and nothing breaks in between.
+
+**`ReplicatedStorage.Shared.SeaRig`** (new) is how: it finds a mesh in `Assets/TileMeshes`, REFUSES one
+imported at the wrong size (an old or rescaled import; a rig cannot be resized, because setting
+Size moves the mesh and leaves the bones) or without its bones, places copies, and bends a bone
+about the animal's own axes turned into that bone's rest frame, worked out from the bones' own
+CFrames and never from anything the engine updates. The client's report line ends with its
+summary: `N meshes drawn; part-built because not imported: ...; REFUSED: ... <why>`.
+
+**The kelp is two meshes.** `Sea_Kelp` is the stipe, its small blades and the float, and the client
+bends its twelve bones so the joints fall exactly where the part-built strand's did (`kelpJoint`,
+which the checker already holds), stretching the chain to the strand's height. `Sea_KelpCanopy` is
+the fronds streaming off the float, rippling on four bones; the street's strands carry one, laid
+down the street's current (the server now writes `Along` and `Canopy` on each strand), and the
+tank's do not, because in the tank a canopy would lie over the tunnel's roof.
+
+**The dolphins' leap** tops out exactly `LEAP_HIGH` over the water from wherever the dolphin is (its
+bob included), and it points along its arc but never steeper than `SWIM.pitch` (0.7): at the turn
+of its wander a dolphin barely moves along, and judged by that alone it stood on its tail. They
+swim a little deeper (4 to 6) for the mesh's taller fin.
+
+**A drowned Ferris wheel** (`blender/gen_ferris.py`), 250 off the street on the side away from the
+plaza and the thing on the horizon, in its own square of open water (`blocked` keeps the city off
+it): two braced A-frames standing on the sea floor, the wheel 74 across on its axle 26 over the
+water, sixteen pastel cabins, the lowest under the surface, going round once in five minutes on the
+server's clock, every cabin hanging level and swinging a little. One cabin's light is still on (a
+real PointLight, dipping now and then like the other lanterns). It is placed at the first of
+`FERRIS.shares` along the street that is clear of the aquarium, the flat and the harbour and far
+enough off the route for something that breaks the surface. Built from parts in the same place if
+the meshes are not imported.
+
+**Jellyfish, a new material and two new chunks.** `MaterialConfig.Jellyfish` bounces you on EVERY
+landing (five studs up, a jump's height, with a 0.45 s cooldown so it bounces rather than buzzes),
+through the same `microBounceHeight` path bubble wrap and jello use; it is pace, since nothing
+about a bell drops you. `blender/gen_jellyfish.py` builds two bells on slime's 16 x 12 cell rig: a
+compass jelly (a high round bell with sixteen raised canals, warts toward the margin and twelve
+long tentacles) and a moon jelly (flatter, with the four horseshoe rings and a fringe). The bell
+rises out of a thin membrane that fills the platform's corners, so there is visible floor under
+every tile; the drops take the colliders down the dome. It is SmoothPlastic and not Glass, because
+its level's sea is Glass. `R39_JellyfishHop` (risk) is two bells with a GAP_LENGTH gap between them
+and one to a wide landing; `P29_JellyfishBloom` (pace) is one moon jelly. Both are in the Sunken
+City's pool, and at the front of the sandbox.
+
+**The checker measures the meshes.** `gen_sealife.py` and `gen_ferris.py` write
+`blender/sealife_extents.json`, every mesh's real geometry box; `check_sunkencity.py` reads it, so
+every clearance the part-built animals were held to (a fin under the surface, a wing over the
+tunnel's roof, the widest reach across the street, the leap under the chunks, the gulls short of
+the blocks) is held for the meshes too, with the bends the client gives them. New gates: SeaRig
+expects the sizes the generators build; the canopy stays inside the street and 1 stud under the
+surface as it ripples; nothing hanging under a rigged platform (the jellyfish's tentacles, 7.8 under
+the bell) comes within 1.5 of the water (worst 3.2); the Ferris wheel's frame reaches exactly the
+floor, the service and the generator agree on its radius, hang and cabins, it fits its square, and
+on every seed there is somewhere clear to stand it. 23 mutations, one per new gate, all caught.
+
+### Seventh pass (2026-09-24): the surface, the street, the whirlpool, and a report
+
+From screenshots and a recorded play-through (no voice in it: the video's audio is the game).
+
+**The flickering green roofs were two flat faces at one height.** The weed band every building wore
+was a slab its own size whose top lay exactly on the water's surface: on a drowned building it was a
+green roof lying on the water, and the two fought for the same pixels. Warehouse roofs could also
+sit within a stud of the surface, and a wide house's ridge could come out of it. Now nothing is
+within `SURFACE_CLEAR` (2.5) of the surface: a building stands clear or is plainly under, the weed
+band is four strips on the walls ending under the surface, and the foam and weed mats sit clear of
+it. The checker restates every building's top and what it carries.
+
+**The street's own buildings stand.** Which lots may break the surface was judged from where the block
+STARTED, minus half a block, so the whole front row counted as too near the route and drowned just
+under the surface. It is judged from the lot's real frontage now, which is 62 from the route's line,
+48 past any chunk's edge and far out of jumping reach. More of the blocks along the street stand.
+
+**Buildings are detailed all the way down** near the street (`FACADE_FLOORS`, 14): sills at every
+storey and a window band a side on the deep storeys, where they used to stop 26 under the surface.
+
+**The street under the water:** vehicles at their own size (cars, vans and buses; they were two thirds
+of a car and looked like toys), a tram on the rails, street furniture on the pavement edge (bus
+shelters, phone boxes, benches and bins, dead trees in their planters, an amber traffic light still
+blinking), the reef the road has become (coral heads, anemones, urchins), and bubbles rising a
+hundred studs from the kelp beds to the surface.
+
+**Life you can see from the route.** Everything alive used to be twenty studs down or deeper. Now
+jellyfish float just under the surface, a pod of three dolphins leaps out of it one after another
+every thirteen seconds with a splash each way, turtles come up to breathe, the fish shoals swim
+three to ten under in four colours, and gulls circle over the street, flapping and gliding. The
+dolphins' leap stays under every chunk and the gulls stay above them; the checker holds both.
+
+**The flooded floor is swimmable.** Past the FLOODED. NO ACCESS. sign, the flat's stairwell now goes on
+down in real Roblox terrain water, through the doorway at its foot (the wardrobe no longer blocks it)
+and into the flooded flat a storey under: furniture lifted and turned over, a lamp still on, a teddy
+bear, a few fish, and a note on the wall. The water is remembered and cleared with the level
+(`SunkenCityService.clearWater`), as Sky Pools does with its pools.
+
+**The whirlpool moves like water.** Its rings were Glass (each hid the others) and sixteen identical
+segments turning look like nothing turning. Now the funnel carries the engine's water texture sliding
+round and in, faster toward the middle (`SunkenWhirlFlow`); foam streaks on every ring show it
+turning; the foam arms are thin fading skins, not planks you pass through; spray blows off the rim;
+and it roars.
+
+**The lobby countdown ticks on the second.** The video's audio showed the ticks in pairs, 0.8 then 1.2
+seconds apart: each tick was a sound made on the server, heard when it replicated. The server now
+says when the countdown ends on the shared clock, and each client shows the numeral and plays the
+tick together, every second (`HubVoteService`).
+
+**A report, and every piece guarded.** Nothing moving in the Sunken City (whirlpool, animals, kelp)
+points at `SunkenCityClient` failing: it ran everything in one function, so one error stopped every
+piece after it, every frame. Each piece now runs guarded and names itself once if it fails, and ten
+seconds into the level the client prints what it is drawing:
+`SunkenCityClient: drawing the thing (...), N swimmers, N shoals, N strands of kelp, N gulls, N
+whirlpool rings; nothing has failed` (or `FAILED: ...`). The server's build line counts the same
+things. Those two lines together say where the fault is.
+
+### Sixth pass (2026-09-24): what the fifth one looked like, and the aquarium
+
+**Invisible ice was Glass.** Roblox's Glass material draws only what is OPAQUE behind it and leaves out
+every transparent part. Looking down on a sheet of ice, the only thing behind it is transparent water
+(or Sky Pools' cloud and pools), so the ice showed the drowned city straight through and read as
+open water; from the side, with scenery behind it, it looked fine. Ice is Roblox's Ice material now
+(`MaterialAppearance`, the shell finish in `ChunkBuilder`, the shards in `DeformationRenderer`). The
+white puffs and sparkles in the screenshot were the ice's own mist and drips.
+
+**The same rule was hiding the aquarium.** The tunnel's panes, the viewing window and the tint
+layers were all Glass, so from inside the tunnel the tinted water outside, the bubbles, the specks
+and even the sea's surface overhead were not drawn, and one tint layer hid the next. They are a plain
+translucent material now (`PANE`). And for the same reason, the street's jellyfish are solid: the sea's
+surface is still Glass, and a clear jellyfish under it is invisible from the route. Only the tank's
+(`Clear`) are clear.
+
+**The entrance was blocked by the stair.** The spiral was laid from the top at a fixed 18 degrees a
+step, and its last turn crossed the TUNNEL'S MOUTH four studs off the floor (the pointed opening in
+the screenshot is the tunnel's roof). `stairPlan` now lays it from both ends: the head leaves the
+landing by the door, the foot comes down 50 degrees short of the mouth, and it picks the step count
+and angle that join them. The check walks the stair for every seed: nothing over the mouth under 7.5,
+nothing over the way from the foot to the mouth under 6.5, nothing in the doorway, and even the
+shallowest plan it may choose leaves 7 studs under the turn above.
+
+**No animals because they were inside the walls.** The fish shoals were placed 54 to 90 studs off the
+street, which is inside the drowned blocks. And on a short run, the rule that kept the new swimmers
+off the road signs' legs threw nearly all of them out. Now the street's animals keep within
+`SWIM_REACH` (24) of the centre line, under the route where you look down on them, and at 6 to 24
+under the surface, where the light still reaches. The shoals circle loops laid along the street.
+The swimmers are drawn bigger (rays 1.6, turtles and groupers 1.4), there are more of them (every 38
+studs), and there is a shark.
+
+**The glass (your design).** Every pane in the aquarium can be tapped now, the tunnel's sides as well
+as the window: before, only the window at the far end was tappable, and the blocked tunnel kept you
+from it. A tap thuds and the tank's fish bolt. Keep tapping one pane and it takes the strain (`TAP`
+in SunkenCityService): at 3 a crack stars out, at 5 it spreads and weeps, at 7 it BREAKS. The pane
+bursts inward in shards, water jets through, and the tower, tunnel and gallery fill to the top in 3.5
+seconds, the view going green and soft underwater. Everyone still inside is washed out: back to
+their checkpoint in Chill, to the start in Hardcore. After 14 seconds the water goes down and every
+pane is whole; a crack left alone mends on its own. The Hardcore knock-back after three quick taps is
+still there.
+
+**The aquarium, better:**
+- **Kelp** that is a plant: a stipe from the sea floor to just under the surface, blades on
+  alternating sides, gas floats, dark low down and gold at the top, swaying with a wave running up
+  it, all leaning with one current (`SunkenKelp`, grown and swayed on each client). Sixteen strands
+  in the tank, kept 13 off the tunnel's line and out of the rocks, and a band past the window.
+- **Rock stacks** beside the tunnel with coral on their tops at eye level: branching coral, a sea fan,
+  a brain coral, a starfish.
+- **A diver's helmet and a treasure chest** past the window on their own rocks, each breathing a
+  stream of bubbles.
+- **A brass rail** down both sides of the tunnel with plaques (THE KELP FOREST, OPEN WATER, THE DEEP).
+- **Bubble vents** along the tunnel's foot outside the glass.
+- **Animals in the tank**: rays, a turtle, a shark and a grouper over the tunnel's roof, where you
+  look up at them, and clear jellyfish past the window.
+- **What looks in**: every 110 seconds (first at 45), for anyone near the gallery, a head as wide as
+  the gallery with one pale eye rises out of the dark past the window, holds level with it, and sinks
+  away. It stays 62 studs out, behind the kelp.
+
+**The street, more of it:** kelp beds along both kerbs halfway between lamp posts, their fronds moving
+at the top of the water; flotsam bobbing under the route (planks, crates, barrels, a ball, and now and
+then a child's rubber duck); weed mats on the surface by the kerbs. Lamp posts and cars now keep out
+of the aquarium and the dry flat too (one run in a dozen put a post through the tunnel).
+
+**Checking it.** New gates: the stair walk above; the swimmers' and shoals' reach against the road
+signs' legs; nothing breaking the surface, up or down; the tank's animals over the roof and under the
+surface; the kelp's worst-case sway against the legs, the blocks, the tunnel's glass, the chest and
+what looks in; the glass's order and its washing out; no Glass in the aquarium's panes or in ice; and
+Squash within Roblox's range. Twenty-five mutations, all caught.
+
+### Fifth pass (2026-09-23): the frames in the sky, found; and the city comes alive
+
+**The frames in the sky were a unit bug, not a design.** `facadeOf` took world heights and the tower
+passed it a height over its own floor. With the sea floor a hundred studs down, every tower's sills,
+pilasters and windows were drawn about ninety studs above its roof: the floor plates on thin posts
+in the screenshots were facades with no building inside them. The old window bands had the same
+bug. `facadeOf` now takes heights over the building's own floor, like everything else in a frame,
+and the check follows every call's arguments back to `floorY`.
+
+**The aquarium square.** The tank's tint panes rose thirteen studs out of the water and four more
+lay flat over the tunnel, three of them above the surface, so from the route there was a rectangle
+of different-looking water. The panes are upright only now and stop three studs under the surface,
+edge-on from above.
+
+**Nothing is hollow.** Every block of flats has a roof. One in four has partly fallen in, with the
+roof lying in the room and the furniture showing, which is wear rather than an open box.
+
+**Better pieces:**
+- **Lanterns** are street lanterns: glass between four corner posts, a tray, a stepped cap and a
+  finial, hung from a scrolled arm with a brace, on a post with a collar and a ring of weed where it
+  leaves the water. Every eighth one is lit, and the lit ones gutter now and then (`SunkenLantern`).
+  The pier's lantern is the same.
+- **Skyscrapers** have a top: a setback storey, a crown of fins, a plant room, and a mast with a red
+  aviation light that still blinks (`SunkenBlink`).
+- **The clock tower** is built in stages: a quoined shaft with string courses and arched windows, a
+  clock stage with a face on each side (bezel, twelve marks, hands, boss), an open belfry with
+  louvres and the bell on its headstock, pinnacles, a green copper spire and a weathervane. Every
+  137 seconds, on a schedule every player shares, the bell tolls once and swings. Nobody is up there
+  (`SunkenBell`, swung about its `Hang` attribute).
+- **Containers** are corrugated with ribs; the harbour's have a door end with locking bars and
+  corner castings.
+
+**The water moves.** Each surface plate carries the engine's water texture at two scales, and the
+client slides them different ways (`SunkenSurface`), so they interfere like ripples. Foam skirts
+every building where it comes out of the water.
+
+**Animals that swim like characters** (`SunkenSwimmer`, made and moved on each client): a ray whose
+wings beat from the body, a turtle paddling, jellyfish pulsing with their tendrils trailing, an eel
+whose body follows its head, and an old grouper. They wander the street's open water, mostly along
+it, never further across than 10 studs inside the kerb (`SWIM_KERB`), and never where their wander
+would reach the aquarium, the dry flat, a gantry's legs or the harbour.
+
+**The eerie half:**
+- **The thing on the horizon.** At 95 seconds and then every 260, far out on one side of the city,
+  a back 760 studs long breaks the surface like a line of dark hills over nine seconds, breathes out
+  once, lies there twelve seconds and sinks. A double moan comes first, heard everywhere. It is laid
+  in the city's own frame at `LEVIATHAN_OUT` (1300), and the lone towers on that side stop at
+  `FAR_OPEN` (160) past the city's edge, so it always comes up in open sea. The check holds the gap.
+- **Rain.** At 70 seconds and then every 230, for 75 seconds, the same for everyone: streaks round
+  the camera, a hiss, rings on the water round you, the ripples running faster, and the light one
+  small step lower (brightness -0.04, saturation -0.1).
+- **Windows that should not be lit.** Seven windows above the water (`LIT_WINDOWS`) with a real
+  light in them that goes on and off at odd intervals (`SunkenLitWindow`).
+- **Strange sounds** every 22 to 57 seconds, each from a real spot a few hundred studs off: a long
+  moan, metal giving, masonry letting go, something breathing out.
+
+**Also:** LevelService's log line for a meander gives its length in studs instead of "59816
+degrees round". The horrors' unused `Floor` attribute is gone; the new marker check found it.
+
+**Checking it.** `check_sunkencity.py` gained gates for: every facade call in the building's own
+frame; a roof on every block of flats; the tank held under the surface with one kind of pane; lit
+windows counted and capped; swimmers held inside the lamp posts and clear of the aquarium, flat,
+gantries and harbour; the thing on the horizon clear of the lone towers; `rain` declared before
+`applyMood` reads it; and every attribute a marker is given is read by the client. Thirteen
+mutations, including the original facade bug, all fail the check.
+
+### Fourth pass (2026-09-23): buildings, not platforms
+
+The city was read back as "ugly platforms in the sky". It was a fair description of what a box with
+a stripe of window colour round it looks like, and the answer is four things every building now
+gets, spent by distance so a three-hundred-building city stays affordable:
+
+- **A facade** (`facadeOf`): a sill course at every storey, pilasters standing the full height
+  between them, a cornice on top, and window panes set INTO the wall -- some dark, some boarded,
+  some with glass still in them.
+- **Wear** (`wearOn`): rust running from the fixings, render fallen off in patches, a corner gone
+  with its rubble at the foot of the wall.
+- **Growth** (`growthOn`): the weed line every drowned building wears at the waterline, algae up the
+  faces under it, ivy up the side that gets light, and a tree out of a roof nobody is coming back to.
+- **Holding out** (`holdingOut`): the half that makes it a city rather than a ruin -- sandbags along
+  a frontage, scaffolding where somebody was shoring a wall up, a pump on a parapet with its hose
+  over the side, a floodlight still burning, and a gauge painted on the wall with the marks of how
+  far the water came.
+- **Heights vary.** Blocks of flats used to top out two or three studs under the surface without
+  exception, which is what made a street of them read as a field of platforms; they now run from a
+  storey under the water to thirty above it, with a roof, a parapet, a tank and a stair head on the
+  ones that stand. A building may only rise out of the water where its lot is allowed to break the
+  surface, which the check holds.
+- **Detail is spent by distance** (`DETAIL_NEAR` 300, `DETAIL_MID` 620): everything on the frontages
+  you run past, storeys and ribs in the middle distance, a silhouette out in the haze. Those two
+  numbers are the dial if the part count needs to come down.
+
+### Third pass (2026-09-22): it is a street now, and there is something living in it
+
+Played, and the level read as a grey plane with slabs floating on it. Every part of this pass comes
+from that.
+
+- **THE ROUTE IS A MEANDER THROUGH THE CITY**, not a ring round it (`layout = "meander"`,
+  `meander = { amplitude = 0.45, wavelength = 1300, stepScale = 0, wave = ... }`). A ring meant the
+  whole run was spent looking at the place from its edge; a line means blocks either side of you and
+  the street running ahead into the haze.
+- **The city is a grid laid in the route's direction.** Blocks of 118 studs with 26-stud streets,
+  out to 940 either side and 460 past each end, and any lot the boulevard runs into is pushed back
+  and shortened until its frontage is on the kerb -- which is how a curving street through a square
+  grid actually looks. A block on the kerb turns to face the street; one further back keeps the
+  grid's own direction. Each block holds two or three buildings rather than one. 125 to 215 lots on
+  a run.
+- **New things in it:** warehouses with sawtooth roofs and loading banks, a church whose spire comes
+  out of the water, roof hoardings, and the boulevard itself -- road surface, kerbs, tram rails,
+  lamp posts whose heads break the surface (every eighth one still lit) and the cars that never got
+  out.
+- **The harbour is at the END of the street** rather than a sector of a ring: quay walls with
+  bollards, a gantry crane with its hook down, a container yard, a lighthouse whose beacon sweeps
+  (tag `SunkenBeacon`), a fishing boat gone down by the quay, a half-sunk barge and an older wreck
+  out on the silt.
+- **The water reads as water.** The flat dark murk sheet is gone -- it was a lid, and from the route
+  the city under you was one black plane. In its place: shafts of light leaning down from the
+  surface with specks hanging in them (`SunkenShaft`), and the buildings' own drowned colours doing
+  the depth.
+- **Things living in it.** Shoals of fish along the street, made and swum on each client from
+  markers the server places (`SunkenFishShoal`); the fish have bellies, fins, an eye and a tail that
+  beats. And, far out where the haze takes over, four long dark things turning slowly on their own
+  circles (`SunkenHorror`) -- never near the route, never lit, never explained.
+- **The thing patrols the street** instead of swimming a ring. `SunkenPath` is rewritten round a
+  polyline: it reads the route's line off the sea model as an attribute, walks up it and back down
+  it for ever, wanders five studs either side, and turns back 200 studs short of the harbour. Its
+  surfacing works the same way, keyed to distance along the street rather than an angle.
+- **The aquarium.** The water outside the glass is four layers of tint at increasing distance, so
+  the view out has depth; caustics slide across the tunnel; specks hang in the light; the tunnel is
+  lit by a fitting in the roof of every bay and two uplights in the floor throwing light up through
+  the water. **And tapping the glass does something**: it had only a ClickDetector, which shows no
+  prompt and answered only in Hardcore after three taps, so a player could stand in front of the
+  notice asking them not to tap the glass, tap it, and be told nothing. There is a prompt on it now,
+  every tap thuds and startles the fish in both modes, and three taps in Hardcore still bring the
+  other answer.
+- **The ending.** The whirlpool has three spiral arms of foam wound into the middle, debris turning
+  on it, and mist over it. At the bottom of the shaft there is now a SLUICE: a brick chamber with
+  the water still coming down one wall, a grating underfoot, a bulkhead lamp that stutters
+  (`SunkenSluiceLamp`), a ladder nobody is coming down and a door marked OUTFALL 3. The ride down is
+  drawn by the rider's own client from `SunkenPath.drainFrame` over the new `SunkenRide` remote, for
+  the reason Sky Pools' slide is: the server moving a character every frame stutters.
+
 ### Open for this level
 
 - Nothing is seen in Studio yet: the look of the water and the depth tinting, the parts count, the
   thing's size and speed, the surfacing and whether it is fair, the stair, the tunnel, the flat,
   the face in the mirror, the whirlpool ride and the light.
+- **Ninth pass, untested:** the serpent, above all whether it reads from the route through the
+  water and whether it turns round cleanly at each end of its patrol; import `Sea_Serpent` WITH its
+  bones. The client's report says `drawing the thing (the serpent mesh)` when it is. If anything
+  pops in or freezes at a distance, the ranges are the client's `SEEN` table.
+- **Eighth pass, untested:** the client's report line now ends with SeaRig's summary, which says
+  which meshes are drawn and why any are not; the server's build line says whether the Ferris wheel
+  stood. Import the 19 FBX files first (`Sea_*`, `Ferris_*`, `Jellyfish_*`, each WITH its Bone
+  children). To judge by eye: whether the animals swim convincingly (the bend amplitudes are in the
+  client's `SWIM` table, the kelp's in `KELP`), the wheel's size and speed from the route
+  (`FERRIS`), and how the jellyfish bounce feels (`MaterialConfig.Jellyfish`). Top-level locals: the
+  client 179, the service 182, of Luau's 200.
+- **Seventh pass, untested:** the two report lines above are the first thing to read. The part
+  count grows again (deep facades, vehicles, furniture, reef); `FACADE_FLOORS` and `DETAIL_NEAR` are
+  the dials. SunkenCityService has 178 locals live at its top level, near Luau's 200: new tuning
+  numbers go into its tables (`STAIR`, `TAP`, `SCHEDULE`, `ROADSIDE`, `GULL`), not new locals.
+- In the recording, 0.3 seconds into the second run the view went a flat dark grey for the rest of
+  the video while the top bar still drew: the 3D view stopped rendering. Not reproduced here and
+  not explained yet; the Output from that moment is what would say.
+- **Sixth pass, untested:** whether the ice now reads from above over the water and over Sky
+  Pools' clouds; the kelp's look and cost (up to about 1,700 client parts on a long run, only the
+  near ones moving; `KELP_NEAR` in SunkenCityClient is the dial); the flood; the thing at the window.
+  Slime, honey and jello soda are still Glass at 0.1 to 0.3 transparency: they read, but if any of
+  them still looks thin from above, the same change as ice is the fix.
+- **Fifth pass, untested:** the part count. The last log said 6,494; the lanterns, clock tower,
+  skyscraper tops, roofs and containers add roughly a thousand to fifteen hundred, so expect about
+  7,500 to 8,000. `DETAIL_NEAR` and `DETAIL_MID` are still the dials.
+- Whether the thing on the horizon reads through the haze at 1300 studs. To bring it nearer, lower
+  `FAR_OPEN` first and then `LEVIATHAN_OUT`; the check says how far it can go.
+- The sounds are the engine's own, pitched: the bell is the lobby's ping at 0.26 over a thud, the
+  rain is the falling-wind loop at 1.4. If either sounds wrong, those are the lines to change.
 - `WASH_RADIUS`, `SURFACE_EVERY` and `WARN` in `SunkenPath.lua`, and `MIRROR_CHANCE` in
   `SunkenCityService.lua`, are the numbers to turn if the threat or the scare is too much or too
   little.
@@ -1032,6 +1591,22 @@ entrance and dome detail before it **have not been seen in Studio yet**. Everyth
 - **Lighting moves in small steps.** It has been called both too bright and too dark.
   `ROOF_GLOW`, `OCULUS_BRIGHTNESS` and the pool lamps' `glow.Brightness` are the dials.
 
+### Fixed on 2026-09-22, both found by playing it
+
+- **The flume teleported you onto a platform instead of finishing the level.** The ride ends in the
+  void under the far chamber, well below the kill plane, and `FloodedHallsService` had no
+  `ownsFall` -- so the plane caught the rider part way down and did what it does: put them back on
+  the last chunk they had touched. It has one now, and Bootstrap's kill plane exempts a rider the
+  way it already exempted the dive, the slide and the drain. `check_halls.py` holds both ends of
+  that.
+- **The halls followed you home.** Their bloom, depth of field and grade hang on Lighting and their
+  model is its own thing in the workspace; all of it was torn down only when the NEXT level was
+  built. So finishing the level and going back to the lobby left the room under the halls' air with
+  the halls still in the world. Two fixes: Bootstrap now tears the level's world down on the way
+  home as well (`tearDownLevelWorld`, which also clears Sky Pools' terrain water), and
+  `LightingService.apply` sweeps away any post-processing effect that is not one of its own three
+  before it applies a region. A level may add to the look; no level's look outlives it.
+
 ### Open for this level
 
 - The latest round is untested in Studio (see State above).
@@ -1095,6 +1670,10 @@ Blender 5.2 at `C:\Program Files\Blender Foundation\Blender 5.2\blender.exe`. Ru
 | `gen_sea.py` | `Sea_Tile`, `Sea_Foam`, `Sea_Ring`, `Sea_Surf`. Prints the Luau wave constants BackdropService must match. |
 | `gen_backdrop.py` | The NINETEEN horizon props, each at two detail levels (34 files). Optional -- BackdropService falls back without them. |
 | `gen_flooded_halls.py` | The `Hall_*` kit for Level 4. Writes `kit_sizes.txt` and prints the `EXPECTED_SIZE` table the service needs. |
+| `gen_sealife.py` | The Sunken City's animals and kelp, rigged: `Sea_*` (14 files). Writes `sealife_extents.json` for the checker. `-- render` draws each at rest and posed. |
+| `gen_ferris.py` | `Ferris_Wheel`, `Ferris_Frame`, `Ferris_Gondola`. Run AFTER `gen_sealife.py`: it adds itself to `sealife_extents.json`. |
+| `gen_serpent.py` | `Sea_Serpent`, the thing under the route. Also after `gen_sealife.py` (it adds itself to `sealife_extents.json`, with its `side_reach`). `-- render` draws it whole, posed and its head. |
+| `gen_jellyfish.py` | The two jellyfish bells on slime's 16 x 12 rig. Prints their `SKINNED_PLATFORMS` entries. `-- render` draws them. |
 | `gen_chunk_meshes.py` | Superseded platform-sized meshes; kept for reference |
 | `render_*.py` | PNG previews |
 
@@ -1135,7 +1714,7 @@ Same idea applied to geometry instead of meshes, because the Studio loop for a
 | `plan_halls.py` | `python plan_halls.py` -- `halls_plan.png`: the three run lengths in plan plus a section. Needs matplotlib. |
 | `plan_cityshore.py` | `python plan_cityshore.py` -- `cityshore_plan.png`: City Shore's backdrop from above and in section, placed by BackdropService's own rules and numbers (random draws differ). It is what caught the stair-stepped headlands. Needs matplotlib. |
 | `check_skypools.py` | `python check_skypools.py` -- Sky Pools. See that section for what it covers. |
-| `skypools_layout.py` | Lays the Sky Pools ring in Python the way LevelService and SkyPoolsService do. Shared by the check and the plan. |
+| `skypools_layout.py` | Lays the Sky Pools route in Python the way LevelService and SkyPoolsService do, including the shape of a terrace and the slide. Shared by the check and the plan. |
 | `check_sunkencity.py` | `python check_sunkencity.py` -- the Sunken City. See that section for what it covers. |
 | `ring_layout.py` | Lays any level with a `ring` in Python the way LevelService does. Shared by the two layouts below. |
 | `sunkencity_layout.py` | The Sunken City's heights, aquarium, pier and the thing's path, from the Luau. Shared by its check and plan. |
