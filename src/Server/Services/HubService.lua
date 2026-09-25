@@ -37,7 +37,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local ServerStorage = game:GetService("ServerStorage")
-local ServerStorage = game:GetService("ServerStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local LevelDefinitions = require(Shared:WaitForChild("LevelDefinitions"))
@@ -539,13 +538,31 @@ end
 -- whether the horizon is a city or empty sky, so four giant material blocks in the lobby
 -- were saying something untrue about what you were picking.
 --
--- What a pad shows now is the SKY you would be standing under. Only one backdrop exists, so
--- the others are honest about being empty rather than dressed up as something.
+-- What a pad shows now is the SKY you would be standing under. Every level with a place of its
+-- own has a look here; one without (the sandbox) is honest about being empty rather than dressed
+-- up as something. A level whose backdrop is missing from this table falls back to that empty
+-- look, which is how Sky Pools and the Sunken City came to sit in the lobby as "no horizon yet";
+-- check_hub.py now fails if any level's backdrop has no look.
 local THEME_LOOKS = {
 	cityShore = {
 		sky = Color3.fromRGB(196, 178, 226),
 		ground = Color3.fromRGB(120, 96, 150),
 		label = "city, beach and waterpark",
+	},
+	skyPools = {
+		sky = Color3.fromRGB(176, 214, 244),
+		ground = Color3.fromRGB(214, 222, 228),
+		label = "pools in the sky, down to the clouds",
+	},
+	sunkenCity = {
+		sky = Color3.fromRGB(120, 150, 148),
+		ground = Color3.fromRGB(44, 70, 72),
+		label = "a drowned city, and something under it",
+	},
+	floodedHalls = {
+		sky = Color3.fromRGB(150, 196, 178),
+		ground = Color3.fromRGB(84, 110, 102),
+		label = "a flooded bathhouse",
 	},
 	none = {
 		sky = Color3.fromRGB(96, 100, 118),
@@ -763,7 +780,7 @@ end
 -- Everything here is an engine sound shipped with Roblox under rbxasset://sounds/, so none of
 -- it depends on an upload and none of it can 404 into silence. Those are also the only IDs I
 -- can honestly promise exist -- see LOBBY_MUSIC_ID below.
-local TICK_SOUND = "rbxasset://sounds/electronicpingshort.wav"
+-- (The countdown's tick is played by each client now: HubVoteService.)
 local VOTE_SOUND = "rbxasset://sounds/switch3.wav"
 local START_SOUND = "rbxasset://sounds/bass.mp3"
 
@@ -1178,6 +1195,9 @@ local COUNTDOWN_SECONDS = 10
 local ANNOUNCE_SECONDS = 3
 
 local countdown: number? = nil
+-- When the countdown reaches nothing, on the server's clock that every client shares
+-- (workspace:GetServerTimeNow). The banner counts and TICKS against this on each client.
+local countdownEndsAt: number? = nil
 local announcer: ((string, any) -> ())? = nil
 
 function HubService.setAnnouncer(fn)
@@ -1234,6 +1254,7 @@ function HubService.voteState()
 	local leading = HubService.resolveVote()
 	return {
 		secondsLeft = countdown,
+		endsAt = countdownEndsAt,
 		leading = leading,
 		-- The leader's own counts, resolved server-side, so the banner never has to look
 		-- anything up in a table that crossed the wire.
@@ -1271,6 +1292,7 @@ function HubService.callVote()
 		return
 	end
 	countdown = COUNTDOWN_SECONDS
+	countdownEndsAt = workspace:GetServerTimeNow() + COUNTDOWN_SECONDS
 	task.spawn(function()
 		-- AGAINST A DEADLINE, not by adding up waits.
 		--
@@ -1287,14 +1309,11 @@ function HubService.callVote()
 		local step = 0
 		while countdown ~= nil and (countdown :: number) > 0 do
 			tell("tick", HubService.voteState())
-			local folder = hubFolder
-			if folder then
-				-- Rising pitch over the last three seconds. A metronome that speeds up is the
-				-- oldest trick there is for making a countdown feel like one, and it costs a
-				-- single number.
-				local left = countdown :: number
-				playAt(folder, TICK_SOUND, 0.4, if left <= 3 then 1.5 else 1.0)
-			end
+			-- THE TICK IS NOT PLAYED HERE any more. A sound made on the server reaches each client
+			-- when it replicates, and replication comes in batches: the ticks were heard in pairs,
+			-- 0.8 of a second then 1.2, over and over, averaging a second and never landing on one.
+			-- Each client now plays its own tick on the second, from `endsAt` on the server's clock
+			-- (HubVoteService), so the numeral and the sound change together and evenly.
 			step += 1
 			-- The number and the sound above are one event, and the wait below is the whole
 			-- gap to the next one -- so they cannot separate.
@@ -1331,6 +1350,7 @@ function HubService.callVote()
 		})
 		task.wait(ANNOUNCE_SECONDS)
 		countdown = nil
+		countdownEndsAt = nil
 		HubService.beginRun()
 	end)
 end
@@ -1352,6 +1372,7 @@ function HubService.cancelVote()
 		return
 	end
 	countdown = nil
+	countdownEndsAt = nil
 	tell("cancelled", HubService.voteState())
 end
 

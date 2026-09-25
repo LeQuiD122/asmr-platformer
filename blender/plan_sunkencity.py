@@ -2,8 +2,8 @@
 
 Run with plain Python from the project root:  python blender/plan_sunkencity.py [seed]
 
-Laid by sunkencity_layout.py, the same Python check_sunkencity.py tests. The lots themselves are
-drawn as their bands only: SunkenCityService fills them from Roblox's random numbers, which Python
+Laid by sunkencity_layout.py, the same Python check_sunkencity.py tests. The lots are drawn as the
+ground they stand on: SunkenCityService fills each one from Roblox's random numbers, which Python
 cannot reproduce, so the picture shows where buildings may stand and what may break the surface,
 not which building stands where. Writes blender/sunkencity_plan.png.
 """
@@ -17,8 +17,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import Circle, Ellipse, Polygon, Wedge  # noqa: E402
 
 from ring_layout import CAP_TOP, chunk_frame, xmax  # noqa: E402
-from sunkencity_layout import (K, LEVEL, M, aquarium, aquarium_checkpoint, bands, finale, flat, flat_checkpoint,  # noqa: E402
-                               heights, monster_radius)
+from sunkencity_layout import (K, LEVEL, M, along_route, aquarium, aquarium_checkpoint, city_lots,  # noqa: E402
+                               finale, flat, flat_checkpoint, heights, monster_span, route_of)
 
 SEED = int(sys.argv[1]) if len(sys.argv) > 1 else 0
 COUNT = dict(LEVEL.runs)["medium"]
@@ -27,7 +27,7 @@ h = heights(chunks)
 kill = min(ch["y"] for ch in chunks) - 40
 fin = finale(radius, chunks, finish_y)
 vortex = fin["vortex"]
-harbour = math.atan2(vortex[1], vortex[0])
+route = route_of(radius, chunks, finish_y)
 aq_ch = aquarium_checkpoint(chunks)
 aq = aquarium(radius, aq_ch) if aq_ch else None
 flat_ch = flat_checkpoint(chunks, aq_ch)
@@ -49,73 +49,93 @@ dx = fig.add_axes([0.56, 0.07, 0.42, 0.38])
 
 # ===================================================================== from above
 ax.set_facecolor(WATER)
-# Outermost first: each band is a disc with the water painted back inside it, so a band drawn after a
-# wider one would be erased by that one's water.
-for start, end, kind in reversed(bands(radius)):
-    emerge = start - (radius + K["ROUTE_REACH"]) >= K["EMERGE_CLEAR"] or (radius - K["ROUTE_REACH"]) - end >= K["EMERGE_CLEAR"]
-    colour = "#6f8f86" if kind in ("nearInner", "nearOuter") else ("#7d8f88" if emerge else "#5f7d78")
-    ax.add_patch(Circle((0, 0), end, color=colour, alpha=0.55))
-    ax.add_patch(Circle((0, 0), start, color=WATER))
-ax.add_patch(Circle((0, 0), radius + K["BOULEVARD_HALF"], fill=False, ec="#9cb8b2", ls="--", lw=0.8))
-ax.add_patch(Circle((0, 0), radius - K["BOULEVARD_HALF"], fill=False, ec="#9cb8b2", ls="--", lw=0.8))
-outer_edge = radius + K["BOULEVARD_HALF"] + K["STREET"] / 2 + K["OUTER_BANDS"] * (K["OUTER_BAND"] + K["STREET"])
-ax.add_patch(Wedge((0, 0), outer_edge + 10, math.degrees(harbour - K["HARBOUR_SECTOR_HALF"]),
-                   math.degrees(harbour + K["HARBOUR_SECTOR_HALF"]), width=outer_edge - radius - K["BOULEVARD_HALF"],
-                   color=WATER))
-ax.text(math.cos(harbour) * (radius + 260), math.sin(harbour) * (radius + 260), "the harbour", ha="center", color="#dfeeea",
-        fontsize=9)
+# EVERY LOT, as the ground it stands on. Pale where anything on it may break the surface, darker
+# where it stays under: that difference is the one rule the city is laid by.
+for lot in city_lots(route):
+    colour = "#7d8f88" if lot["emerges"] else "#5f7d78"
+    half = K["BLOCK"] / 2
+    away = lot["away"]
+    along_dir = (-away[1], away[0])
+    depth = lot["depth"]
+    corners = []
+    for dx_, dz_ in ((-depth / 2, -half), (depth / 2, -half), (depth / 2, half), (-depth / 2, half)):
+        corners.append((lot["centre"][0] + away[0] * dx_ + along_dir[0] * dz_,
+                        lot["centre"][1] + away[1] * dx_ + along_dir[1] * dz_))
+    ax.add_patch(Polygon(corners, closed=True, color=colour, alpha=0.75, ec="#4c6b66", lw=0.3))
+
+# The street itself, either side of the route.
+for sign in (-1, 1):
+    edge = []
+    for step in range(81):
+        at, direction = along_route(route, route["total"] * step / 80)
+        side = (-direction[1], direction[0])
+        edge.append((at[0] + side[0] * sign * K["BOULEVARD_HALF"], at[1] + side[1] * sign * K["BOULEVARD_HALF"]))
+    ax.plot(*zip(*edge), color="#9cb8b2", ls="--", lw=0.8)
+
+# The clock tower on its plaza, off the street about a third of the way along.
+plaza_at, plaza_dir = along_route(route, route["total"] * 0.34)
+plaza_side = (-plaza_dir[1], plaza_dir[0])
+plaza = (plaza_at[0] + plaza_side[0] * M["PLAZA_OUT"], plaza_at[1] + plaza_side[1] * M["PLAZA_OUT"])
+ax.add_patch(Circle(plaza, K["PLAZA_RADIUS"], color="#6f8f86", alpha=0.8))
 side = M["CLOCK_SIDE"]
-ax.add_patch(Polygon([(-side / 2, -side / 2), (side / 2, -side / 2), (side / 2, side / 2), (-side / 2, side / 2)],
+ax.add_patch(Polygon([(plaza[0] - side / 2, plaza[1] - side / 2), (plaza[0] + side / 2, plaza[1] - side / 2),
+                      (plaza[0] + side / 2, plaza[1] + side / 2), (plaza[0] - side / 2, plaza[1] + side / 2)],
                      color="#c9c5b8"))
-ax.text(0, -32, "clock tower", ha="center", color="#eef3f0", fontsize=8)
+ax.text(plaza[0], plaza[1] - side, "clock tower", ha="center", color="#eef3f0", fontsize=8)
+
 for ch in chunks:
     origin, out, tan = chunk_frame(radius, ch)
     reach = xmax(ch["id"])
-    ax.add_patch(Polygon(quad(origin, out, tan, -reach, reach, 0, ch["length"]), closed=True, color=COLOURS[ch["id"][0]],
-                         ec="#5a524a", lw=0.4))
-path = []
-for step in range(361):
-    theta = step / 360 * 2 * math.pi
-    r = monster_radius(radius, theta, harbour)
-    path.append((math.cos(theta) * r, math.sin(theta) * r))
-ax.plot(*zip(*path), color=THING, lw=2.2, ls=(0, (6, 4)))
-ax.text(path[90][0] * 0.82, path[90][1] * 0.82, "the thing's round,\nagainst the route", ha="center", color="#e8f0ee", fontsize=8)
+    ax.add_patch(Polygon(quad(origin, out, tan, -reach, reach, 0, ch["length"]), closed=True,
+                         color=COLOURS[ch["id"][0]], ec="#5a524a", lw=0.4))
+
+# The thing's patrol: up the street and back, turning short of the harbour.
+patrol = []
+for step in range(81):
+    at, _ = along_route(route, monster_span(route) * step / 80)
+    patrol.append(at)
+ax.plot(*zip(*patrol), color=THING, lw=2.2, ls=(0, (6, 4)))
+mid = patrol[len(patrol) // 2]
+ax.text(mid[0], mid[1] - 90, "the thing patrols the street,\nturning back before the harbour", ha="center",
+        color="#e8f0ee", fontsize=8)
+
 ax.add_patch(Polygon(quad(fin["finish"], fin["out"], fin["tan"], -K["PIER_W"] / 2, K["PIER_W"] / 2, 0, K["PIER_L"]),
                      color="#b8b4a8"))
 ax.add_patch(Circle(vortex, K["VORTEX_R"] + 3, color="#d6e8e2"))
 ax.add_patch(Circle(vortex, K["VORTEX_R"] * 0.6, color="#29545a"))
-ax.text(vortex[0] * 1.18, vortex[1] * 1.18, "pier and\nwhirlpool", ha="center", color="#f0f5f3", fontsize=8)
+ax.text(vortex[0], vortex[1] + 60, "pier, whirlpool\nand the harbour", ha="center", color="#f0f5f3", fontsize=8)
 if aq:
     ax.add_patch(Circle(aq["tower"], K["ROT_R"], color="#c9c5b8"))
     ax.plot([aq["tunnel"][0][0], aq["tunnel"][1][0]], [aq["tunnel"][0][1], aq["tunnel"][1][1]], color="#bfe6ea", lw=4)
     ax.add_patch(Polygon(quad(aq["at"](aq["room_x"]), aq["out"], aq["along"], -K["ROOM_L"] / 2, K["ROOM_L"] / 2,
                               -K["ROOM_W"] / 2, K["ROOM_W"] / 2), color="#a8a496"))
-    ax.text(aq["far"][0] * 1.12, aq["far"][1] * 1.12, "aquarium", ha="center", color="#f0f5f3", fontsize=8)
+    ax.text(aq["far"][0], aq["far"][1] + 34, "aquarium", ha="center", color="#f0f5f3", fontsize=8)
 if fl:
     ax.add_patch(Polygon(quad(fl["edge"], fl["out"], fl["along"], 0, fl["x"][1], -2, 2), color="#8a6a4a"))
     ax.add_patch(Polygon(quad(fl["edge"], fl["out"], fl["along"], fl["x"][0], fl["x"][1], fl["z"][0], fl["z"][1]),
                          color="#c4baa8", ec="#6b6259", lw=0.6))
-    ax.text(fl["centre"][0] * 1.16, fl["centre"][1] * 1.16, "the dry flat\n(the mirror)", ha="center", color="#f0f5f3",
+    ax.text(fl["centre"][0], fl["centre"][1] + 34, "the dry flat\n(the mirror)", ha="center", color="#f0f5f3",
             fontsize=8)
-view = outer_edge + 40
-ax.set_xlim(-view, view)
-ax.set_ylim(-view, view)
+xs = [p[0] for p in route["points"]] + [vortex[0]]
+ys = [p[1] for p in route["points"]] + [vortex[1]]
+span = max(max(xs) - min(xs), max(ys) - min(ys)) / 2 + K["CITY_SIDE"] * 0.55
+cx, cy = (max(xs) + min(xs)) / 2, (max(ys) + min(ys)) / 2
+ax.set_xlim(cx - span, cx + span)
+ax.set_ylim(cy - span, cy + span)
 ax.set_aspect("equal")
 ax.set_xticks([])
 ax.set_yticks([])
-ax.set_title("The Sunken City from above: %d chunks round a %.0f-stud ring (seed %d). Pale bands may break the "
-             "surface; the bands by the boulevard stay under it." % (len(chunks), radius, SEED), fontsize=9)
+ax.set_title("The Sunken City from above: %d chunks down a %.0f-stud street (seed %d). Pale blocks may break the "
+             "surface; the ones on the kerb stay under it." % (len(chunks), route["total"], SEED), fontsize=9)
 
 
 # ===================================================================== sections
 def water_column(axis, left, right):
     axis.axhspan(h["floor"] - 20, h["floor"], color="#46584f")
     axis.axhspan(h["floor"], h["water"], color=WATER, alpha=0.55)
-    axis.axhspan(h["floor"], h["murk"], color=DEEP, alpha=0.45)
     axis.axhline(h["water"], color="#a9d0cc", lw=1.2)
     axis.axhline(kill, color="#c55", lw=0.8, ls="--")
     axis.text(left + 4, kill - 5, "kill plane", color="#ffb4b4", fontsize=7)
-    axis.text(left + 4, h["murk"] - 6, "murk", color="#9fb6b2", fontsize=7)
     axis.set_facecolor("#b9c8c6")
     axis.set_xlim(left, right)
 
@@ -127,11 +147,11 @@ def thing(axis, at):
 
 
 # Through the aquarium: outward from the middle, along the checkpoint's radial line.
-water_column(sx, radius - 110, radius + 170)
+water_column(sx, -110, 170)
 if aq:
     landing = aq["landing_y"]
-    base = radius + 7.4
-    sx.add_patch(plt.Rectangle((radius - 10, landing - 4), 20, 4, color=COLOURS["S"]))
+    base = 7.4
+    sx.add_patch(plt.Rectangle((-10, landing - 4), 20, 4, color=COLOURS["S"]))
     sx.add_patch(plt.Rectangle((base, landing - K["NECK_THICK"]), K["AQ_NECK"], K["NECK_THICK"], color="#b8b4a8"))
     tower_x = base + aq["xc"]
     sx.add_patch(plt.Rectangle((tower_x - K["ROT_R"], h["floor"]), 2 * K["ROT_R"], landing + K["ROT_ROOF"] - h["floor"],
@@ -147,11 +167,11 @@ if aq:
     sx.add_patch(plt.Rectangle((t1 + 1, h["tunnel"]), K["ROOM_L"] - 2, K["ROOM_H"], color="#e3dccb"))
     sx.text(t1 + K["ROOM_L"] / 2, h["tunnel"] + 4, "gallery", ha="center", fontsize=7)
     sx.text(tower_x, landing + K["ROT_ROOF"] + 4, "door, stair down", ha="center", fontsize=7)
-thing(sx, radius - K["MONSTER_INSET"])
-sx.add_patch(plt.Rectangle((radius - 19, h["water"] - 11.2), 22, 6, color="#2f7e5a"))
-sx.text(radius - 8, h["water"] - 16, "road sign", ha="center", fontsize=6, color="#e0f0e8")
+thing(sx, 0)
+sx.add_patch(plt.Rectangle((-19, h["water"] - 11.2), 22, 6, color="#2f7e5a"))
+sx.text(-8, h["water"] - 16, "road sign", ha="center", fontsize=6, color="#e0f0e8")
 sx.set_ylim(h["floor"] - 20, h["water"] + 45)
-sx.set_title("Section through the aquarium: route, landing, stair tower, tunnel on pillars, gallery", fontsize=9)
+sx.set_title("Section across the street at the aquarium: route, landing, stair tower, tunnel, gallery", fontsize=9)
 
 # Through the pier and the drain, along the route's end.
 water_column(dx, -40, K["PIER_L"] + K["VORTEX_GAP"] + 60)
@@ -175,5 +195,5 @@ dx.set_title("Section through the pier and the drain: the whirlpool pulls you ro
 
 out_path = pathlib.Path(__file__).with_name("sunkencity_plan.png")
 fig.savefig(out_path, dpi=85)
-print("wrote %s | ring %.0f, water %.0f, floor %.0f, kill %.0f, tunnel %.0f, shaft %.0f"
-      % (out_path, radius, h["water"], h["floor"], kill, h["tunnel"], h["shaft"]))
+print("wrote %s | street %.0f studs, water %.0f, floor %.0f, kill %.0f, tunnel %.0f, shaft %.0f"
+      % (out_path, route["total"], h["water"], h["floor"], kill, h["tunnel"], h["shaft"]))

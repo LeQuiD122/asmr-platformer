@@ -348,18 +348,40 @@ end
 -- it ends: that level's name, its own colour, a line about what you actually just did, and the
 -- run's numbers under a rule that draws itself in. A LOOK PER LEVEL, with a fallback, so a new
 -- level gets a sensible banner before anybody writes it one.
+-- EACH LEVEL ENDS IN ITS OWN LANGUAGE.
+--
+-- The banner used to differ between levels by two colours, which is the difference between four
+-- levels and one level with four skins. Every look below now also carries the SHAPE of its level:
+-- the panel's own gradient, a vignette in its colour, and a MOTIF -- a few frames drawn inside the
+-- panel that say where you have just been, with one of them moving.
+--
+--   CITY SHORE: a sun going down behind a horizon line. The last thing you did was dive at it.
+--   SKY POOLS: cloud along the bottom edge and a ripple under the headline, in the slide's lavender
+--   over a morning blue.
+--   THE SUNKEN CITY: caustics drifting across a panel that is nearly black, because the banner comes
+--   up at the bottom of the shaft with water somewhere overhead.
+--   FLOODED HALLS: tile. A grid and a dado line, which is the whole building in two marks.
+--
+-- Every motif is frames and gradients -- no images, nothing to import -- and every one has exactly
+-- one thing in motion, for the reason the rest of this banner does: one considered announcement
+-- rather than five things switched on.
 local COMPLETION_LOOKS: { [number]: any } = {
 	[1] = { name = "City Shore", line = "You made the dive",
-		accent = Color3.fromRGB(255, 206, 128), tint = Color3.fromRGB(31, 45, 72) },
-	-- The slide's lavender over a morning-sky blue: the last thing you saw was the slide, and the
-	-- first thing under the banner is the pool and the clouds.
+		accent = Color3.fromRGB(255, 206, 128), tint = Color3.fromRGB(31, 45, 72),
+		top = Color3.fromRGB(46, 62, 96), bottom = Color3.fromRGB(122, 74, 74),
+		vignette = Color3.fromRGB(26, 16, 22), motif = "shore" },
 	[2] = { name = "Sky Pools", line = "Down through the clouds",
-		accent = Color3.fromRGB(200, 190, 255), tint = Color3.fromRGB(30, 46, 76) },
-	-- Sea-glass green on a tint that is nearly black: the banner comes up at the bottom of the shaft.
+		accent = Color3.fromRGB(200, 190, 255), tint = Color3.fromRGB(30, 46, 76),
+		top = Color3.fromRGB(52, 78, 122), bottom = Color3.fromRGB(150, 176, 216),
+		vignette = Color3.fromRGB(14, 22, 40), motif = "clouds" },
 	[3] = { name = "The Sunken City", line = "Pulled down into the dark",
-		accent = Color3.fromRGB(150, 226, 210), tint = Color3.fromRGB(8, 20, 24) },
+		accent = Color3.fromRGB(150, 226, 210), tint = Color3.fromRGB(8, 20, 24),
+		top = Color3.fromRGB(10, 26, 30), bottom = Color3.fromRGB(18, 48, 52),
+		vignette = Color3.fromRGB(2, 8, 10), motif = "caustics" },
 	[4] = { name = "Flooded Halls", line = "Down the flume",
-		accent = Color3.fromRGB(142, 214, 200), tint = Color3.fromRGB(22, 41, 45) },
+		accent = Color3.fromRGB(142, 214, 200), tint = Color3.fromRGB(22, 41, 45),
+		top = Color3.fromRGB(30, 52, 54), bottom = Color3.fromRGB(58, 84, 82),
+		vignette = Color3.fromRGB(8, 18, 18), motif = "tiles" },
 }
 local COMPLETION_FALLBACK: any = { line = "Route cleared", accent = COLOUR.gold,
 	tint = COLOUR.surfaceRaised }
@@ -396,10 +418,11 @@ end
 local vignetteTop = vignetteBand("VignetteTop", true)
 local vignetteBottom = vignetteBand("VignetteBottom", false)
 
-local function showVignette(on: boolean, seconds: number)
+local function showVignette(on: boolean, seconds: number, colour: Color3?)
 	for _, band in ipairs({ vignetteTop, vignetteBottom }) do
 		if on then
 			band.Visible = true
+			band.BackgroundColor3 = colour or Color3.fromRGB(8, 6, 12)
 		end
 		TweenService:Create(band, TweenInfo.new(seconds, MOTION.style, Enum.EasingDirection.Out),
 			{ BackgroundTransparency = if on then VIGNETTE_DARK else 1 }):Play()
@@ -447,6 +470,113 @@ completionShineFade.Transparency = NumberSequence.new({
 	NumberSequenceKeypoint.new(1, 1),
 })
 completionShineFade.Parent = completionShine
+
+-- ===== THE MOTIF =====
+--
+-- A few frames drawn inside the panel, behind the text, rebuilt for whichever level just ended.
+-- Everything here sits at a ZIndex under the labels and over the panel, and nothing in it is ever
+-- read -- it is the difference between a banner that says which level you finished and a banner
+-- that LOOKS like the level you finished.
+local completionMotif = Instance.new("Frame")
+completionMotif.Name = "Motif"
+completionMotif.BackgroundTransparency = 1
+completionMotif.Size = UDim2.fromScale(1, 1)
+completionMotif.ZIndex = BLACKOUT_ZINDEX + 2
+completionMotif.Parent = completion
+
+local function motifFrame(name: string, colour: Color3, size: UDim2, position: UDim2, transparency: number): Frame
+	local piece = Instance.new("Frame")
+	piece.Name = name
+	piece.BackgroundColor3 = colour
+	piece.BackgroundTransparency = transparency
+	piece.BorderSizePixel = 0
+	piece.Size = size
+	piece.Position = position
+	piece.ZIndex = BLACKOUT_ZINDEX + 2
+	piece.Parent = completionMotif
+	return piece
+end
+
+local function rounded(piece: Frame, scale: number)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(scale, 0)
+	corner.Parent = piece
+end
+
+-- Builds the motif for a look and returns the one part of it that moves, with where it is going.
+local function buildMotif(look: any): (Instance?, { [string]: any }?)
+	for _, child in ipairs(completionMotif:GetChildren()) do
+		child:Destroy()
+	end
+	local accent: Color3 = look.accent
+	if look.motif == "shore" then
+		-- A sun setting behind a horizon: the sea is a band across the lower third, the sun is a
+		-- disc that rises out of it as the banner arrives, and the light on the water is a gradient.
+		local sun = motifFrame("Sun", accent, UDim2.fromOffset(74, 74), UDim2.new(0.72, 0, 1, -34), 0.25)
+		rounded(sun, 0.5)
+		local sea = motifFrame("Sea", look.bottom or accent, UDim2.new(1, 0, 0, 44), UDim2.new(0, 0, 1, -44), 0.25)
+		local shimmer = Instance.new("UIGradient")
+		shimmer.Rotation = 90
+		shimmer.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1),
+			NumberSequenceKeypoint.new(1, 0.85) })
+		shimmer.Parent = sea
+		sun.ZIndex = BLACKOUT_ZINDEX + 1
+		return sun, { Position = UDim2.new(0.72, 0, 1, -74) }
+	elseif look.motif == "clouds" then
+		-- Cloud along the bottom edge, five humps of different sizes, and a ripple under the
+		-- headline. The humps drift sideways, slowly, which is all a cloud ever does.
+		local bank = motifFrame("Bank", Color3.fromRGB(246, 249, 255), UDim2.new(1.3, 0, 0, 40),
+			UDim2.new(-0.15, 0, 1, -26), 0.35)
+		for index = 0, 4 do
+			local wide = 44 + (index % 3) * 26
+			local hump = motifFrame("Hump", Color3.fromRGB(246, 249, 255), UDim2.fromOffset(wide, wide * 0.7),
+				UDim2.new(-0.15, 24 + index * 108, 1, -34 - (index % 2) * 10), 0.35)
+			rounded(hump, 0.5)
+			hump.Parent = bank
+			hump.ZIndex = bank.ZIndex
+		end
+		local ripple = motifFrame("Ripple", accent, UDim2.new(0, 190, 0, 2), UDim2.new(0, 28, 0, 96), 0.55)
+		local fade = Instance.new("UIGradient")
+		fade.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(1, 1) })
+		fade.Parent = ripple
+		return bank, { Position = UDim2.new(-0.1, 0, 1, -26) }
+	elseif look.motif == "caustics" then
+		-- Caustics: three pale bands leaning across a panel that is nearly black, drifting the way
+		-- light does on the floor of somewhere flooded.
+		local holder = motifFrame("Caustics", Color3.new(0, 0, 0), UDim2.fromScale(1, 1), UDim2.fromScale(0, 0), 1)
+		for index = 0, 2 do
+			local band = Instance.new("Frame")
+			band.Name = "Caustic"
+			band.BackgroundColor3 = accent
+			band.BackgroundTransparency = 0.86
+			band.BorderSizePixel = 0
+			band.Size = UDim2.new(0, 120 + index * 40, 1.6, 0)
+			band.Position = UDim2.new(0, -160 + index * 150, -0.3, 0)
+			band.Rotation = 18
+			band.ZIndex = BLACKOUT_ZINDEX + 2
+			band.Parent = holder
+			local soft = Instance.new("UIGradient")
+			soft.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1),
+				NumberSequenceKeypoint.new(0.5, 0.2), NumberSequenceKeypoint.new(1, 1) })
+			soft.Parent = band
+		end
+		return holder, { Position = UDim2.fromScale(0.12, 0) }
+	elseif look.motif == "tiles" then
+		-- Tile: a grid of hairlines and the dado stripe that runs round every wall in the building.
+		for index = 1, 7 do
+			motifFrame("Grout", Color3.fromRGB(226, 240, 236), UDim2.new(0, 1, 1, 0),
+				UDim2.new(index / 8, 0, 0, 0), 0.92)
+		end
+		for index = 1, 3 do
+			motifFrame("Grout", Color3.fromRGB(226, 240, 236), UDim2.new(1, 0, 0, 1),
+				UDim2.new(0, 0, index / 4, 0), 0.92)
+		end
+		local dado = motifFrame("Dado", accent, UDim2.new(0, 0, 0, 6), UDim2.new(0, 0, 1, -44), 0.45)
+		return dado, { Size = UDim2.new(1, 0, 0, 6) }
+	end
+	return nil, nil
+end
 
 local completionEyebrow = newLabel(completion, TEXT.caption, COLOUR.gold, Enum.Font.GothamBold)
 completionEyebrow.ZIndex = BLACKOUT_ZINDEX + 3
@@ -511,6 +641,13 @@ function UIService.showCompletion(levelId: number?, time: number?)
 	end
 
 	completion.BackgroundColor3 = look.tint
+	-- THE PANEL'S OWN LIGHT is the level's now: its sky at the top falling to its ground at the
+	-- bottom, rather than one tint shaded downward for every level alike.
+	completionDepth.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, look.top or Color3.new(1, 1, 1)),
+		ColorSequenceKeypoint.new(1, look.bottom or Color3.fromRGB(150, 150, 150)),
+	})
+	local mover, goal = buildMotif(look)
 	completionStroke.Color = look.accent
 	completionEyebrow.TextColor3 = look.accent
 	completionRule.BackgroundColor3 = look.accent
@@ -527,7 +664,7 @@ function UIService.showCompletion(levelId: number?, time: number?)
 	for _, label in ipairs({ completionEyebrow, completionTitle, completionMode, completionTime }) do
 		label.TextTransparency = 1
 	end
-	showVignette(true, MOTION.slow)
+	showVignette(true, MOTION.slow, look.vignette)
 
 	local rise = tweenIn(MOTION.slow)
 	TweenService:Create(completion, rise, {
@@ -550,6 +687,13 @@ function UIService.showCompletion(levelId: number?, time: number?)
 	arrive(completionTime, { TextTransparency = 0 }, 0.3)
 	-- And one sweep of light across the panel, once, behind the text.
 	arrive(completionShine, { Position = UDim2.fromScale(1.1, 0) }, 0.16, 0.8)
+	-- THE MOTIF'S ONE MOVING PART: the sun rising out of the sea, the cloud drifting, the caustics
+	-- sliding, the dado drawing itself along the wall. Slow, and it finishes while the banner is
+	-- still up.
+	if mover and goal then
+		TweenService:Create(mover, TweenInfo.new(2.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out,
+			0, false, 0.1), goal):Play()
+	end
 
 	task.delay(COMPLETION_HOLD, function()
 		if completionToken ~= token then

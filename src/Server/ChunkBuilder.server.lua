@@ -138,7 +138,7 @@ local MESH_FOLDER = "TileMeshes"
 -- Needoh joins these: a bag of dough sinks under you the whole time you stand on it, it
 -- does not give way in steps. The discrete materials are the ones that BREAK -- ice, butter
 -- wax, bubble wrap -- and nothing in a sealed toy breaks.
-local CONTINUOUS: { [string]: boolean } = { Honey = true, Slime = true, Soap = true, JelloSoda = true, Needoh = true, ButterStick = true, LavaKeys = true }
+local CONTINUOUS: { [string]: boolean } = { Honey = true, Slime = true, Soap = true, JelloSoda = true, Needoh = true, ButterStick = true, LavaKeys = true, Jellyfish = true }
 
 -- Of those, the ones that hang something off the platform edge. Kept SEPARATE from
 -- CONTINUOUS because soap is edge-matched but solid: it wants the Interior/Edge/Corner
@@ -211,7 +211,10 @@ local SHELL_FINISH: { [string]: { whiten: number, transparency: number, reflecta
 	-- A frozen sheet with water under it. Clearer than the wax and far more reflective,
 	-- because ice reads by what it bounces back rather than by its own colour -- and the
 	-- player has to be able to see that there is no floor beneath it.
-	Ice = { whiten = 0.15, transparency = 0.45, reflectance = 0.34 },
+	-- Less clear than it was (0.45) now that it is the Ice material rather than Glass: Glass left out
+	-- every transparent thing behind it, so the old number was never what showed. See Ice in
+	-- MaterialAppearance.
+	Ice = { whiten = 0.15, transparency = 0.34, reflectance = 0.2 },
 }
 
 local SHELL_THICKNESS = 0.3  -- how deep the wax coating is
@@ -1127,6 +1130,15 @@ local SKINNED_PLATFORMS: { [string]: { SkinnedSpec } } = {
 	-- them is that slime THROWS you a fixed distance and jello returns what you put in.
 	JelloSoda = {
 		{ sizeX = 16, sizeZ = 12, meshHeight = 6.78, surfaceOffset = 2.72, mesh = "Jello_Platform_Skinned" },
+	},
+	-- THE JELLYFISH BELLS (gen_jellyfish.py), on slime's 16 x 12 grid. A round bell rising out
+	-- of a thin margin membrane that fills the corners, so the drops are deep at the four
+	-- corners and nothing in the middle: you walk up the dome and bounce off the top of it.
+	-- The compass jelly trails long tentacles; the moon jelly carries its four horseshoes
+	-- and a fringe. Printed by the generator: run it and paste, do not measure by eye.
+	Jellyfish = {
+		{ sizeX = 16, sizeZ = 12, meshHeight = 7.78, surfaceOffset = 3.91, mesh = "Jellyfish_Platform_16x12", drops = { -2.163, -0.61, -0.392, -0.616, -2.159, -0.954, -0.106, 0, -0.106, -0.977, -0.977, -0.106, 0, -0.106, -0.977, -2.162, -0.612, -0.392, -0.611, -2.162 } },
+		{ sizeX = 16, sizeZ = 12, meshHeight = 6.29, surfaceOffset = 3.16, mesh = "Jellyfish_Platform_16x12_Moon", form = "moon", drops = { -1.55, -0.482, -0.347, -0.482, -1.55, -0.697, 0, -0.092, 0, -0.697, -0.697, 0, -0.092, 0, -0.697, -1.55, -0.482, -0.347, -0.482, -1.55 } },
 	},
 	-- A BED OF SIX BLOCKS, not a slab. The tops stand 1.19 studs above the grooves between
 	-- them, which is why this carries drops where jello does not: one flat plane through a
@@ -2450,20 +2462,36 @@ end
 local LinearChunks: { [string]: { Segment } } = {
 	-- Stable chunks are the rest beats and the only place LevelService applies an
 	-- elevation step, so their variety has to be profile only: never narrow the
-	-- walking line, never introduce a gap. Flanking shelves do exactly that. The
-	-- route through the middle is the same flat 16 studs it always was; the
-	-- cross-section is a stepped plateau instead of a slab.
+	-- walking line, never introduce a gap.
+	--
+	-- THE FLANKING SHELVES ARE GONE, and it is worth saying why they were wrong. They
+	-- added 5 studs of solid ground each side of every stable chunk, a stud below the
+	-- top -- which reads as profile from the outside and as a PAVEMENT from inside the
+	-- run. Two things followed from that, both reported from play:
+	--
+	--   THE MATERIAL BECAME OPTIONAL. A shelf here reaches to 13.4 from the centre
+	--   line, and the chunk after it is 16 wide, so the shelf of the stable chunk
+	--   carried you alongside the honey rather than onto it. The one chunk whose whole
+	--   job is to be walked on was the one you could walk past.
+	--   NOTHING COULD BE FALLEN OFF. Step off the side of the Needoh field and you
+	--   landed on the neighbouring stable chunk's shelf. A route made of platforms over
+	--   a void has to have the void.
+	--
+	-- The cross-section is a plain slab again, which is the honest shape for a rest beat.
 	S1_Straight = {
-		{ name = "Platform", length = 20, shelf = { width = 5, drop = STEP_RISE } },
+		{ name = "Platform", length = 20 },
 	},
 	-- SIZE-LOCKED at 16 x 18. This is the one platform Honey_Platform_Skinned is
 	-- rigged for (see SKINNED_PLATFORMS), and a rig cannot be resized: setting Size
 	-- moves the rendered mesh but leaves every Bone where it was. So the honey slab
-	-- is untouchable, and the variety is bought entirely OUTSIDE its footprint.
-	-- Shelves are separate slabs, so the lock holds and the corridor now reads as
-	-- honey pooled in a channel between two lower ledges.
+	-- is untouchable, and any variety has to be bought outside its footprint.
+	--
+	-- IT USED TO BE BOUGHT WITH SHELVES, a dry ledge either side of the honey, and that
+	-- was the clearest case of the mistake described on S1_Straight above: a corridor of
+	-- honey with a pavement down both sides is a corridor you cross without touching the
+	-- honey. The honey is the chunk. You walk on it.
 	P1_HoneyCorridor = {
-		{ name = "Platform", material = "Honey", length = 18, shelf = { width = 4, drop = STEP_RISE } },
+		{ name = "Platform", material = "Honey", length = 18 },
 	},
 	-- SHAPED LIKE A BAR OF SOAP: widest through the middle, both ends drawn in.
 	--
@@ -2741,6 +2769,22 @@ local LinearChunks: { [string]: { Segment } } = {
 	P6_JelloSoda = {
 		{ name = "Platform", material = "JelloSoda", length = 12 },
 	},
+	-- TWO BELLS AND A GAP BETWEEN THEM, and then the gap to the landing: you bounce across the
+	-- compass jelly and time the last bounce off its edge onto the moon jelly, and again onto
+	-- the landing. Both gaps are the ordinary GAP_LENGTH -- a walking bounce clears it from the
+	-- bell's edge, and so does a plain jump -- so the risk is where you leave from, not how far.
+	-- The landing is wide where you come down out of a bounce, as R1's is, and stable.
+	R39_JellyfishHop = {
+		{ name = "Platform", material = "Jellyfish", length = 12 },
+		{ gap = GAP_LENGTH, name = "gap" },
+		{ name = "Bell", material = "Jellyfish", length = 12, form = "moon" },
+		{ gap = GAP_LENGTH, name = "gap" },
+		{ name = "Landing", width = 20, widthEnd = 16, length = 10 },
+	},
+	-- One moon jelly, floating level with the route: a pace chunk you cross in bounces.
+	P29_JellyfishBloom = {
+		{ name = "Platform", material = "Jellyfish", length = 12, form = "moon" },
+	},
 	P5_KeyboardRun = {
 		{ name = "Platform", material = "CreamyKeyboard", width = 16, length = 16 },
 	},
@@ -2837,12 +2881,13 @@ local LinearChunks: { [string]: { Segment } } = {
 	C1_SlimeToPace = {
 		{ name = "Platform", material = "Slime", length = 12 },
 		{ gap = GAP_LENGTH, name = "gap" },
+		-- The landing has no shelf either, for P1_HoneyCorridor's reason: a dry ledge
+		-- beside the honey you have just been launched onto makes the honey optional.
 		{
 			name = "HoneyLanding",
 			material = "Honey",
 			length = 12,
 			rise = -STEP_RISE,
-			shelf = { width = 4, drop = STEP_RISE },
 		},
 	},
 	-- Each step is its own slab already, so narrowing the climb costs nothing and

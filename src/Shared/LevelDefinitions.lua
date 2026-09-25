@@ -246,23 +246,29 @@ LevelDefinitions.Level2 = {
 	description = "Pool decks going down through the sky round a fountain tower, and a slide into the clouds.",
 	-- ===== SKY POOLS =====
 	--
-	-- Calm, bright and silent apart from water: the one level with no scares at all. The route is
-	-- one wide ring that goes DOWN -- the only level that does -- past pool decks standing on columns
-	-- that rise out of a sea of cloud, round a fountain tower in the middle. It ends on a slide that
-	-- spirals down through the clouds into the pool at the tower's foot. SkyPoolsService builds all
+	-- Calm, bright and silent apart from water: the one level with no scares at all. The route winds
+	-- DOWN -- the only level that does -- past pool decks standing on columns that rise out of a sea
+	-- of cloud, alternating sides of the way down. It ends at a fountain tower standing ahead of the
+	-- finish, on a slide that spirals down round it, through the clouds, into the pool at its foot. SkyPoolsService builds all
 	-- of it round the route LevelService lays; see ROADMAP section 3 for the layout and
 	-- blender/plan_skypools.py for the picture.
 	backdrop = "skyPools",
 	finale = "slide",
-	-- ===== THE RING =====
+	-- ===== THE ROUTE: A DESCENDING MEANDER =====
 	--
-	-- Read by LevelService. `turn` is how much of a full circle the route sweeps: the radius is
-	-- worked out from the run's planned length so that a short, medium and long run all come out
-	-- at the same three quarters of a turn -- a fixed radius would wrap a long run past its own
-	-- start, and a route that passes over itself is a route you can fall onto a later part of.
-	-- `descend` turns every step down instead of up, and `stepScale` makes them bigger, because
-	-- going down is what this level is about and the climb's steps were sized for climbing.
-	ring = { turn = 0.76, descend = true, stepScale = 1.6 },
+	-- Read by LevelService. The route was a ring, and it read as one: you came round to where you
+	-- started, the terraces faced the middle, and on a short run a neighbour's columns stood past
+	-- your own deck. It FOLLOWS A PATH now -- long S-curves sweeping away and back, going down the
+	-- whole way -- so the level is a journey out rather than a lap.
+	--
+	-- `amplitude` is how far the heading swings either side of straight ahead, in radians;
+	-- `wavelength` is how many studs one full S takes, so the bends are gentle enough that a chunk's
+	-- entry face never turns more than the route's chunks can take (blender/check_skypools.py holds
+	-- that, the same way it held the ring's turn rate). `descend` takes every step down instead of
+	-- up and `stepScale` makes them bigger, because going down is what this level is about and the
+	-- climb's steps were sized for climbing.
+	layout = "meander",
+	meander = { amplitude = 0.7, wavelength = 900, descend = true, stepScale = 1.6 },
 	-- The bubble wrap windows are what this level is FOR.
 	headlineMaterial = "BubbleWrap",
 	minChunks = 44,
@@ -321,24 +327,32 @@ LevelDefinitions.Level2 = {
 LevelDefinitions.Level3 = {
 	levelId = 3,
 	name = "The Sunken City",
-	description = "A ring just above the sea, round a drowned city, with something enormous under it.",
+	description = "A causeway just above the sea, through a drowned city, with something enormous under it.",
 	-- ===== THE SUNKEN CITY =====
 	--
-	-- The route runs round a drowned city, just above the water: streets, a clock tower, a car park
-	-- and flooded apartment blocks you can look down into. Something enormous swims the boulevard
-	-- under the route and never chases you; when it passes beneath, the water darkens and the sound
-	-- drops. The ending is the harbour drain: the route runs out onto a pier, and the whirlpool past
-	-- its end pulls you down into the dark. SunkenCityService builds all of it round the route
-	-- LevelService lays; ROADMAP section 4 has the plan and blender/plan_sunkencity.py the picture.
+	-- The route runs THROUGH a drowned city, just above the water, down the line of its drowned
+	-- boulevard: blocks of flooded flats and offices either side, lamp posts and trams still
+	-- standing in the street, a clock tower stopped at the hour the water came. Something enormous
+	-- patrols the boulevard under the route and never chases you; when it passes beneath, the water
+	-- darkens and the sound drops. The ending is the harbour at the far end: the route runs out onto
+	-- a pier, and the whirlpool past it pulls you down into the dark. SunkenCityService builds all
+	-- of it along the route LevelService lays; ROADMAP section 4 has the plan and
+	-- blender/plan_sunkencity.py the picture.
 	backdrop = "sunkenCity",
 	finale = "drain",
-	-- ===== THE RING =====
+	-- ===== THE ROUTE: A MEANDER THROUGH THE CITY =====
 	--
-	-- Flat, not climbing: stepScale 0 turns the steps off, so the route stays near the water all
-	-- the way round, and the swell lifts and lowers it 3.5 studs either way over every ten chunks,
-	-- a road over low hills. `turn` leaves a fifth of the circle open for the harbour, where the
-	-- pier and the whirlpool are. See LevelService.ringRadius and the swell in startLevel.
-	ring = { turn = 0.8, stepScale = 0, wave = { height = 3.5, every = 10 } },
+	-- It was a ring round the city, seen from outside it the whole way; it is a line through the
+	-- city now, which is the only way a city reads as one -- blocks either side of you, the street
+	-- running ahead into the haze, and somewhere at the end of it the harbour.
+	--
+	-- Flat, not climbing: stepScale 0 turns the steps off, so the route stays near the water the
+	-- whole way, and the swell lifts and lowers it 3.5 studs either way over every ten chunks, a
+	-- road over low hills. The bend is gentler than Sky Pools' because this route is a street and
+	-- the blocks are laid to it; blender/check_sunkencity.py holds it under what a chunk's entry
+	-- face can take.
+	layout = "meander",
+	meander = { amplitude = 0.45, wavelength = 1300, stepScale = 0, wave = { height = 3.5, every = 10 } },
 	headlineMaterial = "Oobleck",
 	minChunks = 50,
 	maxChunks = 50,
@@ -369,8 +383,11 @@ LevelDefinitions.Level3 = {
 		"R2_SoapBridge",
 		"R19_SoapWave",
 		"R8_BubbleWrapGiant",
+		-- And the sea's own: jellyfish bells to bounce across (MaterialConfig.Jellyfish).
+		"R39_JellyfishHop",
+		"P29_JellyfishBloom",
 	},
-	allowedMaterials = { "Slime", "JelloSoda", "Ice", "Oobleck", "Salt", "Foam", "Needoh", "Soap", "BubbleWrap" },
+	allowedMaterials = { "Slime", "JelloSoda", "Ice", "Oobleck", "Salt", "Foam", "Needoh", "Soap", "BubbleWrap", "Jellyfish" },
 	parTime = 375,
 	baseSeed = 1003,
 	templates = { T3_ExtendedSoapPressure },
@@ -407,10 +424,12 @@ LevelDefinitions.Sandbox = {
 	-- lego is the one rigid material in a set otherwise made of things that give -- so its
 	-- pad feels unlike every other pad in the room the moment you stand on it.
 	headlineMaterial = "Lego",
-	minChunks = 82,
-	maxChunks = 82,
+	minChunks = 85,
+	maxChunks = 85,
 	allowedChunkIds = {
 		"S1_Straight",
+		"R39_JellyfishHop",
+		"P29_JellyfishBloom",
 		"P1_HoneyCorridor",
 		"P2_ButterWaxCurve",
 		"P3_KineticSandRamp",
@@ -475,11 +494,11 @@ LevelDefinitions.Sandbox = {
 		"C3_SoapWithWideLanding",
 		"C4_BubbleWrapToStable",
 	},
-	allowedMaterials = { "Honey", "KineticSand", "ButterWax", "Slime", "Soap", "BubbleWrap", "CreamyKeyboard", "Ice", "JelloSoda", "LambsEar", "Foam", "LightSwitch", "Clay", "Lego", "Charcoal", "Chocolate", "Cloud", "ChocolateSolid", "Salt", "Lava", "Oobleck", "Buttons", "Snow" },
+	allowedMaterials = { "Honey", "KineticSand", "ButterWax", "Slime", "Soap", "BubbleWrap", "CreamyKeyboard", "Ice", "JelloSoda", "LambsEar", "Foam", "LightSwitch", "Clay", "Lego", "Charcoal", "Chocolate", "Cloud", "ChocolateSolid", "Salt", "Lava", "Oobleck", "Buttons", "Snow", "Jellyfish" },
 	parTime = 420,
 	baseSeed = 9999,
 	templates = {},
-	-- 82 chunks, 41 of them material-bearing, with a stable rest
+	-- 85 chunks, 43 of them material-bearing, with a stable rest
 	-- between every pair.
 	--
 	-- THE NEWEST EIGHT COME FIRST, and that is the only rule that really matters here. This
@@ -515,6 +534,10 @@ LevelDefinitions.Sandbox = {
 		-- occupies the first slot is what you land on -- and landing on a granular platform
 		-- that crumbles under you, or a risk material that dissolves on a timer, is not a
 		-- start. This one slab is the only reason a stable chunk is here at all.
+		"S1_Straight",
+		-- THE NEWEST: the Sunken City's jellyfish bells, the hop and the bloom.
+		"R39_JellyfishHop",
+		"P29_JellyfishBloom",
 		"S1_Straight",
 		-- === THE SHAPED RUN, AND IT GOES FIRST ===
 		--

@@ -4,13 +4,29 @@
 --
 -- === The water ===
 --
--- The pools are shallow enough to walk through, and until now walking through them was silent and
--- left no mark: glass with a player standing in it. So, for your own character only (everyone else's
--- pool is their own business, and their client does the same for them):
+-- The pools are Roblox terrain water now, so the swimming, the waves and the view from under the
+-- surface are the engine's. What is here is what the engine does not do: for your own character
+-- only (everyone else's pool is their own business, and their client does the same for them),
 --
 --   STEP IN and it splashes: spray where you broke the surface and the project's water sound.
 --   WADE and it ripples: a ring spreading out from you on the surface every few steps, with a
 --   quieter slosh, only while you are actually moving.
+--
+-- === The falls ===
+--
+-- A waterfall is built as three sheets of glass, which is the right shape and none of the motion.
+-- Light runs down them here: each sheet's transparency breathes on a wave travelling downward, out
+-- of step with its neighbours, so the fall reads as water moving past rather than as a pane. Local,
+-- like everything else in this file, because nobody can touch it and replicating it would cost a
+-- stream of updates for a shimmer.
+--
+-- === The ride ===
+--
+-- The slide at the end is ridden in a sled, and the rider's own client draws it: the server sits you
+-- in it, hands it over, and from then on every frame of the ride is worked out here from
+-- ReplicatedStorage.Shared.SkyPath and the moment it started. That is why it is smooth. The server
+-- still owns the clock and still says where the ride ends, so nothing here decides anything; if this
+-- file is not in the place at all, the server drives the sled itself and the ride still happens.
 --
 -- The rings are twelve short slivers laid in a circle and grown outward, because Roblox has no ring
 -- shape and a flat disc growing reads as a stain rather than a ripple.
@@ -31,8 +47,16 @@
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local CollectionService = game:GetService("CollectionService")
 local SoundService = game:GetService("SoundService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- The slide's shape and timing, shared with the server. Looked for with a timeout: without it there
+-- is no ride drawn here, which the server copes with, so it must not stop the rest of this.
+local skyPathModule = ReplicatedStorage:WaitForChild("Shared", 10)
+skyPathModule = if skyPathModule then skyPathModule:WaitForChild("SkyPath", 10) else nil
+local SkyPath: any = if skyPathModule and skyPathModule:IsA("ModuleScript") then require(skyPathModule) else nil
 
 local SkyPoolsClient = {}
 
@@ -70,6 +94,13 @@ local function over(pool: BasePart, point: Vector3): (boolean, number)
 	local p = pool.CFrame:PointToObjectSpace(point)
 	local half = pool.Size / 2
 	return math.abs(p.X) <= half.X + 0.5 and math.abs(p.Z) <= half.Z + 0.5, pool.Position.Y + half.Y
+end
+
+-- How far under its surface a pool still counts as that pool. A terrace pool says so on itself; for
+-- anything that does not, six studs is a wade rather than a fall past it.
+local function depthOf(pool: BasePart): number
+	local deep = pool:GetAttribute("Deep")
+	return if typeof(deep) == "number" then deep + 2 else 6
 end
 
 local function sliver(parent: Instance): Part
@@ -217,9 +248,209 @@ local function moveSky(serverNow: number, clock: number)
 	end
 end
 
+-- ===== THE FALLS =====
+
+local FALL_WAVE = 1.9 -- how fast the shimmer travels down a fall, in waves a second
+local falls: { [BasePart]: { phase: number, alpha: number } } = {}
+
+local function fallAdded(item: Instance)
+	local phase = item:GetAttribute("Veil")
+	local alpha = item:GetAttribute("Alpha")
+	if item:IsA("BasePart") and typeof(phase) == "number" and typeof(alpha) == "number" then
+		falls[item] = { phase = phase, alpha = alpha }
+	end
+end
+
+local function moveFalls(now: number)
+	for part, fall in pairs(falls) do
+		if part.Parent then
+			-- Down the fall, not across it: the phase carries the piece's place in the sheet, so
+			-- the bright band travels from the lip toward the bottom.
+			local wave = math.sin((now * FALL_WAVE - fall.phase * 0.55) * math.pi * 2)
+			part.Transparency = math.clamp(fall.alpha + wave * 0.07, 0, 1)
+		else
+			falls[part] = nil
+		end
+	end
+end
+
+-- ===== THE RIDE =====
+--
+-- One at a time, and only ever your own: the server fires this client with the sled it has just sat
+-- you in, and from then until the ride's time is up, the sled's seat is written here every frame.
+type Ride = { sled: Model, seat: BasePart, spec: any, distances: { number }, startAt: number, seconds: number }
+local ride: Ride? = nil
+local rideRemote: RemoteEvent? = nil
+
+-- ===== WHAT THE RIDE LOOKS LIKE FROM INSIDE IT =====
+--
+-- The slide was eight to fifteen seconds with nothing on screen to say it was happening. This is
+-- the smallest thing that fixes that and the most that belongs on a calm level: the edges of the
+-- screen draw in a little, two soft bands blur past to give the speed somewhere to read, and one
+-- line of text counts the drop down to the water. It arrives as you leave the deck and is gone
+-- before the banner comes up, so the ending still belongs to the ending.
+local rideGui: ScreenGui? = nil
+local rideParts: { [string]: any } = {}
+
+local function ensureRideGui()
+	if rideGui and rideGui.Parent then
+		return
+	end
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "SkyRideOverlay"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.DisplayOrder = 30
+	gui.Enabled = false
+	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+
+	-- The two bands: top and bottom, the colour of the slide, fading toward the middle.
+	local bands = {}
+	for index, top in ipairs({ true, false }) do
+		local band = Instance.new("Frame")
+		band.Name = if top then "RushTop" else "RushBottom"
+		band.BackgroundColor3 = Color3.fromRGB(186, 172, 240)
+		band.BackgroundTransparency = 1
+		band.BorderSizePixel = 0
+		band.Size = UDim2.new(1, 0, 0.3, 0)
+		band.Position = if top then UDim2.fromScale(0, 0) else UDim2.fromScale(0, 0.7)
+		band.Parent = gui
+		local fade = Instance.new("UIGradient")
+		fade.Rotation = 90
+		fade.Transparency = if top
+			then NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 1) })
+			else NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0.35) })
+		fade.Parent = band
+		bands[index] = band
+	end
+
+	local drop = Instance.new("TextLabel")
+	drop.Name = "Drop"
+	drop.BackgroundTransparency = 1
+	drop.AnchorPoint = Vector2.new(0.5, 0)
+	drop.Position = UDim2.new(0.5, 0, 0.1, 0)
+	drop.Size = UDim2.new(0, 320, 0, 34)
+	drop.Font = Enum.Font.GothamBold
+	drop.TextSize = 26
+	drop.TextColor3 = Color3.fromRGB(246, 248, 255)
+	drop.TextTransparency = 1
+	drop.TextStrokeTransparency = 0.7
+	drop.Text = ""
+	drop.Parent = gui
+
+	local caption = Instance.new("TextLabel")
+	caption.Name = "Caption"
+	caption.BackgroundTransparency = 1
+	caption.AnchorPoint = Vector2.new(0.5, 0)
+	caption.Position = UDim2.new(0.5, 0, 0.1, 30)
+	caption.Size = UDim2.new(0, 320, 0, 20)
+	caption.Font = Enum.Font.Gotham
+	caption.TextSize = 14
+	caption.TextColor3 = Color3.fromRGB(206, 214, 236)
+	caption.TextTransparency = 1
+	caption.Text = "TO THE POOL"
+	caption.Parent = gui
+
+	-- The splash: one white frame that flashes as you hit the water and fades off it.
+	local splashFlash = Instance.new("Frame")
+	splashFlash.Name = "Splash"
+	splashFlash.BackgroundColor3 = Color3.fromRGB(236, 250, 255)
+	splashFlash.BackgroundTransparency = 1
+	splashFlash.BorderSizePixel = 0
+	splashFlash.Size = UDim2.fromScale(1, 1)
+	splashFlash.Parent = gui
+
+	rideGui = gui
+	rideParts = { bands = bands, drop = drop, caption = caption, flash = splashFlash }
+end
+
+local function showRide(on: boolean)
+	ensureRideGui()
+	local gui = rideGui
+	if not gui then
+		return
+	end
+	gui.Enabled = true
+	local seconds = if on then 0.5 else 0.7
+	local tween = TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	for _, band in ipairs(rideParts.bands) do
+		TweenService:Create(band, tween, { BackgroundTransparency = if on then 0.55 else 1 }):Play()
+	end
+	TweenService:Create(rideParts.drop, tween, { TextTransparency = if on then 0 else 1 }):Play()
+	TweenService:Create(rideParts.caption, tween, { TextTransparency = if on then 0.25 else 1 }):Play()
+	if not on then
+		task.delay(seconds + 0.1, function()
+			if gui.Parent and not ride then
+				gui.Enabled = false
+			end
+		end)
+	end
+end
+
+-- The splash, at the moment the ride runs out: a flash that clears in half a second.
+local function splashFlash()
+	ensureRideGui()
+	local flash = rideParts.flash
+	if not flash then
+		return
+	end
+	flash.BackgroundTransparency = 0.45
+	TweenService:Create(flash, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ BackgroundTransparency = 1 }):Play()
+end
+
+local function rideStarted(sled: Instance)
+	if not (SkyPath and sled:IsA("Model")) then
+		return
+	end
+	local spec = SkyPath.read(sled)
+	local startAt, seconds = sled:GetAttribute("RideStart"), sled:GetAttribute("RideSeconds")
+	-- The model arrives before its PrimaryPart is necessarily set, so the seat is waited for.
+	local seat = sled.PrimaryPart or sled:FindFirstChild("SledSeat") or sled:WaitForChild("SledSeat", 5)
+	if not (spec and typeof(startAt) == "number" and typeof(seconds) == "number" and seat and seat:IsA("BasePart")) then
+		return
+	end
+	ride = { sled = sled, seat = seat, spec = spec, distances = SkyPath.distances(spec), startAt = startAt,
+		seconds = seconds }
+	showRide(true)
+	-- The one thing this says back: the sled is on screen, so the server may hand it over.
+	if rideRemote then
+		rideRemote:FireServer()
+	end
+end
+
+local function moveSled(serverNow: number)
+	local current = ride
+	if not current then
+		return
+	end
+	if not current.sled.Parent or not current.seat.Parent then
+		ride = nil
+		showRide(false)
+		return
+	end
+	local u = (serverNow - current.startAt) / current.seconds
+	if u >= 1 then
+		ride = nil
+		splashFlash()
+		showRide(false)
+		return
+	end
+	-- How far there is left to fall, which is the one number worth showing on a slide.
+	local left = math.max(0, current.seat.Position.Y - current.spec.y1)
+	rideParts.drop.Text = ("%d studs"):format(left)
+	current.seat.CFrame = SkyPath.rideFrame(current.spec, current.distances, u)
+	-- It is unanchored while this client has it, so gravity would pull at it between frames.
+	current.seat.AssemblyLinearVelocity = Vector3.zero
+	current.seat.AssemblyAngularVelocity = Vector3.zero
+end
+
 local function step()
 	local now = os.clock()
-	moveSky(workspace:GetServerTimeNow(), now)
+	local serverNow = workspace:GetServerTimeNow()
+	moveSky(serverNow, now)
+	moveSled(serverNow)
+	moveFalls(now)
 	local character = Players.LocalPlayer.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	if root and root:IsA("BasePart") then
@@ -230,7 +461,7 @@ local function step()
 				local isOver, top = over(pool, root.Position)
 				-- In the water when you are over it with your feet below its top, and not far below it
 				-- (falling past a pool is not wading in it).
-				if isOver and feet.Y < top and feet.Y > top - 6 then
+				if isOver and feet.Y < top and feet.Y > top - depthOf(pool) then
 					inWater, surface = true, top
 					break
 				end
@@ -288,6 +519,13 @@ function SkyPoolsClient.start()
 	for _, item in ipairs(CollectionService:GetTagged("SkyPoolWater")) do
 		added(item)
 	end
+	for _, item in ipairs(CollectionService:GetTagged("SkyFall")) do
+		fallAdded(item)
+	end
+	CollectionService:GetInstanceAddedSignal("SkyFall"):Connect(fallAdded)
+	CollectionService:GetInstanceRemovedSignal("SkyFall"):Connect(function(item)
+		falls[item :: any] = nil
+	end)
 	CollectionService:GetInstanceAddedSignal("SkyPoolWater"):Connect(added)
 	CollectionService:GetInstanceRemovedSignal("SkyPoolWater"):Connect(function(item)
 		local index = table.find(pools, item :: any)
@@ -345,6 +583,14 @@ function SkyPoolsClient.start()
 		end
 		flocks[item] = nil
 	end)
+
+	-- The ride, if the place has the remote: made by Bootstrap with every other one.
+	local remotes = ReplicatedStorage:FindFirstChild("RemoteEvents") or ReplicatedStorage:WaitForChild("RemoteEvents", 10)
+	local event = remotes and remotes:FindFirstChild("SkyRide")
+	if event and event:IsA("RemoteEvent") then
+		rideRemote = event
+		event.OnClientEvent:Connect(rideStarted)
+	end
 
 	RunService.RenderStepped:Connect(step)
 end

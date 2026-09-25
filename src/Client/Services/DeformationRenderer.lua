@@ -1816,6 +1816,14 @@ local FootprintProfiles: { [string]: FootprintProfile } = {
 		tint = 0.20,
 		seep = true,
 	},
+	-- A bell takes the faintest print of all and lets it go at once: it is a skin over water.
+	Jellyfish = {
+		depth = 0.4,
+		transparency = 0.5,
+		reflectance = 0.08,
+		tint = 0.18,
+		seep = true,
+	},
 	-- SNOW TAKES THE BEST PRINT OF ANYTHING HERE, and it is the one material where that is
 	-- the popular image of it rather than a design decision -- a line of footprints across
 	-- fresh snow is the picture everybody already has.
@@ -2131,6 +2139,10 @@ local DEBRIS: { [string]: DebrisKind } = {
 		scale = 0.26, speed = 13, spin = 9, buoyancy = 0.08, glow = 0, life = 3.5 },
 	JelloBit = { colour = Color3.fromRGB(246, 158, 92), material = Enum.Material.Glass,
 		scale = 0.24, speed = 14, spin = 12, buoyancy = 0.06, glow = 0, life = 3.2 },
+	-- Beads of sea water off a bell, clear and light; they hang a moment before they fall.
+	-- SmoothPlastic, not Glass, for the reason Jellyfish's appearance gives.
+	JellyDrop = { colour = Color3.fromRGB(226, 208, 244), material = Enum.Material.SmoothPlastic,
+		scale = 0.18, speed = 12, spin = 8, buoyancy = 0.22, glow = 0, life = 2.6 },
 	-- Warm chocolate is the heaviest liquid here and the slowest thrown: it barely leaves
 	-- the surface at all, which is what separates a melt from a splash.
 	ChocGlob = { colour = Color3.fromRGB(88, 52, 28), material = Enum.Material.SmoothPlastic,
@@ -2141,9 +2153,10 @@ local DEBRIS: { [string]: DebrisKind } = {
 		scale = 0.20, speed = 14, spin = 18, buoyancy = 0.28, glow = 0, life = 3.0 },
 	ClayChip = { colour = Color3.fromRGB(166, 104, 74), material = Enum.Material.Sandstone,
 		scale = 0.24, speed = 13, spin = 14, buoyancy = 0.12, glow = 0, life = 4.0 },
-	-- Thin, bright and sharp. Glass so it catches light on the way down, which is the whole
-	-- difference between a shard of ice and a chip of stone.
-	IceShard = { colour = Color3.fromRGB(214, 238, 250), material = Enum.Material.Glass,
+	-- Thin, bright and sharp: the Ice material catches light on the way down, which is the whole
+	-- difference between a shard of ice and a chip of stone. Not Glass, which drops out against the
+	-- water behind it for the same reason the ice sheet did (MaterialAppearance).
+	IceShard = { colour = Color3.fromRGB(214, 238, 250), material = Enum.Material.Ice,
 		scale = 0.28, speed = 17, spin = 20, buoyancy = 0.14, glow = 0, life = 3.2 },
 	-- Wax flakes are soft and opaque where ice is hard and bright, and they fall slower.
 	WaxFlake = { colour = Color3.fromRGB(246, 232, 168), material = Enum.Material.SmoothPlastic,
@@ -3396,7 +3409,8 @@ Effects.Slime = function(ctx: Ctx)
 	local bone = boneFor(tile)
 
 	if ctx.state == "deformed" then
-		flingDebris(tile, if ctx.material == "JelloSoda" then "JelloBit" else "SlimeGob", 3)
+		flingDebris(tile, if ctx.material == "JelloSoda" then "JelloBit" elseif ctx.material == "Jellyfish" then "JellyDrop"
+			else "SlimeGob", 3)
 		-- The fine spray that goes with the gobs. Downward and fast: slime flicks, it does
 		-- not drift, and this is the half of the shed that is too small to be a part.
 		--
@@ -3429,8 +3443,11 @@ Effects.Slime = function(ctx: Ctx)
 		-- identity invisible -- the neck and stretch above were only ever visible
 		-- with the meshes MISSING. Stretching is the one case where the deviation is
 		-- right: it is the material's defining behaviour, not incidental detail.
+		-- NOT A JELLYFISH'S BELL, which shares this effect: a bell squashes, it does not neck and
+		-- stretch, and at 2.6 times its height its tentacles would plunge twenty studs down into the
+		-- sea under the Sunken City's route.
 		local visual, offset = visualOf(tile), visualOffset[tile]
-		if visual and offset then
+		if visual and offset and ctx.material ~= "Jellyfish" then
 			if not slimeVisualRest[tile] then
 				slimeVisualRest[tile] = visual.Size
 			end
@@ -6928,6 +6945,9 @@ end
 Effects.ButterStick = softBedEffect(BUTTER_STICK)
 
 Effects.JelloSoda = Effects.Slime
+-- And the jellyfish's bell: the same soft rig answering a landing, in its own colour and with
+-- its own beads of water (both keyed on ctx.material above).
+Effects.Jellyfish = Effects.Slime
 
 Effects.BubbleWrap = function(ctx: Ctx)
 	local tile = ctx.tile

@@ -145,6 +145,11 @@ LightingService.palettes = {
 	skyPools = {
 		sky = Color3.fromRGB(150, 194, 240),
 		horizon = Color3.fromRGB(214, 230, 248),
+		-- See the note by EnvironmentSpecularScale: this is the level whose whole lower
+		-- hemisphere is white cloud, so a glossy top face mirrors white on white. A step
+		-- down, not a switch off -- the materials still need their highlight.
+		specular = 0.5,
+		diffuse = 0.7,
 		density = 0.18,
 		haze = 0.35,
 		offset = 0.22,
@@ -209,7 +214,32 @@ LightingService.palettes = {
 	},
 }
 
+-- THE THREE EFFECTS THIS SERVICE OWNS. Anything else of that kind in Lighting was put there by a
+-- level, and a level's look must not outlive it.
+local OURS = { Bloom = true, SunRays = true, Grade = true }
+
+-- ANYTHING A LEVEL ADDED, TAKEN AWAY AGAIN.
+--
+-- The Flooded Halls hang their own bloom, depth of field and grade on Lighting, and their teardown
+-- only ran when the NEXT level was built -- so finishing the level and going back to the lobby left
+-- the room under the halls' air, with the far end of it blurred. It is not the halls' mistake to
+-- fix in one place: any level may add to the look, and every one of them can be stopped mid-run.
+-- So the rule is here, where the look is owned: applying a region first takes away every
+-- post-processing effect that is not one of this service's own.
+function LightingService.clearLevelLook()
+	for _, item in ipairs(Lighting:GetChildren()) do
+		if item:IsA("PostEffect") and not OURS[item.Name] then
+			item:Destroy()
+		end
+	end
+	-- Fog is legacy and ignored while an Atmosphere exists, but a level that set it leaves it set,
+	-- and anything that later removes the Atmosphere would find the halls' green.
+	Lighting.FogEnd = 100000
+	Lighting.FogStart = 0
+end
+
 function LightingService.apply(region: string?)
+	LightingService.clearLevelLook()
 	-- === Sun position ===
 	-- Mid-afternoon. A high sun flattens everything and a low one throws long shadows
 	-- across the whole level; this angle puts a readable specular streak on horizontal
@@ -238,8 +268,15 @@ function LightingService.apply(region: string?)
 	-- Specular is deliberately higher than diffuse. Diffuse ambient flattens form;
 	-- specular is what gives a glossy surface its highlight and therefore its read as
 	-- wet. This is the difference between honey and orange plastic.
-	Lighting.EnvironmentDiffuseScale = 0.65
-	Lighting.EnvironmentSpecularScale = 0.8
+	--
+	-- PER REGION, because on one level it went too far. Environment specular is the sky
+	-- reflected in a surface, and on Sky Pools the sky is white cloud in every direction
+	-- you look DOWN -- so a translucent chunk seen from above was a sheet of reflected
+	-- white over a background of white cloud, and vanished. From the side and from
+	-- underneath the same chunk read perfectly, which is the signature of a reflection
+	-- rather than of a transparency. Lower it where the sky is the background.
+	Lighting.EnvironmentDiffuseScale = palette.diffuse or 0.65
+	Lighting.EnvironmentSpecularScale = palette.specular or 0.8
 
 	-- === Atmosphere: the sky gradient ===
 	--

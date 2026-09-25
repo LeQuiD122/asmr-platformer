@@ -52,49 +52,125 @@ local RunService = game:GetService("RunService")
 
 local PlayerStateService = require(script.Parent:WaitForChild("PlayerStateService"))
 -- Where the thing is and when it surfaces, shared with every client so both agree on who it reaches.
-local SunkenPath = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("SunkenPath"))
+--
+-- LOOKED FOR WITH A TIMEOUT. A bare WaitForChild here yields forever when SunkenPath has not been
+-- pasted in, and Bootstrap requires this module at startup -- so one missing file would stop the
+-- whole server before the lobby was built. Without it the city still builds and the drain still
+-- works; only the surfacing is off, and this says so.
+local pathModule = game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("SunkenPath", 10)
+local SunkenPath: any = if pathModule and pathModule:IsA("ModuleScript") then require(pathModule) else nil
+if not SunkenPath then
+	warn("SunkenCityService: no ReplicatedStorage.Shared.SunkenPath, so the thing will not surface. Paste "
+		.. "src/Shared/SunkenPath.lua in as a ModuleScript named exactly SunkenPath.")
+end
+-- The meshes (the Ferris wheel's, here), looked for the same way: without SeaRig the wheel is
+-- built from parts in the same place.
+local rigModule = game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("SeaRig", 10)
+local SeaRig: any = if rigModule and rigModule:IsA("ModuleScript") then require(rigModule) else nil
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local SunkenCityService = {}
 
 -- ===== The water =====
 local WATER_UNDER_ROUTE = 9 -- the surface, this far under the lowest chunk's origin
 local FLOOR_DEPTH = 100 -- the sea floor, this far under the surface
-local MURK_DEPTH = 35 -- a darker layer this far down: under the kill plane, over most of the city
+-- HOW DEEP THE DETAIL GOES. There used to be a flat dark sheet at this depth and it read as a lid:
+-- from the route the city under you was one black plane. It is gone; this is now only the depth
+-- past which a window band is not worth building, because nothing can make it out from up there.
+local MURK_DEPTH = 35
+-- ===== What lives in it =====
+-- A SHOAL of fish this often along the street, in the open water under the route: within SHOAL_OUT
+-- of the centre line. They were ninety studs off it, which is inside the drowned blocks, so every
+-- fish in the city was swimming inside a wall and nobody had ever seen one.
+local SHOAL_EVERY = 70
+local SHOAL_OUT = 8
+local HORRORS = 4 -- and, far out where the haze takes over, four things that are not fish
+local HORROR_OUT = 780
+-- THE SWIMMERS: single animals with somewhere to be, rather than a shoal going round in a ring. A ray,
+-- a turtle, a jellyfish, an eel, a big old grouper -- one every so often along the street, each with a
+-- home it wanders round. The client makes and moves them; this only says where and what.
+local SWIMMER_EVERY = 38
+local SWIMMER_KINDS = { "ray", "turtle", "jelly", "dolphins", "shark", "grouper", "jelly", "turtle", "ray", "jelly",
+	"dolphins", "eel" }
+-- They swim in the street's open water, under the route where you look down: a home within SWIM_OUT
+-- of the centre line and never further across than SWIM_REACH from it, which is inside the road
+-- signs' legs and far inside the lamp posts -- so nothing has to be kept away from those.
+local SWIM_OUT = 10
+-- GULLS over the street: one every GULL.every studs, circling a point within GULL.out of the centre
+-- line at up to GULL.radius, never lower than GULL.low over the water.
+local GULL = { every = 70, out = 16, radius = 28, low = 32 }
+local SWIM_REACH = 24
+-- THE THING ON THE HORIZON. Far out past the city, on a schedule every client shares, something so
+-- large that its back comes up out of the sea like a range of low hills, lies there, and goes down
+-- again. It never comes near. It does not need to.
+-- Measured across from the street's first point the way the blocks are laid, so it is always past
+-- the city's edge whatever the street does. On its side the lone towers stop at FAR_OPEN past the
+-- edge, which leaves it open sea to come up in (check_sunkencity.py holds the gap).
+local LEVIATHAN_OUT = 1300
+local LEVIATHAN_LONG = 760
+local SCHEDULE = { leviathanFirst = 95, leviathanEvery = 260, rainFirst = 70, rainEvery = 230, rainLength = 75 }
+-- THE WEATHER. A shower every few minutes, the same showers for everyone.
+-- (its times are in SCHEDULE, above, with the thing's)
+-- AND THE WINDOWS. A handful, near the street, with a light in them that goes on and off. Somebody is
+-- still in there, or something is.
+local LIT_WINDOWS = 7
 local SEA_HALF = 3072 -- how far the water reaches from the middle, each way
 local LONGEST = 2000 -- a part stops at 2048 studs; anything longer is built in pieces
 
--- ===== The city =====
+-- ===== The city, laid along the route rather than round it =====
+--
+-- THE ROUTE IS THE BOULEVARD. The level used to be a ring with the city outside it, so the whole
+-- run was spent looking at the place from its edge. The route is a line through the middle of it
+-- now: blocks either side, their frontages on the street, the street running ahead into the haze.
+-- The blocks are a grid laid in the route's own direction, and any lot the street would run through
+-- is pushed back and shortened until its frontage is on the kerb -- which is how a real street
+-- makes a wall of buildings rather than a corridor of gaps.
 local PLAZA_RADIUS = 60
-local BOULEVARD_HALF = 45 -- the street under the route: no lot comes within this of the ring
-local STREET = 20 -- between one band of lots and the next
-local INNER_BAND = 80
-local OUTER_BAND = 110
-local OUTER_BANDS = 3
-local AVENUES = 8
-local AVENUE_WIDE = 26
-local LOT_ARC_MIN, LOT_ARC_MAX = 40, 62
+local BOULEVARD_HALF = 56 -- the open water either side of the route's centre line
+local BLOCK = 118 -- a city block, each way
+local STREET = 26 -- between one block and the next
+local CITY_SIDE = 940 -- how far the blocks reach either side of the route
+local CITY_BEYOND = 460 -- and past each end of it
+local LOT_MIN = 30 -- a lot shorter than this after the street has taken its bite is not built
 -- THE ROUTE'S REACH, the widest any chunk in this level's pool extends from its centre line (the
 -- straight chunk's shelves). check_sunkencity.py holds it against the pool.
 local ROUTE_REACH = 13.4
 -- ANYTHING THAT BREAKS THE SURFACE stays this far beyond the route's reach, in plan.
 local EMERGE_CLEAR = 40
-local FAR_TOWERS = 10 -- lone towers out past the last band, for the skyline in the haze
+local FAR_TOWERS = 16 -- lone towers out past the last block, for the skyline in the haze
+local FAR_OPEN = 160 -- and on the side the thing on the horizon comes up, they stop this far past the edge
 
 -- ===== The thing (drawn and moved by SunkenCityClient; these numbers are its whole brief) =====
-local MONSTER_INSET = 6 -- it swims this far inside the route's centre line
-local MONSTER_SPEED = 12 -- studs a second, round the ring the other way to the route
+local MONSTER_SPEED = 12 -- studs a second, up the street and back down it
 local MONSTER_DEPTH = 29 -- its centre line, this far under the surface on average: fins clear of the road signs
 local MONSTER_BOB = 5 -- and up and down by this much
 local MONSTER_BOB_PERIOD = 47
 local MONSTER_GIRTH = 8 -- its widest radius; the client draws nothing thicker
--- THE HARBOUR SWERVE. Round the harbour it swings out into the open water rather than pass over
--- the drain, and the harbour has no buildings for the width of the swerve.
-local HARBOUR_SWERVE = 85
-local HARBOUR_SWERVE_HALF = 0.1 * 2 * math.pi
-local HARBOUR_SECTOR_HALF = 0.14 * 2 * math.pi
+-- IT PATROLS THE BOULEVARD, up the route and back down it, and turns back this far short of the
+-- far end, because the far end is the harbour and the drain.
+local MONSTER_KEEP = 200
+-- HOW FAR OFF THE LINE IT WANDERS, and it is small on purpose. On the ring it swam a few studs
+-- inside the route with the whole city outside; on a street the aquarium's tower and the dry flat
+-- stand right beside the water it is in, so the room it has is the gap between them.
+-- blender/check_sunkencity.py holds its whole body inside that gap.
+local MONSTER_SWING = 5
+local MONSTER_SWING_WAVE = 340
+-- The harbour: the open water at the end of the route, which has no city blocks in it. REACH is how
+-- far it spreads either side of the route, ALONG is how much of the route's end belongs to it --
+-- and they are separate numbers because a short run's whole street is shorter than the harbour is
+-- wide, and measuring one with the other left a short run with nowhere to put the dry flat.
+local HARBOUR_REACH = 520
+-- A QUARTER OF THE STREET AT MOST. A short run's whole street is only about five hundred studs, and
+-- a fixed two hundred of harbour at the end of that leaves nowhere to put the dry flat.
+local HARBOUR_ALONG = 200
+local HARBOUR_ALONG_SHARE = 0.25
 
 -- ===== The aquarium =====
-local AQ_NECK = 9 -- the landing from the checkpoint's cap edge to the tower's inner wall
+-- THE LANDING from the checkpoint's cap edge to the tower's inner wall. Longer than it was: the
+-- thing patrols the street now rather than a ring inside it, and the tower has to stand back far
+-- enough that it never touches the thing's body.
+local AQ_NECK = 14
 local AQ_NECK_WIDE = 7
 local NECK_THICK = 7.4 -- deep enough to swallow the straight chunk's side shelves (Sky Pools' reason)
 local ROT_R = 11 -- the round tower's outer radius
@@ -110,12 +186,51 @@ local TUNNEL_BAY = 16
 local ROOM_L, ROOM_W, ROOM_H = 22, 24, 11
 local STEP_ANGLE = math.rad(18)
 local STEP_RISE_MAX = 1.05
+-- THE STAIR IS LAID FROM BOTH ENDS. Its head leaves the top landing just past the door (STAIR.top,
+-- the door facing pi) and its foot comes down at STAIR.foot, fifty degrees short of the tunnel's
+-- mouth (which faces 0) -- so you step off the last step and walk forward into the tunnel under the
+-- turn above. It used to be laid from the head only, at a fixed eighteen degrees a step, and its
+-- last turn ran straight across the tunnel's mouth four studs off the floor: the entrance to the
+-- aquarium was a stair. stairPlan finds the step count and angle that join the two ends.
+local STAIR = {
+	top = math.pi + 0.6, -- where the first step leaves the top landing
+	foot = math.rad(-50), -- where the last one comes down
+	riseMin = 0.6, -- the shallowest rise, which keeps the turn above off your head
+	riseBest = 0.85,
+	angleMin = math.rad(14),
+	angleMax = math.rad(20),
+}
+-- The aquarium's tank: everything in it keeps within TANK_HALF of the tunnel's line, which is where
+-- the city is kept out (the city's `blocked`), and the open water past the gallery's window runs
+-- WINDOW_DEEP further, for what comes up out of the dark to look in.
+local TANK_HALF = 20
+local WINDOW_DEEP = 60
+local KELP_TUNNEL = 13 -- a strand in the tank stands at least this far off the tunnel's line
+-- THE GLASS, tapped: it cracks at TAP.crack, cracks further at TAP.crack2 and goes at TAP.breaks.
+-- Every tap adds one; one drains away every TAP.ease seconds, so it takes a player meaning it.
+-- Then the aquarium floods for TAP.hold seconds, and everyone still inside after TAP.rise is
+-- washed out: to their checkpoint in Chill, to the start in Hardcore. And the glass is back.
+local TAP = {
+	crack = 3, -- taps of strain on one pane before it cracks
+	crack2 = 5, -- before the crack spreads and weeps
+	breaks = 7, -- before it goes
+	ease = 4, -- seconds for one tap's strain to drain away
+	rise = 3.5, -- seconds for the water to come up
+	hold = 14, -- seconds before it is gone and the glass is whole
+}
+-- KELP, as markers the client grows and sways (SunkenCityClient): in the tank, and in beds along the
+-- street's kerbs, KELP_KERB off the centre line, halfway between one lamp post and the next.
+local KELP_KERB = 49
+-- THE STREET'S THINGS: the widest a vehicle's lane goes from the centre line (inside the road signs'
+-- legs, clear of the kerb's kelp), and the pavement edge the furniture stands on.
+local ROADSIDE = { vehicleLane = 30, furnitureAt = 52 }
 
 -- ===== The last dry flat =====
 local FLAT_SHARE = 0.7 -- off the checkpoint nearest this share of the way round
-local FLAT_GANG = 6 -- the gangway, from the checkpoint's cap edge to the doorstep
+local FLAT_GANG = 10 -- the gangway, from the checkpoint's cap edge to the doorstep; see AQ_NECK
 local FLAT_D, FLAT_W, FLAT_H = 24, 26, 9 -- outward, along the route, and the top floor's height
 local FLAT_REACH = 26 -- the lots keep this far from its middle
+local FLOODED_DEPTH = 13 -- the flooded floor under the flat, this far under the surface
 -- THE FACE IN THE MIRROR (ROADMAP section 6): rare, once a server or less, never in Chill.
 local MIRROR_LINGER = 1.6 -- seconds a Hardcore player stands before the mirror before it may happen
 local MIRROR_CHANCE = 0.5 -- the chance, once per player per run, while it has not happened on this server
@@ -164,8 +279,25 @@ local THUD_SOUND = "rbxasset://sounds/action_jump_land.mp3"
 -- The surface height for this build. Set once by build() before anything is made; every drowned
 -- colour reads it.
 local waterLevel = 0
+-- How many windows in this build still have a light in them; see LIT_WINDOWS.
+local litLeft = 0
 
--- ===== Parts =====
+-- ===== WHY THE TANK IS NOT TERRAIN WATER =====
+--
+-- The obvious way to make the aquarium's water look like water is to fill the tank with Roblox
+-- terrain water, which refracts and caustics on its own. It cannot be done here, and the reason is
+-- worth writing down: terrain water does not know about parts. Filling the tank would fill the
+-- TUNNEL as well -- the glass tube is inside the tank, that is what a tunnel aquarium is -- and the
+-- player would swim down a corridor they are supposed to walk through. Leaving a dry channel wide
+-- enough to be safe from the four-stud voxel grid would leave a visible gap of clear nothing
+-- between the glass and the water, which is worse than the problem.
+--
+-- So the tank is built the way the rest of this level is: layers of tinted glass at increasing
+-- distance, so the view out has depth to it; caustics the client moves across the tunnel; specks
+-- hanging in the light; and fish. What follows from that is that anything else in this level which
+-- wants real water has the same answer.
+
+-- ===== Parts =====-- ===== Parts =====
 
 local function block(parent: Instance, name: string, size: Vector3, cf: CFrame, colour: Color3,
 	material: Enum.Material, solid: boolean): Part
@@ -193,6 +325,17 @@ end
 
 -- A piece of the city: drowned by its own depth, and never solid (see NOTHING IN THE WATER CATCHES
 -- A FALL in the header).
+-- AN ELLIPSOID, which a Ball part cannot be: Roblox forces a ball's three sizes equal. A block with
+-- a sphere mesh takes the block's size on all three axes, which is what a clump of weed or a tree's
+-- canopy needs. Sky Pools' clouds are built the same way and for the same reason.
+local function ellipsoid(parent: Instance, name: string, size: Vector3, cf: CFrame, colour: Color3): Part
+	local part = block(parent, name, size, cf, colour, Enum.Material.Grass, false)
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Sphere
+	mesh.Parent = part
+	return part
+end
+
 local function cityBlock(parent: Instance, name: string, size: Vector3, cf: CFrame, colour: Color3,
 	material: Enum.Material?): Part
 	return block(parent, name, size, cf, drowned(colour, cf.Position.Y), material or Enum.Material.SmoothPlastic, false)
@@ -390,9 +533,133 @@ local function sheet(parent: Instance, name: string, centre: Vector3, y: number,
 				if material == Enum.Material.Glass then
 					plate.Reflectance = 0.08
 				end
+				-- THE WATER HAS TO MOVE. A flat sheet of glass is the right colour and the wrong
+				-- thing: what the eye actually reads as liquid is a pattern of light sliding across
+				-- it, which is what the lobby's pool does with the engine's own water texture. Two of
+				-- them at different scales, which the client slides in different directions, so
+				-- they interfere the way real ripples do instead of scrolling like wallpaper.
+				if name == "Water" then
+					for index, scale in ipairs({ 14, 37 }) do
+						local ripple = Instance.new("Texture")
+						ripple.Name = "Ripple" .. index
+						ripple.Face = Enum.NormalId.Top
+						ripple.Texture = "rbxasset://textures/water/normal_1.dds"
+						ripple.StudsPerTileU = scale
+						ripple.StudsPerTileV = scale
+						ripple.Transparency = if index == 1 then 0.72 else 0.82
+						ripple.Color3 = Color3.fromRGB(214, 236, 232)
+						ripple.Parent = plate
+					end
+					CollectionService:AddTag(plate, "SunkenSurface")
+				end
 			end
 		end
 	end
+end
+
+-- ===== THE ROUTE, AS A LINE ON THE PLAN =====
+--
+-- Everything in this level is placed from the route: the blocks are laid either side of it, the
+-- signs hang over it, the thing patrols it and the harbour is at the end of it. So it is read once,
+-- here, as a polyline through the chunks with the finish on the end, and every question the build
+-- asks -- how far along, how far off, which way does it run here -- is answered from that.
+export type Route = {
+	points: { Vector3 },
+	steps: { number },
+	total: number,
+	forward: Vector3,
+	side: Vector3,
+	middle: Vector3,
+}
+
+local function routeOf(chunks: { any }, finish: CFrame, y: number): Route
+	local points: { Vector3 } = {}
+	for _, entry in ipairs(chunks) do
+		local at = entry.model:GetPivot().Position
+		table.insert(points, Vector3.new(at.X, y, at.Z))
+	end
+	table.insert(points, Vector3.new(finish.Position.X, y, finish.Position.Z))
+	local steps = { 0 }
+	for index = 2, #points do
+		steps[index] = steps[index - 1] + (points[index] - points[index - 1]).Magnitude
+	end
+	local run = points[#points] - points[1]
+	local forward = if run.Magnitude > 1 then Vector3.new(run.X, 0, run.Z).Unit else Vector3.new(0, 0, 1)
+	local sum = Vector3.zero
+	for _, at in ipairs(points) do
+		sum += at
+	end
+	return {
+		points = points,
+		steps = steps,
+		total = steps[#steps],
+		forward = forward,
+		side = Vector3.yAxis:Cross(forward),
+		middle = sum / #points,
+	}
+end
+
+-- The point `s` studs along the route, and the way it runs there.
+local function alongRoute(route: Route, s: number): (Vector3, Vector3)
+	local at = math.clamp(s, 0, route.total)
+	local low, high = 1, #route.steps
+	while high - low > 1 do
+		local mid = (low + high) // 2
+		if route.steps[mid] <= at then
+			low = mid
+		else
+			high = mid
+		end
+	end
+	local span = route.steps[high] - route.steps[low]
+	local within = if span > 0 then (at - route.steps[low]) / span else 0
+	local from, to = route.points[low], route.points[high]
+	local run = to - from
+	local dir = if run.Magnitude > 0.001 then run.Unit else route.forward
+	return from + run * within, dir
+end
+
+-- How far a point is from the route in plan, and which way is away from it. Walked segment by
+-- segment: the route bends, and the distance to a bent line is not the distance to its ends.
+local function nearRoute(route: Route, point: Vector3): (number, Vector3)
+	local best, away = math.huge, route.side
+	local p = Vector3.new(point.X, 0, point.Z)
+	for index = 1, #route.points - 1 do
+		local from = Vector3.new(route.points[index].X, 0, route.points[index].Z)
+		local to = Vector3.new(route.points[index + 1].X, 0, route.points[index + 1].Z)
+		local run = to - from
+		local length = run.Magnitude
+		if length > 0.001 then
+			local along = math.clamp((p - from):Dot(run / length), 0, length)
+			local foot = from + (run / length) * along
+			local gap = (p - foot).Magnitude
+			if gap < best then
+				best = gap
+				away = if gap > 0.01 then (p - foot).Unit else route.side
+			end
+		end
+	end
+	return best, away
+end
+
+-- How far along the route a point is, which is what the road signs and the harbour are measured in.
+local function alongOf(route: Route, point: Vector3): number
+	local best, at = math.huge, 0
+	local p = Vector3.new(point.X, 0, point.Z)
+	for index = 1, #route.points - 1 do
+		local from = Vector3.new(route.points[index].X, 0, route.points[index].Z)
+		local to = Vector3.new(route.points[index + 1].X, 0, route.points[index + 1].Z)
+		local run = to - from
+		local length = run.Magnitude
+		if length > 0.001 then
+			local along = math.clamp((p - from):Dot(run / length), 0, length)
+			local gap = (p - (from + (run / length) * along)).Magnitude
+			if gap < best then
+				best, at = gap, route.steps[index] + along
+			end
+		end
+	end
+	return at
 end
 
 -- ===== BUILDINGS =====
@@ -400,67 +667,498 @@ end
 -- Each is built in its lot's frame: origin on the sea floor at the lot's middle, +X outward from
 -- the city's centre, +Z round the ring. `w` runs along Z (the frontage), `d` along X (the depth).
 
--- A WINDOW BAND: one dark ribbon round all four faces, a little proud of the wall. Only above the
--- murk, where anyone can see it.
-local function ribbons(parent: Instance, frame: CFrame, w: number, d: number, from: number, to: number, every: number)
+-- ===== A LANTERN =====
+--
+-- A street lantern as a street lantern is made: a glass box between four corner posts, a tray under
+-- it, a stepped cap over it with a finial on top, hung from its arm by a short rod. The glass is lit
+-- from inside by a real light when `lit` says so -- and a lantern that is lit is tagged, so the
+-- client can make it gutter now and then, the way a light still running on something is not quite
+-- steady. Built centred on `at`.
+local function lantern(parent: Instance, at: CFrame, lit: boolean, warm: Color3)
+	local iron = Color3.fromRGB(46, 50, 52)
+	local glass = block(parent, "LanternGlass", Vector3.new(1.5, 2, 1.5), at, warm, Enum.Material.Glass, false)
+	glass.Transparency = if lit then 0.2 else 0.45
+	for _, corner in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
+		block(parent, "LanternFrame", Vector3.new(0.18, 2.2, 0.18), at * CFrame.new(corner[1] * 0.78, 0, corner[2] * 0.78),
+			iron, Enum.Material.Metal, false)
+	end
+	block(parent, "LanternTray", Vector3.new(1.9, 0.25, 1.9), at * CFrame.new(0, -1.15, 0), iron, Enum.Material.Metal, false)
+	block(parent, "LanternCap", Vector3.new(2.1, 0.35, 2.1), at * CFrame.new(0, 1.2, 0), iron, Enum.Material.Metal, false)
+	block(parent, "LanternCap", Vector3.new(1.3, 0.35, 1.3), at * CFrame.new(0, 1.5, 0), iron, Enum.Material.Metal, false)
+	block(parent, "LanternCap", Vector3.new(0.6, 0.35, 0.6), at * CFrame.new(0, 1.8, 0), iron, Enum.Material.Metal, false)
+	ellipsoid(parent, "LanternFinial", Vector3.new(0.4, 0.5, 0.4), at * CFrame.new(0, 2.15, 0), iron)
+	if lit then
+		local glow = Instance.new("PointLight")
+		glow.Brightness = 1
+		glow.Range = 24
+		glow.Color = warm
+		glow.Shadows = false
+		glow.Parent = glass
+		CollectionService:AddTag(glass, "SunkenLantern")
+	end
+	return glass
+end
+
+-- ===== A SHIPPING CONTAINER =====
+--
+-- Corrugated sides, a door end with its locking bars, and a casting at each top corner. `size` is
+-- length, height, width. The plain version -- ribs only -- is for the ones in a warehouse yard, which
+-- are seen from further off and there are more of.
+local function container(parent: Instance, cf: CFrame, size: Vector3, colour: Color3, rich: boolean)
+	-- Plain Metal: Roblox has no corrugated material, and the ribs below are what make it read as one.
+	local body = cityBlock(parent, "Container", size, cf, colour, Enum.Material.Metal)
+	local dark = colour:Lerp(Color3.new(0, 0, 0), 0.25)
+	local ribs = if rich then 6 else 3
+	for index = 1, ribs do
+		local x = -size.X / 2 + index * size.X / (ribs + 1)
+		for _, side in ipairs({ -1, 1 }) do
+			cityBlock(parent, "ContainerRib", Vector3.new(0.35, size.Y - 0.4, 0.25),
+				cf * CFrame.new(x, 0, side * (size.Z / 2 + 0.1)), dark, Enum.Material.Metal)
+		end
+	end
+	if rich then
+		-- The door end: two leaves, and the locking bars running up them.
+		cityBlock(parent, "ContainerDoor", Vector3.new(0.3, size.Y - 0.5, size.Z - 0.5),
+			cf * CFrame.new(size.X / 2 + 0.1, 0, 0), dark, Enum.Material.Metal)
+		for _, z in ipairs({ -size.Z * 0.3, -size.Z * 0.1, size.Z * 0.1, size.Z * 0.3 }) do
+			cityBlock(parent, "LockBar", Vector3.new(0.25, size.Y - 0.6, 0.18),
+				cf * CFrame.new(size.X / 2 + 0.3, 0, z), Color3.fromRGB(140, 136, 128), Enum.Material.Metal)
+		end
+		for _, x in ipairs({ -1, 1 }) do
+			for _, z in ipairs({ -1, 1 }) do
+				cityBlock(parent, "Casting", Vector3.new(0.7, 0.6, 0.7),
+					cf * CFrame.new(x * (size.X / 2 - 0.25), size.Y / 2 - 0.2, z * (size.Z / 2 - 0.25)),
+					Color3.fromRGB(70, 70, 68), Enum.Material.Metal)
+			end
+		end
+	end
+	return body
+end
+
+-- ===== WHAT A BUILDING IS MADE OF =====
+--
+-- The city was read back as "ugly platforms in the sky", and the criticism was exact: a box with a
+-- band of window colour round it is a massing study, not a building. What makes a building read is
+-- not more boxes, it is the four things below, and every kind of building here now gets all four.
+--
+--   A FACADE. Storeys, not one flat face: a sill line at every floor, pilasters standing the full
+--   height between them, a cornice on top, and window panes set INTO the wall rather than painted
+--   on the outside of it. Some panes are dark, some are broken, some are boarded.
+--   WEAR. Nothing here has been maintained since the water came: rust running from every fixing,
+--   render fallen off in patches, cracks, a corner gone, rubble at the foot of it.
+--   GROWTH. The waterline is where the sea starts: weed and algae in a band along it, ivy up the
+--   face that gets light, a tree that has taken a roof.
+--   HOLDING OUT. And the other half of the story, which is the half that makes it a CITY rather
+--   than a ruin: sandbags along a frontage, boards over the low windows, a pump with its hose over
+--   the parapet, scaffolding on a wall somebody was shoring up, a floodlight still burning, a gauge
+--   painted on the wall with the dates the water reached. Somebody was fighting this.
+--
+-- Each of these is a function taking the building's own frame and size, so a new kind of building
+-- gets the whole language for four calls.
+
+-- How weathered a surface is, from 0 (new) to 1 (nothing left of it): everything near the waterline
+-- and everything old is greener and greyer.
+local function weathered(colour: Color3, y: number, rng: Random): Color3
+	local wet = math.clamp(1 - math.abs(y - waterLevel) / 26, 0, 1)
+	return colour:Lerp(Color3.fromRGB(96, 110, 92), wet * 0.35 + rng:NextNumber(0, 0.12))
+end
+
+-- HOW MUCH OF THIS A BUILDING GETS, by how near the street it is. A facade is worth about thirty
+-- parts and a city is three hundred buildings, so detail is spent where it is read: full on the
+-- frontages you run past, sills and ribs in the middle distance, and nothing at all out in the haze
+-- where a silhouette is the whole of what you can see anyway. `detail` is 2, 1 or 0.
+local DETAIL_NEAR, DETAIL_MID = 300, 620
+-- The most storeys a near facade is drawn with, top to bottom; the dial if the parts are too many.
+local FACADE_FLOORS = 14
+-- And nothing is drawn far under the water, where the depth has taken it: this is how far down the
+-- eye still reaches from the route.
+local SEEN_DEEP = 26
+-- NO ROOF WITHIN SURFACE_CLEAR OF THE WATER, above or below. Two flat faces at nearly the same
+-- height fight over which one the screen draws, and a roof a stud under the surface flickers green
+-- and blue as the camera moves -- the "green roofs" that looked glitchy. A building stands clear of
+-- the water or is plainly under it.
+local SURFACE_CLEAR = 2.5
+
+-- A FACADE between two heights: sills, pilasters, a cornice, and windows set into the wall.
+--
+-- `from` AND `to` ARE HEIGHTS ABOVE THE BUILDING'S OWN FLOOR, like every other height inside a
+-- building's frame. They used to be world heights, and the tower passed a height above its floor
+-- instead -- with the sea floor a hundred studs down, every tower's sills and pilasters ran about
+-- ninety studs over its own roof. That is what the empty frames standing in the sky were: a facade
+-- with no building in it. Relative is the convention everything else in a frame already uses, so it
+-- is the one that cannot be got wrong by writing the obvious number.
+local function facadeOf(parent: Instance, frame: CFrame, w: number, d: number, from: number, to: number,
+	colour: Color3, rng: Random, storey: number, detail: number)
 	local floorY = frame.Position.Y
-	local start = math.max(from, waterLevel - MURK_DEPTH)
-	if to - start < 2 then
+	if detail <= 0 then
 		return
 	end
-	local count = math.min(10, math.floor((to - start) / every))
-	for index = 1, count do
-		local y = to - index * (to - start) / (count + 0.5)
-		cityBlock(parent, "Windows", Vector3.new(d + 0.4, 1.6, w + 0.4), frame * CFrame.new(0, y - floorY, 0), GLASS,
-			Enum.Material.Glass)
+	-- ALL THE WAY DOWN on the frontages near the street, which is where you see them from under the
+	-- water (falling, swimming, from the aquarium); only the part the eye reaches from above further
+	-- out. Deep storeys get one window band a side rather than panes: the eye reads the band and the
+	-- ribs as windows at that depth, and it costs a third of the parts.
+	local start = if detail >= 2 then from else math.max(from, waterLevel - SEEN_DEEP - floorY)
+	if to - start < 4 then
+		return
+	end
+	local floors = math.clamp(math.floor((to - start) / storey), 1, if detail >= 2 then FACADE_FLOORS else 4)
+	local each = (to - start) / floors
+	local dark = Color3.fromRGB(28, 36, 40)
+	local boarded = Color3.fromRGB(122, 96, 68)
+	for index = 0, floors - 1 do
+		local y = start + (index + 0.5) * each
+		local sillY = start + index * each
+		if math.abs(sillY + floorY - waterLevel) < 0.8 then
+			sillY -= 1.2 -- never a sill lying in the surface (SURFACE_CLEAR)
+		end
+		-- The sill line at every floor: a thin course standing a little proud, which is the shadow
+		-- that tells you how many storeys there are from a hundred studs away.
+		cityBlock(parent, "Sill", Vector3.new(d + 0.7, 0.5, w + 0.7), frame * CFrame.new(0, sillY, 0),
+			weathered(colour, sillY + floorY, rng))
+		-- WINDOWS, set into the wall, on the two long faces only -- the ones a street sees. Some are
+		-- dark, some are boarded, and the rest have glass still in them.
+		if detail >= 2 and y + floorY < waterLevel - SEEN_DEEP then
+			for _, side in ipairs({ -1, 1 }) do
+				cityBlock(parent, "WindowBand", Vector3.new(0.5, each * 0.45, w - 2.4),
+					frame * CFrame.new(side * (d / 2 - 0.05), y, 0), Color3.fromRGB(30, 40, 46))
+			end
+		elseif detail >= 2 then
+			for _, side in ipairs({ -1, 1 }) do
+				local panes = math.clamp(math.floor(w / 7), 1, 3)
+				for pane = 0, panes - 1 do
+					local along = -w / 2 + (pane + 0.5) * (w / panes)
+					local pick = rng:NextNumber()
+					local glassColour = if pick < 0.18 then dark elseif pick < 0.28 then boarded else GLASS
+					local piece = cityBlock(parent, if pick < 0.28 then "Boarded" else "Window",
+						Vector3.new(0.5, each * 0.5, w / panes - 2.2),
+						frame * CFrame.new(side * (d / 2 - 0.1), y, along), glassColour,
+						if pick < 0.28 then Enum.Material.WoodPlanks else Enum.Material.Glass)
+					if pick >= 0.28 then
+						piece.Reflectance = 0.06
+					end
+					-- A LIGHT IN A WINDOW above the water, in a handful of them. It is a real light,
+					-- and it is not on all the time: the client switches it on and off at odd
+					-- intervals, which is the thing about a drowned city that should not be
+					-- happening.
+					if pick >= 0.28 and litLeft > 0 and y + floorY > waterLevel + 2 and rng:NextNumber() < 0.06 then
+						litLeft -= 1
+						piece.Color = Color3.fromRGB(255, 214, 150)
+						local glow = Instance.new("PointLight")
+						glow.Brightness = 0
+						glow.Range = 14
+						glow.Color = Color3.fromRGB(255, 206, 140)
+						glow.Shadows = false
+						glow.Parent = piece
+						CollectionService:AddTag(piece, "SunkenLitWindow")
+					end
+				end
+			end
+		end
+	end
+	-- PILASTERS: the vertical ribs between the window bays, which are what stop a facade reading as
+	-- a striped box.
+	local ribs = math.clamp(math.floor(w / 11), 1, 3)
+	for index = 0, ribs do
+		local z = -w / 2 + index * (w / ribs)
+		for _, side in ipairs({ -1, 1 }) do
+			cityBlock(parent, "Pilaster", Vector3.new(0.7, to - start, 1.4),
+				frame * CFrame.new(side * (d / 2 + 0.25), (start + to) / 2, z),
+				weathered(colour, (start + to) / 2 + floorY, rng))
+		end
+	end
+	-- And a cornice on top of the run.
+	cityBlock(parent, "Cornice", Vector3.new(d + 1.6, 1.1, w + 1.6), frame * CFrame.new(0, to, 0),
+		weathered(colour, to + floorY, rng))
+end
+
+-- WEAR: rust, lost render, cracks, a corner gone and the rubble it left.
+local function wearOn(parent: Instance, frame: CFrame, w: number, d: number, top: number, colour: Color3,
+	rng: Random, detail: number)
+	local floorY = frame.Position.Y
+	local rust = Color3.fromRGB(122, 78, 52)
+	if detail <= 0 then
+		return
+	end
+	-- Rust running down from fixings. Thin, long, and always downward, which is the only direction
+	-- a stain goes.
+	for _ = 1, rng:NextInteger(2, if detail >= 2 then 5 else 3) do
+		local side = if rng:NextNumber() < 0.5 then -1 else 1
+		local high = rng:NextNumber(floorY + 4, math.max(floorY + 5, top))
+		local run = rng:NextNumber(4, 14)
+		cityBlock(parent, "Stain", Vector3.new(0.25, run, rng:NextNumber(0.6, 1.6)),
+			frame * CFrame.new(side * (d / 2 + 0.3), high - run / 2 - floorY, rng:NextNumber(-w / 2, w / 2)),
+			rust:Lerp(colour, rng:NextNumber(0.2, 0.6)))
+	end
+	-- Render fallen off in patches, showing the block underneath.
+	for _ = 1, if detail >= 2 then rng:NextInteger(1, 4) else 0 do
+		local side = if rng:NextNumber() < 0.5 then -1 else 1
+		local patchW = rng:NextNumber(3, 9)
+		local patchH = rng:NextNumber(2, 6)
+		cityBlock(parent, "Bare", Vector3.new(0.3, patchH, patchW),
+			frame * CFrame.new(side * (d / 2 + 0.2), rng:NextNumber(2, math.max(3, top - floorY - 2)),
+				rng:NextNumber(-w / 2 + patchW / 2, w / 2 - patchW / 2)), Color3.fromRGB(128, 120, 110))
+	end
+	-- A CORNER GONE, with what came off it on the ground. Parts cannot be subtracted, so the corner
+	-- is not cut out -- it is rebuilt shorter, and the missing piece is lying at the foot of the wall.
+	if detail >= 2 and rng:NextNumber() < 0.4 and top - floorY > 12 then
+		local side = if rng:NextNumber() < 0.5 then -1 else 1
+		local lost = rng:NextNumber(4, 9)
+		cityBlock(parent, "Broken", Vector3.new(d * 0.32, lost, w * 0.3),
+			frame * CFrame.new(side * d * 0.34, top - floorY - lost / 2, w * 0.35) * CFrame.Angles(0, 0, math.rad(4)),
+			colour:Lerp(DEEP, 0.3))
+		for piece = 1, rng:NextInteger(3, 6) do
+			local size = rng:NextNumber(1.4, 3.4)
+			cityBlock(parent, "Rubble", Vector3.new(size, size * 0.7, size * rng:NextNumber(0.7, 1.3)),
+				frame * CFrame.new(side * (d / 2 + rng:NextNumber(1, 5)), size * 0.35,
+					rng:NextNumber(-w / 2, w / 2)) * CFrame.Angles(rng:NextNumber(0, 1), rng:NextNumber(0, 6),
+					rng:NextNumber(0, 1)), Color3.fromRGB(120, 116, 108))
+		end
 	end
 end
 
--- FLOODED FLATS, roofless, their top storey a few studs under the surface with the rooms still
--- furnished. What you look down into from the route.
-local function floodedFlats(parent: Instance, frame: CFrame, w: number, d: number, rng: Random)
+-- GROWTH: the waterline band, ivy where the light is, and a tree that has taken a roof.
+local function growthOn(parent: Instance, frame: CFrame, w: number, d: number, top: number, rng: Random,
+	detail: number)
 	local floorY = frame.Position.Y
-	local top = waterLevel - rng:NextNumber(2, 3.2)
+	local weed = Color3.fromRGB(74, 104, 62)
+	local algae = Color3.fromRGB(88, 118, 86)
+	-- THE WATERLINE. Everything that has stood in a tide line wears one, and on a drowned city it is
+	-- the one mark every building shares.
+	--
+	-- A RING ON THE WALLS, ENDING UNDER THE SURFACE. It was a solid slab the size of the building
+	-- with its top exactly at the water's surface: on a building that stood, most of it was inside
+	-- the walls, but on one that did not it was a green roof lying ON the water, fighting the water
+	-- for the same pixels. Now it is four strips hugging the walls, from three studs down to a
+	-- third of a stud under, and only on a building that actually reaches the surface.
+	if top > waterLevel + 1 then
+		for _, strip in ipairs({ { d / 2 + 0.25, 0, 0.5, w + 1 }, { -d / 2 - 0.25, 0, 0.5, w + 1 },
+			{ 0, w / 2 + 0.25, d + 1, 0.5 }, { 0, -w / 2 - 0.25, d + 1, 0.5 } }) do
+			cityBlock(parent, "Weedline", Vector3.new(strip[3], 2.7, strip[4]),
+				frame * CFrame.new(strip[1], waterLevel - 1.65 - floorY, strip[2]), algae)
+		end
+	elseif top > waterLevel - 12 then
+		-- A drowned roof near enough the light grows a mat of weed ON it, well under the surface.
+		cityBlock(parent, "RoofWeed", Vector3.new(d * 0.7, 0.3, w * 0.6),
+			frame * CFrame.new(rng:NextNumber(-d * 0.1, d * 0.1), top - floorY + 0.15, rng:NextNumber(-w * 0.15, w * 0.15)), algae)
+	end
+	-- FOAM where it comes out of the water: a ring a stud out from the wall, lying on the surface --
+	-- high enough off it (SURFACE_CLEAR's reason) that the two never meet.
+	if top > waterLevel + 1 then
+		for _, strip in ipairs({ { d / 2 + 0.9, 0, 1.4, w + 3 }, { -d / 2 - 0.9, 0, 1.4, w + 3 },
+			{ 0, w / 2 + 0.9, d + 3, 1.4 }, { 0, -w / 2 - 0.9, d + 3, 1.4 } }) do
+			local foam = block(parent, "Foam", Vector3.new(strip[3], 0.25, strip[4]),
+				frame * CFrame.new(strip[1], waterLevel + 0.35 - floorY, strip[2]), Color3.fromRGB(226, 238, 234),
+				Enum.Material.SmoothPlastic, false)
+			foam.Transparency = 0.45
+			foam.CastShadow = false
+		end
+	end
+	-- Algae up the underwater faces, in patches.
+	for _ = 1, if detail >= 2 then rng:NextInteger(2, 5) else 0 do
+		local side = if rng:NextNumber() < 0.5 then -1 else 1
+		local patch = rng:NextNumber(3, 10)
+		cityBlock(parent, "Algae", Vector3.new(0.35, patch, rng:NextNumber(3, 9)),
+			frame * CFrame.new(side * (d / 2 + 0.35), rng:NextNumber(1, math.max(2, math.min(top, waterLevel) - floorY)),
+				rng:NextNumber(-w / 2, w / 2)), algae:Lerp(DEEP, rng:NextNumber(0, 0.4)))
+	end
+	-- IVY up one face, above the water, and weed hanging off the sills under it.
+	if detail >= 1 and top > waterLevel + 2 and rng:NextNumber() < 0.55 then
+		local side = if rng:NextNumber() < 0.5 then -1 else 1
+		local from = waterLevel - 2
+		local runs = math.max(2, math.floor((top - from) / 3))
+		for index = 0, runs do
+			local y = from + index * ((top - from) / runs)
+			ellipsoid(parent, "Ivy", Vector3.new(1.4, 2.6, rng:NextNumber(3, 7)),
+				frame * CFrame.new(side * (d / 2 + 0.4), y - floorY,
+					rng:NextNumber(-w / 3, w / 3) + math.sin(index) * 2), weed:Lerp(Color3.fromRGB(58, 84, 52),
+					rng:NextNumber(0, 0.5)))
+		end
+	end
+	-- AND A TREE OUT OF THE ROOF, sometimes: the thing that says nobody is coming back to this one.
+	if detail >= 1 and top > waterLevel + 6 and rng:NextNumber() < 0.3 then
+		local at = frame * Vector3.new(rng:NextNumber(-d / 4, d / 4), top - floorY, rng:NextNumber(-w / 4, w / 4))
+		column(parent, "Trunk", 1, at, at.Y, at.Y + rng:NextNumber(4, 8), Color3.fromRGB(96, 82, 66), false, true)
+		for leaf = 1, 3 do
+			ellipsoid(parent, "Canopy", Vector3.new(rng:NextNumber(5, 9), rng:NextNumber(3, 5), rng:NextNumber(5, 9)),
+				CFrame.new(at + Vector3.new(rng:NextNumber(-2, 2), rng:NextNumber(5, 9), rng:NextNumber(-2, 2))),
+				weed:Lerp(Color3.fromRGB(110, 140, 84), rng:NextNumber(0, 0.6)))
+		end
+	end
+end
+
+-- HOLDING OUT: what somebody did about it, and in places is still doing.
+local function holdingOut(parent: Instance, frame: CFrame, w: number, d: number, top: number, rng: Random)
+	local floorY = frame.Position.Y
+	local sand = Color3.fromRGB(168, 156, 128)
+	local kind = rng:NextInteger(1, 5)
+	if kind == 1 and top > waterLevel then
+		-- SANDBAGS along the frontage, two courses, the top one short of the ends.
+		for course = 0, 1 do
+			local runs = math.max(2, math.floor(w / 3)) - course
+			for index = 0, runs - 1 do
+				local z = -w / 2 + (index + 0.5) * (w / runs)
+				cityBlock(parent, "Sandbag", Vector3.new(2.4, 1, 2.8),
+					frame * CFrame.new(d / 2 + 1.4, waterLevel - floorY + 0.5 + course * 1, z)
+						* CFrame.Angles(0, rng:NextNumber(-0.1, 0.1), 0), sand:Lerp(DEEP, rng:NextNumber(0, 0.25)))
+			end
+		end
+	elseif kind == 2 then
+		-- SCAFFOLDING on one wall: somebody was shoring this up when the water won.
+		local side = if rng:NextNumber() < 0.5 then -1 else 1
+		local high = math.min(top, waterLevel + 12)
+		local pipe = Color3.fromRGB(150, 146, 134)
+		for lift = 0, math.max(1, math.floor((high - floorY) / 7)) do
+			local y = floorY + lift * 7
+			if math.abs(y - waterLevel) < 0.8 then
+				y -= 1.2 -- a board lying in the surface fights it for the same pixels
+			end
+			cityBlock(parent, "Boards", Vector3.new(2.6, 0.4, w * 0.8),
+				frame * CFrame.new(side * (d / 2 + 1.6), y - floorY, 0), Color3.fromRGB(150, 124, 88))
+			for _, z in ipairs({ -w * 0.35, w * 0.35 }) do
+				local at = frame * Vector3.new(side * (d / 2 + 1.6), 0, z)
+				column(parent, "ScaffoldLeg", 0.4, at, floorY, high, pipe, false, true)
+			end
+		end
+	elseif kind == 3 and top > waterLevel then
+		-- A PUMP on the parapet with its hose over the side, still pointing at the water.
+		local at = frame * CFrame.new(rng:NextNumber(-d / 4, d / 4), top - floorY, rng:NextNumber(-w / 4, w / 4))
+		cityBlock(parent, "PumpSkid", Vector3.new(4, 1, 3), at * CFrame.new(0, 0.5, 0), Color3.fromRGB(96, 100, 104))
+		cityBlock(parent, "Pump", Vector3.new(3, 2.4, 2.2), at * CFrame.new(0, 2.2, 0), Color3.fromRGB(150, 92, 60))
+		local hoseTop = (at * CFrame.new(1.4, 2.2, 0)).Position
+		rod(parent, "Hose", hoseTop, Vector3.new(hoseTop.X + d / 2, waterLevel + 1, hoseTop.Z), 0.6,
+			Color3.fromRGB(60, 66, 62))
+		rod(parent, "Hose", Vector3.new(hoseTop.X + d / 2, waterLevel + 1, hoseTop.Z),
+			Vector3.new(hoseTop.X + d / 2 + 3, waterLevel - 3, hoseTop.Z), 0.6, Color3.fromRGB(60, 66, 62))
+	elseif kind == 4 and top > waterLevel + 3 then
+		-- A FLOODLIGHT still burning on a corner, and it is a real light.
+		local at = frame * CFrame.new(d / 2 - 1, top - floorY + 1.5, w / 2 - 1)
+		column(parent, "LightMast", 0.5, at.Position, at.Position.Y - 1.5, at.Position.Y + 4,
+			Color3.fromRGB(80, 84, 88), false, true)
+		local head = cityBlock(parent, "Floodlight", Vector3.new(2, 1.4, 1.4), at * CFrame.new(0, 4, 0),
+			Color3.fromRGB(226, 216, 190), Enum.Material.Glass)
+		local glow = Instance.new("SpotLight")
+		glow.Face = Enum.NormalId.Front
+		glow.Angle = 70
+		glow.Brightness = 1.4
+		glow.Range = 50
+		glow.Color = Color3.fromRGB(255, 232, 190)
+		glow.Shadows = false
+		glow.Parent = head
+	else
+		-- THE GAUGE painted on the wall, with the water's own marks on it. The plainest thing in the
+		-- city and the one that says the most: somebody stood here and wrote down how far it came.
+		local side = if rng:NextNumber() < 0.5 then -1 else 1
+		local board = cityBlock(parent, "Gauge", Vector3.new(0.25, 10, 2.4),
+			frame * CFrame.new(side * (d / 2 + 0.3), waterLevel - 3 - floorY, w / 3),
+			Color3.fromRGB(226, 220, 204))
+		for mark = 0, 4 do
+			cityBlock(parent, "GaugeMark", Vector3.new(0.3, 0.3, if mark % 2 == 0 then 2.4 else 1.4),
+				board.CFrame * CFrame.new(0.06, -4 + mark * 2, 0), Color3.fromRGB(60, 62, 66))
+		end
+		if top > waterLevel then
+			label(board, if side > 0 then Enum.NormalId.Right else Enum.NormalId.Left, "HIGH WATER",
+				Color3.fromRGB(70, 74, 78))
+		end
+	end
+end
+
+-- Everything a building gets once its own shape is up.
+local function dress(parent: Instance, frame: CFrame, w: number, d: number, top: number, colour: Color3,
+	rng: Random, detail: number)
+	wearOn(parent, frame, w, d, top, colour, rng, detail)
+	growthOn(parent, frame, w, d, top, rng, detail)
+	-- Somebody was fighting the water at about one building in two on the street, and nowhere out in
+	-- the haze, where a pump on a roof is four parts nobody will ever resolve.
+	if detail >= 2 and rng:NextNumber() < 0.55 then
+		holdingOut(parent, frame, w, d, top, rng)
+	end
+end
+
+-- A BLOCK OF FLATS WITH THE WATER IN IT. Its lower storeys are drowned and its top one is open to
+-- the weather, so you can look down into the rooms from the route.
+--
+-- IT NO LONGER STOPS AT THE WATERLINE. Every one of these used to top out two or three studs under
+-- the surface, so a street of them was a field of flat tops at one height -- which is exactly what
+-- "platforms in the sky" meant. They range from one storey under to four above now, and what is
+-- above the water gets a roof rather than an open edge.
+local function floodedFlats(parent: Instance, frame: CFrame, w: number, d: number, rng: Random, detail: number,
+	mayStand: boolean)
+	local floorY = frame.Position.Y
+	-- IT ONLY STANDS UP OUT OF THE WATER WHERE THE LOT MAY. Anything that breaks the surface has to
+	-- keep EMERGE_CLEAR beyond the route's reach, or it is a roof beside the walkway to jump onto;
+	-- the city works out which lots those are and tells the building. Everywhere else it drowns,
+	-- which is the same rule this level has always had -- it is only that a block of flats can now
+	-- be the thing that stands.
+	local stands = mayStand and rng:NextNumber() < 0.6
+	-- A drowned one's parapet stands 2.6 over its top, so its top keeps 5.2 under the surface: the
+	-- parapet then stays SURFACE_CLEAR under it, plainly drowned rather than a lip at the waterline.
+	local top = if stands then waterLevel + rng:NextNumber(6, 30) else waterLevel - rng:NextNumber(5.2, 12)
 	local storey = top - 8
 	local facade = FACADES[rng:NextInteger(1, #FACADES)]
-	cityBlock(parent, "Flats", Vector3.new(d, storey - floorY, w), frame * CFrame.new(0, (storey - floorY) / 2, 0), facade)
-	ribbons(parent, frame, w, d, floorY, storey - 2, 6)
+	cityBlock(parent, "Flats", Vector3.new(d, storey - floorY, w), frame * CFrame.new(0, (storey - floorY) / 2, 0),
+		facade)
+	facadeOf(parent, frame, w, d, 2, storey - floorY - 1, facade, rng, 7, detail)
 	local rel = storey - floorY
 	for _, wall in ipairs({ { d / 2 - 0.4, 0, 0.8, w }, { -d / 2 + 0.4, 0, 0.8, w }, { 0, w / 2 - 0.4, d, 0.8 },
 		{ 0, -w / 2 + 0.4, d, 0.8 } }) do
-		cityBlock(parent, "FlatWall", Vector3.new(wall[3], 8, wall[4]), frame * CFrame.new(wall[1], rel + 4, wall[2]), facade)
+		cityBlock(parent, "FlatWall", Vector3.new(wall[3], 8, wall[4]), frame * CFrame.new(wall[1], rel + 4, wall[2]),
+			facade)
 	end
-	-- A partition, and what was left in the rooms either side of it.
-	local split = rng:NextNumber(-w / 5, w / 5)
-	cityBlock(parent, "Partition", Vector3.new(d - 1.6, 6.5, 0.5), frame * CFrame.new(0, rel + 3.25, split), facade)
-	local tone = FADED[rng:NextInteger(1, #FADED)]
-	local a = frame * CFrame.new(rng:NextNumber(-d / 4, d / 4), rel, (split + w / 2) / 2)
-	cityBlock(parent, "Bed", Vector3.new(4.2, 1.1, 2.4), a * CFrame.new(0, 0.55, 0), Color3.fromRGB(214, 210, 200))
-	cityBlock(parent, "Blanket", Vector3.new(3, 0.3, 2.5), a * CFrame.new(0.5, 1.2, 0), tone)
-	local b = frame * CFrame.new(rng:NextNumber(-d / 4, d / 4), rel, (split - w / 2) / 2)
-	cityBlock(parent, "Sofa", Vector3.new(4, 1, 1.8), b * CFrame.new(0, 0.5, 0), tone, Enum.Material.Fabric)
-	cityBlock(parent, "SofaBack", Vector3.new(4, 1.6, 0.5), b * CFrame.new(0, 1.3, -0.9), tone, Enum.Material.Fabric)
-	cityBlock(parent, "Table", Vector3.new(2.4, 1.2, 1.6), b * CFrame.new(0.4, 0.6, 2.4), Color3.fromRGB(150, 120, 90))
-	cityBlock(parent, "Fridge", Vector3.new(1.6, 3.4, 1.6), frame * CFrame.new(d / 2 - 1.6, rel + 1.7, split + 1.4),
-		Color3.fromRGB(226, 226, 220))
-	-- Sometimes a piece of the roof, fallen in and leaning on the partition.
-	if rng:NextNumber() < 0.35 then
-		cityBlock(parent, "FallenRoof", Vector3.new(d * 0.6, 0.6, w * 0.4),
-			frame * CFrame.new(0, rel + 3, split + w / 5) * CFrame.Angles(math.rad(28), 0, 0), facade)
+	-- EVERY BLOCK HAS A ROOF. The top storey used to be open to the sky so you could look down into
+	-- the rooms, and from any distance that is a hollow box -- which is what it was read back as.
+	-- One in four has lost part of its roof instead: that is wear rather than hollowness, and it is
+	-- the only way in for the eye, so it is the only one that gets the rooms furnished.
+	local collapsed = rng:NextNumber() < 0.25
+	local roofColour = weathered(facade, top, rng)
+	if collapsed then
+		cityBlock(parent, "FlatRoof", Vector3.new(d + 0.8, 0.7, w * 0.55 + 0.4),
+			frame * CFrame.new(0, rel + 8.4, -w * 0.225), roofColour)
+		cityBlock(parent, "FallenRoof", Vector3.new(d * 0.7, 0.6, w * 0.5),
+			frame * CFrame.new(0, rel + 4, w * 0.2) * CFrame.Angles(math.rad(34), 0, 0), roofColour)
+		local split = rng:NextNumber(-w / 5, w / 5)
+		cityBlock(parent, "Partition", Vector3.new(d - 1.6, 6.5, 0.5), frame * CFrame.new(0, rel + 3.25, split), facade)
+		local tone = FADED[rng:NextInteger(1, #FADED)]
+		local a = frame * CFrame.new(rng:NextNumber(-d / 4, d / 4), rel, (split + w / 2) / 2)
+		cityBlock(parent, "Bed", Vector3.new(4.2, 1.1, 2.4), a * CFrame.new(0, 0.55, 0), Color3.fromRGB(214, 210, 200))
+		cityBlock(parent, "Blanket", Vector3.new(3, 0.3, 2.5), a * CFrame.new(0.5, 1.2, 0), tone)
+		local b = frame * CFrame.new(rng:NextNumber(-d / 4, d / 4), rel, (split - w / 2) / 2)
+		cityBlock(parent, "Sofa", Vector3.new(4, 1, 1.8), b * CFrame.new(0, 0.5, 0), tone, Enum.Material.Fabric)
+		cityBlock(parent, "SofaBack", Vector3.new(4, 1.6, 0.5), b * CFrame.new(0, 1.3, -0.9), tone, Enum.Material.Fabric)
+		cityBlock(parent, "Table", Vector3.new(2.4, 1.2, 1.6), b * CFrame.new(0.4, 0.6, 2.4), Color3.fromRGB(150, 120, 90))
+	else
+		cityBlock(parent, "FlatRoof", Vector3.new(d + 0.8, 0.7, w + 0.8), frame * CFrame.new(0, rel + 8.4, 0), roofColour)
 	end
+	-- A parapet round the roof, so the building has an edge rather than stopping.
+	for _, edge in ipairs({ { d / 2, 0, 0.6, w + 1.6 }, { -d / 2, 0, 0.6, w + 1.6 }, { 0, w / 2, d + 1.6, 0.6 },
+		{ 0, -w / 2, d + 1.6, 0.6 } }) do
+		cityBlock(parent, "Parapet", Vector3.new(edge[3], 1.8, edge[4]), frame * CFrame.new(edge[1], rel + 9.7, edge[2]),
+			roofColour)
+	end
+	-- A tank and a stair head on the roofs that stand out of the water, which is what is actually on
+	-- a roof; the drowned ones keep only the parapet, because nothing up there survived.
+	if stands then
+		local at = frame * Vector3.new(rng:NextNumber(-d / 5, d / 5), rel + 8.8, rng:NextNumber(-w / 5, w / 5))
+		column(parent, "TankLegs", 2.4, at, at.Y, at.Y + 2.2, Color3.fromRGB(90, 80, 70), false, true)
+		column(parent, "WaterTank", 4, at, at.Y + 2.2, at.Y + 6, Color3.fromRGB(128, 100, 80), false, true)
+		cityBlock(parent, "StairHead", Vector3.new(4.5, 4, 4), frame * CFrame.new(-d / 4, rel + 10.5, w / 4), roofColour)
+	end
+	dress(parent, frame, w, d, math.max(top, storey + 8), facade, rng, detail)
 end
 
 -- A HOUSE OR A SHOP, low, entirely under the water, with a pitched roof made of two tilted slabs
 -- (which look the same whichever way a wedge part happens to face).
-local function house(parent: Instance, frame: CFrame, w: number, d: number, rng: Random)
+local function house(parent: Instance, frame: CFrame, w: number, d: number, rng: Random, detail: number)
 	local floorY = frame.Position.Y
-	local eaves = waterLevel - rng:NextNumber(10, 32)
+	-- The roof's ridge and the chimney over it stand up to rise + 2 over the eaves, so the eaves go at
+	-- least that and SURFACE_CLEAR under: a wide house with the old ten studs put its ridge out of the
+	-- water.
+	local rise = math.min(d, w) * 0.28
+	local eaves = math.min(waterLevel - rng:NextNumber(10, 32), waterLevel - rise - 2 - SURFACE_CLEAR)
 	local facade = FACADES[rng:NextInteger(1, #FACADES)]
 	local roof = Color3.fromRGB(120, 76, 66):Lerp(Color3.fromRGB(80, 88, 96), rng:NextNumber())
 	local body = eaves - floorY
 	cityBlock(parent, "House", Vector3.new(d, body, w), frame * CFrame.new(0, body / 2, 0), facade)
-	ribbons(parent, frame, w, d, floorY, eaves - 2, 5)
-	local rise = math.min(d, w) * 0.28
+	facadeOf(parent, frame, w, d, 1.5, body - 1.5, facade, rng, 6, detail)
 	local slope = math.atan2(rise, d / 2)
 	local slab = math.sqrt(rise * rise + d * d / 4) + 0.6
 	for _, side in ipairs({ -1, 1 }) do
@@ -471,10 +1169,12 @@ local function house(parent: Instance, frame: CFrame, w: number, d: number, rng:
 		cityBlock(parent, "Chimney", Vector3.new(1.6, rise + 2, 1.6), frame * CFrame.new(d / 5, body + rise / 2 + 1, w / 4),
 			facade)
 	end
+	dress(parent, frame, w, d, eaves + rise, facade, rng, detail)
 end
 
 -- AN APARTMENT BLOCK OR AN OFFICE, standing up out of the water. `broken` takes a storey off one half.
-local function tower(parent: Instance, frame: CFrame, w: number, d: number, top: number, office: boolean, rng: Random)
+local function tower(parent: Instance, frame: CFrame, w: number, d: number, top: number, office: boolean,
+	rng: Random, detail: number)
 	local floorY = frame.Position.Y
 	local facade = FACADES[rng:NextInteger(1, #FACADES)]
 	local height = top - floorY
@@ -486,13 +1186,35 @@ local function tower(parent: Instance, frame: CFrame, w: number, d: number, top:
 		-- The half that is still standing.
 		cityBlock(parent, "Apartments", Vector3.new(d, 6, w / 2), frame * CFrame.new(0, main + 3, w / 4), facade)
 	end
-	ribbons(parent, frame, w, d, floorY, main - 2, if office then 4 else 6)
+	facadeOf(parent, frame, w, d, 2, main - 2, facade, rng, if office then 5 else 7, detail)
 	if office then
-		cityBlock(parent, "Crown", Vector3.new(d + 1, 1.4, w + 1), frame * CFrame.new(0, height - 0.7, 0), facade)
-		if rng:NextNumber() < 0.5 then
-			local at = frame * Vector3.new(d / 5, height, -w / 5)
-			column(parent, "Antenna", 0.4, at, at.Y, at.Y + 10, Color3.fromRGB(90, 94, 100), false, true)
+		-- A SKYSCRAPER has a top, not an end. A setback storey narrower than the shaft, a crown of
+		-- fins round it, plant on the roof and a mast with a red light that still blinks -- the
+		-- aviation light is the one thing in this city still doing its job, which is the point of it.
+		local upper = math.min(10, height * 0.12)
+		cityBlock(parent, "Setback", Vector3.new(d * 0.72, upper, w * 0.72), frame * CFrame.new(0, height + upper / 2, 0),
+			weathered(facade, top, rng))
+		for index = 0, 5 do
+			local a = index * math.pi / 3
+			cityBlock(parent, "CrownFin", Vector3.new(0.6, upper + 4, 2.2),
+				frame * CFrame.new(math.cos(a) * d * 0.38, height + (upper + 4) / 2, math.sin(a) * w * 0.38)
+					* CFrame.Angles(0, -a, 0), weathered(facade, top, rng))
 		end
+		cityBlock(parent, "Crown", Vector3.new(d + 1, 1.4, w + 1), frame * CFrame.new(0, height - 0.7, 0), facade)
+		cityBlock(parent, "PlantRoom", Vector3.new(d * 0.3, 3, w * 0.3), frame * CFrame.new(-d * 0.1, height + upper + 1.5, 0),
+			Color3.fromRGB(118, 122, 124))
+		local mastAt = frame * Vector3.new(d * 0.12, height + upper, w * 0.12)
+		local mastTop = mastAt.Y + rng:NextNumber(12, 20)
+		column(parent, "Antenna", 0.5, mastAt, mastAt.Y, mastTop, Color3.fromRGB(90, 94, 100), false, true)
+		local beacon = block(parent, "AviationLight", Vector3.new(0.8, 0.8, 0.8), CFrame.new(mastAt.X, mastTop + 0.4, mastAt.Z),
+			Color3.fromRGB(220, 60, 50), Enum.Material.Glass, false)
+		local red = Instance.new("PointLight")
+		red.Brightness = 1.2
+		red.Range = 18
+		red.Color = Color3.fromRGB(255, 70, 50)
+		red.Shadows = false
+		red.Parent = beacon
+		CollectionService:AddTag(beacon, "SunkenBlink")
 	else
 		cityBlock(parent, "RoofHouse", Vector3.new(d * 0.3, 3, w * 0.25), frame * CFrame.new(-d / 5, main + 1.5, -w / 5), facade)
 		if rng:NextNumber() < 0.4 then
@@ -501,6 +1223,14 @@ local function tower(parent: Instance, frame: CFrame, w: number, d: number, top:
 			column(parent, "WaterTank", 4.2, at, at.Y + 2.5, at.Y + 7, Color3.fromRGB(128, 100, 80), false, true)
 		end
 	end
+	-- A PARAPET round whatever the top turned out to be, so the building has an edge rather than
+	-- stopping; and then everything time and the sea have done to it.
+	for _, edge in ipairs({ { d / 2, 0, 0.6, w + 1.4 }, { -d / 2, 0, 0.6, w + 1.4 }, { 0, w / 2, d + 1.4, 0.6 },
+		{ 0, -w / 2, d + 1.4, 0.6 } }) do
+		cityBlock(parent, "Parapet", Vector3.new(edge[3], 1.6, edge[4]),
+			frame * CFrame.new(edge[1], main + 0.8, edge[2]), weathered(facade, top, rng))
+	end
+	dress(parent, frame, w, d, top, facade, rng, detail)
 end
 
 -- THE MULTI-STOREY CAR PARK: open decks on columns, cars still parked, the top deck a few studs
@@ -541,122 +1271,723 @@ local function carPark(parent: Instance, frame: CFrame, w: number, d: number, rn
 	label(sign, Enum.NormalId.Back, "P", Color3.fromRGB(220, 230, 240))
 end
 
+-- A WAREHOUSE: one long shed with a sawtooth roof and a door big enough for a lorry, which is what
+-- the far side of a dock street is made of. Low, so it reads as the back of the city rather than
+-- competing with the towers.
+local function warehouse(parent: Instance, frame: CFrame, w: number, d: number, rng: Random, detail: number,
+	mayStand: boolean)
+	local floorY = frame.Position.Y
+	-- Its roof only comes up out of the water where the lot may break the surface; see floodedFlats.
+	-- Standing clear of the water or plainly under it: a sawtooth roof within a stud of the surface
+	-- was one of the flickering green roofs (SURFACE_CLEAR).
+	local top = if mayStand then waterLevel + rng:NextNumber(3.5, 9) else waterLevel - rng:NextNumber(6, 11)
+	local colour = drowned(Color3.fromRGB(150, 148, 138), (floorY + top) / 2)
+	cityBlock(parent, "Warehouse", Vector3.new(d, top - floorY, w), frame * CFrame.new(0, (top - floorY) / 2, 0), colour)
+	-- The sawtooth: short pitched ridges along its length, the glazed face of each one landward.
+	local teeth = math.max(2, math.floor(w / 14))
+	for index = 0, teeth - 1 do
+		local z = -w / 2 + (index + 0.5) * (w / teeth)
+		cityBlock(parent, "SawRidge", Vector3.new(d * 0.9, 3, w / teeth * 0.55),
+			frame * CFrame.new(0, top - floorY + 1.5, z) * CFrame.Angles(math.rad(18), 0, 0), colour)
+		local pane = cityBlock(parent, "SawGlass", Vector3.new(d * 0.88, 2.6, 0.4),
+			frame * CFrame.new(0, top - floorY + 2.2, z + w / teeth * 0.3), GLASS)
+		pane.Transparency = 0.45
+	end
+	-- The door, and the loading bank in front of it.
+	cityBlock(parent, "WarehouseDoor", Vector3.new(0.6, math.min(10, top - floorY - 2), w * 0.34),
+		frame * CFrame.new(-d / 2 - 0.2, math.min(10, top - floorY - 2) / 2, 0), Color3.fromRGB(96, 104, 104))
+	cityBlock(parent, "LoadingBank", Vector3.new(6, 2.2, w * 0.5), frame * CFrame.new(-d / 2 - 3, 1.1, 0),
+		drowned(STONE, floorY + 1))
+	facadeOf(parent, frame, w, d, 2, top - floorY - 4, colour, rng, 9, detail)
+	dress(parent, frame, w, d, top, colour, rng, detail)
+	if rng:NextNumber() < 0.6 then
+		for index = 1, rng:NextInteger(2, 5) do
+			local crate = rng:NextNumber(3.5, 6)
+			container(parent, frame * CFrame.new(-d / 2 - 8 - rng:NextNumber(0, 10), crate / 2,
+				rng:NextNumber(-w / 2, w / 2)) * CFrame.Angles(0, rng:NextNumber(-0.4, 0.4), 0),
+				Vector3.new(crate * 2.2, crate, crate), FADED[rng:NextInteger(1, #FADED)], false)
+		end
+	end
+end
+
+-- A CHURCH, because every drowned city has one thing older than the rest of it, and because a
+-- spire is the one silhouette that reads at any distance. The nave is under the water and the
+-- tower comes up out of it.
+local function church(parent: Instance, frame: CFrame, w: number, d: number)
+	local floorY = frame.Position.Y
+	local stone = drowned(Color3.fromRGB(184, 178, 162), floorY + 10)
+	local naveTop = waterLevel - 6 -- its roof, 3 over this, keeps SURFACE_CLEAR under the water
+	cityBlock(parent, "Nave", Vector3.new(d, naveTop - floorY, w * 0.6), frame * CFrame.new(0, (naveTop - floorY) / 2, 0), stone)
+	cityBlock(parent, "NaveRoof", Vector3.new(d * 1.04, 3, w * 0.62), frame * CFrame.new(0, naveTop - floorY + 1.5, 0),
+		drowned(Color3.fromRGB(120, 116, 112), naveTop))
+	-- Buttresses down both sides, which is what says church rather than shed.
+	for index = -2, 2 do
+		for _, side in ipairs({ -1, 1 }) do
+			cityBlock(parent, "Buttress", Vector3.new(5, naveTop - floorY - 6, 3),
+				frame * CFrame.new(side * (d / 2 + 1.5), (naveTop - floorY - 6) / 2, index * w * 0.11), stone)
+		end
+	end
+	local towerTop = waterLevel + 34
+	local side = math.min(d * 0.7, 16)
+	cityBlock(parent, "ChurchTower", Vector3.new(side, towerTop - floorY, side),
+		frame * CFrame.new(0, (towerTop - floorY) / 2, -w * 0.36), stone)
+	-- The belfry openings, and the spire over them.
+	for _, face in ipairs({ Vector3.new(side / 2 + 0.2, 0, 0), Vector3.new(-side / 2 - 0.2, 0, 0),
+		Vector3.new(0, 0, side / 2 + 0.2), Vector3.new(0, 0, -side / 2 - 0.2) }) do
+		local opening = cityBlock(parent, "Belfry", Vector3.new(1, 7, 5),
+			frame * CFrame.new(face.X, towerTop - floorY - 8, -w * 0.36 + face.Z), Color3.fromRGB(30, 34, 36))
+		opening.Size = if math.abs(face.X) > 0 then Vector3.new(1, 7, 5) else Vector3.new(5, 7, 1)
+	end
+	for index = 0, 5 do
+		local shrink = 1 - index / 6
+		cityBlock(parent, "Spire", Vector3.new(side * 0.8 * shrink, 4, side * 0.8 * shrink),
+			frame * CFrame.new(0, towerTop - floorY + 2 + index * 4, -w * 0.36), stone)
+	end
+	column(parent, "Cross", 0.5, (frame * CFrame.new(0, 0, -w * 0.36)).Position, towerTop + 26, towerTop + 32, BRASS, false)
+end
+
+-- A BILLBOARD on a roof or on its own legs: a hoarding whose paint has gone, and the one flat
+-- surface in the level that faces the street.
+local function billboard(parent: Instance, at: CFrame, wide: number, high: number, rng: Random)
+	local frame = drowned(Color3.fromRGB(88, 88, 92), at.Position.Y)
+	for _, side in ipairs({ -1, 1 }) do
+		column(parent, "BoardLeg", 1, (at * CFrame.new(side * wide * 0.38, 0, 0)).Position, at.Position.Y - 12,
+			at.Position.Y, frame, false)
+	end
+	local face = cityBlock(parent, "Billboard", Vector3.new(0.6, high, wide), at * CFrame.new(0, high / 2, 0),
+		drowned(FADED[rng:NextInteger(1, #FADED)], at.Position.Y))
+	label(face, Enum.NormalId.Front, if rng:NextNumber() < 0.5 then "SEA\nVIEW" else "OPEN\nDAILY",
+		Color3.fromRGB(230, 226, 214))
+	cityBlock(parent, "BoardRail", Vector3.new(0.8, 0.8, wide + 1.4), at * CFrame.new(0, high, 0), frame)
+end
+
+-- A VEHICLE, drowned where it stopped: a car, a van or a bus, at its own size. They were drawn at
+-- two thirds of a car next to a person, and beside hundred-stud buildings in a hundred-and-twelve-
+-- stud street they read as toys. `big` allows the bus, which only goes where there is room for one.
+local streetKit = {}
+function streetKit.wheel(parent: Instance, at: CFrame, size: number)
+	local tyre = cityBlock(parent, "Wheel", Vector3.new(size * 0.35, size, size), at, Color3.fromRGB(34, 34, 36))
+	tyre.Shape = Enum.PartType.Cylinder
+end
+
+function streetKit.car(parent: Instance, at: CFrame, rng: Random, big: boolean)
+	local colour = FADED[rng:NextInteger(1, #FADED)]
+	local glass = Color3.fromRGB(40, 54, 62)
+	local kind = rng:NextNumber()
+	if big and kind > 0.82 then
+		-- A BUS: long, tall, a band of windows down both sides and a destination board nobody reads.
+		cityBlock(parent, "Bus", Vector3.new(8.4, 8.6, 34), at * CFrame.new(0, 5.6, 0), colour:Lerp(Color3.fromRGB(200, 170, 80), 0.4))
+		cityBlock(parent, "BusWindows", Vector3.new(8.6, 2.6, 30), at * CFrame.new(0, 7, 0.6), glass)
+		cityBlock(parent, "BusScreen", Vector3.new(7.4, 3, 0.3), at * CFrame.new(0, 6.4, -17.05), glass)
+		local board = cityBlock(parent, "BusBoard", Vector3.new(6, 1.2, 0.3), at * CFrame.new(0, 9.2, -17.1), Color3.fromRGB(30, 30, 32))
+		label(board, Enum.NormalId.Front, "42  HARBOUR", Color3.fromRGB(230, 170, 70))
+		for _, z in ipairs({ -11, 11 }) do
+			for _, x in ipairs({ -4.2, 4.2 }) do
+				streetKit.wheel(parent, at * CFrame.new(x, 1.6, z), 3.2)
+			end
+		end
+	elseif kind > 0.66 then
+		-- A VAN: a box behind a cab.
+		cityBlock(parent, "Van", Vector3.new(6, 6.4, 11), at * CFrame.new(0, 4.4, 2), colour)
+		cityBlock(parent, "VanCab", Vector3.new(6, 4.6, 5), at * CFrame.new(0, 3.5, -5.8), colour)
+		cityBlock(parent, "VanScreen", Vector3.new(5.4, 1.8, 0.3), at * CFrame.new(0, 4.6, -8.3), glass)
+		for _, z in ipairs({ -5.6, 4.6 }) do
+			for _, x in ipairs({ -2.9, 2.9 }) do
+				streetKit.wheel(parent, at * CFrame.new(x, 1.3, z), 2.6)
+			end
+		end
+	else
+		-- A CAR: body, cabin with its glass, bumpers, headlamps.
+		cityBlock(parent, "CarBody", Vector3.new(5.4, 2.4, 13), at * CFrame.new(0, 1.9, 0), colour)
+		cityBlock(parent, "CarCabin", Vector3.new(5, 2.2, 6.6), at * CFrame.new(0, 4.2, 0.4), colour)
+		cityBlock(parent, "CarGlass", Vector3.new(5.1, 1.4, 5.6), at * CFrame.new(0, 4.3, 0.4), glass)
+		cityBlock(parent, "CarGlass", Vector3.new(4.6, 1.4, 6.8), at * CFrame.new(0, 4.3, 0.4), glass)
+		for _, z in ipairs({ -6.6, 6.6 }) do
+			cityBlock(parent, "Bumper", Vector3.new(5.6, 0.7, 0.5), at * CFrame.new(0, 1.2, z), Color3.fromRGB(120, 122, 124))
+		end
+		for _, x in ipairs({ -1.8, 1.8 }) do
+			cityBlock(parent, "Headlamp", Vector3.new(0.9, 0.6, 0.2), at * CFrame.new(x, 2.3, -6.55), Color3.fromRGB(210, 214, 200))
+		end
+		for _, z in ipairs({ -4.2, 4.2 }) do
+			for _, x in ipairs({ -2.7, 2.7 }) do
+				streetKit.wheel(parent, at * CFrame.new(x, 1.3, z), 2.6)
+			end
+		end
+	end
+end
+
+-- A TRAM on its rails, where the last one stopped: one along the whole street, and the only thing
+-- down there longer than a bus.
+function streetKit.tram(parent: Instance, at: CFrame)
+	local cream, green = Color3.fromRGB(222, 212, 184), Color3.fromRGB(74, 120, 98)
+	cityBlock(parent, "Tram", Vector3.new(8.2, 9.4, 32), at * CFrame.new(0, 6.2, 0), cream)
+	cityBlock(parent, "TramSkirt", Vector3.new(8.4, 2.6, 32.2), at * CFrame.new(0, 2.8, 0), green)
+	cityBlock(parent, "TramWindows", Vector3.new(8.4, 3, 28), at * CFrame.new(0, 7.4, 0), Color3.fromRGB(40, 54, 62))
+	cityBlock(parent, "TramRoof", Vector3.new(7.2, 0.8, 30), at * CFrame.new(0, 11.3, 0), green)
+	rod(parent, "Pantograph", (at * CFrame.new(0, 11.7, 2)).Position, (at * CFrame.new(0, 15.5, -1)).Position, 0.3,
+		Color3.fromRGB(60, 62, 64))
+	rod(parent, "Pantograph", (at * CFrame.new(0, 15.5, -1)).Position, (at * CFrame.new(0, 15.5, -4)).Position, 0.3,
+		Color3.fromRGB(60, 62, 64))
+	for _, z in ipairs({ -11, 11 }) do
+		cityBlock(parent, "Bogie", Vector3.new(7, 1.6, 6), at * CFrame.new(0, 1.2, z), Color3.fromRGB(46, 48, 50))
+	end
+end
+
+-- STREET FURNITURE on the pavement edge: a bus shelter, a phone box, a bench, a bin, a dead tree, or
+-- a traffic light still changing for nobody -- its amber is a real light, and it blinks
+-- (SunkenBlink, SunkenCityClient).
+function streetKit.furniture(parent: Instance, at: CFrame, rng: Random)
+	local iron = Color3.fromRGB(62, 66, 68)
+	local pick = rng:NextNumber()
+	if pick < 0.2 then
+		for _, z in ipairs({ -3.6, 3.6 }) do
+			column(parent, "ShelterPost", 0.4, (at * CFrame.new(-1.2, 0, z)).Position, at.Position.Y, at.Position.Y + 7.4, iron, false)
+		end
+		cityBlock(parent, "ShelterRoof", Vector3.new(3.2, 0.3, 8.4), at * CFrame.new(-0.4, 7.5, 0), iron)
+		local back = cityBlock(parent, "ShelterBack", Vector3.new(0.2, 5, 7.6), at * CFrame.new(-1.6, 3.6, 0), Color3.fromRGB(150, 180, 184))
+		back.Transparency = 0.4
+		cityBlock(parent, "ShelterSeat", Vector3.new(1, 0.3, 5), at * CFrame.new(-1, 1.6, 0), iron)
+	elseif pick < 0.36 then
+		local red = Color3.fromRGB(168, 56, 48)
+		cityBlock(parent, "PhoneBox", Vector3.new(2.6, 7.6, 2.6), at * CFrame.new(0, 3.8, 0), red)
+		cityBlock(parent, "PhoneGlass", Vector3.new(2.7, 4.6, 2.2), at * CFrame.new(0, 4.4, 0), Color3.fromRGB(40, 54, 62))
+		cityBlock(parent, "PhoneRoof", Vector3.new(2.9, 0.6, 2.9), at * CFrame.new(0, 7.9, 0), red)
+	elseif pick < 0.54 then
+		local wood = Color3.fromRGB(110, 90, 66)
+		cityBlock(parent, "BenchSeat", Vector3.new(1.6, 0.3, 6), at * CFrame.new(0, 1.8, 0), wood)
+		cityBlock(parent, "BenchBack", Vector3.new(0.3, 1.6, 6), at * CFrame.new(-0.8, 2.9, 0), wood)
+		for _, z in ipairs({ -2.4, 2.4 }) do
+			cityBlock(parent, "BenchLeg", Vector3.new(1.4, 1.7, 0.3), at * CFrame.new(0, 0.85, z), iron)
+		end
+		column(parent, "Bin", 1.4, (at * CFrame.new(0, 0, 4.6)).Position, at.Position.Y, at.Position.Y + 2.6, Color3.fromRGB(58, 84, 70), false)
+	elseif pick < 0.8 then
+		-- A DEAD TREE, the street's plane trees drowned in their planters, weed hanging off them.
+		local base = at.Position
+		column(parent, "Planter", 3.6, base, base.Y, base.Y + 1.2, Color3.fromRGB(120, 116, 106), false)
+		local tall = rng:NextNumber(14, 22)
+		local crown = base + Vector3.new(0, tall, 0)
+		rod(parent, "Trunk", base, crown, 1.1, Color3.fromRGB(70, 64, 56))
+		for branch = 1, 4 do
+			local a = branch * 1.6 + rng:NextNumber(-0.4, 0.4)
+			local from = base + Vector3.new(0, tall * rng:NextNumber(0.55, 0.9), 0)
+			local tip = from + Vector3.new(math.cos(a) * rng:NextNumber(3, 6), rng:NextNumber(2, 5), math.sin(a) * rng:NextNumber(3, 6))
+			rod(parent, "Branch", from, tip, 0.45, Color3.fromRGB(70, 64, 56))
+			if branch % 2 == 0 then
+				ellipsoid(parent, "Weed", Vector3.new(1.4, 2.6, 1.4), CFrame.new(tip - Vector3.new(0, 1.2, 0)), Color3.fromRGB(70, 100, 60))
+			end
+		end
+	else
+		-- A TRAFFIC LIGHT, amber, blinking.
+		local base = at.Position
+		column(parent, "SignalPole", 0.5, base, base.Y, base.Y + 10, iron, false)
+		cityBlock(parent, "SignalHead", Vector3.new(1.2, 3.6, 1.2), CFrame.new(base + Vector3.new(0, 11.6, 0)), Color3.fromRGB(40, 42, 44))
+		for index, colour in ipairs({ Color3.fromRGB(90, 30, 26), Color3.fromRGB(230, 160, 50), Color3.fromRGB(30, 70, 40) }) do
+			local lens = cityBlock(parent, "SignalLens", Vector3.new(0.3, 0.8, 0.8), CFrame.new(base + Vector3.new(0.65, 12.8 - index * 1.1, 0)), colour)
+			if index == 2 then
+				local amber = Instance.new("PointLight")
+				amber.Brightness = 1.2
+				amber.Range = 14
+				amber.Color = Color3.fromRGB(255, 170, 60)
+				amber.Shadows = false
+				amber.Parent = lens
+				CollectionService:AddTag(lens, "SunkenBlink")
+			end
+		end
+	end
+end
+
+-- LIFE ON THE SEA FLOOR: a coral head, anemones on their stalks, urchins, a starfish. The street has
+-- been a sea floor for long enough to be colonised.
+function streetKit.reef(parent: Instance, at: Vector3, rng: Random)
+	local ANEMONE = { Color3.fromRGB(220, 120, 140), Color3.fromRGB(240, 180, 90), Color3.fromRGB(160, 130, 210),
+		Color3.fromRGB(120, 200, 170) }
+	local head = ellipsoid(parent, "CoralHead", Vector3.new(rng:NextNumber(2.5, 4.5), rng:NextNumber(1.6, 2.6), rng:NextNumber(2.5, 4.5)),
+		CFrame.new(at + Vector3.new(0, 0.8, 0)), Color3.fromRGB(190, 176, 150):Lerp(ANEMONE[rng:NextInteger(1, #ANEMONE)], 0.3))
+	head.Material = Enum.Material.Slate
+	for _ = 1, rng:NextInteger(2, 3) do
+		local foot = at + Vector3.new(rng:NextNumber(-3, 3), 0, rng:NextNumber(-3, 3))
+		local stalk = rng:NextNumber(0.8, 1.8)
+		column(parent, "AnemoneStalk", 0.6, foot, foot.Y, foot.Y + stalk, Color3.fromRGB(200, 180, 160), false, true)
+		ellipsoid(parent, "Anemone", Vector3.new(1.4, 0.9, 1.4), CFrame.new(foot + Vector3.new(0, stalk + 0.3, 0)),
+			ANEMONE[rng:NextInteger(1, #ANEMONE)])
+	end
+	if rng:NextNumber() < 0.6 then
+		local urchin = ellipsoid(parent, "Urchin", Vector3.new(0.9, 0.7, 0.9), CFrame.new(at + Vector3.new(rng:NextNumber(-2, 2), 0.35,
+			rng:NextNumber(-2, 2))), Color3.fromRGB(40, 30, 50))
+		urchin.Material = Enum.Material.Slate
+	end
+end
+
+
 -- ===== THE CITY =====
 --
--- Bands of lots in rings round the plaza, inside and outside the boulevard, cut by eight avenues;
--- the harbour sector has none outside the ring. `blocked(point, reach)` says whether a lot there
--- would stand in something that has already claimed the space (the aquarium, the car park).
-
-type Band = { from: number, to: number, kind: string }
-
-local function bands(radius: number): { Band }
-	local out: { Band } = {}
-	local innerFrom, innerTo = PLAZA_RADIUS + STREET / 2, radius - BOULEVARD_HALF - STREET / 2
-	local depth = innerTo - innerFrom
-	if depth >= 30 then
-		local count = math.max(1, math.floor((depth + STREET) / (INNER_BAND + STREET)))
-		local each = (depth - (count - 1) * STREET) / count
-		for index = 1, count do
-			local from = innerFrom + (index - 1) * (each + STREET)
-			table.insert(out, { from = from, to = from + each, kind = if index == count then "nearInner" else "inner" })
-		end
-	end
-	local outerFrom = radius + BOULEVARD_HALF + STREET / 2
-	for index = 1, OUTER_BANDS do
-		local from = outerFrom + (index - 1) * (OUTER_BAND + STREET)
-		table.insert(out, { from = from, to = from + OUTER_BAND, kind = if index == 1 then "nearOuter" else "outer" .. index })
-	end
-	return out
+-- A grid of blocks laid in the route's own direction, either side of it, out to CITY_SIDE and a
+-- little past each end. The grid is STRAIGHT and the route MEANDERS through it, which is what a
+-- real city looks like where a boulevard sweeps through one: every lot the street would run into
+-- is pushed back and shortened until its frontage is on the kerb, and the street's edge follows
+-- the bend while the blocks behind it stay square.
+--
+-- Each block holds two or three buildings along its frontage rather than one, because a block that
+-- is one building is a warehouse and a street of warehouses is not a city.
+-- How much of the route's end belongs to the harbour, on a route of this length.
+local function harbourAlong(route: Route): number
+	return math.min(HARBOUR_ALONG, route.total * HARBOUR_ALONG_SHARE)
 end
 
-local function wrapAngle(a: number): number
-	return (a + math.pi) % (2 * math.pi) - math.pi
-end
-
-local function city(parent: Instance, centre: Vector3, radius: number, floorY: number, harbourAngle: number,
-	carParkAngle: number, blocked: (Vector3, number) -> boolean, rng: Random): number
+local function city(parent: Instance, route: Route, floorY: number, blocked: (Vector3, number) -> boolean,
+	rng: Random): number
 	local built = 0
-	local carParkDone = false
-	local avenueOffset = rng:NextNumber(0, 2 * math.pi / AVENUES)
-	for _, band in ipairs(bands(radius)) do
-		local mid = (band.from + band.to) / 2
-		local theta = 0
-		while theta < 2 * math.pi do
-			local arc = rng:NextNumber(LOT_ARC_MIN, LOT_ARC_MAX)
-			local span = arc / mid
-			local at = theta + span / 2
-			theta += span
-			-- Not across an avenue.
-			local onAvenue = false
-			for k = 0, AVENUES - 1 do
-				local avenue = avenueOffset + k * 2 * math.pi / AVENUES
-				if math.abs(wrapAngle(at - avenue)) < span / 2 + (AVENUE_WIDE / 2) / mid then
-					onAvenue = true
-					break
+	local pitch = BLOCK + STREET
+	local from, to = -CITY_BEYOND, route.total + CITY_BEYOND
+	local rows = math.max(1, math.floor((to - from) / pitch))
+	local cols = math.max(1, math.floor(CITY_SIDE * 2 / pitch))
+	local churchDone = false
+	for row = 0, rows do
+		for col = 0, cols do
+			local s = from + (row + 0.5) * pitch
+			local across = -CITY_SIDE + (col + 0.5) * pitch
+			local spot = route.points[1] + route.forward * s + route.side * across
+			local at = Vector3.new(spot.X, floorY, spot.Z)
+			local near, away = nearRoute(route, at)
+			local half = BLOCK / 2
+			-- In the street itself, or in the harbour's open water at the end of it.
+			local along = alongOf(route, at)
+			local harbourish = along > route.total - harbourAlong(route) and near < HARBOUR_REACH
+			if near >= BOULEVARD_HALF + 14 and not harbourish then
+				-- What the street takes out of this block, and what is left of it.
+				local bite = math.max(0, (BOULEVARD_HALF + 6) - (near - half))
+				local depth = BLOCK - bite
+				if depth >= LOT_MIN then
+					local centre = at + away * (bite / 2)
+					local reach = math.sqrt(depth * depth + BLOCK * BLOCK) / 2
+					if not blocked(centre, reach) then
+						-- WHICH WAY THE BLOCK FACES. On the kerb it faces the street, because a
+						-- frontage follows the road it is on. Further back it faces the way the
+						-- GRID does, or the whole city would fan out round the bend like spokes
+						-- instead of standing in streets of its own.
+						local gridWay = if across >= 0 then route.side else -route.side
+						local facing = if near < 320 then away else gridWay
+						local frame = CFrame.fromMatrix(Vector3.new(centre.X, floorY, centre.Z), facing, Vector3.yAxis)
+						-- HOW MUCH BUILDING THIS LOT GETS. A frontage on the street is read at walking
+						-- distance and gets everything; the middle distance gets its storeys and its
+						-- ribs; the haze gets a silhouette, which is all it could show anyway.
+						local detail = if near < DETAIL_NEAR then 2 elseif near < DETAIL_MID then 1 else 0
+						local frontage = BLOCK - 8
+						local lots = if near < 320 then rng:NextInteger(2, 3) else rng:NextInteger(1, 2)
+						local lotW = frontage / lots
+						-- ANYTHING THAT BREAKS THE SURFACE keeps clear of the route.
+						--
+						-- Judged by where the lot's frontage ACTUALLY is once the street has taken its
+						-- bite, not by where the block started: the block's own half made every lot on the
+						-- kerb count as too near, so the whole first row drowned just under the surface.
+						-- The frontage is 62 from the route's line at the nearest, which is far past any
+						-- jump from a chunk.
+						local nearCentre = nearRoute(route, centre)
+						local clearOfRoute = nearCentre - depth / 2 >= EMERGE_CLEAR + ROUTE_REACH
+						for index = 1, lots do
+							local offset = -frontage / 2 + (index - 0.5) * lotW
+							local lot = frame * CFrame.new(0, 0, offset)
+							local w, d = lotW - 6, depth - 10
+							local pick = rng:NextNumber()
+							if near < 320 then
+								if not churchDone and near > 150 and pick > 0.94 and clearOfRoute then
+									church(parent, lot, w, d)
+									dress(parent, lot, w, d, waterLevel + 34, Color3.fromRGB(184, 178, 162), rng, 2)
+									churchDone = true
+								elseif pick < 0.42 then
+									floodedFlats(parent, lot, w, d, rng, detail, clearOfRoute)
+								elseif pick < 0.72 then
+									house(parent, lot, w, d, rng, detail)
+								elseif pick < 0.88 and clearOfRoute then
+									tower(parent, lot, w, d * 0.8, waterLevel + rng:NextNumber(6, 22), false, rng, detail)
+								else
+									warehouse(parent, lot, w, d, rng, detail, clearOfRoute)
+								end
+							elseif near < 620 then
+								if pick < 0.35 and clearOfRoute then
+									tower(parent, lot, w, d * 0.7, waterLevel + rng:NextNumber(10, 38), false, rng, detail)
+								elseif pick < 0.62 then
+									floodedFlats(parent, lot, w, d * 0.8, rng, detail, clearOfRoute)
+								elseif pick < 0.84 then
+									warehouse(parent, lot, w, d * 0.8, rng, detail, clearOfRoute)
+								else
+									house(parent, lot, w, d * 0.8, rng, detail)
+								end
+							elseif pick < 0.62 then
+								tower(parent, lot, w * 0.85, d * 0.6, waterLevel + rng:NextNumber(20, 64),
+									pick < 0.3, rng, detail)
+							end
+							built += 1
+							-- A hoarding on a roof, where it would face the street.
+							if near < 420 and clearOfRoute and rng:NextNumber() < 0.07 then
+								billboard(parent, lot * CFrame.new(-d / 2 + 2, waterLevel - floorY + 4, 0), 18, 9, rng)
+							end
+						end
+					end
 				end
-			end
-			local outside = band.from > radius
-			local inHarbour = outside and math.abs(wrapAngle(at - harbourAngle)) < HARBOUR_SECTOR_HALF
-			local where = Vector3.new(centre.X + math.cos(at) * mid, floorY, centre.Z + math.sin(at) * mid)
-			-- As wide as the lot is at its NARROW end, so neighbours never overlap at the inner corners.
-			local w, d = span * band.from - 6, band.to - band.from
-			local reach = math.sqrt(w * w + d * d) / 2
-			if not onAvenue and not inHarbour and not blocked(where, reach) then
-				local out = Vector3.new(math.cos(at), 0, math.sin(at))
-				local frame = CFrame.fromMatrix(where, out, Vector3.yAxis)
-				-- May it break the surface? Only where the whole lot is EMERGE_CLEAR beyond the reach.
-				local clearOfRoute = band.from - (radius + ROUTE_REACH) >= EMERGE_CLEAR
-					or (radius - ROUTE_REACH) - band.to >= EMERGE_CLEAR
-				local pick = rng:NextNumber()
-				if band.kind == "nearOuter" and not carParkDone and math.abs(wrapAngle(at - carParkAngle)) < span then
-					carPark(parent, frame, w, d, rng)
-					carParkDone = true
-				elseif band.kind == "nearOuter" or band.kind == "nearInner" then
-					if pick < 0.55 then
-						floodedFlats(parent, frame, w, d, rng)
-					elseif pick < 0.8 or not clearOfRoute then
-						house(parent, frame, w, d, rng)
-					else
-						tower(parent, frame, w, d * 0.8, waterLevel + rng:NextNumber(6, 18), false, rng)
-					end
-				elseif band.kind == "inner" then
-					if pick < 0.7 or not clearOfRoute then
-						house(parent, frame, w, d * 0.8, rng)
-					else
-						floodedFlats(parent, frame, w, d * 0.7, rng)
-					end
-				elseif band.kind == "outer2" then
-					if pick < 0.5 and clearOfRoute then
-						tower(parent, frame, w, d * 0.6, waterLevel + rng:NextNumber(8, 28), false, rng)
-					elseif pick < 0.75 then
-						floodedFlats(parent, frame, w, d * 0.6, rng)
-					else
-						house(parent, frame, w, d * 0.6, rng)
-					end
-				else
-					if pick < 0.6 and clearOfRoute then
-						tower(parent, frame, w * 0.8, d * 0.5, waterLevel + rng:NextNumber(24, 58), true, rng)
-					elseif pick < 0.9 and clearOfRoute then
-						tower(parent, frame, w, d * 0.6, waterLevel + rng:NextNumber(8, 26), false, rng)
-					end
-				end
-				built += 1
 			end
 		end
 	end
-	-- LONE TOWERS out past the last band, for a skyline that fades into the haze.
-	local last = radius + BOULEVARD_HALF + STREET / 2 + OUTER_BANDS * (OUTER_BAND + STREET)
+	-- LONE TOWERS out past the last block, for a skyline that fades into the haze.
 	for index = 1, FAR_TOWERS do
-		local at = (index / FAR_TOWERS) * 2 * math.pi + rng:NextNumber(-0.2, 0.2)
-		if math.abs(wrapAngle(at - harbourAngle)) > HARBOUR_SECTOR_HALF then
-			local r = last + rng:NextNumber(80, 420)
-			local where = Vector3.new(centre.X + math.cos(at) * r, floorY, centre.Z + math.sin(at) * r)
-			local frame = CFrame.fromMatrix(where, Vector3.new(math.cos(at), 0, math.sin(at)), Vector3.yAxis)
-			tower(parent, frame, rng:NextNumber(26, 40), rng:NextNumber(26, 40), waterLevel + rng:NextNumber(40, 90), true, rng)
-			built += 1
-		end
+		local s = rng:NextNumber(-CITY_BEYOND, route.total + CITY_BEYOND)
+		local sign = if index % 2 == 0 then 1 else -1
+		local across = sign * rng:NextNumber(CITY_SIDE, CITY_SIDE + (if sign > 0 then FAR_OPEN else 700))
+		local spot = route.points[1] + route.forward * s + route.side * across
+		local at = Vector3.new(spot.X, floorY, spot.Z)
+		local _, away = nearRoute(route, at)
+		local frame = CFrame.fromMatrix(at, away, Vector3.yAxis)
+		tower(parent, frame, rng:NextNumber(26, 40), rng:NextNumber(26, 40), waterLevel + rng:NextNumber(40, 96),
+			true, rng, 0)
+		built += 1
 	end
 	return built
+end
+
+-- ===== THE FERRIS WHEEL =====
+--
+-- A fairground's, drowned: standing in its own square of open water off the street, on the side
+-- away from the plaza and the thing on the horizon, its lowest cabins under the surface and the
+-- rest still going round, very slowly, for nobody. Every city has towers and a clock; a drowned one
+-- reads as drowned by what should not be in water, and this is the one circle in a city of
+-- rectangles, which is why it is seen from everywhere.
+--
+-- The meshes are gen_ferris.py's (Ferris_Frame, Ferris_Wheel, Ferris_Gondola, found and checked by
+-- SeaRig); with none imported it is built plainer from parts in the same place. The frame reaches
+-- the floor from `hub` over the water -- gen_ferris.py's FRAME_DOWN is FLOOR_DEPTH + hub, and the
+-- checker holds the two together -- so it stands on the sea floor, not a stud off it. The client
+-- turns the wheel and hangs the cabins (SunkenFerris), on the server's clock. One cabin's light is
+-- still on.
+local FERRIS = {
+	out = 250, -- off the route's line
+	hub = 26, -- the axle, over the water
+	radius = 36, -- to the cabins' pins
+	hang = 3, -- a cabin's middle, under its pin
+	cabins = 16,
+	spin = 0.02, -- radians a second: once round in five minutes
+	reach = 40, -- the most it covers from its middle, frame and all
+	clear = 48, -- and the square the city leaves it
+	shares = { 0.55, 0.62, 0.48, 0.7, 0.3 }, -- where along the street it may stand, first choice first
+	colours = { Color3.fromRGB(214, 170, 170), Color3.fromRGB(170, 204, 186), Color3.fromRGB(222, 206, 150),
+		Color3.fromRGB(160, 186, 214) },
+}
+
+local function ferrisWheel(parent: Instance, at: Vector3, toward: Vector3, floorY: number, rng: Random): Model
+	local model = Instance.new("Model")
+	model.Name = "FerrisWheel"
+	model.Parent = parent
+	local axle = CFrame.fromMatrix(Vector3.new(at.X, floorY + FLOOR_DEPTH + FERRIS.hub, at.Z), toward, Vector3.yAxis)
+	local epoch = workspace:GetServerTimeNow()
+	local paint = Color3.fromRGB(206, 202, 192)
+	local function turning(item: Instance, index: number?)
+		item:SetAttribute("Axle", axle)
+		item:SetAttribute("Spin", FERRIS.spin)
+		item:SetAttribute("Epoch", epoch)
+		item:SetAttribute("Radius", FERRIS.radius)
+		item:SetAttribute("Hang", FERRIS.hang)
+		item:SetAttribute("Count", FERRIS.cabins)
+		if index then
+			item:SetAttribute("Index", index)
+		end
+		CollectionService:AddTag(item, "SunkenFerris")
+	end
+	local function mesh(name: string): BasePart?
+		local rig = if SeaRig then SeaRig.place(model, name) else nil
+		return rig and rig.part
+	end
+	-- A straight member from a to b, for the part-built wheel.
+	local function strut(name: string, a: Vector3, b: Vector3, thick: number, into: Instance): Part
+		return block(into, name, Vector3.new(thick, thick, (b - a).Magnitude), CFrame.lookAt((a + b) / 2, b), paint,
+			Enum.Material.Metal, false)
+	end
+	-- THE FRAME: an A-frame either side, braced, from the axle's bearings down to the floor.
+	local frame = mesh("Ferris_Frame")
+	if frame then
+		frame.CFrame = axle
+		frame.Color = paint
+		frame.Material = Enum.Material.Metal
+	else
+		for _, side in ipairs({ -1, 1 }) do
+			local top = axle * Vector3.new(side * 7.2, 0, 0)
+			for _, spread in ipairs({ -30, 30 }) do
+				strut("FerrisLeg", top, axle * Vector3.new(side * 9, -(FLOOR_DEPTH + FERRIS.hub), spread), 1.9, model)
+			end
+		end
+		strut("FerrisAxle", axle * Vector3.new(-7.6, 0, 0), axle * Vector3.new(7.6, 0, 0), 2.2, model)
+	end
+	-- THE WHEEL, which the client turns about its part's X.
+	local wheel = mesh("Ferris_Wheel")
+	if wheel then
+		wheel.CFrame = axle
+		wheel.Color = paint
+		wheel.Material = Enum.Material.Metal
+		turning(wheel)
+	else
+		local rim = Instance.new("Model")
+		rim.Name = "FerrisRim"
+		local function onRim(side: number, a: number): Vector3
+			return axle * Vector3.new(side * 3, math.sin(a) * FERRIS.radius, -math.cos(a) * FERRIS.radius)
+		end
+		for _, side in ipairs({ -1, 1 }) do
+			for index = 0, 23 do
+				strut("FerrisRim", onRim(side, 2 * math.pi * index / 24), onRim(side, 2 * math.pi * (index + 1) / 24), 0.9, rim)
+			end
+			for index = 0, 7 do
+				strut("FerrisSpoke", axle * Vector3.new(side * 5, 0, 0), onRim(side, 2 * math.pi * (index + 0.5) / 8), 0.5, rim)
+			end
+		end
+		rim.WorldPivot = axle
+		rim.Parent = model
+		turning(rim)
+	end
+	-- THE CABINS, one on every pin, hanging level. Put at rest here; the client moves them.
+	local lit = rng:NextInteger(0, FERRIS.cabins - 1)
+	for index = 0, FERRIS.cabins - 1 do
+		local pin = (axle * CFrame.Angles(2 * math.pi * index / FERRIS.cabins, 0, 0)) * Vector3.new(0, 0, -FERRIS.radius)
+		local rest = CFrame.new(pin) * axle.Rotation * CFrame.new(0, -FERRIS.hang, 0)
+		local colour = FERRIS.colours[index % #FERRIS.colours + 1]
+		-- Part-built, a box whose top is at the pin, so it hangs from something.
+		local cabin: BasePart = mesh("Ferris_Gondola")
+			or block(model, "FerrisCabin", Vector3.new(3.4, FERRIS.hang * 2, 3), rest, colour, Enum.Material.SmoothPlastic, false)
+		cabin.CFrame = rest
+		cabin.Color = colour
+		turning(cabin, index)
+		if index == lit then
+			-- Still lit, after everything. A warm lamp in one cabin, going round with it.
+			local glow = Instance.new("PointLight")
+			glow.Color = Color3.fromRGB(255, 206, 140)
+			glow.Brightness = 1.1
+			glow.Range = 14
+			glow.Shadows = false
+			glow.Parent = cabin
+			CollectionService:AddTag(cabin, "SunkenLantern")
+		end
+	end
+	return model
+end
+
+-- A STRAND OF KELP: a holdfast gripping the floor, and a marker saying how tall the strand is and
+-- which way the current leans it. The client grows the stipe, the blades and the floats from it and
+-- sways the whole thing, top most, a wave running up it (SunkenCityClient).
+--
+-- `current` is the way the water runs where it stands (down the street, or along the tank), which
+-- a mesh strand leans and streams its canopy along; `canopy` says it may have one. The street's
+-- strands do; the tank's do not, because a canopy there would lie over the tunnel's roof.
+local function kelp(parent: Instance, foot: Vector3, height: number, rng: Random, current: Vector3?, canopy: boolean?)
+	local hold = ellipsoid(parent, "Holdfast", Vector3.new(2.8, 1.4, 2.8), CFrame.new(foot + Vector3.new(0, 0.4, 0))
+		* CFrame.Angles(0, rng:NextNumber(0, 6), 0), drowned(Color3.fromRGB(84, 72, 44), foot.Y))
+	hold.Material = Enum.Material.SmoothPlastic
+	local marker = block(parent, "Kelp", Vector3.new(1, 1, 1), CFrame.new(foot), SURFACE, Enum.Material.SmoothPlastic, false)
+	marker.Transparency = 1
+	marker:SetAttribute("Height", height)
+	marker:SetAttribute("Phase", rng:NextNumber(0, 100))
+	-- One current through the whole city, a strand a little either side of it: a bed of kelp all
+	-- leaning its own way is a bed of kelp with no water in it.
+	marker:SetAttribute("Lean", 0.7 + rng:NextNumber(-0.4, 0.4))
+	if current then
+		marker:SetAttribute("Along", current)
+	end
+	marker:SetAttribute("Canopy", canopy == true)
+	CollectionService:AddTag(marker, "SunkenKelp")
+end
+
+-- ===== THE BOULEVARD ITSELF =====
+--
+-- The street the route runs down, which is the one part of the city you are actually in. Kerbs
+-- either side under the water, tram rails down the middle of it, lamp posts whose heads come up
+-- through the surface, and the cars that never got out. All of it under you and read through the
+-- water, which is why the lamps are the only things here that break it.
+local function boulevard(parent: Instance, route: Route, floorY: number, rng: Random, blocked: (Vector3, number) -> boolean,
+	alongs: { number })
+	local reachable = route.total - harbourAlong(route)
+	-- Nothing wide stands where a road sign's legs come down.
+	local function byGantry(s: number): boolean
+		for _, g in ipairs(alongs) do
+			if math.abs(g - s) < 24 then
+				return true
+			end
+		end
+		return false
+	end
+	local tramAt = route.total * 0.46
+	while byGantry(tramAt) and tramAt < reachable do
+		tramAt += 10
+	end
+	local step = 30
+	local count = math.floor(route.total / step)
+	local roadY = floorY + 0.8
+	for index = 0, count do
+		local s = index * step
+		local at, dir = alongRoute(route, s)
+		local side = Vector3.yAxis:Cross(dir)
+		local mid = Vector3.new(at.X, roadY, at.Z)
+		local facing = CFrame.lookAt(mid, mid + dir)
+		-- The road surface, and a kerb either side of it.
+		block(parent, "Road", Vector3.new(BOULEVARD_HALF * 2, 1.4, step + 1), facing, drowned(Color3.fromRGB(82, 86, 84), roadY),
+			Enum.Material.Concrete, false)
+		for _, sign in ipairs({ -1, 1 }) do
+			block(parent, "Kerb", Vector3.new(3, 2, step + 1), facing * CFrame.new(sign * BOULEVARD_HALF, 0.8, 0),
+				drowned(Color3.fromRGB(150, 148, 140), roadY), Enum.Material.Concrete, false)
+		end
+		-- Tram rails down the middle, a pair of thin bright lines in all that silt.
+		for _, rail in ipairs({ -3.2, 3.2 }) do
+			block(parent, "TramRail", Vector3.new(0.5, 0.4, step + 1), facing * CFrame.new(rail, 1.1, 0),
+				Color3.fromRGB(120, 116, 104), Enum.Material.Metal, false)
+		end
+		-- LAMP POSTS, alternating sides, their lanterns out of the water. The one thing down here
+		-- with a light still in it, and only every eighth one: a street of lit lamps would be a
+		-- party, and a street where one in eight still burns is something else.
+		-- NOTHING STANDS THROUGH THE AQUARIUM OR THE FLAT. A lamp post, like a building, is kept out of
+		-- what they claim; before this, one in a dozen runs put a post through the tunnel.
+		local lampSign = if index % 4 == 0 then 1 else -1
+		if index % 2 == 0 and not blocked(at + side * (lampSign * (BOULEVARD_HALF - 2)), 4) then
+			local sign = lampSign
+			local foot = at + side * (sign * (BOULEVARD_HALF - 2))
+			local top = waterLevel + 7
+			local iron = drowned(Color3.fromRGB(64, 70, 72), waterLevel)
+			column(parent, "LampPost", 1.1, Vector3.new(foot.X, floorY, foot.Z), floorY, top, iron, false)
+			-- A collar where it comes out of the water, and a ring of weed on it.
+			column(parent, "LampCollar", 1.6, Vector3.new(foot.X, 0, foot.Z), waterLevel - 0.6, waterLevel + 0.6,
+				iron, false)
+			column(parent, "LampWeed", 2.2, Vector3.new(foot.X, 0, foot.Z), waterLevel - 0.3, waterLevel + 0.2,
+				Color3.fromRGB(74, 104, 62), false)
+			-- The arm: up and out over the street, with a scroll where it leaves the post.
+			local root = Vector3.new(foot.X, top - 0.4, foot.Z)
+			local tip = root - side * (sign * 3.2) + Vector3.new(0, 0.6, 0)
+			rod(parent, "LampArm", root, tip, 0.35, Color3.fromRGB(64, 70, 72))
+			rod(parent, "LampBrace", root - Vector3.new(0, 1.4, 0), root - side * (sign * 1.6), 0.25,
+				Color3.fromRGB(64, 70, 72))
+			ellipsoid(parent, "LampScroll", Vector3.new(0.6, 0.6, 0.6), CFrame.new(root - side * (sign * 0.9)
+				- Vector3.new(0, 0.6, 0)), Color3.fromRGB(64, 70, 72))
+			rod(parent, "LampHanger", tip, tip - Vector3.new(0, 0.6, 0), 0.15, Color3.fromRGB(46, 50, 52))
+			local lit = index % 8 == 0
+			local glass = lantern(parent, CFrame.new(tip - Vector3.new(0, 1.8, 0)), lit, Color3.fromRGB(255, 226, 170))
+			if lit then
+				sound(glass, "LampBuzz", THUD_SOUND, 0.12, 0.05, 30, true)
+			end
+		end
+		-- A CAR now and then, stopped where the water caught it.
+		-- VEHICLES, where they stopped: in the lanes either side of the rails, the big ones nearer the
+		-- middle where there is room for them, none where a road sign's legs come down.
+		if not byGantry(s) then
+			for _ = 1, if rng:NextNumber() < 0.25 then 2 else 1 do
+				if rng:NextNumber() < 0.5 then
+					local laneSide = if rng:NextNumber() < 0.5 then -1 else 1
+					local big = rng:NextNumber() < 0.35
+					local lane = laneSide * (if big then rng:NextNumber(10, 22) else rng:NextNumber(10, ROADSIDE.vehicleLane))
+					if not blocked(at + side * lane, 18) then
+						streetKit.car(parent, facing * CFrame.new(lane, 1.4, rng:NextNumber(-step / 3, step / 3))
+							* CFrame.Angles(0, rng:NextNumber(-0.25, 0.25), 0), rng, big)
+					end
+				end
+			end
+		end
+		if math.abs(s - tramAt) < step / 2 then
+			streetKit.tram(parent, facing * CFrame.new(0, 1.4, s - tramAt) * CFrame.Angles(0, 0.06, 0))
+		end
+		-- FURNITURE on the pavement edge, on the side the lamp is not.
+		if index % 2 == 0 and rng:NextNumber() < 0.7 and not byGantry(s) then
+			local sign = if index % 4 == 0 then -1 else 1
+			local spot = at + side * (sign * ROADSIDE.furnitureAt) + dir * rng:NextNumber(-6, 6)
+			if not blocked(spot, 6) then
+				streetKit.furniture(parent, CFrame.lookAt(Vector3.new(spot.X, roadY + 0.7, spot.Z), Vector3.new(spot.X, roadY + 0.7, spot.Z) - side * sign), rng)
+			end
+		end
+		-- THE REEF the street has become, in patches either side of the rails.
+		for _ = 1, 2 do
+			local spot = at + side * ((if rng:NextNumber() < 0.5 then -1 else 1) * rng:NextNumber(7, 46)) + dir * rng:NextNumber(-step / 2, step / 2)
+			if not blocked(spot, 4) then
+				streetKit.reef(parent, Vector3.new(spot.X, roadY + 0.7, spot.Z), rng)
+			end
+		end
+		if s < reachable then
+			-- KELP BEDS along the kerbs, halfway between one lamp post and the next, on alternating
+			-- sides: two or three strands from the road to just under the surface, which is what
+			-- you see from the route -- fronds moving at the top of the water.
+			if index % 2 == 1 then
+				local sign = if index % 4 == 1 then 1 else -1
+				local bed = at + side * (sign * KELP_KERB)
+				if not blocked(bed, 10) then
+					for strand = 1, if rng:NextNumber() < 0.4 then 3 else 2 do
+						local foot = bed + dir * ((strand - 2) * 3 + rng:NextNumber(-0.8, 0.8)) + side * rng:NextNumber(-1, 1)
+						kelp(parent, Vector3.new(foot.X, floorY + 0.5, foot.Z), waterLevel - rng:NextNumber(1.5, 4) - floorY - 0.5, rng,
+							dir, true)
+					end
+					-- BUBBLES out of the bed, all the way up: the one sign from the route that the floor
+					-- a hundred studs down is alive.
+					if rng:NextNumber() < 0.6 then
+						local vent = block(parent, "BubbleVent", Vector3.new(1, 1, 1), CFrame.new(bed.X, floorY + 1, bed.Z), SURFACE,
+							Enum.Material.SmoothPlastic, false)
+						vent.Transparency = 1
+						local rise = Instance.new("ParticleEmitter")
+						rise.Name = "Bubbles"
+						rise.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+						rise.Color = ColorSequence.new(Color3.fromRGB(226, 242, 240))
+						rise.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 0.7) })
+						rise.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(0.9, 0.5),
+							NumberSequenceKeypoint.new(1, 1) })
+						rise.Lifetime = NumberRange.new(16, 19)
+						rise.Speed = NumberRange.new(5.5, 6.5)
+						rise.EmissionDirection = Enum.NormalId.Top
+						rise.SpreadAngle = Vector2.new(4, 4)
+						rise.Rate = 1.6
+						rise.Parent = vent
+					end
+				end
+			end
+			-- FLOTSAM, afloat in the open water under the route and bobbing (the client bobs anything
+			-- tagged SunkenBuoy): planks, a crate, a barrel, a ball, and now and then a child's rubber
+			-- duck, which is the one that stops people.
+			if rng:NextNumber() < 0.34 then
+				local spot = at + side * ((if rng:NextNumber() < 0.5 then -1 else 1) * rng:NextNumber(12, 32))
+					+ dir * rng:NextNumber(-10, 10)
+				if not blocked(spot, 4) then
+					local float = Instance.new("Model")
+					float.Name = "Flotsam"
+					local turn = CFrame.new(spot.X, waterLevel, spot.Z) * CFrame.Angles(0, rng:NextNumber(0, 6.28), 0)
+					local pick = rng:NextNumber()
+					if pick < 0.06 then
+						local yellow = Color3.fromRGB(244, 204, 70)
+						ellipsoid(float, "DuckBody", Vector3.new(1.6, 1.1, 2), turn * CFrame.new(0, 0.2, 0), yellow)
+						ellipsoid(float, "DuckHead", Vector3.new(1, 1, 1), turn * CFrame.new(0, 0.95, -0.6), yellow)
+						ellipsoid(float, "DuckBeak", Vector3.new(0.5, 0.25, 0.6), turn * CFrame.new(0, 0.85, -1.15),
+							Color3.fromRGB(236, 124, 50))
+					elseif pick < 0.4 then
+						for plank = 0, rng:NextInteger(1, 2) do
+							block(float, "Plank", Vector3.new(0.9, 0.3, rng:NextNumber(4, 7)), turn * CFrame.new(plank * 1.1, 0.05, plank * 0.8)
+								* CFrame.Angles(0, plank * 0.4, 0), Color3.fromRGB(120, 96, 70), Enum.Material.WoodPlanks, false)
+						end
+					elseif pick < 0.62 then
+						block(float, "Crate", Vector3.new(2.4, 2.4, 2.4), turn * CFrame.new(0, 0.3, 0) * CFrame.Angles(0.2, 0, 0.15),
+							Color3.fromRGB(146, 116, 78), Enum.Material.WoodPlanks, false)
+					elseif pick < 0.84 then
+						local barrel = block(float, "Barrel", Vector3.new(3.2, 2, 2), turn * CFrame.new(0, 0.2, 0),
+							FADED[rng:NextInteger(1, #FADED)], Enum.Material.Metal, false)
+						barrel.Shape = Enum.PartType.Cylinder
+					else
+						local ball = ellipsoid(float, "Ball", Vector3.new(1.4, 1.4, 1.4), turn * CFrame.new(0, 0.3, 0),
+							Color3.fromRGB(210, 80, 70))
+						ball.Material = Enum.Material.SmoothPlastic
+					end
+					float.Parent = parent
+					CollectionService:AddTag(float, "SunkenBuoy")
+				end
+			end
+			-- WEED MATS on the surface along the kerbs, where the drift gathers.
+			if rng:NextNumber() < 0.3 then
+				local mat = at + side * ((if rng:NextNumber() < 0.5 then -1 else 1) * rng:NextNumber(40, 52))
+				if not blocked(mat, 6) then
+					local across = rng:NextNumber(3, 8)
+					local weed = block(parent, "WeedMat", Vector3.new(0.12, across, across * rng:NextNumber(0.7, 1)),
+						CFrame.new(mat.X, waterLevel + 0.25, mat.Z) * CFrame.Angles(0, rng:NextNumber(0, 6), math.pi / 2),
+						Color3.fromRGB(88, 112, 60), Enum.Material.Grass, false)
+					weed.Shape = Enum.PartType.Cylinder
+					weed.Transparency = 0.15
+					weed.CastShadow = false
+				end
+			end
+		end
+	end
 end
 
 -- ===== THE PLAZA AND THE CLOCK TOWER =====
@@ -664,117 +1995,471 @@ end
 -- Stopped at twelve minutes past four, which is when the water came. The minute hands are tagged so
 -- SunkenCityClient can make them try, now and then, to move on.
 local function clockTower(parent: Instance, centre: Vector3, floorY: number)
+	-- Placed beside the route rather than at the middle of a ring: the city has no middle now, it
+	-- has a street, and this is the landmark off it.
+	--
+	-- BUILT IN STAGES, the way a clock tower is: a shaft of dressed stone with quoins at the corners
+	-- and tall arched windows, a wider clock stage with a face on every side, an open belfry with the
+	-- bell still hanging in it, pinnacles, and a copper spire gone green with a weathervane on top.
+	-- The bell is tagged: every so often it tolls, once, and nobody is up there (SunkenCityClient).
+	local rng = Random.new(412)
 	column(parent, "Plaza", PLAZA_RADIUS * 2, centre, floorY, floorY + 0.6, Color3.fromRGB(120, 116, 106), false)
-	local top = waterLevel + 44
 	local side = 22
-	cityBlock(parent, "ClockTower", Vector3.new(side, top - floorY, side), CFrame.new(centre.X, (floorY + top) / 2, centre.Z), STONE)
-	ribbons(parent, CFrame.new(centre.X, floorY, centre.Z), side, side, floorY, waterLevel + 20, 8)
-	cityBlock(parent, "Cornice", Vector3.new(side + 2, 1.6, side + 2), CFrame.new(centre.X, top - 6, centre.Z), STONE)
-	-- The belfry, and a stepped roof with a spire.
-	for index, size in ipairs({ side - 2, side - 8, side - 14 }) do
-		cityBlock(parent, "Roof", Vector3.new(size, 3, size), CFrame.new(centre.X, top + 1.5 + (index - 1) * 3, centre.Z),
-			Color3.fromRGB(96, 110, 108))
+	local shaftTop = waterLevel + 26
+	local clockTop = waterLevel + 40
+	local belfryTop = waterLevel + 52
+	local stone = STONE
+	local light = Color3.fromRGB(204, 198, 182)
+	local copper = Color3.fromRGB(96, 150, 128)
+	local at = function(y: number): CFrame
+		return CFrame.new(centre.X, y, centre.Z)
 	end
-	column(parent, "Spire", 1.2, centre, top + 9, top + 22, Color3.fromRGB(110, 104, 90), false, true)
-	local faceY = waterLevel + 30
+	-- THE SHAFT.
+	cityBlock(parent, "ClockTower", Vector3.new(side, shaftTop - floorY, side), at((floorY + shaftTop) / 2), stone)
+	for _, corner in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
+		cityBlock(parent, "Quoin", Vector3.new(1.6, shaftTop - (waterLevel - 20), 1.6),
+			at((shaftTop + waterLevel - 20) / 2) * CFrame.new(corner[1] * side / 2, 0, corner[2] * side / 2), light)
+	end
+	for y = waterLevel - 16, shaftTop - 2, 8 do
+		cityBlock(parent, "StringCourse", Vector3.new(side + 0.8, 0.7, side + 0.8), at(y), light)
+	end
+	-- Tall arched windows on every face, above the water: a dark recess with a round head.
 	for index = 0, 3 do
 		local normal = Vector3.new(math.cos(index * math.pi / 2), 0, math.sin(index * math.pi / 2))
-		local faceAt = Vector3.new(centre.X, faceY, centre.Z) + normal * (side / 2 + 0.3)
-		local face = block(parent, "ClockFace", Vector3.new(0.6, 14, 14),
-			CFrame.lookAt(faceAt, faceAt + normal) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(232, 228, 214),
+		local mid = Vector3.new(centre.X, waterLevel + 11, centre.Z) + normal * (side / 2 + 0.05)
+		local facing = CFrame.lookAt(mid, mid + normal)
+		cityBlock(parent, "ArchWindow", Vector3.new(4, 10, 0.4), facing, Color3.fromRGB(26, 32, 36), Enum.Material.Glass)
+		local head = block(parent, "ArchHead", Vector3.new(0.4, 4, 4), facing * CFrame.new(0, 5, 0)
+			* CFrame.Angles(0, math.pi / 2, 0), drowned(Color3.fromRGB(26, 32, 36), waterLevel + 16), Enum.Material.Glass,
+			false)
+		head.Shape = Enum.PartType.Cylinder
+		cityBlock(parent, "ArchSurround", Vector3.new(5.4, 0.8, 0.5), facing * CFrame.new(0, -5.2, 0.05), light)
+	end
+
+	-- THE CLOCK STAGE, a little wider than the shaft, with a cornice under and over it.
+	cityBlock(parent, "ClockStage", Vector3.new(side + 2, clockTop - shaftTop, side + 2), at((shaftTop + clockTop) / 2), stone)
+	cityBlock(parent, "Cornice", Vector3.new(side + 3.4, 1.2, side + 3.4), at(shaftTop), light)
+	cityBlock(parent, "Cornice", Vector3.new(side + 3.4, 1.4, side + 3.4), at(clockTop), light)
+	local faceY = (shaftTop + clockTop) / 2
+	for index = 0, 3 do
+		local normal = Vector3.new(math.cos(index * math.pi / 2), 0, math.sin(index * math.pi / 2))
+		local faceAt = Vector3.new(centre.X, faceY, centre.Z) + normal * (side / 2 + 1.3)
+		-- The bezel, the face, and twelve marks round its rim.
+		local bezel = block(parent, "ClockBezel", Vector3.new(0.5, 12.4, 12.4),
+			CFrame.lookAt(faceAt, faceAt + normal) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(58, 62, 64),
+			Enum.Material.Metal, false)
+		bezel.Shape = Enum.PartType.Cylinder
+		local faceCentre = faceAt + normal * 0.2
+		local face = block(parent, "ClockFace", Vector3.new(0.4, 11, 11),
+			CFrame.lookAt(faceCentre, faceCentre + normal) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(232, 228, 214),
 			Enum.Material.SmoothPlastic, false)
 		face.Shape = Enum.PartType.Cylinder
-		local pivot = CFrame.lookAt(faceAt, faceAt - normal)
+		local pivot = CFrame.lookAt(faceCentre, faceCentre - normal)
+		for hour = 0, 11 do
+			local a = hour * math.pi / 6
+			block(parent, "ClockMark", Vector3.new(if hour % 3 == 0 then 0.5 else 0.3, if hour % 3 == 0 then 1.4 else 0.9, 0.15),
+				pivot * CFrame.Angles(0, 0, -a) * CFrame.new(0, 4.4, 0.3), Color3.fromRGB(40, 40, 44), Enum.Material.Metal,
+				false)
+		end
 		-- 4:12. Clockwise, seen from in front, is a negative turn about the face's outward normal.
-		local hour = block(parent, "HourHand", Vector3.new(0.8, 4.2, 0.2),
-			pivot * CFrame.Angles(0, 0, -math.rad(126)) * CFrame.new(0, 2.1, 0.4), Color3.fromRGB(30, 30, 34),
+		local hourHand = block(parent, "HourHand", Vector3.new(0.7, 3.2, 0.2),
+			pivot * CFrame.Angles(0, 0, -math.rad(126)) * CFrame.new(0, 1.6, 0.45), Color3.fromRGB(30, 30, 34),
 			Enum.Material.Metal, false)
-		hour:SetAttribute("Pivot", pivot)
-		local minute = block(parent, "MinuteHand", Vector3.new(0.6, 6, 0.2),
-			pivot * CFrame.Angles(0, 0, -math.rad(72)) * CFrame.new(0, 3, 0.5), Color3.fromRGB(30, 30, 34),
+		hourHand:SetAttribute("Pivot", pivot)
+		local minute = block(parent, "MinuteHand", Vector3.new(0.5, 4.6, 0.2),
+			pivot * CFrame.Angles(0, 0, -math.rad(72)) * CFrame.new(0, 2.3, 0.55), Color3.fromRGB(30, 30, 34),
 			Enum.Material.Metal, false)
 		minute:SetAttribute("Pivot", pivot)
 		CollectionService:AddTag(minute, "SunkenClockHand")
+		ellipsoid(parent, "ClockBoss", Vector3.new(0.9, 0.9, 0.9), pivot * CFrame.new(0, 0, 0.6), Color3.fromRGB(30, 30, 34))
 	end
+
+	-- THE BELFRY: four piers and the arches between them, open to the air, with the bell in it.
+	local belfryMid = (clockTop + belfryTop) / 2
+	for _, corner in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
+		cityBlock(parent, "BelfryPier", Vector3.new(4, belfryTop - clockTop, 4),
+			at(belfryMid) * CFrame.new(corner[1] * (side / 2 - 2), 0, corner[2] * (side / 2 - 2)), stone)
+	end
+	for index = 0, 3 do
+		local normal = Vector3.new(math.cos(index * math.pi / 2), 0, math.sin(index * math.pi / 2))
+		local lintelAt = Vector3.new(centre.X, belfryTop - 1.5, centre.Z) + normal * (side / 2 - 2)
+		cityBlock(parent, "BelfryLintel", Vector3.new(side, 3, 4), CFrame.lookAt(lintelAt, lintelAt + normal)
+			* CFrame.Angles(0, math.pi / 2, 0), stone)
+		-- The louvres in the lower half of each opening, which is how the sound gets out.
+		for louvre = 0, 3 do
+			local y = clockTop + 1.5 + louvre * 1.4
+			local louvreAt = Vector3.new(centre.X, y, centre.Z) + normal * (side / 2 - 2)
+			cityBlock(parent, "Louvre", Vector3.new(side - 8, 0.3, 1.8), CFrame.lookAt(louvreAt, louvreAt + normal)
+				* CFrame.Angles(0, math.pi / 2, 0) * CFrame.Angles(0, 0, math.rad(-25)), Color3.fromRGB(88, 76, 62),
+				Enum.Material.WoodPlanks)
+		end
+	end
+	cityBlock(parent, "BelfryFloor", Vector3.new(side, 1, side), at(clockTop + 0.5), stone)
+	cityBlock(parent, "BelfryRoof", Vector3.new(side + 2, 1.2, side + 2), at(belfryTop + 0.6), light)
+	-- THE BELL, on its headstock, still hanging. Tagged so the client can toll it.
+	local bellBeam = cityBlock(parent, "Headstock", Vector3.new(side - 6, 1.2, 1.2), at(belfryTop - 3.5),
+		Color3.fromRGB(96, 76, 58), Enum.Material.Wood)
+	local bell = ellipsoid(parent, "Bell", Vector3.new(6, 6.5, 6), at(belfryTop - 7.6), Color3.fromRGB(146, 116, 66))
+	bell.Material = Enum.Material.Metal
+	bell:SetAttribute("Hang", bellBeam.CFrame)
+	CollectionService:AddTag(bell, "SunkenBell")
+	column(parent, "BellLip", 7, bell.Position - Vector3.new(0, 3.2, 0), bell.Position.Y - 3.6, bell.Position.Y - 2.8,
+		Color3.fromRGB(130, 104, 60), false)
+
+	-- PINNACLES at the four corners, and the SPIRE: copper gone green, in shrinking courses.
+	for _, corner in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
+		local base = at(belfryTop + 1.2) * CFrame.new(corner[1] * (side / 2 - 1.4), 0, corner[2] * (side / 2 - 1.4))
+		for step = 0, 3 do
+			cityBlock(parent, "Pinnacle", Vector3.new(2.6 - step * 0.6, 1.6, 2.6 - step * 0.6), base * CFrame.new(0, 0.8 + step * 1.6, 0),
+				light)
+		end
+	end
+	local courses = 8
+	for step = 0, courses - 1 do
+		local size = (side - 2) * (1 - step / courses)
+		cityBlock(parent, "Spire", Vector3.new(size, 3, size), at(belfryTop + 2.7 + step * 3), copper:Lerp(Color3.fromRGB(70, 110, 96),
+			step / courses))
+	end
+	local vaneFoot = Vector3.new(centre.X, belfryTop + 1.2 + courses * 3, centre.Z)
+	column(parent, "VaneRod", 0.3, vaneFoot, vaneFoot.Y, vaneFoot.Y + 7, Color3.fromRGB(58, 62, 64), false, true)
+	cityBlock(parent, "VaneArrow", Vector3.new(4.2, 0.25, 0.25), CFrame.new(vaneFoot + Vector3.new(0, 6, 0))
+		* CFrame.Angles(0, math.rad(35), 0), Color3.fromRGB(58, 62, 64), Enum.Material.Metal)
+	for _, a in ipairs({ 0, math.pi / 2 }) do
+		cityBlock(parent, "VaneCross", Vector3.new(2.4, 0.18, 0.18), CFrame.new(vaneFoot + Vector3.new(0, 4.8, 0))
+			* CFrame.Angles(0, a, 0), Color3.fromRGB(58, 62, 64), Enum.Material.Metal)
+	end
+
+	-- And what the water and the weather have done to it, the same as everything else.
+	dress(parent, CFrame.new(centre.X, floorY, centre.Z), side, side, belfryTop, stone, rng, 2)
 end
 
 -- ===== THE BOULEVARD'S ROAD SIGNS =====
 --
 -- Gantries across the street under the route, their signs a few studs down: the one thing on the
--- boulevard you can read from the route. The thing swims under them.
-local function gantries(parent: Instance, centre: Vector3, radius: number, floorY: number, angles: { number })
-	local names = { "CITY CENTRE", "HARBOUR", "AQUARIUM", "CLOCK TOWER" }
-	for index, at in ipairs(angles) do
-		local out = Vector3.new(math.cos(at), 0, math.sin(at))
+-- boulevard you can read from the route, and the last thing you read before the harbour. The thing
+-- swims under them and never surfaces there. Placed at shares ALONG the route, which is the only
+-- measurement a street has.
+local function gantries(parent: Instance, route: Route, floorY: number, alongs: { number })
+	local names = { "CITY CENTRE", "HARBOUR", "AQUARIUM", "CLOCK TOWER", "ALL ROUTES" }
+	for index, s in ipairs(alongs) do
+		local at, dir = alongRoute(route, s)
+		local side = Vector3.yAxis:Cross(dir)
 		local beamY = waterLevel - 4.5
-		for _, side in ipairs({ -1, 1 }) do
-			local foot = centre + out * (radius + side * 38)
-			column(parent, "GantryLeg", 1.4, foot, floorY, beamY, Color3.fromRGB(110, 116, 120), false)
+		for _, sign in ipairs({ -1, 1 }) do
+			local foot = at + side * (sign * 38)
+			column(parent, "GantryLeg", 1.4, Vector3.new(foot.X, floorY, foot.Z), floorY, beamY,
+				Color3.fromRGB(110, 116, 120), false)
 		end
-		local mid = centre + out * radius + Vector3.new(0, beamY, 0)
-		local frame = CFrame.fromMatrix(mid, out, Vector3.yAxis)
+		local mid = Vector3.new(at.X, beamY, at.Z)
+		local frame = CFrame.fromMatrix(mid, side, Vector3.yAxis)
 		cityBlock(parent, "GantryBeam", Vector3.new(78, 1.4, 1.4), frame, Color3.fromRGB(110, 116, 120), Enum.Material.Metal)
 		local panel = cityBlock(parent, "RoadSign", Vector3.new(22, 6, 0.4), frame * CFrame.new(-8, -3.7, 0),
 			Color3.fromRGB(30, 96, 70))
 		label(panel, Enum.NormalId.Front, names[(index - 1) % #names + 1], Color3.fromRGB(226, 232, 226))
 		label(panel, Enum.NormalId.Back, names[index % #names + 1], Color3.fromRGB(226, 232, 226))
+		-- A hanging traffic signal beside the sign, dead.
+		local signal = cityBlock(parent, "Signal", Vector3.new(1.6, 4.4, 1.6), frame * CFrame.new(16, -3.4, 0),
+			Color3.fromRGB(46, 50, 52))
+		-- The loop's counter is not called `lamp`: this file declares a lamp() further down and the
+		-- Luau check reads a local of that name here as shadowing it before it exists.
+		for bulb = 0, 2 do
+			local tone = if bulb == 0 then Color3.fromRGB(120, 40, 36) elseif bulb == 1 then Color3.fromRGB(120, 100, 40)
+				else Color3.fromRGB(40, 110, 60)
+			cityBlock(parent, "SignalLamp", Vector3.new(0.5, 1, 1), signal.CFrame * CFrame.new(0.9, 1.4 - bulb * 1.4, 0),
+				drowned(tone, signal.Position.Y))
+		end
 	end
 end
 
 -- ===== THE HARBOUR =====
-local function harbour(parent: Instance, centre: Vector3, radius: number, floorY: number, harbourAngle: number,
-	rng: Random)
-	-- Quay walls along the sector's edges, their tops a few studs out of the water.
-	for _, side in ipairs({ -1, 1 }) do
-		local at = harbourAngle + side * HARBOUR_SECTOR_HALF
-		local out = Vector3.new(math.cos(at), 0, math.sin(at))
-		local from, to = radius + BOULEVARD_HALF + EMERGE_CLEAR, radius + 520
-		local mid = centre + out * ((from + to) / 2) + Vector3.new(0, (floorY + waterLevel + 3) / 2, 0)
-		block(parent, "Quay", Vector3.new(to - from, waterLevel + 3 - floorY, 8), CFrame.fromMatrix(mid, out, Vector3.yAxis),
-			STONE, Enum.Material.Concrete, false)
+--
+-- The end of the street: the water opens out, the blocks stop, and what is left is the working
+-- edge of a port with nothing working in it. Built in the frame of the route's last stretch, so
+-- the quays run away either side of the pier and everything faces the water you are about to be
+-- pulled into.
+local function harbour(parent: Instance, route: Route, vortex: Vector3, floorY: number, rng: Random)
+	local at, dir = alongRoute(route, route.total)
+	local side = Vector3.yAxis:Cross(dir)
+	local frame = CFrame.fromMatrix(Vector3.new(at.X, floorY, at.Z), dir, Vector3.yAxis)
+	local quayTop = waterLevel + 3
+
+	-- QUAY WALLS either side of the basin, running back along the street's last stretch.
+	for _, sign in ipairs({ -1, 1 }) do
+		local wall = frame * CFrame.new(-190, (quayTop - floorY) / 2, sign * HARBOUR_REACH * 0.62)
+		block(parent, "Quay", Vector3.new(420, quayTop - floorY, 10), wall, drowned(STONE, floorY + 10),
+			Enum.Material.Concrete, false)
+		-- Bollards along its edge, and a ladder down into the water.
+		for index = -6, 6 do
+			local bollard = wall * CFrame.new(index * 30, (quayTop - floorY) / 2 + 1, -sign * 6)
+			column(parent, "Bollard", 2.2, bollard.Position, quayTop, quayTop + 2.4, Color3.fromRGB(58, 60, 62), false)
+		end
 	end
-	-- A gantry crane standing out in the basin: the landmark on the harbour side.
-	local craneAt = harbourAngle + 0.05 * 2 * math.pi
-	local out = Vector3.new(math.cos(craneAt), 0, math.sin(craneAt))
-	local base = centre + out * (radius + 230)
-	local frame = CFrame.fromMatrix(Vector3.new(base.X, floorY, base.Z), out, Vector3.yAxis)
-	local craneTop = waterLevel + 42
+
+	-- A GANTRY CRANE over one quay, the landmark you see the whole way down the street.
+	local craneAt = frame * CFrame.new(-120, 0, HARBOUR_REACH * 0.62)
+	local craneTop = waterLevel + 46
 	local paint = Color3.fromRGB(186, 104, 64)
-	for _, leg in ipairs({ { -10, -12 }, { 10, -12 }, { -10, 12 }, { 10, 12 } }) do
-		local at = frame * Vector3.new(leg[1], 0, leg[2])
-		column(parent, "CraneLeg", 2.4, at, floorY, craneTop, paint, false)
+	for _, leg in ipairs({ { -12, -12 }, { 12, -12 }, { -12, 12 }, { 12, 12 } }) do
+		column(parent, "CraneLeg", 2.6, (craneAt * CFrame.new(leg[1], 0, leg[2])).Position, floorY, craneTop, paint, false)
 	end
-	block(parent, "CraneBeam", Vector3.new(24, 3, 28), frame * CFrame.new(0, craneTop - floorY + 1.5, 0), paint,
-		Enum.Material.Metal, false)
-	block(parent, "CraneBoom", Vector3.new(70, 2.4, 3), frame * CFrame.new(-30, craneTop - floorY + 4.2, 0), paint,
-		Enum.Material.Metal, false)
-	block(parent, "CraneCab", Vector3.new(6, 5, 6), frame * CFrame.new(4, craneTop - floorY + 5.5, 0),
-		Color3.fromRGB(210, 200, 180), Enum.Material.SmoothPlastic, false)
-	-- A fishing boat that went down by the quay, its bow still out of the water.
-	local boatAt = harbourAngle - 0.08 * 2 * math.pi
-	local boatOut = Vector3.new(math.cos(boatAt), 0, math.sin(boatAt))
-	local boat = CFrame.fromMatrix(centre + boatOut * (radius + 150) + Vector3.new(0, waterLevel - 6, 0), boatOut, Vector3.yAxis)
+	cityBlock(parent, "CraneBeam", Vector3.new(30, 3.4, 30), craneAt * CFrame.new(0, craneTop - floorY + 1.7, 0), paint)
+	cityBlock(parent, "CraneBoom", Vector3.new(96, 2.6, 3.4), craneAt * CFrame.new(-34, craneTop - floorY + 5, 0), paint)
+	cityBlock(parent, "CraneCounter", Vector3.new(16, 5, 6), craneAt * CFrame.new(26, craneTop - floorY + 5, 0),
+		Color3.fromRGB(70, 72, 74))
+	cityBlock(parent, "CraneCab", Vector3.new(6, 5, 6), craneAt * CFrame.new(6, craneTop - floorY + 6.4, 4),
+		Color3.fromRGB(210, 200, 180))
+	-- Its hook, down on a cable, swinging over nothing.
+	local hookTop = (craneAt * CFrame.new(-28, craneTop - floorY + 3.6, 0)).Position
+	rod(parent, "CraneCable", hookTop, hookTop - Vector3.new(0, 26, 0), 0.4, Color3.fromRGB(80, 78, 74))
+	cityBlock(parent, "CraneHook", Vector3.new(3, 3, 3), CFrame.new(hookTop - Vector3.new(0, 27, 0)),
+		Color3.fromRGB(70, 72, 74))
+
+	-- CONTAINERS stacked on the other quay, the colour gone out of them.
+	local yard = frame * CFrame.new(-150, 0, -HARBOUR_REACH * 0.62)
+	for index = 1, 16 do
+		local tier = rng:NextInteger(0, 2)
+		local box = yard * CFrame.new(rng:NextNumber(-90, 90), quayTop - floorY + 3 + tier * 6,
+			rng:NextNumber(-14, 14)) * CFrame.Angles(0, rng:NextNumber(-0.1, 0.1), 0)
+		container(parent, box, Vector3.new(24, 6, 8), FADED[rng:NextInteger(1, #FADED)], true)
+	end
+
+	-- A LIGHTHOUSE on the basin's far side: the one light still burning out here, and it is what
+	-- you steer by while the water takes you.
+	local lightAt = frame * CFrame.new(150, 0, HARBOUR_REACH * 0.5)
+	local lightTop = waterLevel + 40
+	column(parent, "LighthouseBase", 22, lightAt.Position, floorY, waterLevel + 4, drowned(STONE, floorY + 8), false)
+	for index = 0, 5 do
+		local shrink = 1 - index * 0.1
+		column(parent, "LighthouseShaft", 15 * shrink, lightAt.Position, waterLevel + 4 + index * 5.6,
+			waterLevel + 9.6 + index * 5.6, if index % 2 == 0 then Color3.fromRGB(226, 222, 212) else Color3.fromRGB(190, 78, 66),
+			false)
+	end
+	column(parent, "LighthouseGallery", 16, lightAt.Position, lightTop - 4, lightTop - 3, Color3.fromRGB(70, 72, 74), false)
+	local lantern = column(parent, "LighthouseLantern", 10, lightAt.Position, lightTop - 3, lightTop + 4,
+		Color3.fromRGB(238, 230, 200), false)
+	if lantern then
+		lantern.Material = Enum.Material.Glass
+		lantern.Transparency = 0.25
+		local beam = Instance.new("PointLight")
+		beam.Brightness = 2.2
+		beam.Range = 90
+		beam.Color = Color3.fromRGB(255, 232, 190)
+		beam.Shadows = false
+		beam.Parent = lantern
+		CollectionService:AddTag(lantern, "SunkenBeacon")
+	end
+	column(parent, "LighthouseCap", 11, lightAt.Position, lightTop + 4, lightTop + 6, Color3.fromRGB(70, 72, 74), false)
+
+	-- A FISHING BOAT that went down by the quay, its bow still out of the water.
+	local boat = frame * CFrame.new(-60, waterLevel - 6 - floorY, -HARBOUR_REACH * 0.34)
 		* CFrame.Angles(math.rad(-32), 0, math.rad(8))
-	cityBlock(parent, "Hull", Vector3.new(7, 4, 22), boat, Color3.fromRGB(60, 80, 110))
-	cityBlock(parent, "HullBand", Vector3.new(7.2, 1, 22.2), boat * CFrame.new(0, 1.6, 0), Color3.fromRGB(200, 196, 186))
-	cityBlock(parent, "Wheelhouse", Vector3.new(5, 4, 6), boat * CFrame.new(0, 4, 3), Color3.fromRGB(214, 210, 200))
+	cityBlock(parent, "Hull", Vector3.new(22, 4, 7), boat, Color3.fromRGB(60, 80, 110))
+	cityBlock(parent, "HullBand", Vector3.new(22.2, 1, 7.2), boat * CFrame.new(0, 1.6, 0), Color3.fromRGB(200, 196, 186))
+	cityBlock(parent, "Wheelhouse", Vector3.new(6, 4, 5), boat * CFrame.new(3, 4, 0), Color3.fromRGB(214, 210, 200))
+	column(parent, "BoatMast", 0.6, (boat * CFrame.new(-4, 2, 0)).Position, waterLevel - 4, waterLevel + 9,
+		Color3.fromRGB(150, 140, 120), false)
+
+	-- A BARGE, half sunk, and the wreck of something older out on the silt.
+	local barge = frame * CFrame.new(40, waterLevel - 3 - floorY, -HARBOUR_REACH * 0.5) * CFrame.Angles(0, 0, math.rad(-12))
+	cityBlock(parent, "Barge", Vector3.new(46, 6, 14), barge, drowned(Color3.fromRGB(96, 92, 86), waterLevel - 3))
+	cityBlock(parent, "BargeHold", Vector3.new(30, 1, 10), barge * CFrame.new(0, 3.2, 0), Color3.fromRGB(40, 44, 44))
+	local wreck = frame * CFrame.new(230, 5, -HARBOUR_REACH * 0.2) * CFrame.Angles(math.rad(6), 0.4, math.rad(28))
+	cityBlock(parent, "WreckHull", Vector3.new(58, 12, 16), wreck, drowned(Color3.fromRGB(70, 74, 72), floorY + 6))
+	for index = -2, 2 do
+		cityBlock(parent, "WreckRib", Vector3.new(1.2, 14, 17), wreck * CFrame.new(index * 11, 2, 0),
+			drowned(Color3.fromRGB(58, 60, 58), floorY + 8))
+	end
+
 	-- BUOYS, floating on the water and chained to the floor. Tagged so the client can bob them.
-	for index = 1, 5 do
-		local at = harbourAngle + rng:NextNumber(-0.9, 0.9) * HARBOUR_SECTOR_HALF
-		local r = radius + BOULEVARD_HALF + EMERGE_CLEAR + rng:NextNumber(20, 300)
-		local spot = centre + Vector3.new(math.cos(at) * r, waterLevel, math.sin(at) * r)
-		local buoy = Instance.new("Model")
-		buoy.Name = "Buoy"
-		local red = index % 2 == 0
-		column(buoy, "BuoyBody", 3, spot, waterLevel - 1.2, waterLevel + 1.8,
-			if red then Color3.fromRGB(190, 70, 60) else Color3.fromRGB(230, 226, 214), false, true)
-		column(buoy, "BuoyMast", 0.4, spot, waterLevel + 1.8, waterLevel + 5, Color3.fromRGB(60, 60, 64), false, true)
-		block(buoy, "BuoyTop", Vector3.new(1.4, 1.4, 1.4), CFrame.new(spot + Vector3.new(0, 5.4, 0)),
-			if red then Color3.fromRGB(190, 70, 60) else Color3.fromRGB(60, 120, 80), Enum.Material.SmoothPlastic, false)
-		buoy.Parent = parent
-		CollectionService:AddTag(buoy, "SunkenBuoy")
-		rod(parent, "BuoyChain", spot + Vector3.new(0, -1.2, 0), Vector3.new(spot.X, floorY, spot.Z), 0.3,
-			Color3.fromRGB(70, 66, 60))
+	for index = 1, 6 do
+		local spotAt = frame * CFrame.new(rng:NextNumber(-40, 260), waterLevel - floorY,
+			rng:NextNumber(-HARBOUR_REACH * 0.7, HARBOUR_REACH * 0.7))
+		local spot = spotAt.Position
+		if (Vector3.new(spot.X - vortex.X, 0, spot.Z - vortex.Z)).Magnitude > VORTEX_R + 40 then
+			local buoy = Instance.new("Model")
+			buoy.Name = "Buoy"
+			local red = index % 2 == 0
+			column(buoy, "BuoyBody", 3, spot, waterLevel - 1.2, waterLevel + 1.8,
+				if red then Color3.fromRGB(190, 70, 60) else Color3.fromRGB(230, 226, 214), false, true)
+			column(buoy, "BuoyMast", 0.4, spot, waterLevel + 1.8, waterLevel + 5, Color3.fromRGB(60, 60, 64), false, true)
+			block(buoy, "BuoyTop", Vector3.new(1.4, 1.4, 1.4), CFrame.new(spot + Vector3.new(0, 5.4, 0)),
+				if red then Color3.fromRGB(190, 70, 60) else Color3.fromRGB(60, 120, 80), Enum.Material.SmoothPlastic, false)
+			buoy.Parent = parent
+			CollectionService:AddTag(buoy, "SunkenBuoy")
+			rod(parent, "BuoyChain", spot + Vector3.new(0, -1.2, 0), Vector3.new(spot.X, floorY, spot.Z), 0.3,
+				Color3.fromRGB(70, 66, 60))
+		end
+	end
+end
+
+-- ===== WHAT LIVES IN THE WATER =====
+--
+-- Nothing here is built: each of these is a MARKER the client reads, because a shoal of fish is
+-- thirty parts moving every frame and replicating that from the server would cost every player a
+-- stream of updates for something nobody can touch. The server decides where they are and how big;
+-- SunkenCityClient makes them and swims them. The same trade as City Shore's sea and Sky Pools'
+-- gulls.
+local function shoals(parent: Instance, route: Route, floorY: number, rng: Random,
+	blocked: (Vector3, number) -> boolean)
+	-- Each shoal circles a long loop laid ALONG the street (`Along`), so it stays in the street
+	-- however the street bends: out to its radius along it, three fifths of that across.
+	local reachable = route.total - harbourAlong(route)
+	local count = math.max(3, math.floor(reachable / SHOAL_EVERY))
+	for index = 1, count do
+		local s = (index - 0.5) * (reachable / count)
+		local at, dir = alongRoute(route, s)
+		local side = Vector3.yAxis:Cross(dir)
+		local spot = at + side * rng:NextNumber(-SHOAL_OUT, SHOAL_OUT)
+		local radius = rng:NextNumber(12, 20)
+		if not blocked(spot, radius + 4) then
+			local marker = block(parent, "Shoal", Vector3.new(1, 1, 1),
+				CFrame.new(spot.X, waterLevel - rng:NextNumber(3.5, 10), spot.Z), SURFACE,
+				Enum.Material.SmoothPlastic, false)
+			marker.Transparency = 1
+			marker:SetAttribute("Count", rng:NextInteger(10, 16))
+			marker:SetAttribute("Radius", radius)
+			marker:SetAttribute("Speed", rng:NextNumber(0.25, 0.45))
+			marker:SetAttribute("Length", rng:NextNumber(2.2, 3.2))
+			marker:SetAttribute("Phase", rng:NextNumber(0, 100))
+			marker:SetAttribute("Along", dir)
+			CollectionService:AddTag(marker, "SunkenFishShoal")
+		end
+	end
+	-- AND THE ONES AT THE BACK. Far enough out that the haze has them, big enough that you can see
+	-- them anyway, slow enough that you are never sure. They keep to the deep water well off the
+	-- street, and they are the reason not to look too long at the edge of the view.
+	for index = 1, HORRORS do
+		local s = route.total * (index - 0.5) / HORRORS
+		local at, dir = alongRoute(route, s)
+		local side = Vector3.yAxis:Cross(dir)
+		local sign = if index % 2 == 0 then 1 else -1
+		local spot = at + side * (sign * rng:NextNumber(HORROR_OUT * 0.8, HORROR_OUT * 1.3))
+		local marker = block(parent, "Horror", Vector3.new(1, 1, 1),
+			CFrame.new(spot.X, waterLevel - rng:NextNumber(26, 46), spot.Z), DEEP,
+			Enum.Material.SmoothPlastic, false)
+		marker.Transparency = 1
+		marker:SetAttribute("Length", rng:NextNumber(34, 58))
+		marker:SetAttribute("Radius", rng:NextNumber(120, 240))
+		marker:SetAttribute("Speed", rng:NextNumber(0.03, 0.06))
+		marker:SetAttribute("Phase", rng:NextNumber(0, 100))
+		CollectionService:AddTag(marker, "SunkenHorror")
+	end
+end
+
+-- ===== THE SWIMMERS =====
+--
+-- Markers, like the shoals: each is an animal's home, and the client builds the animal and moves it
+-- round that home on a wandering path of its own -- turning to face where it is going, speeding up
+-- and drifting, now and then darting. Nothing about them is shared between clients, because nothing
+-- about them matters to the game: a ray nobody else saw is still a ray you saw.
+local function swimmers(parent: Instance, route: Route, floorY: number, rng: Random,
+	blocked: (Vector3, number) -> boolean)
+	-- IN THE OPEN WATER UNDER THE ROUTE, where you look down and see them. Each one wanders along the
+	-- street far more than across it and never further across than SWIM_REACH, which keeps it clear
+	-- of the road signs' legs and the lamp posts without having to know where they are; none is given
+	-- a home where its wander would reach the aquarium, the dry flat, or the harbour's whirlpool.
+	-- NEAR THE TOP, mostly. The street's floor is a hundred studs down and what is down there is a
+	-- shape in the dark; the animals are six to twenty-four studs under the surface, where the light
+	-- still gets to them.
+	local reachable = route.total - harbourAlong(route)
+	local count = math.max(6, math.floor(reachable / SWIMMER_EVERY))
+	for index = 1, count do
+		local s = math.clamp((index - 0.5) * (reachable / count) + rng:NextNumber(-12, 12), 0, reachable)
+		local at, dir = alongRoute(route, s)
+		local side = Vector3.yAxis:Cross(dir)
+		local kind = SWIMMER_KINDS[(index - 1) % #SWIMMER_KINDS + 1]
+		-- NEAR THE TOP, where you see them from the route: jellyfish just under the surface, a pod of
+		-- dolphins that leaps out of it now and then, turtles that come up to breathe, rays and sharks
+		-- a little deeper and the grouper and the eels deeper still. How far each rises and sinks
+		-- (`Bob`) is what keeps the top of it under the surface; the dolphins' leap and the turtles'
+		-- breath are the two things that are meant to break it, and they do it on the client.
+		local depth = if kind == "jelly" then rng:NextNumber(3.5, 7)
+			elseif kind == "dolphins" then rng:NextNumber(4, 6)
+			elseif kind == "turtle" then rng:NextNumber(5, 10)
+			elseif kind == "ray" or kind == "shark" then rng:NextNumber(7, 16)
+			else rng:NextNumber(9, 20)
+		local bob = if kind == "jelly" then 1.2 elseif kind == "dolphins" then 1 elseif kind == "turtle" then 2 else 3
+		local range = if kind == "jelly" then 10 else rng:NextNumber(22, 40)
+		local out = rng:NextNumber(-SWIM_OUT, SWIM_OUT)
+		local across = SWIM_REACH - math.abs(out)
+		local home = at + side * out
+		if not blocked(home, math.max(range, across) + 6) and s + range < reachable then
+			local marker = block(parent, "Swimmer", Vector3.new(1, 1, 1), CFrame.new(home.X, waterLevel - depth, home.Z),
+				SURFACE, Enum.Material.SmoothPlastic, false)
+			marker.Transparency = 1
+			marker:SetAttribute("Kind", kind)
+			marker:SetAttribute("Range", range)
+			marker:SetAttribute("Across", if kind == "jelly" then math.min(across, 10) else across)
+			marker:SetAttribute("Speed", rng:NextNumber(0.6, 1.2))
+			marker:SetAttribute("Phase", rng:NextNumber(0, 100))
+			marker:SetAttribute("Along", dir)
+			marker:SetAttribute("Bob", bob)
+			CollectionService:AddTag(marker, "SunkenSwimmer")
+		end
+	end
+end
+
+-- ===== GULLS =====
+--
+-- Over the street, circling: the one kind of life you see without looking into the water. Markers
+-- the client builds and flies (SunkenCityClient). Each circles its own point over the street, high
+-- enough to clear every chunk, the aquarium's tower and the dry flat's roof, and near enough the
+-- street's middle that no circle reaches the buildings either side.
+local function gulls(parent: Instance, route: Route, rng: Random, blocked: (Vector3, number) -> boolean)
+	local count = math.max(4, math.floor(route.total / GULL.every))
+	for index = 1, count do
+		local s = (index - 0.5) * (route.total / count)
+		local at, dir = alongRoute(route, s)
+		local side = Vector3.yAxis:Cross(dir)
+		local centre = at + side * rng:NextNumber(-GULL.out, GULL.out)
+		local radius = rng:NextNumber(12, GULL.radius)
+		if not blocked(centre, radius + 6) then
+			local marker = block(parent, "Gull", Vector3.new(1, 1, 1), CFrame.new(centre.X, waterLevel + rng:NextNumber(GULL.low, 46),
+				centre.Z), FOAM, Enum.Material.SmoothPlastic, false)
+			marker.Transparency = 1
+			marker:SetAttribute("Radius", radius)
+			marker:SetAttribute("Speed", rng:NextNumber(0.25, 0.45) * (if index % 2 == 0 then 1 else -1))
+			marker:SetAttribute("Phase", rng:NextNumber(0, 100))
+			CollectionService:AddTag(marker, "SunkenGull")
+		end
+	end
+end
+
+-- ===== LIGHT IN THE WATER =====
+--
+-- What makes water read as water from above is not the surface, it is what the light does under it.
+-- Two things, both cheap: shafts leaning down from the surface where it is broken, and the specks
+-- drifting in them.
+local function shafts(parent: Instance, route: Route, floorY: number, rng: Random)
+	local count = math.max(4, math.floor(route.total / 110))
+	for index = 1, count do
+		local s = (index - 0.5) * (route.total / count) + rng:NextNumber(-30, 30)
+		local at, dir = alongRoute(route, s)
+		local side = Vector3.yAxis:Cross(dir)
+		local spot = at + side * rng:NextNumber(-BOULEVARD_HALF * 1.6, BOULEVARD_HALF * 1.6)
+		local depth = rng:NextNumber(24, 44)
+		local wide = rng:NextNumber(7, 16)
+		local shaft = block(parent, "LightShaft", Vector3.new(wide, depth, wide * 0.5),
+			CFrame.new(spot.X, waterLevel - depth / 2, spot.Z) * CFrame.Angles(rng:NextNumber(-0.16, 0.16), rng:NextNumber(0, 6.2), 0),
+			Color3.fromRGB(196, 226, 220), Enum.Material.Glass, false)
+		shaft.Transparency = 0.93
+		shaft.CastShadow = false
+		shaft:SetAttribute("Phase", rng:NextNumber(0, 100))
+		CollectionService:AddTag(shaft, "SunkenShaft")
+		-- The specks, hanging in it.
+		local motes = Instance.new("ParticleEmitter")
+		motes.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		motes.Color = ColorSequence.new(Color3.fromRGB(226, 240, 232))
+		motes.LightEmission = 0.4
+		motes.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 0.15) })
+		motes.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5),
+			NumberSequenceKeypoint.new(0.5, 0.75), NumberSequenceKeypoint.new(1, 1) })
+		motes.Lifetime = NumberRange.new(6, 12)
+		motes.Speed = NumberRange.new(0.3, 1)
+		motes.SpreadAngle = Vector2.new(60, 60)
+		motes.Acceleration = Vector3.new(0, -0.4, 0)
+		motes.Rate = 6
+		motes.Parent = shaft
 	end
 end
 
@@ -788,14 +2473,18 @@ local function capOf(model: Instance): BasePart?
 	return nil
 end
 
--- The frame beside a checkpoint: origin on its cap's outer edge at the cap's top, +X outward from
--- the city's centre, +Z along the route. Sky Pools' terraces use the same frame.
-local function besideFrame(cap: BasePart, centre: Vector3): CFrame?
-	local flat = Vector3.new(cap.Position.X - centre.X, 0, cap.Position.Z - centre.Z)
-	if flat.Magnitude < 1 then
+-- The frame beside a checkpoint: origin on its cap's outer edge at the cap's top, +X facing away
+-- from the route on the side asked for, +Z along it. Sky Pools' terraces use the same frame.
+--
+-- IT TAKES A SIDE NOW, not a centre to face away from. On a ring there was an outside and that was
+-- always the answer; on a street there is a left and a right, and what goes on one has to be able
+-- to be told to go on the other.
+local function besideFrame(cap: BasePart, side: number): CFrame?
+	local right = Vector3.new(cap.CFrame.RightVector.X, 0, cap.CFrame.RightVector.Z)
+	if right.Magnitude < 0.01 then
 		return nil
 	end
-	local outward = flat.Unit
+	local outward = right.Unit * side
 	local capCF = cap.CFrame
 	local halfOut = math.abs(capCF.RightVector:Dot(outward)) * cap.Size.X / 2
 		+ math.abs(capCF.LookVector:Dot(outward)) * cap.Size.Z / 2
@@ -858,7 +2547,89 @@ local function lamp(parent: Instance, at: CFrame, brightness: number, range: num
 	return light
 end
 
+
+
+
 local function aquarium(parent: Instance, frame: CFrame, floorY: number, rng: Random): Aquarium
+	-- THE STAIR: how many rises, how high each is and how far round each step turns, so that it runs
+	-- from STAIR.top to STAIR.foot in whole turns with steps no steeper than STEP_RISE_MAX and none so
+	-- shallow the turn above comes down on your head. Of the plans that fit, the one nearest
+	-- STAIR.riseBest. check_sunkencity.py lays the same stair and walks it.
+	local function stairPlan(drop: number): (number, number, number)
+		local bestCount, bestRise, bestAngle, bestMiss = 0, 0, 0, math.huge
+		for turns = 1, 5 do
+			local sweep = STAIR.foot + turns * 2 * math.pi - STAIR.top
+			if sweep > 0 then
+				local fewest = math.max(2, math.ceil(sweep / STAIR.angleMax + 0.5))
+				local most = math.floor(sweep / STAIR.angleMin + 0.5)
+				for steps = fewest, most do
+					local rise = drop / (steps + 1)
+					local angle = sweep / (steps - 0.5)
+					if rise >= STAIR.riseMin and rise <= STEP_RISE_MAX and angle >= STAIR.angleMin and angle <= STAIR.angleMax then
+						local miss = math.abs(rise - STAIR.riseBest)
+						if miss < bestMiss then
+							bestCount, bestRise, bestAngle, bestMiss = steps + 1, rise, angle, miss
+						end
+					end
+				end
+			end
+		end
+		if bestCount == 0 then
+			local count = math.ceil(drop / STEP_RISE_MAX)
+			return count, drop / count, STEP_ANGLE
+		end
+		return bestCount, bestRise, bestAngle
+	end
+
+	-- A STACK OF ROCK from the sea floor to `topY`, boulders narrowing as they go up, and on the top --
+	-- which is at the tunnel's eye level, the only part anyone sees -- what grows there: branching coral,
+	-- a fan, a brain coral, a starfish. The colours are muted on purpose: this is a drowned aquarium,
+	-- not a reef poster.
+	local CORAL = { Color3.fromRGB(226, 146, 136), Color3.fromRGB(186, 160, 214), Color3.fromRGB(232, 196, 120),
+		Color3.fromRGB(150, 200, 180) }
+	local function rockStack(parent: Instance, base: Vector3, floorY: number, topY: number, rng: Random, dressed: boolean)
+		local y = floorY
+		local width = rng:NextNumber(9, 12)
+		while y < topY - 1 do
+			local h = math.min(topY - y, rng:NextNumber(10, 16))
+			local rock = ellipsoid(parent, "Rock", Vector3.new(width, h * 1.35, width * rng:NextNumber(0.8, 1.1)),
+				CFrame.new(base.X + rng:NextNumber(-1, 1), y + h * 0.325, base.Z + rng:NextNumber(-1, 1))
+					* CFrame.Angles(0, rng:NextNumber(0, 6), 0), drowned(Color3.fromRGB(110, 108, 98), y + h / 2))
+			rock.Material = Enum.Material.Rock
+			y += h * 0.85
+			width = math.max(4.5, width * 0.86)
+		end
+		if not dressed then
+			return
+		end
+		local top = Vector3.new(base.X, topY, base.Z)
+		-- Branching coral: a trunk and three arms, each with a rounded tip.
+		local colour = CORAL[rng:NextInteger(1, #CORAL)]
+		local trunkTop = top + Vector3.new(0, 2.4, 0)
+		rod(parent, "Coral", top, trunkTop, 0.6, colour)
+		for arm = 1, 3 do
+			local a = arm * 2.1 + rng:NextNumber(-0.4, 0.4)
+			local tip = trunkTop + Vector3.new(math.cos(a) * 1.4, rng:NextNumber(1.2, 2.2), math.sin(a) * 1.4)
+			rod(parent, "Coral", trunkTop, tip, 0.45, colour)
+			ellipsoid(parent, "CoralTip", Vector3.new(0.7, 0.7, 0.7), CFrame.new(tip), colour:Lerp(Color3.new(1, 1, 1), 0.25))
+		end
+		-- A sea fan, standing across the current: a cylinder's axis is its X, so a thin one stands as a disc.
+		local fanAt = top + Vector3.new(rng:NextNumber(-2, 2), 2, rng:NextNumber(-2, 2))
+		local fan = block(parent, "SeaFan", Vector3.new(0.2, 4, 4.6), CFrame.new(fanAt) * CFrame.Angles(0, rng:NextNumber(0, 6), 0),
+			Color3.fromRGB(150, 70, 90), Enum.Material.Fabric, false)
+		fan.Shape = Enum.PartType.Cylinder
+		-- A brain coral, and a starfish on the rock.
+		local brain = ellipsoid(parent, "BrainCoral", Vector3.new(2.6, 1.5, 2.4), CFrame.new(top + Vector3.new(rng:NextNumber(-2, 2),
+			0.5, rng:NextNumber(-2, 2))), Color3.fromRGB(196, 206, 150))
+		brain.Material = Enum.Material.Slate
+		local star = CFrame.new(top + Vector3.new(rng:NextNumber(-2.5, 2.5), 0.1, rng:NextNumber(-2.5, 2.5)))
+			* CFrame.Angles(0, rng:NextNumber(0, 6), 0)
+		for arm = 0, 4 do
+			block(parent, "Starfish", Vector3.new(0.5, 0.25, 1.3), star * CFrame.Angles(0, arm * 2 * math.pi / 5, 0)
+				* CFrame.new(0, 0, -0.6), Color3.fromRGB(214, 120, 70), Enum.Material.SmoothPlastic, false)
+		end
+	end
+
 	local landingY = frame.Position.Y
 	local tunnelY = waterLevel - TUNNEL_BELOW
 	local xc = AQ_NECK + ROT_R - ROT_WALL
@@ -906,21 +2677,21 @@ local function aquarium(parent: Instance, frame: CFrame, floorY: number, rng: Ra
 		Enum.Material.Concrete, true)
 	bottomFloor.Shape = Enum.PartType.Cylinder
 
-	-- THE STAIR, turning down from the top landing: a step every eighteen degrees, as many as the
-	-- drop needs at no more than STEP_RISE_MAX each, the last one landing on the floor.
+	-- THE STAIR, turning down from the top landing to its foot beside the tunnel's mouth (stairPlan),
+	-- the last step one rise above the floor.
 	local drop = landingY - tunnelY
-	local count = math.ceil(drop / STEP_RISE_MAX)
-	local rise = drop / count
-	local firstAngle = math.pi + 0.6
+	local count, rise, angle = stairPlan(drop)
 	for step = 1, count - 1 do
-		local psi = firstAngle + (step - 0.5) * STEP_ANGLE
+		local psi = STAIR.top + (step - 0.5) * angle
 		local cf = towerAt * CFrame.Angles(0, -psi, 0) * CFrame.new(6.15, -step * rise - 0.5, 0)
 		block(parent, "Step", Vector3.new(7.1, 1, 3.2), cf, drowned(STONE, landingY - step * rise), Enum.Material.Concrete, true)
 	end
-	-- Three lamps down the stairwell, at depths under the door.
-	for index, depth in ipairs({ 6, 18, drop - 6 }) do
-		local psi = math.pi / 2 + index * 2.1
-		lamp(parent, towerAt * CFrame.Angles(0, -psi, 0) * CFrame.new(ROT_R - ROT_WALL - 0.6, -math.min(depth, drop - 4), 0),
+	-- Three lamps down the stairwell, on the wall six and a half studs over the step beside them, so
+	-- nobody walks into one.
+	for _, share in ipairs({ 0.25, 0.5, 0.75 }) do
+		local step = math.max(1, math.floor((count - 1) * share))
+		local psi = STAIR.top + (step - 0.5) * angle
+		lamp(parent, towerAt * CFrame.Angles(0, -psi, 0) * CFrame.new(ROT_R - ROT_WALL - 0.4, -step * rise + 6.5, 0),
 			0.8, 16, warm)
 	end
 	-- DRIPS in the stairwell, irregular, so no two settle into a rhythm.
@@ -948,7 +2719,14 @@ local function aquarium(parent: Instance, frame: CFrame, floorY: number, rng: Ra
 	local ty = tunnelY - landingY
 	block(parent, "TunnelFloor", Vector3.new(TUNNEL_L + 0.6, 1, TUNNEL_W), frame * CFrame.new((tunnelFrom + tunnelTo) / 2, ty - 0.5, 0),
 		drowned(STONE, tunnelY), Enum.Material.Concrete, true)
+	-- THE AQUARIUM'S GLASS IS NOT THE GLASS MATERIAL. Roblox's Glass draws only what is opaque
+	-- behind it and leaves out everything transparent -- so from inside the tunnel, the four layers
+	-- of tinted water outside, the bubbles, the specks and the sea's own surface overhead were
+	-- simply not there, and the view out was of a clear, dry-looking dark. That is the "the water
+	-- does not look watery" of an earlier round. A plain translucent pane shows all of it. The same
+	-- goes for the tint layers themselves: glass in front of glass shows only the nearest.
 	local glassColour = Color3.fromRGB(150, 200, 205)
+	local PANE = Enum.Material.SmoothPlastic
 	local metal = drowned(Color3.fromRGB(70, 80, 84), tunnelY)
 	local bays = math.floor(TUNNEL_L / TUNNEL_BAY)
 	local half = TUNNEL_W / 2 + 0.2
@@ -961,12 +2739,14 @@ local function aquarium(parent: Instance, frame: CFrame, floorY: number, rng: Ra
 			local mid = x + TUNNEL_BAY / 2
 			for _, side in ipairs({ -1, 1 }) do
 				local pane = block(parent, "TunnelGlass", Vector3.new(TUNNEL_BAY, 6, 0.4), frame * CFrame.new(mid, ty + 3, side * half),
-					glassColour, Enum.Material.Glass, true)
-				pane.Transparency = 0.6
+					glassColour, PANE, true)
+				pane.Transparency = 0.64
+				pane.Reflectance = 0.06
 				local roofPane = block(parent, "TunnelGlass", Vector3.new(TUNNEL_BAY, 0.4, roofSpan + 0.3),
 					frame * CFrame.new(mid, ty + 6 + ridge / 2, side * half / 2) * CFrame.Angles(side * slope, 0, 0),
-					glassColour, Enum.Material.Glass, true)
-				roofPane.Transparency = 0.6
+					glassColour, PANE, true)
+				roofPane.Transparency = 0.64
+				roofPane.Reflectance = 0.06
 			end
 		end
 		local post = if bay == 0 then 1.6 else 0.6
@@ -981,8 +2761,104 @@ local function aquarium(parent: Instance, frame: CFrame, floorY: number, rng: Ra
 			column(parent, "TunnelPillar", 1.6, at, floorY, tunnelY - 1, STONE, true)
 		end
 	end
-	lamp(parent, frame * CFrame.new(tunnelFrom + TUNNEL_L * 0.35, ty + TUNNEL_H - 1.2, 0), 0.5, 14, Color3.fromRGB(190, 220, 230))
-	lamp(parent, frame * CFrame.new(tunnelFrom + TUNNEL_L * 0.75, ty + TUNNEL_H - 1.2, 0), 0.5, 14, Color3.fromRGB(190, 220, 230))
+	-- THE LIGHT IN THE TUNNEL. Two lamps in a sixty-four stud tube left most of it dark and the
+	-- glass reading as slate. A strip along the ridge every bay instead -- a real fitting, set into
+	-- the roof, with a small light in every third one -- lights the whole run and, more to the
+	-- point, lights the WATER outside it, which is the thing you came down here to look at.
+	for bay = 0, bays - 1 do
+		local x = tunnelFrom + (bay + 0.5) * TUNNEL_BAY
+		local strip = block(parent, "TunnelLight", Vector3.new(TUNNEL_BAY - 3, 0.5, 1.2),
+			frame * CFrame.new(x, ty + TUNNEL_H - 1.1, 0), Color3.fromRGB(226, 240, 240), Enum.Material.Glass, false)
+		strip.Transparency = 0.2
+		if bay % 2 == 0 then
+			local glow = Instance.new("PointLight")
+			glow.Brightness = 0.85
+			glow.Range = 26
+			glow.Color = Color3.fromRGB(198, 228, 236)
+			glow.Shadows = false
+			glow.Parent = strip
+		end
+	end
+	-- And two uplights in the tunnel floor, throwing light UP through the water, which is what an
+	-- aquarium tunnel actually feels like.
+	for _, share in ipairs({ 0.3, 0.7 }) do
+		local up = block(parent, "TunnelUplight", Vector3.new(3, 0.3, TUNNEL_W - 1),
+			frame * CFrame.new(tunnelFrom + TUNNEL_L * share, ty + 0.2, 0), Color3.fromRGB(180, 226, 226),
+			Enum.Material.Glass, false)
+		up.Transparency = 0.25
+		local glow = Instance.new("SurfaceLight")
+		glow.Face = Enum.NormalId.Top
+		glow.Angle = 150
+		glow.Brightness = 1.2
+		glow.Range = 34
+		glow.Color = Color3.fromRGB(150, 220, 220)
+		glow.Shadows = false
+		glow.Parent = up
+	end
+
+	-- THE WATER OUTSIDE THE GLASS, in layers. One pane of tint reads as a green window; four at
+	-- increasing distance read as water, because each one dims what is behind it a little more and
+	-- that is what depth in water actually does to a view. They stand off the tunnel and the
+	-- gallery, never across them, so the tube stays dry and walkable.
+	--
+	-- THEY STOP UNDER THE SURFACE, and nothing lies flat. They used to rise thirteen studs out of
+	-- the water, and there were four more laid flat over the tunnel, three of them above the
+	-- surface -- so from the route there was a rectangle over the aquarium where the water was a
+	-- different water. Upright panes that end under the surface are edge-on from above, which is
+	-- to say invisible from everywhere except inside the tunnel, which is the only place they are
+	-- for.
+	local tankLong = TUNNEL_L + ROOM_L + 40
+	local tankMidX = tunnelFrom + tankLong / 2 - 20
+	local tankTop = waterLevel - 3
+	local tankBottom = floorY + 1
+	for index, layer in ipairs({ { 22, 0.9 }, { 40, 0.93 }, { 64, 0.95 }, { 92, 0.96 } }) do
+		for _, sign in ipairs({ -1, 1 }) do
+			local pane = block(parent, "TankWater", Vector3.new(tankLong, tankTop - tankBottom, 0.6),
+				frame * CFrame.new(tankMidX, (tankTop + tankBottom) / 2 - landingY, sign * layer[1]),
+				SURFACE:Lerp(DEEP, index / 5), PANE, false)
+			pane.Transparency = layer[2]
+			pane.CastShadow = false
+			pane:SetAttribute("Phase", index * 0.7 + (if sign > 0 then 0.4 else 0))
+			CollectionService:AddTag(pane, "SunkenTank")
+		end
+	end
+
+	-- CAUSTICS: the moving bright patches the surface throws onto everything under it. The client
+	-- slides and fades them (SunkenCityClient); without them a tunnel under water is a tunnel in a
+	-- dark room.
+	for index = 1, 10 do
+		local caustic = block(parent, "Caustic", Vector3.new(rng:NextNumber(5, 11), 0.2, rng:NextNumber(5, 11)),
+			frame * CFrame.new(tunnelFrom + rng:NextNumber(0, TUNNEL_L + ROOM_L), ty + 0.35,
+				rng:NextNumber(-TUNNEL_W / 2 + 0.6, TUNNEL_W / 2 - 0.6)),
+			Color3.fromRGB(214, 240, 236), Enum.Material.SmoothPlastic, false)
+		-- NOT NEON. A caustic is light the water throws onto the floor, and the light in this
+		-- tunnel is the fittings in its roof and the two uplights in its floor -- so this is a pale
+		-- patch for them to catch, not a part pretending to glow.
+		caustic.Transparency = 0.82
+		caustic.CastShadow = false
+		caustic:SetAttribute("Phase", rng:NextNumber(0, 100))
+		caustic:SetAttribute("Drift", rng:NextNumber(2.5, 5))
+		CollectionService:AddTag(caustic, "SunkenCaustic")
+	end
+
+	-- Specks in the water, so it has something in it to see.
+	local motesHost = block(parent, "TankMotes", Vector3.new(TUNNEL_L, 20, 60),
+		frame * CFrame.new(tunnelFrom + TUNNEL_L / 2, ty + 6, 0), SURFACE, Enum.Material.SmoothPlastic, false)
+	motesHost.Transparency = 1
+	local motes = Instance.new("ParticleEmitter")
+	motes.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	motes.Color = ColorSequence.new(Color3.fromRGB(214, 232, 226))
+	motes.LightEmission = 0.3
+	motes.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 0.2) })
+	motes.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55),
+		NumberSequenceKeypoint.new(0.5, 0.8), NumberSequenceKeypoint.new(1, 1) })
+	motes.Lifetime = NumberRange.new(8, 16)
+	motes.Speed = NumberRange.new(0.2, 0.8)
+	motes.SpreadAngle = Vector2.new(70, 70)
+	motes.Acceleration = Vector3.new(0.1, -0.2, 0)
+	motes.Rate = 14
+	motes.Parent = motesHost
+
 
 	-- THE GALLERY at the tunnel's end: the top floor of a building standing on the sea floor.
 	local roomX = tunnelTo + ROOM_L / 2 - 0.3
@@ -1021,8 +2897,9 @@ local function aquarium(parent: Instance, frame: CFrame, floorY: number, rng: Ra
 	end
 	-- The window onto the deep, in a brass frame.
 	local window = block(parent, "ViewingWindow", Vector3.new(0.3, 6, 10), room * CFrame.new(ROOM_L / 2 + 0.5, ty + 5.5, 0),
-		glassColour, Enum.Material.Glass, true)
-	window.Transparency = 0.55
+		glassColour, PANE, true)
+	window.Transparency = 0.6
+	window.Reflectance = 0.06
 	window.CanQuery = true
 	for _, edge in ipairs({ { 0, 2.5, 0.5, 10.6 }, { 0, 8.5, 0.5, 10.6 }, { -5.1, 5.5, 6.4, 0.5 }, { 5.1, 5.5, 6.4, 0.5 } }) do
 		block(parent, "WindowFrame", Vector3.new(0.6, edge[3], edge[4]), room * CFrame.new(ROOM_L / 2 - 0.1, ty + edge[2], edge[1]),
@@ -1042,23 +2919,184 @@ local function aquarium(parent: Instance, frame: CFrame, floorY: number, rng: Ra
 	local hum = sound(window, "Hum", WATER_SOUND, 0.18, 0.2, 40, true)
 	hum:Play()
 
-	-- KELP, in strands from the floor, and three shoals of fish (the client makes and moves the fish
-	-- from these markers).
-	for _ = 1, 10 do
-		local along = rng:NextNumber(tunnelFrom, tunnelTo + ROOM_L)
-		local off = (if rng:NextNumber() < 0.5 then -1 else 1) * rng:NextNumber(10, 28)
+	-- ROCK STACKS beside the tunnel, their tops at eye level with the coral on them: the tank had
+	-- nothing in it to look AT, only through. Placed first, so the kelp can keep out of them.
+	local rocks: { Vector3 } = {}
+	for index, spot in ipairs({ { 0.18, 13 }, { 0.42, -14 }, { 0.66, 12 }, { 0.88, -13 } }) do
+		local at = frame * Vector3.new(tunnelFrom + TUNNEL_L * spot[1], 0, spot[2])
+		table.insert(rocks, Vector3.new(at.X, 0, at.Z))
+		rockStack(parent, Vector3.new(at.X, 0, at.Z), floorY, tunnelY + rng:NextNumber(0, 5) + (if index % 2 == 0 then 1 else 0), rng, true)
+	end
+
+	-- THE KELP FOREST: strands from the sea floor to just under the surface, a hundred studs of plant,
+	-- in the tank either side of the tunnel and in a band past the gallery's window. Grown and swayed
+	-- by the client, which lets the top of a strand and its blades reach KELP_REACH across: so a
+	-- strand beside the tunnel stands KELP_TUNNEL off its line, keeps clear of the tower at one end
+	-- and the gallery at the other, and is never rooted in a rock stack; and the ones past the window
+	-- stand between the helmet and chest and what comes up out of the dark (check_sunkencity.py).
+	local roomFar = roomX + ROOM_L / 2
+	local planted = 0
+	for _ = 1, 60 do
+		if planted >= 16 then
+			break
+		end
+		local along, off
+		if planted < 12 then
+			along = rng:NextNumber(tunnelFrom + 8, tunnelTo - 10)
+			off = (if planted % 2 == 0 then 1 else -1) * rng:NextNumber(KELP_TUNNEL, TANK_HALF - 3)
+		else
+			along = rng:NextNumber(roomFar + 35, roomFar + 38)
+			off = rng:NextNumber(-TANK_HALF + 3, TANK_HALF - 3)
+		end
 		local at = frame * Vector3.new(along, 0, off)
-		local topY = math.min(waterLevel - 4, tunnelY + rng:NextNumber(-6, 10))
-		local y0 = floorY
-		local lean = rng:NextNumber(-0.25, 0.25)
-		for piece = 1, 3 do
-			local y1 = floorY + (topY - floorY) * piece / 3
-			local from = Vector3.new(at.X + lean * (piece - 1) * 3, y0, at.Z)
-			local to = Vector3.new(at.X + lean * piece * 3, y1, at.Z)
-			rod(parent, "Kelp", from, to, 1.2, Color3.fromRGB(70, 104, 56))
-			y0 = y1
+		local clear = true
+		for _, rock in ipairs(rocks) do
+			if Vector3.new(at.X - rock.X, 0, at.Z - rock.Z).Magnitude < 9 then
+				clear = false
+			end
+		end
+		if clear then
+			planted += 1
+			kelp(parent, Vector3.new(at.X, floorY, at.Z), waterLevel - rng:NextNumber(3, 9) - floorY, rng,
+				Vector3.new(frame.RightVector.X, 0, frame.RightVector.Z).Unit, false)
 		end
 	end
+
+	-- AND WHAT EVERY AQUARIUM HAS: a diver's helmet and a treasure chest, out past the gallery's
+	-- window on their own rocks, breathing bubbles. Built at the size of the thing, so they read as
+	-- ornaments made for a tank of giants.
+	local helmetRock = frame * Vector3.new(roomFar + 16, 0, -6)
+	rockStack(parent, Vector3.new(helmetRock.X, 0, helmetRock.Z), floorY, tunnelY - 2, rng, false)
+	-- Seated on the rock: the collar's foot at the rock's top.
+	local helmetAt = CFrame.lookAt(Vector3.new(helmetRock.X, tunnelY + 0.1, helmetRock.Z),
+		(frame * Vector3.new(roomFar, 0, 0)) * Vector3.new(1, 0, 1) + Vector3.new(0, tunnelY + 0.1, 0))
+	local copper = Color3.fromRGB(176, 124, 70)
+	local helmet = ellipsoid(parent, "DiverHelmet", Vector3.new(5.4, 5.4, 5.4), helmetAt * CFrame.new(0, 1.4, 0), copper)
+	helmet.Material = Enum.Material.Metal
+	local collar = block(parent, "HelmetCollar", Vector3.new(1.4, 6.4, 6.4), helmetAt * CFrame.new(0, -1.4, 0)
+		* CFrame.Angles(0, 0, math.pi / 2), copper:Lerp(Color3.fromRGB(90, 140, 110), 0.35), Enum.Material.Metal, false)
+	collar.Shape = Enum.PartType.Cylinder
+	for _, port in ipairs({ { 0, 0, 1 }, { -1, 0, 0.5 }, { 1, 0, 0.5 } }) do
+		local dir = (helmetAt.LookVector * port[3] + helmetAt.RightVector * port[1]).Unit
+		local at = helmetAt.Position + Vector3.new(0, 1.4, 0) + dir * 2.55
+		local rim = block(parent, "PortRim", Vector3.new(0.5, 2.6, 2.6), CFrame.lookAt(at, at + dir) * CFrame.Angles(0, math.pi / 2, 0),
+			BRASS, Enum.Material.Metal, false)
+		rim.Shape = Enum.PartType.Cylinder
+		local pane = block(parent, "PortGlass", Vector3.new(0.52, 1.9, 1.9), CFrame.lookAt(at, at + dir) * CFrame.Angles(0, math.pi / 2, 0),
+			Color3.fromRGB(20, 30, 34), Enum.Material.Glass, false)
+		pane.Shape = Enum.PartType.Cylinder
+	end
+	local valve = block(parent, "HelmetValve", Vector3.new(0.9, 0.9, 0.9), helmetAt * CFrame.new(0, 4.3, 0.4), BRASS,
+		Enum.Material.Metal, false)
+	local chestRock = frame * Vector3.new(roomFar + 20, 0, 7)
+	rockStack(parent, Vector3.new(chestRock.X, 0, chestRock.Z), floorY, tunnelY - 3, rng, false)
+	local chestAt = CFrame.lookAt(Vector3.new(chestRock.X, tunnelY - 3 + 1.6, chestRock.Z),
+		(frame * Vector3.new(roomFar, 0, 0)) * Vector3.new(1, 0, 1) + Vector3.new(0, tunnelY - 1.4, 0))
+	block(parent, "Chest", Vector3.new(5, 3, 3.4), chestAt, Color3.fromRGB(112, 78, 50), Enum.Material.WoodPlanks, false)
+	for _, x in ipairs({ -1.8, 1.8 }) do
+		block(parent, "ChestBand", Vector3.new(0.35, 3.1, 3.5), chestAt * CFrame.new(x, 0, 0), BRASS, Enum.Material.Metal, false)
+	end
+	local gold = ellipsoid(parent, "Gold", Vector3.new(4.2, 1.2, 2.8), chestAt * CFrame.new(0, 1.5, 0), Color3.fromRGB(230, 190, 90))
+	gold.Material = Enum.Material.Metal
+	local lid = block(parent, "ChestLid", Vector3.new(5, 0.6, 3.4), chestAt * CFrame.new(0, 1.5, 1.7) * CFrame.Angles(math.rad(38), 0, 0)
+		* CFrame.new(0, 0, -1.7), Color3.fromRGB(112, 78, 50), Enum.Material.WoodPlanks, false)
+	for _, host in ipairs({ valve, lid }) do
+		local stream = Instance.new("ParticleEmitter")
+		stream.Name = "Bubbles"
+		stream.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		stream.Color = ColorSequence.new(Color3.fromRGB(226, 242, 240))
+		stream.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 0.5) })
+		stream.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 0.8) })
+		stream.Lifetime = NumberRange.new(4, 6)
+		stream.Speed = NumberRange.new(3, 5)
+		stream.EmissionDirection = Enum.NormalId.Top
+		stream.SpreadAngle = Vector2.new(8, 8)
+		stream.Acceleration = Vector3.new(0, 1.5, 0)
+		stream.Rate = if host == valve then 5 else 2.5
+		stream.Parent = host
+	end
+
+	-- A BRASS RAIL down both sides of the tunnel, on posts at every rib, with a plaque here and there
+	-- -- which is what makes it an aquarium and not a pipe. It stands off the glass by less than an
+	-- arm, so the glass is still there to tap.
+	for bay = 0, bays do
+		local x = tunnelFrom + bay * TUNNEL_BAY
+		for _, side in ipairs({ -1, 1 }) do
+			block(parent, "RailPost", Vector3.new(0.3, 3.2, 0.3), frame * CFrame.new(x + (if bay == 0 then 1.2 else 0), ty + 1.6,
+				side * (half - 0.9)), BRASS, Enum.Material.Metal, false)
+		end
+	end
+	for _, side in ipairs({ -1, 1 }) do
+		block(parent, "Handrail", Vector3.new(TUNNEL_L - 1.2, 0.3, 0.3), frame * CFrame.new(tunnelFrom + TUNNEL_L / 2 + 0.6, ty + 3.2,
+			side * (half - 0.9)), BRASS, Enum.Material.Metal, false)
+	end
+	for index, words in ipairs({ "THE KELP FOREST", "OPEN WATER", "THE DEEP" }) do
+		local side = if index % 2 == 0 then 1 else -1
+		-- In the middle of a bay, where there is no post.
+		local bayAt = ({ 0, 2, 3 })[index]
+		local plaque = block(parent, "Plaque", Vector3.new(3.2, 1.1, 0.1), frame * CFrame.new(tunnelFrom + TUNNEL_BAY * (bayAt + 0.5),
+			ty + 2.6, side * (half - 0.95)) * CFrame.Angles(math.rad(side * 25), 0, 0), Color3.fromRGB(40, 58, 60),
+			Enum.Material.SmoothPlastic, false)
+		label(plaque, if side > 0 then Enum.NormalId.Front else Enum.NormalId.Back, words, Color3.fromRGB(222, 214, 180))
+	end
+
+	-- BUBBLE VENTS along the tunnel's foot, outside the glass: columns of bubbles going up past you.
+	for index, share in ipairs({ 0.12, 0.38, 0.62, 0.88 }) do
+		local side = if index % 2 == 0 then 1 else -1
+		do
+			do
+				local vent = block(parent, "BubbleVent", Vector3.new(1, 0.4, 1), frame * CFrame.new(tunnelFrom + TUNNEL_L * share, ty - 0.6,
+					side * (half + 1.4)), Color3.fromRGB(60, 64, 66), Enum.Material.Metal, false)
+				local bubbles = Instance.new("ParticleEmitter")
+				bubbles.Name = "Bubbles"
+				bubbles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+				bubbles.Color = ColorSequence.new(Color3.fromRGB(226, 242, 240))
+				bubbles.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 0.45) })
+				bubbles.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 0.9) })
+				bubbles.Lifetime = NumberRange.new(3.5, 5)
+				bubbles.Speed = NumberRange.new(4, 6)
+				bubbles.EmissionDirection = Enum.NormalId.Top
+				bubbles.SpreadAngle = Vector2.new(6, 6)
+				bubbles.Acceleration = Vector3.new(0, 1, 0)
+				bubbles.Rate = 9
+				bubbles.Parent = vent
+			end
+		end
+	end
+
+	-- ANIMALS IN THE TANK, the same swimmers the street has: over the tunnel, where you look up at
+	-- them through the roof, high enough that no wing beat or bob reaches the glass and low enough
+	-- that nothing breaks the surface; and jellyfish past the gallery's window.
+	local tankAlong = Vector3.new(frame.RightVector.X, 0, frame.RightVector.Z).Unit
+	for index, kind in ipairs({ "ray", "turtle", "shark", "ray", "grouper", "jelly", "jelly", "jelly" }) do
+		local at, across, bob
+		if kind == "jelly" then
+			at = frame * Vector3.new(roomFar + rng:NextNumber(10, 26), 0, rng:NextNumber(-8, 8))
+			at = Vector3.new(at.X, tunnelY + rng:NextNumber(8, 11), at.Z)
+			across, bob = 6, 1.5
+		else
+			at = frame * Vector3.new(tunnelFrom + rng:NextNumber(22, TUNNEL_L - 22), 0, rng:NextNumber(-4, 4))
+			at = Vector3.new(at.X, tunnelY + rng:NextNumber(13.5, 16), at.Z)
+			across, bob = 9, 1
+		end
+		local marker = block(parent, "Swimmer", Vector3.new(1, 1, 1), CFrame.new(at), SURFACE, Enum.Material.SmoothPlastic, false)
+		marker.Transparency = 1
+		marker:SetAttribute("Kind", kind)
+		marker:SetAttribute("Range", if kind == "jelly" then 5 else 16)
+		marker:SetAttribute("Across", across)
+		marker:SetAttribute("Bob", bob)
+		marker:SetAttribute("Speed", rng:NextNumber(0.6, 1))
+		marker:SetAttribute("Phase", rng:NextNumber(0, 100) + index)
+		marker:SetAttribute("Along", tankAlong)
+		-- Seen through the gallery's window rather than through the sea's Glass surface, so a
+		-- jellyfish here can be clear (SunkenCityClient).
+		marker:SetAttribute("Clear", kind == "jelly")
+		CollectionService:AddTag(marker, "SunkenSwimmer")
+	end
+	-- THE WINDOW ONTO THE DEEP is tagged, so the client knows where to bring up what looks in.
+	CollectionService:AddTag(window, "SunkenDeepWindow")
+
+	-- Three shoals of fish (the client makes and moves the fish from these markers).
 	for index, spot in ipairs({ { tunnelFrom + TUNNEL_L * 0.3, 12 }, { tunnelFrom + TUNNEL_L * 0.7, -12 }, { roomX + ROOM_L / 2 + 18, 0 } }) do
 		local marker = block(parent, "FishShoal", Vector3.new(1, 1, 1), frame * CFrame.new(spot[1], ty + 5, spot[2]), FOAM,
 			Enum.Material.SmoothPlastic, false)
@@ -1080,6 +3118,21 @@ local function aquarium(parent: Instance, frame: CFrame, floorY: number, rng: Ra
 		CollectionService:AddTag(box, "SunkenAquariumZone")
 		CollectionService:AddTag(box, "SunkenShelter")
 	end
+	-- THE SPACES THAT FLOOD when the glass goes, cut to fit: the tower under the surface, the tunnel and
+	-- the gallery. The client fills them with rising water (SunkenCityClient); who is washed out is
+	-- decided by the zones above, which are a little larger.
+	local floodTower = block(parent, "FloodVolume", Vector3.new(waterLevel - tunnelY, (ROT_R - ROT_WALL) * 2 - 0.3,
+		(ROT_R - ROT_WALL) * 2 - 0.3), CFrame.new(towerAt.Position.X, (tunnelY + waterLevel) / 2, towerAt.Position.Z)
+		* CFrame.Angles(0, 0, math.pi / 2), FOAM, Enum.Material.SmoothPlastic, false)
+	floodTower.Shape = Enum.PartType.Cylinder
+	local floodTunnel = block(parent, "FloodVolume", Vector3.new(TUNNEL_L, 9, TUNNEL_W), frame * CFrame.new((tunnelFrom + tunnelTo) / 2,
+		ty + 4.5, 0), FOAM, Enum.Material.SmoothPlastic, false)
+	local floodGallery = block(parent, "FloodVolume", Vector3.new(ROOM_L, ROOM_H, ROOM_W), room * CFrame.new(0, ty + ROOM_H / 2, 0),
+		FOAM, Enum.Material.SmoothPlastic, false)
+	for _, volume in ipairs({ floodTower, floodTunnel, floodGallery }) do
+		volume.Transparency = 1
+		CollectionService:AddTag(volume, "SunkenFloodVolume")
+	end
 	-- And the whole tower, door to floor, as a shelter from the surge: nothing outside reaches in.
 	local towerShelter = block(parent, "Shelter", Vector3.new((ROT_R - ROT_WALL) * 2, roofY - tunnelY, (ROT_R - ROT_WALL) * 2),
 		frame * CFrame.new(xc, (roofY + tunnelY) / 2 - landingY, 0), FOAM, Enum.Material.SmoothPlastic, false)
@@ -1088,11 +3141,49 @@ local function aquarium(parent: Instance, frame: CFrame, floorY: number, rng: Ra
 
 	return {
 		tower = towerAt.Position,
-		far = (frame * CFrame.new(roomX + ROOM_L / 2, 0, 0)).Position,
+		far = (frame * CFrame.new(roomX + ROOM_L / 2 + WINDOW_DEEP, 0, 0)).Position,
 		window = window,
 		light = light,
 		hum = hum,
 	}
+end
+
+-- ===== WATER YOU CAN SWIM IN =====
+--
+-- The sea is parts, so it can be seen through and cannot be swum in. The one place meant to be swum
+-- is the flooded floor under the dry flat, and that is Roblox terrain water, which is GLOBAL and not
+-- built per run: every fill is remembered here and cleared when the level goes, as Sky Pools does
+-- with its pools, and the water's look is put back as it was found.
+local swimWater = { fills = {} :: { { cf: CFrame, size: Vector3 } }, was = {} :: { [string]: any } }
+
+local function fillSwimWater(cf: CFrame, size: Vector3)
+	workspace.Terrain:FillBlock(cf, size, Enum.Material.Water)
+	table.insert(swimWater.fills, { cf = cf, size = size })
+	-- Dark and green, the colour of a flooded room, not of a pool.
+	for name, value in pairs({ WaterColor = Color3.fromRGB(40, 84, 80), WaterTransparency = 0.35,
+		WaterReflectance = 0.1, WaterWaveSize = 0.02, WaterWaveSpeed = 4 }) do
+		pcall(function()
+			if swimWater.was[name] == nil then
+				swimWater.was[name] = (workspace.Terrain :: any)[name]
+			end
+			(workspace.Terrain :: any)[name] = value
+		end)
+	end
+end
+
+function SunkenCityService.clearWater()
+	for _, region in ipairs(swimWater.fills) do
+		pcall(function()
+			workspace.Terrain:FillBlock(region.cf, region.size + Vector3.new(6, 6, 6), Enum.Material.Air)
+		end)
+	end
+	table.clear(swimWater.fills)
+	for name, value in pairs(swimWater.was) do
+		pcall(function()
+			(workspace.Terrain :: any)[name] = value
+		end)
+	end
+	table.clear(swimWater.was)
 end
 
 -- ===== THE LAST DRY FLAT =====
@@ -1148,17 +3239,32 @@ local function dryFlat(parent: Instance, frame: CFrame, floorY: number): Flat
 	end
 
 	-- THE BUILDING UNDER THE FLAT, from the sea floor to the flat's floor, solid but for the
-	-- stairwell's shaft, each piece drowned by its depth. Its top is the flat's floor.
+	-- stairwell's shaft and THE FLOODED FLOOR: an L of two rooms a storey under the water, reached
+	-- through a doorway at the foot of the shaft. Each piece drowned by its depth. Its top is the
+	-- flat's floor.
 	local shaft = { x0 = b0 + 10, x1 = b0 + 22, z0 = -hz + 0.8, z1 = -hz + 12.8 }
 	local footprint = { x0 = b0, x1 = b1, z0 = -hz, z1 = hz }
-	for _, r in ipairs(subtract(footprint, { shaft })) do
-		for _, band in ipairs({ { floorY, waterLevel - MURK_DEPTH }, { waterLevel - MURK_DEPTH, waterLevel }, { waterLevel, landingY } }) do
-			local y0, y1 = band[1], band[2]
-			if y1 - y0 > 0.05 then
+	local roomA = { x0 = b0 + 1.2, x1 = b0 + 8.8, z0 = -hz + 1.2, z1 = hz - 1.2 }
+	local roomB = { x0 = b0 + 8.8, x1 = b1 - 1.2, z0 = shaft.z1 + 1, z1 = hz - 1.2 }
+	local door = { x0 = b0 + 13, x1 = b0 + 17, z0 = shaft.z1, z1 = shaft.z1 + 1 }
+	local roomFloor = waterLevel - FLOODED_DEPTH
+	local roomCeil = waterLevel - 0.8
+	for _, band in ipairs({
+		{ floorY, roomFloor, { shaft } },
+		{ roomFloor, roomFloor + 7, { shaft, roomA, roomB, door } },
+		{ roomFloor + 7, roomCeil, { shaft, roomA, roomB } },
+		{ roomCeil, waterLevel, { shaft } },
+		{ waterLevel, landingY, { shaft } },
+	}) do
+		local y0, y1 = band[1], band[2]
+		if y1 - y0 > 0.05 then
+			for _, r in ipairs(subtract(footprint, band[3])) do
 				block(parent, "FlatBody", Vector3.new(r.x1 - r.x0, y1 - y0, r.z1 - r.z0), put((r.x0 + r.x1) / 2, (y0 + y1) / 2, (r.z0 + r.z1) / 2),
 					drowned(wallColour, (y0 + y1) / 2), Enum.Material.Concrete, true)
 			end
 		end
+	end
+	for _, r in ipairs(subtract(footprint, { shaft })) do
 		block(parent, "FlatFloor", Vector3.new(r.x1 - r.x0, 0.1, r.z1 - r.z0), put((r.x0 + r.x1) / 2, landingY + 0.05, (r.z0 + r.z1) / 2),
 			Color3.fromRGB(150, 120, 90), Enum.Material.WoodPlanks, false)
 	end
@@ -1209,8 +3315,9 @@ local function dryFlat(parent: Instance, frame: CFrame, floorY: number): Flat
 		Enum.Material.SmoothPlastic, false)
 	label(calendar, Enum.NormalId.Right, "THURSDAY 16\n\nThe water will not come up this far.\nManagement", Color3.fromRGB(60, 50, 40))
 
-	-- THE STAIRWELL: a railing round the hole, a spiral down to a landing just under the water, and at
-	-- the bottom a doorway into the flooded floor, blocked by a wardrobe that fell across it.
+	-- THE STAIRWELL: a railing round the hole and a spiral down to where the water starts. Then the
+	-- water, which is real water now: swim down the shaft, through the doorway at its foot and into
+	-- the flooded floor.
 	local sc = put((shaft.x0 + shaft.x1) / 2, landingY, (shaft.z0 + shaft.z1) / 2)
 	local bottom = waterLevel - 1.5
 	local drop = landingY - bottom
@@ -1221,12 +3328,67 @@ local function dryFlat(parent: Instance, frame: CFrame, floorY: number): Flat
 		block(parent, "Step", Vector3.new(4.2, 1, 2.2), sc * CFrame.Angles(0, -psi, 0) * CFrame.new(3.5, -step * rise - 0.5, 0),
 			drowned(wallColour, landingY - step * rise), Enum.Material.Concrete, true)
 	end
-	column(parent, "StairColumn", 2.4, sc.Position, bottom, landingY + h, wallColour, true, true)
-	block(parent, "StairLanding", Vector3.new(shaft.x1 - shaft.x0, 1, shaft.z1 - shaft.z0), put((shaft.x0 + shaft.x1) / 2, bottom - 0.5,
-		(shaft.z0 + shaft.z1) / 2), drowned(wallColour, bottom), Enum.Material.Concrete, true)
-	cityBlock(parent, "FloodedDoor", Vector3.new(0.3, 7, 4), put(shaft.x1 - 0.1, bottom + 2, (shaft.z0 + shaft.z1) / 2 + 2), Color3.fromRGB(12, 16, 18))
-	cityBlock(parent, "Wardrobe", Vector3.new(1.4, 6.5, 3.2), put(shaft.x1 - 1.4, bottom + 1.4, (shaft.z0 + shaft.z1) / 2 + 2)
-		* CFrame.Angles(0, 0, math.rad(-58)), Color3.fromRGB(110, 86, 64), Enum.Material.Wood)
+	column(parent, "StairColumn", 2.4, sc.Position, roomFloor, landingY + h, wallColour, true, true)
+	block(parent, "ShaftFloor", Vector3.new(shaft.x1 - shaft.x0, 1, shaft.z1 - shaft.z0), put((shaft.x0 + shaft.x1) / 2, roomFloor - 0.5,
+		(shaft.z0 + shaft.z1) / 2), drowned(wallColour, roomFloor), Enum.Material.Concrete, true)
+	-- THE WATER: the shaft from its floor to just under the surface, and the flooded floor, as one
+	-- block through the walls between them (the walls are solid; the water in them is never seen).
+	fillSwimWater(put((roomA.x0 + roomB.x1) / 2, (roomFloor + roomCeil) / 2, (shaft.z0 + roomA.z1) / 2),
+		Vector3.new(roomB.x1 - roomA.x0, roomCeil - roomFloor, roomA.z1 - shaft.z0))
+	fillSwimWater(put((shaft.x0 + shaft.x1) / 2, (roomCeil + waterLevel - 0.3) / 2, (shaft.z0 + shaft.z1) / 2),
+		Vector3.new(shaft.x1 - shaft.x0 - 0.4, waterLevel - 0.3 - roomCeil, shaft.z1 - shaft.z0 - 0.4))
+
+	-- THE FLOODED FLOOR. Somebody's flat, a storey down, the way the water left it: the furniture
+	-- lifted and turned over, a lamp that is somehow still on, a few fish that have moved in, and a
+	-- note on the wall.
+	local planks = Color3.fromRGB(96, 78, 60)
+	for _, room in ipairs({ roomA, roomB }) do
+		block(parent, "FloodedFloor", Vector3.new(room.x1 - room.x0, 0.2, room.z1 - room.z0),
+			put((room.x0 + room.x1) / 2, roomFloor + 0.1, (room.z0 + room.z1) / 2), drowned(planks, roomFloor), Enum.Material.WoodPlanks, false)
+	end
+	local drift = Color3.fromRGB(120, 92, 70)
+	cityBlock(parent, "Wardrobe", Vector3.new(1.4, 3.2, 6.5), put(roomB.x0 + 5, roomFloor + 0.9, roomB.z1 - 2.5)
+		* CFrame.Angles(0, math.rad(20), math.rad(84)), Color3.fromRGB(110, 86, 64), Enum.Material.Wood)
+	cityBlock(parent, "FloatingTable", Vector3.new(4, 0.4, 2.6), put(roomB.x1 - 5, roomCeil - 1.4, roomB.z0 + 4)
+		* CFrame.Angles(math.rad(14), math.rad(30), math.rad(-9)), drift, Enum.Material.Wood)
+	for index = 1, 2 do
+		cityBlock(parent, "FloatingChair", Vector3.new(1.6, 1.6, 1.6), put(roomB.x1 - 6 - index * 2.4, roomCeil - 2.4 - index, roomB.z0 + 2 + index)
+			* CFrame.Angles(math.rad(40 * index), math.rad(70 * index), math.rad(25)), drift, Enum.Material.Wood)
+	end
+	cityBlock(parent, "Bookcase", Vector3.new(5, 1.2, 2.4), put(roomA.x0 + 3.5, roomFloor + 0.6, roomA.z0 + 4)
+		* CFrame.Angles(0, math.rad(12), 0), drift, Enum.Material.Wood)
+	for index = 1, 6 do
+		cityBlock(parent, "Book", Vector3.new(0.3, 1.1, 0.8), put(roomA.x0 + 1.5 + index * 0.9, roomFloor + 3 + (index % 3) * 2.2,
+			roomA.z0 + 3 + index * 1.4) * CFrame.Angles(math.rad(index * 37), math.rad(index * 53), math.rad(index * 21)),
+			({ Color3.fromRGB(150, 60, 50), Color3.fromRGB(60, 90, 130), Color3.fromRGB(190, 160, 90) })[index % 3 + 1])
+	end
+	ellipsoid(parent, "Bear", Vector3.new(1.1, 1.3, 0.9), put(roomA.x0 + 4, roomCeil - 1, roomA.z1 - 4) * CFrame.Angles(0.4, 0.9, 0.3),
+		Color3.fromRGB(150, 110, 80)).Material = Enum.Material.Fabric
+	block(parent, "Picture", Vector3.new(0.1, 2.2, 3), put(roomA.x0 + 0.05, roomFloor + 5, 0),
+		Color3.fromRGB(60, 50, 40), Enum.Material.Wood, false)
+	local note = block(parent, "Note", Vector3.new(0.1, 1.6, 2.4), put(roomB.x1 - 0.05, roomFloor + 4.6, (roomB.z0 + roomB.z1) / 2),
+		Color3.fromRGB(226, 220, 200), Enum.Material.SmoothPlastic, false)
+	label(note, Enum.NormalId.Left, "WE WENT UP.\nIT DID NOT STOP.", Color3.fromRGB(50, 40, 34))
+	-- The lamp that is still on, down here, and gutters (SunkenLantern, SunkenCityClient).
+	local bulb = block(parent, "FloodedLamp", Vector3.new(1, 0.6, 1), put((roomB.x0 + roomB.x1) / 2, roomCeil - 0.4, (roomB.z0 + roomB.z1) / 2),
+		Color3.fromRGB(255, 226, 180), Enum.Material.SmoothPlastic, false)
+	local glow = Instance.new("PointLight")
+	glow.Brightness = 0.9
+	glow.Range = 18
+	glow.Color = Color3.fromRGB(255, 214, 160)
+	glow.Shadows = false
+	glow.Parent = bulb
+	CollectionService:AddTag(bulb, "SunkenLantern")
+	-- And the fish that live here now (SunkenFishShoal, drawn and swum by the client).
+	local fishAt = put((roomA.x0 + roomA.x1) / 2, roomFloor + 5, -3)
+	local fish = block(parent, "Shoal", Vector3.new(1, 1, 1), fishAt, SURFACE, Enum.Material.SmoothPlastic, false)
+	fish.Transparency = 1
+	fish:SetAttribute("Count", 7)
+	fish:SetAttribute("Radius", 2.6)
+	fish:SetAttribute("Speed", 0.5)
+	fish:SetAttribute("Length", 1)
+	fish:SetAttribute("Phase", 3)
+	CollectionService:AddTag(fish, "SunkenFishShoal")
 	local rail = Color3.fromRGB(70, 74, 78)
 	local entryZ = (shaft.z0 + shaft.z1) / 2
 	railing(parent, put(shaft.x1, landingY, shaft.z1).Position, put(shaft.x0, landingY, shaft.z1).Position, rail)
@@ -1237,7 +3399,7 @@ local function dryFlat(parent: Instance, frame: CFrame, floorY: number): Flat
 		Color3.fromRGB(214, 190, 60), Enum.Material.SmoothPlastic, false)
 	label(notice, Enum.NormalId.Back, "FLOODED. NO ACCESS.", Color3.fromRGB(30, 30, 30))
 	-- The water, heard from the top of the stairs, and dripping on the way down.
-	local lap = block(parent, "StairwellSound", Vector3.new(1, 1, 1), put((shaft.x0 + shaft.x1) / 2, bottom + 1, entryZ), wallColour,
+	local lap = block(parent, "StairwellSound", Vector3.new(1, 1, 1), put((shaft.x0 + shaft.x1) / 2, waterLevel - 0.5, entryZ), wallColour,
 		Enum.Material.SmoothPlastic, false)
 	lap.Transparency = 1
 	sound(lap, "Lapping", WATER_SOUND, 0.5, 0.25, 30, true):Play()
@@ -1313,7 +3475,7 @@ end
 --
 -- In the finish frame: +X away from the middle, +Z on along the route. The pier runs on from the
 -- last chunk; the whirlpool is VORTEX_GAP past its end; the drain is on the harbour floor under it.
-local function finale(parent: Instance, finish: CFrame, floorY: number): Vector3
+local function finale(parent: Instance, finish: CFrame, floorY: number, rng: Random): Vector3
 	local pierTop = finish.Position.Y
 	local stone = Color3.fromRGB(150, 150, 140)
 	block(parent, "Pier", Vector3.new(PIER_W, 2.5, PIER_L), finish * CFrame.new(0, -1.25, PIER_L / 2), stone,
@@ -1347,7 +3509,7 @@ local function finale(parent: Instance, finish: CFrame, floorY: number): Vector3
 	column(parent, "LanternPost", 0.45, lanternPost, pierTop, pierTop + 6, Color3.fromRGB(60, 62, 66), true, true)
 	rod(parent, "LanternArm", lanternPost + Vector3.new(0, 5.8, 0), (finish * CFrame.new(-PIER_W / 2 + 2.6, 5.8, PIER_L - 3)).Position, 0.25,
 		Color3.fromRGB(60, 62, 66))
-	lamp(parent, finish * CFrame.new(-PIER_W / 2 + 2.6, 5.1, PIER_L - 3), 0.8, 24, Color3.fromRGB(255, 200, 140))
+	lantern(parent, finish * CFrame.new(-PIER_W / 2 + 2.6, 4.6, PIER_L - 3), true, Color3.fromRGB(255, 200, 140))
 	local post = finish * Vector3.new(PIER_W / 2 - 1.2, 0, PIER_L - 3)
 	column(parent, "SignPost", 0.4, post, pierTop, pierTop + 4, Color3.fromRGB(80, 84, 90), false, true)
 	local sign = block(parent, "DrainSign", Vector3.new(0.2, 1.8, 3.6), finish * CFrame.new(PIER_W / 2 - 1.2, 4.6, PIER_L - 3),
@@ -1377,11 +3539,39 @@ local function finale(parent: Instance, finish: CFrame, floorY: number): Vector3
 		local tone = FOAM:Lerp(Color3.fromRGB(26, 58, 64), ring / 4)
 		for index = 0, 15 do
 			local beta = index * 2 * math.pi / 16 + ring * 0.12
+			-- NOT GLASS, which drew only what was opaque behind it: each ring showed none of the others
+			-- and the funnel was a stack of flat panes. And every segment carries the engine's water
+			-- texture, which the client slides round and in (`SunkenWhirlFlow`), faster the further
+			-- in -- the surface pouring down the funnel rather than a cone standing in the sea.
 			local piece = block(model, "Whirl", Vector3.new(span + 0.4, 0.5, 2 * math.pi * outerR / 16 + 0.4),
 				CFrame.new(vortex) * CFrame.Angles(0, -beta, 0) * CFrame.new((outerR + innerR) / 2, -(topD + bottomD) / 2, 0)
 					* CFrame.Angles(0, 0, slope),
-				tone, Enum.Material.Glass, false)
-			piece.Transparency = 0.25 - ring * 0.03
+				tone, Enum.Material.SmoothPlastic, false)
+			piece.Transparency = 0.18 - ring * 0.02
+			piece.Reflectance = 0.08
+			local flow = Instance.new("Texture")
+			flow.Name = "Flow"
+			flow.Face = Enum.NormalId.Top
+			flow.Texture = "rbxasset://textures/water/normal_1.dds"
+			flow.StudsPerTileU = 9
+			flow.StudsPerTileV = 9
+			flow.Transparency = 0.55
+			flow.Color3 = Color3.fromRGB(226, 242, 238)
+			flow.Parent = piece
+			piece:SetAttribute("Ring", ring)
+			CollectionService:AddTag(piece, "SunkenWhirlFlow")
+		end
+		-- STREAKS of foam on the ring, a few and uneven: sixteen identical segments turning look like
+		-- nothing turning at all, and these are what the eye follows round.
+		for streak = 1, 4 do
+			local beta = streak * 2 * math.pi / 4 + rng:NextNumber(-0.5, 0.5)
+			local r = (outerR + innerR) / 2 + rng:NextNumber(-1, 1)
+			local drop = (topD + bottomD) / 2
+			local mark = block(model, "Streak", Vector3.new(0.6, 0.12, rng:NextNumber(4, 9)),
+				CFrame.new(vortex) * CFrame.Angles(0, -beta, 0) * CFrame.new(r, -drop + 0.35, 0) * CFrame.Angles(0, 0, slope)
+					* CFrame.Angles(0, rng:NextNumber(0.25, 0.5), 0), FOAM, Enum.Material.SmoothPlastic, false)
+			mark.Transparency = 0.25 + ring * 0.08
+			mark.CastShadow = false
 		end
 		model:SetAttribute("Centre", vortex)
 		-- Radians a second, the way the rider goes round.
@@ -1389,6 +3579,104 @@ local function finale(parent: Instance, finish: CFrame, floorY: number): Vector3
 		model.Parent = parent
 		CollectionService:AddTag(model, "SunkenWhirlRing")
 	end
+	-- THE SPIRAL ARMS: three lines of foam wound into the middle, which is the thing that says a
+	-- whirlpool is TURNING rather than that a hole has been cut in the water. Tagged with the rings,
+	-- so the client turns them together.
+	local arms = Instance.new("Model")
+	arms.Name = "WhirlArms"
+	-- THIN, and in more pieces: they were planks a stud thick that the ride went straight through.
+	-- A line of foam is a skin on the water, tapering and fading as it is drawn in.
+	for arm = 0, 2 do
+		for step = 0, 27 do
+			local share = step / 27
+			local r = VORTEX_R * (1 - share * 0.86) + 2
+			local beta = arm * 2 * math.pi / 3 + share * 2.6
+			local drop = FUNNEL_DEPTH * share ^ 1.6
+			local piece = block(arms, "WhirlArm", Vector3.new(r * 0.28, 0.12, 1.5 - share * 0.9),
+				CFrame.new(vortex) * CFrame.Angles(0, -beta, 0) * CFrame.new(r, -drop + 0.35, 0) * CFrame.Angles(0, 0.35, 0),
+				FOAM:Lerp(Color3.fromRGB(180, 214, 212), share), Enum.Material.SmoothPlastic, false)
+			piece.Transparency = 0.3 + share * 0.45
+			piece.CastShadow = false
+		end
+	end
+	arms:SetAttribute("Centre", vortex)
+	arms:SetAttribute("Spin", 0.5)
+	arms.Parent = parent
+	CollectionService:AddTag(arms, "SunkenWhirlRing")
+
+	-- WHAT THE WATER IS CARRYING ROUND: a plank, a barrel, a lifebuoy, a crate. Nothing gets out.
+	local debris = Instance.new("Model")
+	debris.Name = "WhirlDebris"
+	for index = 0, 5 do
+		local beta = index * math.pi / 3
+		local r = VORTEX_R * rng:NextNumber(0.55, 0.92)
+		local at = CFrame.new(vortex) * CFrame.Angles(0, -beta, 0) * CFrame.new(r, -FUNNEL_DEPTH * (r / VORTEX_R) ^ 1.6 * 0.4, 0)
+		if index % 3 == 0 then
+			cityBlock(debris, "Plank", Vector3.new(7, 0.5, 1.4), at * CFrame.Angles(0, rng:NextNumber(0, 3), math.rad(12)),
+				Color3.fromRGB(120, 100, 76))
+		elseif index % 3 == 1 then
+			local barrel = column(debris, "Barrel", 3, at.Position, at.Position.Y - 1.6, at.Position.Y + 1.6,
+				Color3.fromRGB(150, 90, 60), false)
+			if barrel then
+				barrel.CanCollide = false
+			end
+		else
+			for k = 0, 7 do
+				local a = k * math.pi / 4
+				block(debris, "Lifebuoy", Vector3.new(0.8, 0.5, 0.8),
+					at * CFrame.new(math.cos(a) * 1.6, 0, math.sin(a) * 1.6),
+					if k % 2 == 0 then Color3.fromRGB(200, 80, 66) else Color3.fromRGB(232, 228, 216),
+					Enum.Material.SmoothPlastic, false)
+			end
+		end
+	end
+	debris:SetAttribute("Centre", vortex)
+	debris:SetAttribute("Spin", 0.62)
+	debris.Parent = parent
+	CollectionService:AddTag(debris, "SunkenWhirlRing")
+
+	-- SPRAY blown off the rim, all the way round, and THE ROAR of it, which you hear from along the
+	-- route before the pier.
+	for index = 0, 7 do
+		local beta = index * math.pi / 4
+		local host = block(parent, "RimSpray", Vector3.new(1, 1, 1), CFrame.new(vortex) * CFrame.Angles(0, -beta, 0)
+			* CFrame.new(VORTEX_R + 1, 0.4, 0), FOAM, Enum.Material.SmoothPlastic, false)
+		host.Transparency = 1
+		local spray = Instance.new("ParticleEmitter")
+		spray.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		spray.Color = ColorSequence.new(Color3.fromRGB(236, 246, 242))
+		spray.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 3.5) })
+		spray.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1) })
+		spray.Lifetime = NumberRange.new(0.8, 1.4)
+		spray.Speed = NumberRange.new(2, 4)
+		spray.EmissionDirection = Enum.NormalId.Top
+		spray.SpreadAngle = Vector2.new(25, 25)
+		spray.Acceleration = Vector3.new(0, -3, 0)
+		spray.Rate = 6
+		spray.Parent = host
+	end
+	local roarHost = block(parent, "WhirlRoar", Vector3.new(1, 1, 1), CFrame.new(vortex), FOAM, Enum.Material.SmoothPlastic, false)
+	roarHost.Transparency = 1
+	sound(roarHost, "Roar", WATER_SOUND, 0.32, 0.7, 170, true):Play()
+
+	-- THE MIST over it, which is what you see from along the route before you see anything else.
+	local mistHost = block(parent, "WhirlMist", Vector3.new(VORTEX_R * 2, 2, VORTEX_R * 2),
+		CFrame.new(vortex + Vector3.new(0, 1, 0)), FOAM, Enum.Material.SmoothPlastic, false)
+	mistHost.Transparency = 1
+	local mist = Instance.new("ParticleEmitter")
+	mist.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	mist.Color = ColorSequence.new(Color3.fromRGB(236, 246, 242))
+	mist.LightEmission = 0.4
+	mist.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 10), NumberSequenceKeypoint.new(1, 30) })
+	mist.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.82),
+		NumberSequenceKeypoint.new(0.4, 0.9), NumberSequenceKeypoint.new(1, 1) })
+	mist.Lifetime = NumberRange.new(3, 6)
+	mist.Speed = NumberRange.new(1, 4)
+	mist.SpreadAngle = Vector2.new(60, 60)
+	mist.Acceleration = Vector3.new(0, 2, 0)
+	mist.Rate = 5
+	mist.Parent = mistHost
+
 	-- The current going down: a dark column from the funnel to the drain, with bubbles in it.
 	local throat = column(parent, "Throat", 5, vortex, floorY, waterLevel - FUNNEL_DEPTH, Color3.fromRGB(20, 44, 50), false, true)
 	if throat then
@@ -1434,6 +3722,77 @@ local function finale(parent: Instance, finish: CFrame, floorY: number): Vector3
 	end
 	block(parent, "ShaftFloor", Vector3.new(DRAIN_R * 2 + 2, 1, DRAIN_R * 2 + 2),
 		CFrame.new(vortex.X, floorY - SHAFT_DEPTH - 0.5, vortex.Z), SHAFT, Enum.Material.SmoothPlastic, true)
+
+	-- ===== AND SOMEWHERE TO ARRIVE =====
+	--
+	-- The ride used to end in a black cylinder with a floor, which is an ending only in the sense
+	-- that it stops. At the bottom of a harbour drain there is a SLUICE: a brick chamber with the
+	-- water still coming down one wall, a grating underfoot, a bulkhead lamp that still works, a
+	-- ladder nobody is coming down, and a door to somewhere this level does not go. You are in it
+	-- for the few seconds before the banner, and it is the last thing the level says.
+	local bottom = floorY - SHAFT_DEPTH
+	local brick = Color3.fromRGB(58, 54, 50)
+	for index = 0, 15 do
+		local beta = index * 2 * math.pi / 16
+		block(parent, "SluiceWall", Vector3.new(2, 16, 2 * math.pi * (DRAIN_R + 1) / 16 + 0.4),
+			CFrame.new(vortex.X, bottom + 8, vortex.Z) * CFrame.Angles(0, -beta, 0) * CFrame.new(DRAIN_R + 1, 0, 0),
+			brick, Enum.Material.Brick, true)
+	end
+	-- The grating you land on, and the sump under it.
+	for index = -3, 3 do
+		block(parent, "SluiceGrate", Vector3.new(DRAIN_R * 2 - 1, 0.3, 0.6),
+			CFrame.new(vortex.X, bottom + 0.4, vortex.Z + index * 1.8), Color3.fromRGB(70, 68, 62),
+			Enum.Material.Metal, true)
+	end
+	-- The water still coming in, down one wall and into the sump.
+	local inflow = block(parent, "SluiceInflow", Vector3.new(0.8, 15, 5),
+		CFrame.new(vortex.X + DRAIN_R - 1, bottom + 8, vortex.Z), SURFACE, Enum.Material.Glass, false)
+	inflow.Transparency = 0.45
+	inflow.CastShadow = false
+	local splashHost = block(parent, "SluiceSplash", Vector3.new(4, 1, 4),
+		CFrame.new(vortex.X + DRAIN_R - 2, bottom + 1, vortex.Z), FOAM, Enum.Material.SmoothPlastic, false)
+	splashHost.Transparency = 1
+	local spatter = Instance.new("ParticleEmitter")
+	spatter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	spatter.Color = ColorSequence.new(Color3.fromRGB(226, 240, 236))
+	spatter.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 0.1) })
+	spatter.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 1) })
+	spatter.Lifetime = NumberRange.new(0.5, 1.1)
+	spatter.Speed = NumberRange.new(2, 6)
+	spatter.SpreadAngle = Vector2.new(50, 50)
+	spatter.Acceleration = Vector3.new(0, -30, 0)
+	spatter.Rate = 26
+	spatter.Parent = splashHost
+	ambience(splashHost, "SluiceFall", 0.55, 0.4, 10, 60)
+	-- The bulkhead lamp, in its cage, on the wall opposite the inflow.
+	local lampAt = CFrame.new(vortex.X - DRAIN_R + 1.2, bottom + 9, vortex.Z)
+	local fitting = block(parent, "SluiceLamp", Vector3.new(1.2, 2.2, 2.2), lampAt, Color3.fromRGB(240, 226, 190),
+		Enum.Material.Glass, false)
+	fitting.Transparency = 0.2
+	local bulb = Instance.new("PointLight")
+	bulb.Brightness = 1.6
+	bulb.Range = 26
+	bulb.Color = Color3.fromRGB(255, 226, 172)
+	bulb.Shadows = true
+	bulb.Parent = fitting
+	CollectionService:AddTag(fitting, "SunkenSluiceLamp")
+	for index = -1, 1 do
+		block(parent, "LampCage", Vector3.new(0.3, 2.6, 0.2), lampAt * CFrame.new(0.7, 0, index * 0.8),
+			Color3.fromRGB(46, 44, 42), Enum.Material.Metal, false)
+	end
+	-- A ladder up the wall, a door that does not open, and a sign by it.
+	local ladder = Instance.new("TrussPart")
+	ladder.Name = "SluiceLadder"
+	ladder.Size = Vector3.new(2, 14, 2)
+	ladder.CFrame = CFrame.new(vortex.X, bottom + 7, vortex.Z - DRAIN_R + 1.4)
+	ladder.Anchored = true
+	ladder.Color = Color3.fromRGB(70, 68, 62)
+	ladder.Material = Enum.Material.Metal
+	ladder.Parent = parent
+	local door = block(parent, "SluiceDoor", Vector3.new(0.5, 8, 5),
+		CFrame.new(vortex.X - DRAIN_R + 0.6, bottom + 4, vortex.Z - 3), Color3.fromRGB(80, 90, 86),
+		Enum.Material.Metal, true)
+	label(door, Enum.NormalId.Right, "OUTFALL 3", Color3.fromRGB(216, 222, 214))
 	return vortex
 end
 
@@ -1458,15 +3817,16 @@ function SunkenCityService.build(level: any, parent: Instance): Model?
 		return nil
 	end
 	local base: Vector3 = level.centre or Vector3.zero
-	local centre = Vector3.new(base.X, 0, base.Z)
 	local chunks = level.placedChunks
 	local minOrigin = math.huge
 	for _, entry in ipairs(chunks) do
 		minOrigin = math.min(minOrigin, base.Y + entry.surfaceY)
 	end
 	local h = SunkenCityService.heights(minOrigin)
+	-- Any water a run that was stopped mid-way left behind goes first.
+	SunkenCityService.clearWater()
 	waterLevel = h.water
-	local radius: number = level.radius or 200
+	litLeft = LIT_WINDOWS
 	local rng = Random.new(7919 * (level.levelId or 3))
 
 	local model = Instance.new("Model")
@@ -1481,16 +3841,22 @@ function SunkenCityService.build(level: any, parent: Instance): Model?
 	cityFolder.Name = "City"
 	cityFolder.Parent = model
 
-	-- ===== The finale first: the harbour is laid out round where it is =====
+	-- ===== The route, which everything else is placed from =====
 	local finish: CFrame = level.finishFrame
 	local lastCap = capOf(chunks[#chunks].model)
 	if lastCap then
 		finish = finish + Vector3.new(0, lastCap.Position.Y + lastCap.Size.Y / 2 - finish.Position.Y, 0)
 	end
-	local vortex = finale(model, finish, h.floor)
-	local harbourAngle = math.atan2(vortex.Z - centre.Z, vortex.X - centre.X)
+	local route = routeOf(chunks, finish, h.water)
+	local centre = Vector3.new(route.middle.X, 0, route.middle.Z)
 
-	-- ===== The aquarium, off the checkpoint nearest two fifths of the way round =====
+	-- ===== The finale first: the harbour is laid out round where it is =====
+	local vortex = finale(model, finish, h.floor, rng)
+
+	-- ===== The aquarium, off the checkpoint nearest two fifths of the way along =====
+	--
+	-- On the LEFT of the street, and the dry flat on the right, so the two things you can go inside
+	-- are never on the same side of you.
 	local best: any, gap = nil, math.huge
 	for index, entry in ipairs(chunks) do
 		if entry.chunkId == "S1_Straight" and index > 1 and index < #chunks then
@@ -1501,24 +3867,21 @@ function SunkenCityService.build(level: any, parent: Instance): Model?
 		end
 	end
 	local aq: Aquarium? = nil
-	local aqAngle = 0
 	if best then
 		local cap = capOf(best.model)
-		local frame = if cap then besideFrame(cap, centre) else nil
+		local frame = if cap then besideFrame(cap, -1) else nil
 		if frame then
 			aq = aquarium(model, frame, h.floor, rng)
-			aqAngle = math.atan2(frame.Position.Z - centre.Z, frame.Position.X - centre.X)
 		end
 	end
 
-	-- ===== The last dry flat, off the checkpoint nearest seven tenths of the way round =====
+	-- ===== The last dry flat, off the checkpoint nearest seven tenths of the way along =====
 	--
-	-- Never the aquarium's checkpoint, and never in the harbour, where the thing swings wide.
+	-- Never the aquarium's checkpoint, and never so near the end that it stands in the harbour.
 	local flat: Flat? = nil
-	local flatAngle: number? = nil
 	local flatPick: any, flatGap = nil, math.huge
 	for index, entry in ipairs(chunks) do
-		if entry.chunkId == "S1_Straight" and index > 1 and index < #chunks and entry ~= best then
+		if entry.chunkId == "S1_Straight" and index > 1 and index < #chunks - 3 and entry ~= best then
 			local miss = math.abs(index - FLAT_SHARE * #chunks)
 			if miss < flatGap then
 				flatPick, flatGap = entry, miss
@@ -1527,29 +3890,38 @@ function SunkenCityService.build(level: any, parent: Instance): Model?
 	end
 	if flatPick then
 		local cap = capOf(flatPick.model)
-		local frame = if cap then besideFrame(cap, centre) else nil
-		if frame then
-			local at = math.atan2(frame.Position.Z - centre.Z, frame.Position.X - centre.X)
-			if math.abs(wrapAngle(at - harbourAngle)) > HARBOUR_SECTOR_HALF then
-				flat = dryFlat(model, frame, h.floor)
-				flatAngle = at
-			end
+		local frame = if cap then besideFrame(cap, 1) else nil
+		if frame and alongOf(route, frame.Position) < route.total - harbourAlong(route) then
+			flat = dryFlat(model, frame, h.floor)
 		end
 	end
 
-	-- ===== The water: the surface with its two holes, the murk, the floor with the drain's =====
+	-- ===== The water: the surface with its two holes, and the floor with the drain's =====
+	--
+	-- NO MURK LID. There used to be a flat dark sheet thirty-five studs down, and it did exactly
+	-- what a lid does: from the route the city under you was one black plane with a few roofs
+	-- poking through it. The depth is drawn by the water's own colour on the buildings (see
+	-- drowned) and by the haze, which describe distance instead of ending it.
 	local holes: { Hole } = { { centre = vortex, outer = VORTEX_R + 3, inner = VORTEX_R - 1 } }
 	if aq then
 		table.insert(holes, { centre = aq.tower, outer = ROT_R, inner = ROT_R - ROT_WALL })
 	end
 	sheet(sea, "Water", centre, h.water, 0.4, SURFACE, Enum.Material.Glass, 0.4, holes)
-	sheet(sea, "Murk", centre, h.murk, 0.4, MURK, Enum.Material.SmoothPlastic, 0.6, {})
 	sheet(sea, "SeaFloor", centre, h.floor, 4, SILT, Enum.Material.Sand, 0,
 		{ { centre = vortex, outer = 12, inner = DRAIN_R } })
-	clockTower(sea, centre, h.floor)
+
+	-- ===== The plaza and the clock tower, off the street about a third of the way along =====
+	local plazaAt, plazaDir = alongRoute(route, route.total * 0.34)
+	local plazaSide = Vector3.yAxis:Cross(plazaDir)
+	local plaza = plazaAt + plazaSide * 230
+	clockTower(sea, Vector3.new(plaza.X, 0, plaza.Z), h.floor)
 
 	-- ===== The city, round everything that has already claimed its space =====
+	local ferrisAt: Vector3? = nil
 	local function blocked(point: Vector3, reach: number): boolean
+		if ferrisAt and Vector3.new(point.X - ferrisAt.X, 0, point.Z - ferrisAt.Z).Magnitude < reach + FERRIS.clear then
+			return true
+		end
 		if aq then
 			local from, to = Vector3.new(aq.tower.X, 0, aq.tower.Z), Vector3.new(aq.far.X, 0, aq.far.Z)
 			local p = Vector3.new(point.X, 0, point.Z)
@@ -1561,49 +3933,93 @@ function SunkenCityService.build(level: any, parent: Instance): Model?
 		if flat and Vector3.new(point.X - flat.centre.X, 0, point.Z - flat.centre.Z).Magnitude < reach + FLAT_REACH then
 			return true
 		end
+		if Vector3.new(point.X - plaza.X, 0, point.Z - plaza.Z).Magnitude < reach + PLAZA_RADIUS + 14 then
+			return true
+		end
 		return false
 	end
-	local carParkAngle = wrapAngle(aqAngle - 0.18 * 2 * math.pi)
-	local lots = city(cityFolder, centre, radius, h.floor, harbourAngle, carParkAngle, blocked, rng)
-	local gantryAngles = {}
-	for _, share in ipairs({ 0.1, 0.27, 0.55, 0.68 }) do
-		local at = share * 2 * math.pi
-		local clearOfFlat = not flatAngle or math.abs(wrapAngle(at - (flatAngle :: number))) > 0.25
-		if math.abs(wrapAngle(at - aqAngle)) > 0.25 and clearOfFlat and math.abs(wrapAngle(at - harbourAngle)) > HARBOUR_SECTOR_HALF then
-			table.insert(gantryAngles, at)
+	-- The Ferris wheel's square, before the city is laid round it: the first place along the street,
+	-- on the side away from the plaza and the horizon, that is clear of the aquarium and the flat,
+	-- out of the harbour, and far enough off the route for something that breaks the surface.
+	for _, share in ipairs(FERRIS.shares) do
+		local s = route.total * share
+		local at, dir = alongRoute(route, s)
+		local spot = at - Vector3.yAxis:Cross(dir) * FERRIS.out
+		local near, away = nearRoute(route, spot)
+		if s < route.total - harbourAlong(route) - FERRIS.clear and near - FERRIS.reach >= EMERGE_CLEAR + ROUTE_REACH
+			and not blocked(spot, FERRIS.clear) then
+			ferrisWheel(cityFolder, spot, away, h.floor, rng)
+			ferrisAt = spot
+			break
 		end
 	end
-	gantries(cityFolder, centre, radius, h.floor, gantryAngles)
-	harbour(sea, centre, radius, h.floor, harbourAngle, rng)
+	local lots = city(cityFolder, route, h.floor, blocked, rng)
+	-- Where the road signs will stand, worked out first so the street keeps its vehicles out from
+	-- under their legs.
+	local alongs: { number } = {}
+	for _, share in ipairs({ 0.16, 0.36, 0.58, 0.78 }) do
+		local s = route.total * share
+		local spot = alongRoute(route, s)
+		local clearOfAq = not aq or (Vector3.new(spot.X - aq.tower.X, 0, spot.Z - aq.tower.Z)).Magnitude > 60
+		local clearOfFlat = not flat or (Vector3.new(spot.X - flat.centre.X, 0, spot.Z - flat.centre.Z)).Magnitude > 60
+		if clearOfAq and clearOfFlat and s < route.total - harbourAlong(route) then
+			table.insert(alongs, s)
+		end
+	end
+	boulevard(cityFolder, route, h.floor, rng, blocked, alongs)
+	shafts(sea, route, h.floor, rng)
+	shoals(sea, route, h.floor, rng, blocked)
+
+	-- ===== The road signs over the street, and the harbour at the end of it =====
+	gantries(cityFolder, route, h.floor, alongs)
+	swimmers(sea, route, h.floor, rng, blocked)
+	gulls(sea, route, rng, blocked)
+	harbour(sea, route, vortex, h.floor, rng)
 
 	-- ===== The ambience, which the client lets fall away when the thing is under you =====
-	-- On a part at the city's middle, full volume anywhere near the route and silent long before the
-	-- lobby (see ambience).
 	local host = block(model, "AmbienceHost", Vector3.new(1, 1, 1), CFrame.new(centre.X, h.water, centre.Z), FOAM,
 		Enum.Material.SmoothPlastic, false)
 	host.Transparency = 1
-	ambience(host, "Lapping", 0.5, 0.16, radius + 300, radius + 700)
-	ambience(host, "Wind", 0.3, 0.08, radius + 300, radius + 700)
+	ambience(host, "Lapping", 0.5, 0.16, route.total / 2 + 300, route.total / 2 + 800)
+	ambience(host, "Wind", 0.3, 0.08, route.total / 2 + 300, route.total / 2 + 800)
 
 	-- ===== The thing's brief, for SunkenCityClient =====
-	sea:SetAttribute("MonsterCentre", centre)
-	sea:SetAttribute("MonsterRadius", radius - MONSTER_INSET)
+	--
+	-- The route's line itself, as studs on a plan: it patrols the boulevard now rather than
+	-- swimming a ring, so what it needs is the street, not a radius.
+	local line = {}
+	for _, at in ipairs(route.points) do
+		table.insert(line, string.format("%.1f,%.1f", at.X, at.Z))
+	end
+	sea:SetAttribute("MonsterLine", table.concat(line, ";"))
 	sea:SetAttribute("MonsterSpeed", MONSTER_SPEED)
 	sea:SetAttribute("MonsterDepth", MONSTER_DEPTH)
 	sea:SetAttribute("MonsterBob", MONSTER_BOB)
 	sea:SetAttribute("MonsterBobPeriod", MONSTER_BOB_PERIOD)
 	sea:SetAttribute("MonsterGirth", MONSTER_GIRTH)
-	sea:SetAttribute("HarbourAngle", harbourAngle)
-	sea:SetAttribute("HarbourSwerve", HARBOUR_SWERVE)
-	sea:SetAttribute("HarbourSwerveHalf", HARBOUR_SWERVE_HALF)
+	sea:SetAttribute("MonsterSwing", MONSTER_SWING)
+	sea:SetAttribute("MonsterSwingWave", MONSTER_SWING_WAVE)
+	sea:SetAttribute("MonsterKeep", MONSTER_KEEP)
 	sea:SetAttribute("WaterY", h.water)
 	-- Where the road signs hang, which it never surfaces under (SunkenPath.surfacing).
 	local quiet = {}
-	for _, at in ipairs(gantryAngles) do
-		table.insert(quiet, string.format("%.4f", at))
+	for _, s in ipairs(alongs) do
+		table.insert(quiet, string.format("%.1f", s))
 	end
-	sea:SetAttribute("QuietAngles", table.concat(quiet, ","))
+	sea:SetAttribute("QuietAlong", table.concat(quiet, ","))
 	sea:SetAttribute("Epoch", workspace:GetServerTimeNow())
+	-- THE THING ON THE HORIZON: where it comes up, far out on one side of the street and running
+	-- the way the street runs, and when. Every client works the schedule out from the same epoch,
+	-- so everyone looks up at the same moment.
+	local farMiddle = route.points[1] + route.forward * (route.total / 2) + route.side * LEVIATHAN_OUT
+	sea:SetAttribute("LeviathanFrom", Vector3.new(farMiddle.X, h.water, farMiddle.Z) - route.forward * (LEVIATHAN_LONG / 2))
+	sea:SetAttribute("LeviathanTo", Vector3.new(farMiddle.X, h.water, farMiddle.Z) + route.forward * (LEVIATHAN_LONG / 2))
+	sea:SetAttribute("LeviathanFirst", SCHEDULE.leviathanFirst)
+	sea:SetAttribute("LeviathanEvery", SCHEDULE.leviathanEvery)
+	-- The rain, on its own shared schedule.
+	sea:SetAttribute("RainFirst", SCHEDULE.rainFirst)
+	sea:SetAttribute("RainEvery", SCHEDULE.rainEvery)
+	sea:SetAttribute("RainLength", SCHEDULE.rainLength)
 	CollectionService:AddTag(sea, "SunkenSea")
 
 	-- The drain's shape, for attach.
@@ -1618,9 +4034,25 @@ function SunkenCityService.build(level: any, parent: Instance): Model?
 		sea.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
 	end)
 	model.Parent = parent
-	print(("SunkenCityService: water at %d, %d lots, %s, %s, the drain at the end, %d parts."):format(math.floor(h.water), lots,
+	-- And what lives in it, counted off the tags the client draws them from: if these are not zero and
+	-- SunkenCityClient's own report says it drew none, the fault is on the client.
+	local living = { SunkenSwimmer = 0, SunkenFishShoal = 0, SunkenKelp = 0, SunkenGull = 0 }
+	local everything = model:GetDescendants()
+	for _, item in ipairs(everything) do
+		for tag, n in pairs(living) do
+			if CollectionService:HasTag(item, tag) then
+				living[tag] = n + 1
+			end
+		end
+	end
+	print(("SunkenCityService: water at %d, a %d-stud street, %d lots, %s, %s, the drain at the end, "
+		.. "%d parts; %d swimmers, %d shoals, %d strands of kelp, %d gulls%s."):format(math.floor(h.water), math.floor(route.total), lots,
 		if aq then "the aquarium off a checkpoint" else "NO aquarium (no checkpoint to put it on)",
-		if flat then "the dry flat off another" else "no dry flat", #model:GetDescendants()))
+		(if flat then "the dry flat off another, with the flooded floor under it" else "no dry flat")
+			.. (if ferrisAt then ", the Ferris wheel" else ", NO Ferris wheel (nowhere clear)"), #everything,
+		living.SunkenSwimmer, living.SunkenFishShoal, living.SunkenKelp, living.SunkenGull,
+		-- Which of the wheel's meshes it stood with, and why any were refused (SeaRig).
+		if SeaRig then "; the wheel's " .. SeaRig.summary() else ""))
 	return model
 end
 
@@ -1673,118 +4105,72 @@ local function splash(at: Vector3)
 	Debris:AddItem(host, 3)
 end
 
+-- The event the rider's client answers on to say it is drawing the ride, as Sky Pools' does.
+local drainEvent: RemoteEvent? = nil
+local drawing: { [Player]: boolean } = {}
+local function drainRemote(): RemoteEvent?
+	if drainEvent then
+		return drainEvent
+	end
+	local folder = ReplicatedStorage:FindFirstChild("RemoteEvents") or ReplicatedStorage:WaitForChild("RemoteEvents", 5)
+	local event = folder and (folder:FindFirstChild("SunkenRide") or folder:WaitForChild("SunkenRide", 5))
+	if event and event:IsA("RemoteEvent") then
+		drainEvent = event
+		event.OnServerEvent:Connect(function(player: Player)
+			-- Only from someone the drain actually has, and it decides nothing: the server keeps
+			-- the clock and puts them at the bottom itself.
+			if riding[player] then
+				drawing[player] = true
+			end
+		end)
+	end
+	return drainEvent
+end
+
 local function ride(player: Player, root: BasePart, humanoid: Humanoid, vortex: Vector3, shaftBottom: number,
 	onArrive: ((Player) -> ())?)
 	riding[player] = true
 	arrivedAt[player] = nil
+	drawing[player] = nil
 	humanoid.PlatformStand = true
 	splash(Vector3.new(root.Position.X, waterLevel, root.Position.Z))
 	local rush = sound(root, "DrainRush", WATER_SOUND, 0.65, 0.6, 60, true)
 	rush:Play()
-	local start = root.Position
-	local flat = Vector3.new(start.X - vortex.X, 0, start.Z - vortex.Z)
-	local r0 = math.max(2, flat.Magnitude)
-	local a0 = math.atan2(flat.Z, flat.X)
-	local funnelY = vortex.Y - FUNNEL_DEPTH
-	local bottomY = shaftBottom + 3
-	local began = os.clock()
+	local seconds = if SunkenPath then SunkenPath.DRAIN_SECONDS else DRAIN_SECONDS
+	local spec = {
+		vortex = vortex,
+		from = root.Position,
+		funnelY = vortex.Y - FUNNEL_DEPTH,
+		bottomY = shaftBottom + 3,
+	}
+	local began = workspace:GetServerTimeNow()
+	local remote = drainRemote()
+	if remote then
+		remote:FireClient(player, spec.vortex, spec.from, spec.funnelY, spec.bottomY, began, seconds)
+	end
 	while root.Parent do
-		local u = (os.clock() - began) / DRAIN_SECONDS
+		local u = (workspace:GetServerTimeNow() - began) / seconds
 		if u >= 1 then
 			break
 		end
-		local here: Vector3
-		local facing: Vector3
-		if u < 0.5 then
-			-- Round and in, down the funnel.
-			local s = u / 0.5
-			local r = r0 + (1.5 - r0) * s
-			local a = a0 + s * 2.2 * 2 * math.pi
-			here = Vector3.new(vortex.X + math.cos(a) * r, start.Y + (funnelY - start.Y) * s * s, vortex.Z + math.sin(a) * r)
-			facing = Vector3.new(-math.sin(a), 0, math.cos(a))
-		else
-			-- Straight down the current, faster and faster, still turning.
-			local s = (u - 0.5) / 0.5
-			local a = a0 + 2.2 * 2 * math.pi + s * 3 * 2 * math.pi
-			here = Vector3.new(vortex.X + math.cos(a) * 1.2, funnelY + (bottomY - funnelY) * s * s, vortex.Z + math.sin(a) * 1.2)
-			facing = Vector3.new(math.cos(a), 0, math.sin(a))
+		-- THE SERVER MOVES NOBODY once the rider's own client has the ride. Until it answers -- or
+		-- if it never does -- this is the ride, exactly as it was.
+		if not drawing[player] and SunkenPath then
+			root.CFrame = SunkenPath.drainFrame(spec, u)
 		end
-		root.CFrame = CFrame.lookAt(here, here + facing)
 		task.wait()
 	end
 	if root.Parent then
-		root.CFrame = CFrame.new(vortex.X, bottomY, vortex.Z)
+		root.CFrame = CFrame.new(vortex.X, spec.bottomY, vortex.Z)
 	end
 	rush:Destroy()
 	humanoid.PlatformStand = false
 	riding[player] = nil
+	drawing[player] = nil
 	arrivedAt[player] = os.clock()
 	if onArrive then
 		onArrive(player)
 	end
-end
-
--- ===== THE GLASS =====
---
--- Tap on the gallery's window and it thuds. Tap three times in a few seconds and, for a Hardcore
--- player, once a run, something outside taps back: a heavy thud, the glass shivers, the lamp stutters.
--- In Chill nothing answers (ROADMAP section 6: no scares in Chill).
-local function glass(model: Model): RBXScriptConnection?
-	local window = model:FindFirstChild("ViewingWindow", true)
-	if not (window and window:IsA("BasePart")) then
-		return nil
-	end
-	local pane: BasePart = window
-	-- The gallery's own lamp: the light above the window and within a room's width of it.
-	local roomLight: PointLight? = nil
-	for _, item in ipairs(model:GetDescendants()) do
-		local holder = item.Parent
-		if item:IsA("PointLight") and holder and holder:IsA("BasePart") and holder.Position.Y > pane.Position.Y
-			and (holder.Position - pane.Position).Magnitude < 16 then
-			roomLight = item
-		end
-	end
-	local detector = Instance.new("ClickDetector")
-	detector.MaxActivationDistance = 12
-	detector.Parent = pane
-	local taps: { [Player]: { number } } = {}
-	local answered: { [Player]: boolean } = {}
-	return detector.MouseClick:Connect(function(player: Player)
-		local knock = sound(pane, "Tap", THUD_SOUND, 1.4, 0.5, 30, false)
-		knock:Play()
-		Debris:AddItem(knock, 2)
-		local list = taps[player] or {}
-		table.insert(list, os.clock())
-		while #list > 0 and os.clock() - list[1] > 5 do
-			table.remove(list, 1)
-		end
-		taps[player] = list
-		local state = PlayerStateService.getState(player)
-		if #list >= 3 and not answered[player] and state and state.mode == "hardcore" then
-			answered[player] = true
-			task.delay(1.8, function()
-				if not pane.Parent then
-					return
-				end
-				local thud = sound(pane, "Answer", THUD_SOUND, 0.45, 1.4, 60, false)
-				thud:Play()
-				Debris:AddItem(thud, 4)
-				local rest = pane.CFrame
-				local light = roomLight
-				for _ = 1, 6 do
-					pane.CFrame = rest * CFrame.new(0, 0, (math.random() - 0.5) * 0.3)
-					if light then
-						light.Enabled = not light.Enabled
-					end
-					task.wait(0.07)
-				end
-				pane.CFrame = rest
-				if light then
-					light.Enabled = true
-				end
-			end)
-		end
-	end)
 end
 
 -- ===== THE SURGE AND THE MIRROR =====
@@ -1823,6 +4209,294 @@ local function rootOf(player: Player): BasePart?
 	return if root and root:IsA("BasePart") then root else nil
 end
 
+-- ===== THE GLASS =====
+--
+-- Every pane of the aquarium can be tapped now -- the gallery's window and the tunnel's sides -- and
+-- it answers. A tap thuds and the fish bolt (SunkenCityClient reads `Tapped` off the model). Keep
+-- tapping one pane and it takes the strain: at TAP.crack a crack stars out from where you hit it,
+-- at TAP.crack2 it spreads and starts to weep, and at TAP.breaks it goes. The sea comes in. Every
+-- client sees the pane burst and the water rise (`Flood`), and everyone still inside once it has
+-- risen is washed out: back to their checkpoint in Chill -- the chunk the aquarium hangs off -- and
+-- back to the start in Hardcore. After TAP.hold the water is gone and the glass is whole again,
+-- because nothing in this game stays broken.
+--
+-- In Hardcore the old answer still comes first: three taps in five seconds, once a run, and
+-- something outside knocks back.
+
+local function glass(model: Model, onTaken: ((Player) -> ())?): { RBXScriptConnection }
+	local CRACK_SOUND = "rbxassetid://135061782882830"
+	local CRACK_MENDS = 25
+	local function crackLines(pane: BasePart, stage: number, rng: Random, inside: Vector3)
+		local size = pane.Size
+		local thin = if size.X <= size.Y and size.X <= size.Z then 1 elseif size.Y <= size.Z then 2 else 3
+		local axes = { Vector3.xAxis, Vector3.yAxis, Vector3.zAxis }
+		local extents = { size.X, size.Y, size.Z }
+		local normal = axes[thin]
+		local u = axes[if thin == 1 then 2 else 1]
+		local v = axes[if thin == 3 then 2 else 3]
+		local uHalf = extents[if thin == 1 then 2 else 1] / 2
+		local vHalf = extents[if thin == 3 then 2 else 3] / 2
+		local origin = u * rng:NextNumber(-uHalf, uHalf) * 0.5 + v * rng:NextNumber(-vHalf, vHalf) * 0.5
+		local count = if stage == 1 then 7 else 12
+		for _ = 1, count do
+			local a = rng:NextNumber(0, 2 * math.pi)
+			local dir = u * math.cos(a) + v * math.sin(a)
+			local long = if stage == 1 then rng:NextNumber(0.8, 2.2) else rng:NextNumber(1.6, 3.8)
+			local mid = origin + dir * (long / 2)
+			local line = block(pane, "Crack", Vector3.new(long, extents[thin] + 0.06, 0.07),
+				pane.CFrame * CFrame.fromMatrix(mid, dir, normal), Color3.fromRGB(236, 246, 246), Enum.Material.SmoothPlastic, false)
+			line.Transparency = 0.2
+			line.CastShadow = false
+		end
+		if stage >= 2 then
+			local leakAt = Instance.new("Attachment")
+			leakAt.Name = "Crack"
+			-- Spraying INTO the aquarium: the attachment's up is the pane's normal, turned to face inside.
+			local toward = pane.CFrame:VectorToObjectSpace(inside - pane.Position)
+			leakAt.CFrame = CFrame.fromMatrix(origin, u, if toward:Dot(normal) >= 0 then normal else -normal)
+			leakAt.Parent = pane
+			local leak = Instance.new("ParticleEmitter")
+			leak.Texture = "rbxasset://textures/particles/smoke_main.dds"
+			leak.Color = ColorSequence.new(Color3.fromRGB(190, 226, 226))
+			leak.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1.1) })
+			leak.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 1) })
+			leak.Lifetime = NumberRange.new(0.6, 1)
+			leak.Speed = NumberRange.new(2, 4)
+			leak.SpreadAngle = Vector2.new(15, 15)
+			leak.Acceleration = Vector3.new(0, -12, 0)
+			leak.Rate = 22
+			leak.Parent = leakAt
+		end
+	end
+
+	local connections: { RBXScriptConnection } = {}
+	local panes: { BasePart } = {}
+	for _, item in ipairs(model:GetDescendants()) do
+		-- The window, and the tunnel's SIDE panes (the roof panes lie flat, 0.4 tall).
+		if item:IsA("BasePart") and (item.Name == "ViewingWindow" or (item.Name == "TunnelGlass" and item.Size.Y > 1)) then
+			table.insert(panes, item)
+		end
+	end
+	if #panes == 0 then
+		return connections
+	end
+	local zones = tagged(model, "SunkenAquariumZone")
+	-- Which way is inside, from a pane: toward the middle of the nearest zone.
+	local function insideOf(pane: BasePart): Vector3
+		local best, gap = pane.Position, math.huge
+		for _, zone in ipairs(zones) do
+			local d = (zone.Position - pane.Position).Magnitude
+			if d < gap then
+				best, gap = zone.Position, d
+			end
+		end
+		return best
+	end
+	-- The gallery's own lamp: the light above the window and within a room's width of it.
+	local window = model:FindFirstChild("ViewingWindow", true)
+	local roomLight: PointLight? = nil
+	if window and window:IsA("BasePart") then
+		for _, item in ipairs(model:GetDescendants()) do
+			local holder = item.Parent
+			if item:IsA("PointLight") and holder and holder:IsA("BasePart") and holder.Position.Y > window.Position.Y
+				and (holder.Position - window.Position).Magnitude < 16 then
+				roomLight = item
+			end
+		end
+	end
+
+	local rng = Random.new(1847)
+	local strain: { [BasePart]: { value: number, at: number } } = {}
+	local cracked: { [BasePart]: number } = {}
+	local taps: { [Player]: { number } } = {}
+	local answered: { [Player]: boolean } = {}
+	local prompts: { ProximityPrompt } = {}
+	local flooding = false
+	local risenAt = math.huge
+
+	local function wash(player: Player)
+		local root = rootOf(player)
+		if not root then
+			return
+		end
+		if isHardcore(player) then
+			if onTaken then
+				onTaken(player)
+			end
+		else
+			local state = PlayerStateService.getState(player)
+			if state then
+				root.AssemblyLinearVelocity = Vector3.zero
+				root.CFrame = CFrame.new(state.checkpointPosition + Vector3.new(0, 4, 0))
+			end
+		end
+	end
+
+	-- NOTHING STAYS BROKEN: a pane's cracks go when it mends.
+	local function mend(pane: BasePart)
+		for _, child in ipairs(pane:GetChildren()) do
+			if child.Name == "Crack" then
+				child:Destroy()
+			end
+		end
+		strain[pane] = nil
+		cracked[pane] = nil
+	end
+
+	local function breakPane(pane: BasePart)
+		flooding = true
+		for _, prompt in ipairs(prompts) do
+			prompt.Enabled = false
+		end
+		local was = pane.Transparency
+		mend(pane)
+		-- The pane goes. It still stops anyone walking out through the hole into a hundred studs of
+		-- water, which the flood is about to settle anyway.
+		pane.Transparency = 1
+		for _, spec in ipairs({ { CRACK_SOUND, 1.25, 1.4 }, { THUD_SOUND, 0.4, 1.6 }, { WATER_SOUND, 0.55, 1.4 } }) do
+			local s = sound(pane, "Burst", spec[1], spec[2], spec[3], 140, false)
+			s:Play()
+			Debris:AddItem(s, 6)
+		end
+		model:SetAttribute("FloodAt", pane.Position)
+		model:SetAttribute("Flood", workspace:GetServerTimeNow())
+		risenAt = os.clock() + TAP.rise
+		task.delay(TAP.hold, function()
+			if pane.Parent then
+				pane.Transparency = was
+			end
+			for _, each in ipairs(panes) do
+				mend(each)
+			end
+			model:SetAttribute("Flood", 0)
+			risenAt = math.huge
+			flooding = false
+			for _, prompt in ipairs(prompts) do
+				prompt.Enabled = true
+			end
+		end)
+	end
+
+	local function tapped(player: Player, pane: BasePart)
+		if flooding then
+			return
+		end
+		local knock = sound(pane, "Tap", THUD_SOUND, 1.4, 0.5, 30, false)
+		knock:Play()
+		Debris:AddItem(knock, 2)
+		-- WHAT EVERY TAP DOES, in both modes: the fish bolt. The client watches this.
+		model:SetAttribute("Tapped", workspace:GetServerTimeNow())
+
+		-- THE STRAIN on this pane, draining away between taps.
+		local now = os.clock()
+		local held = strain[pane]
+		local value = if held then math.max(0, held.value - (now - held.at) / TAP.ease) else 0
+		value += 1
+		strain[pane] = { value = value, at = now }
+		local stage = cracked[pane] or 0
+		if value >= TAP.breaks then
+			breakPane(pane)
+			return
+		elseif value >= TAP.crack2 and stage < 2 then
+			cracked[pane] = 2
+			crackLines(pane, 2, rng, insideOf(pane))
+			local creak = sound(pane, "Creak", CRACK_SOUND, 0.7, 1, 50, false)
+			creak:Play()
+			Debris:AddItem(creak, 4)
+		elseif value >= TAP.crack and stage < 1 then
+			cracked[pane] = 1
+			crackLines(pane, 1, rng, insideOf(pane))
+			local creak = sound(pane, "Creak", CRACK_SOUND, 1.1, 0.8, 40, false)
+			creak:Play()
+			Debris:AddItem(creak, 3)
+		end
+
+		-- THE OLD ANSWER, Hardcore only, once a run.
+		local list = taps[player] or {}
+		table.insert(list, now)
+		while #list > 0 and now - list[1] > 5 do
+			table.remove(list, 1)
+		end
+		taps[player] = list
+		if #list >= 3 and not answered[player] and isHardcore(player) then
+			answered[player] = true
+			task.delay(1.8, function()
+				if not pane.Parent then
+					return
+				end
+				local thud = sound(pane, "Answer", THUD_SOUND, 0.45, 1.4, 60, false)
+				thud:Play()
+				Debris:AddItem(thud, 4)
+				model:SetAttribute("Answered", workspace:GetServerTimeNow())
+				local rest = pane.CFrame
+				local light = roomLight
+				for _ = 1, 6 do
+					pane.CFrame = rest * CFrame.new(0, 0, (math.random() - 0.5) * 0.3)
+					if light then
+						light.Enabled = not light.Enabled
+					end
+					task.wait(0.07)
+				end
+				pane.CFrame = rest
+				if light then
+					light.Enabled = true
+				end
+			end)
+		end
+	end
+
+	-- A PROMPT on every pane, pressed not held: tapping glass is not a decision. And a click, for
+	-- anyone who just clicks it.
+	for _, pane in ipairs(panes) do
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "Tap"
+		prompt.ObjectText = "The glass"
+		prompt.HoldDuration = 0
+		prompt.MaxActivationDistance = 8
+		prompt.RequiresLineOfSight = false
+		prompt.Parent = pane
+		table.insert(prompts, prompt)
+		table.insert(connections, prompt.Triggered:Connect(function(player)
+			tapped(player, pane)
+		end))
+		local detector = Instance.new("ClickDetector")
+		detector.MaxActivationDistance = 12
+		detector.Parent = pane
+		table.insert(connections, detector.MouseClick:Connect(function(player)
+			tapped(player, pane)
+		end))
+	end
+
+	-- WASHED OUT: once the water is up, anyone inside -- including anyone who walks back in before it
+	-- drains -- goes.
+	local nextWash = 0
+	table.insert(connections, RunService.Heartbeat:Connect(function()
+		local now = os.clock()
+		if now < nextWash then
+			return
+		end
+		nextWash = now + 0.3
+		-- A crack nobody has touched for CRACK_MENDS seconds after its strain drained away mends.
+		if not flooding then
+			for pane, held in pairs(strain) do
+				if cracked[pane] and now - held.at > TAP.ease * held.value + CRACK_MENDS then
+					mend(pane)
+				end
+			end
+		end
+		if now < risenAt then
+			return
+		end
+		for _, player in ipairs(Players:GetPlayers()) do
+			local root = rootOf(player)
+			if root and not riding[player] and not arrivedAt[player] and inAny(zones, root.Position) then
+				wash(player)
+			end
+		end
+	end))
+	return connections
+end
+
 -- ONCE A SERVER, EVER: the face in the mirror is rare by design (ROADMAP section 6), and a scare
 -- that happens every time stops being one.
 local mirrorShown = false
@@ -1841,7 +4515,7 @@ function SunkenCityService.attach(model: Model, onArrive: PlayerCallback?, onTak
 	end
 	local vortex: Vector3 = vortexValue
 	local sea = model:FindFirstChild("Sea")
-	local path = if sea then SunkenPath.read(sea) else nil
+	local path = if sea and SunkenPath then SunkenPath.read(sea) else nil
 	local shelters = tagged(model, "SunkenShelter")
 	local mirrorZones = tagged(model, "SunkenMirrorZone")
 	local washed = -1
@@ -1909,15 +4583,15 @@ function SunkenCityService.attach(model: Model, onArrive: PlayerCallback?, onTak
 			end
 		end
 	end))
-	local tapping = glass(model)
-	if tapping then
-		table.insert(connections, tapping)
+	for _, connection in ipairs(glass(model, onTaken)) do
+		table.insert(connections, connection)
 	end
 	return function()
 		for _, connection in ipairs(connections) do
 			connection:Disconnect()
 		end
 		table.clear(arrivedAt)
+		SunkenCityService.clearWater()
 	end
 end
 

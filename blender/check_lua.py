@@ -1005,6 +1005,77 @@ def check_services_are_required(path, text):
     return problems
 
 
+# EVERY ENUM.MATERIAL NAME IS ONE ROBLOX HAS. An invented one (CorrugatedPlate) is not a compile
+# error: the module loads, and the first build that reaches the line throws, which took a whole
+# level down to its fallback. This list is the engine's Enum.Material, parts and terrain.
+MATERIALS = {
+    "Plastic", "SmoothPlastic", "Neon", "Wood", "WoodPlanks", "Marble", "Basalt", "Slate", "CrackedLava",
+    "Concrete", "Limestone", "Granite", "Pavement", "Brick", "Pebble", "Cobblestone", "Rock", "Sandstone",
+    "CorrodedMetal", "DiamondPlate", "Foil", "Metal", "Grass", "LeafyGrass", "Sand", "Fabric", "Snow", "Mud",
+    "Ground", "Asphalt", "Salt", "Ice", "Glacier", "Glass", "ForceField", "Air", "Water", "Cardboard",
+    "Carpet", "CeramicTiles", "ClayRoofTiles", "RoofShingles", "Leather", "Plaster", "Rubber",
+}
+
+
+def check_material_names(path, clean):
+    problems = []
+    for number, row in enumerate(clean.splitlines(), 1):
+        for name in re.findall(r"Enum\.Material\.(\w+)", row):
+            if name not in MATERIALS:
+                problems.append("%s:%d  Enum.Material.%s does not exist; the line throws the first time it runs"
+                                % (path.name, number, name))
+    return problems
+
+
+# A NAME DECLARED TWICE AT THE TOP OF A FILE. Luau allows it and says nothing: the second `local`
+# makes a new variable and every line after it sees only that one. SunkenCityService declared
+# `local STREET = 26` (the gap between blocks) and, two hundred lines later, `local STREET = { ... }`
+# (the street furniture's numbers), and `BLOCK + STREET` became a number plus a table: the whole
+# city failed to build. A type declared twice is the same trap for the type checker.
+def check_top_level_redeclared(path, clean):
+    problems = []
+    seen = {}
+    for number, row in enumerate(clean.splitlines(), 1):
+        names = []
+        match = re.match(r"^local\s+function\s+(\w+)", row)
+        if match:
+            names = [match.group(1)]
+        else:
+            match = re.match(r"^local\s+(.*)$", row)
+            if match:
+                # The names before the `=`, split on commas at bracket depth 0 only: a type such as
+                # `{ level: number, on: number }` has commas of its own that are not more names.
+                depth, piece, pieces = 0, "", []
+                for ch in match.group(1):
+                    if ch in "{([<":
+                        depth += 1
+                    elif ch in "})]>":
+                        depth -= 1
+                    elif depth == 0 and ch == "=":
+                        break
+                    if depth == 0 and ch == ",":
+                        pieces.append(piece)
+                        piece = ""
+                    else:
+                        piece += ch
+                pieces.append(piece)
+                for piece in pieces:
+                    name = piece.split(":")[0].strip()
+                    if re.match(r"^[A-Za-z_]\w*$", name):
+                        names.append(name)
+            else:
+                match = re.match(r"^(?:export\s+)?type\s+(\w+)", row)
+                if match:
+                    names = ["type " + match.group(1)]
+        for name in names:
+            if name in seen:
+                problems.append("%s:%d  `%s` is declared again at the top of the file (first at line %d); every "
+                                "line after this sees the second one" % (path.name, number, name, seen[name]))
+            else:
+                seen[name] = number
+    return problems
+
+
 def main():
     files = sorted(ROOT.glob("src/**/*.lua"))
     if not files:
@@ -1032,6 +1103,8 @@ def main():
         problems += check_services_are_required(path, clean)
         problems += check_shadowed_locals(path, clean)
         problems += check_constant_fields(path, clean)
+        problems += check_material_names(path, clean)
+        problems += check_top_level_redeclared(path, clean)
 
         used, used_line, over, lost = peak_live_locals(source)
         if over:

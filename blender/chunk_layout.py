@@ -60,6 +60,8 @@ CHUNK_ORDER = [
     "P27_NeedohGrid",
     "P28_NeedohDrift",
     "R9_IceCrack", "P6_JelloSoda", "P7_LambsEar",
+    # The Sunken City's jellyfish bells.
+    "R39_JellyfishHop", "P29_JellyfishBloom",
     "P8_Foam", "P9_LightSwitches", "P10_ClayPress",
     "R10_LegoStuds", "R11_CharcoalSnap", "R12_ChocolateMelt", "R13_CloudSink",
     "R14_ChocolateSnap",
