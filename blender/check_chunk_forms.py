@@ -428,9 +428,38 @@ def check_levels():
                  % (pinned.group(1), pinned.group(2), len(sequence)))
 
 
+def check_no_bypass_shelves():
+    """NO DRY LANE BESIDE THE MATERIAL, and no ledge to be caught by.
+
+    The stable straight and the honey corridor used to carry flanking shelves: five and four studs
+    of solid ground each side, a stud below the top. Two things came of that, both reported from
+    play. The shelf of a stable chunk reaches level with its neighbour, so you could walk ALONGSIDE
+    the honey instead of over it -- the one chunk whose whole job is to be walked on was the one
+    you could skip. And stepping off the side of the Needoh field landed you on the next stable
+    chunk's shelf, so nothing in a route made of platforms over a void could be fallen off.
+
+    The shelf feature itself stays: the butter-wax bend keeps a catch on the outside of its turn,
+    and the soap chunk keeps flanks because soap dissolves and the chunk has to stay crossable. What
+    may not come back is a shelf beside a material you are meant to cross."""
+    with open(CL.SOURCE, "r", encoding="utf-8") as handle:
+        text = handle.read()
+    for chunk_id in ("S1_Straight", "P1_HoneyCorridor"):
+        block = re.search(r"\n\t%s = \{(.*?)\n\t\}," % chunk_id, text, re.S)
+        if not block:
+            failures.append("%s is no longer a linear chunk this check can read." % chunk_id)
+        elif "shelf" in block.group(1):
+            failures.append("%s has flanking shelves again: a dry lane beside the material lets the "
+                            "chunk be walked past, and catches anyone falling off its neighbour."
+                            % chunk_id)
+    landing = re.search(r"name = \"HoneyLanding\",(.*?)\},", text, re.S)
+    if landing and "shelf" in landing.group(1):
+        failures.append("C1_SlimeToPace's honey landing has a shelf again, for the reason above.")
+
+
 def main():
     CL.check_order_covers_definitions()
     layouts, contracts, consts = CL.layout_all()
+    check_no_bypass_shelves()
 
     for chunk_id in CL.CHUNK_ORDER:
         boxes = layouts[chunk_id]

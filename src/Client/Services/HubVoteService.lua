@@ -13,6 +13,8 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
 
 local HubVoteService = {}
 
@@ -32,6 +34,18 @@ local ring: Frame? = nil
 -- When the result card should slide back out, as an os.clock stamp. Zero means "not pending",
 -- which is also what a new tick or idle update sets it to.
 local dismissAt = 0
+
+-- THE COUNTDOWN, KEPT HERE. The server says when it ends, on the clock every client shares; this
+-- counts down to it every frame and, when the whole second changes, shows the new numeral and plays
+-- the tick at the same moment. The server used to play each tick itself, and a sound made on the
+-- server arrives when it replicates -- in pairs, 0.8 and 1.2 of a second apart.
+local endsAt: number? = nil
+local shownSeconds: number? = nil
+local TICK = Instance.new("Sound")
+TICK.Name = "CountdownTick"
+TICK.SoundId = "rbxasset://sounds/electronicpingshort.wav"
+TICK.Volume = 0.4
+TICK.Parent = SoundService
 
 local function build(): Frame
 	local existing = card
@@ -194,26 +208,54 @@ local function dismissSoon(after: number)
 	end)
 end
 
-function HubVoteService.onTick(state)
-	build()
-	dismissAt = 0
-	local seconds = tonumber(state.secondsLeft) or 0
+local function showSeconds(seconds: number)
 	if clock then
 		clock.Text = tostring(seconds)
 		clock.TextSize = 40
 		clock.TextColor3 = ACCENT
-	end
-	if headline then
-		headline.Text = "Starting in"
-	end
-	if detail then
-		detail.Text = describe(state)
 	end
 	if ring then
 		-- Warms toward the accent as it runs out, so the last three seconds LOOK like the
 		-- last three seconds without anything having to say so.
 		local urgency = math.clamp((10 - seconds) / 10, 0, 1)
 		ring.BackgroundTransparency = 0.82 - urgency * 0.45
+	end
+end
+
+RunService.RenderStepped:Connect(function()
+	local deadline = endsAt
+	if not deadline then
+		return
+	end
+	local left = math.ceil(deadline - workspace:GetServerTimeNow() - 0.001)
+	if left >= 1 and left ~= shownSeconds then
+		shownSeconds = left
+		showSeconds(left)
+		-- Rising pitch over the last three seconds: a metronome that speeds up is the oldest trick
+		-- there is for making a countdown feel like one.
+		TICK.PlaybackSpeed = if left <= 3 then 1.5 else 1.0
+		TICK.TimePosition = 0
+		TICK:Play()
+	end
+end)
+
+function HubVoteService.onTick(state)
+	build()
+	dismissAt = 0
+	local seconds = tonumber(state.secondsLeft) or 0
+	local deadline = tonumber(state.endsAt)
+	if deadline then
+		-- The numeral and the tick are the frame loop's; a vote cast mid-countdown only
+		-- refreshes the tally below.
+		endsAt = deadline
+	else
+		showSeconds(seconds)
+	end
+	if headline then
+		headline.Text = "Starting in"
+	end
+	if detail then
+		detail.Text = describe(state)
 	end
 	show(true)
 end
@@ -224,6 +266,7 @@ end
 function HubVoteService.onIdle(state)
 	build()
 	dismissAt = 0
+	endsAt, shownSeconds = nil, nil
 	if clock then
 		clock.Text = "VOTE"
 		clock.TextSize = 24
@@ -244,6 +287,7 @@ end
 
 function HubVoteService.onResult(result)
 	build()
+	endsAt, shownSeconds = nil, nil
 	local hardcore = result.mode == "hardcore"
 	if clock then
 		clock.Text = "GO"
@@ -268,6 +312,7 @@ function HubVoteService.onResult(result)
 end
 
 function HubVoteService.onCancelled()
+	endsAt, shownSeconds = nil, nil
 	if clock then
 		clock.TextSize = 40
 		clock.TextColor3 = ACCENT

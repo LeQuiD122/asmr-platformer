@@ -377,6 +377,39 @@ def main():
              "Its undo also has to be collected, or the swell keeps running after the level "
              "is torn down.")
 
+    # ---- THE RIDE IS NOT INTERRUPTED BY THE KILL PLANE.
+    #
+    # The flume ends in the void under the far chamber, well below the plane that catches an
+    # ordinary fall into the water. Without an exemption the plane took the rider part way down and
+    # put them back on the last chunk they had touched, which is what a rider actually saw: a slide
+    # that teleported them onto a platform instead of finishing the level.
+    if "function FloodedHallsService.ownsFall" not in text:
+        fail("FloodedHallsService has no ownsFall, so nothing can tell the kill plane that a rider "
+             "on the flume is not falling.")
+    boot_text = boot.read_text(encoding="utf-8") if boot.exists() else ""
+    kill = boot_text[boot_text.index("if hrp.Position.Y < killY"):] if "if hrp.Position.Y < killY" in boot_text else ""
+    kill = kill[:kill.index(" then")] if " then" in kill else kill
+    if "FloodedHallsService.ownsFall" not in kill:
+        fail("the kill plane does not exempt a flume rider, so the ride ends by teleporting them "
+             "back to their last checkpoint.")
+
+    # ---- NOTHING OF THIS LEVEL FOLLOWS YOU HOME.
+    #
+    # The halls are their own model in the workspace with two loops running and three
+    # post-processing effects hung on Lighting. All of it used to be taken down only when the NEXT
+    # level was built, so the lobby sat in the halls' weather with the halls still in the world.
+    if boot_text.count("tearDownLevelWorld()") < 3:
+        fail("Bootstrap does not tear the level's world down both when a level starts and when the "
+             "last runner goes home, so the halls and their air outlive the run.")
+    light = (SRC / "Server" / "Services" / "LightingService.lua").read_text(encoding="utf-8")
+    if "function LightingService.clearLevelLook" not in light or "LightingService.clearLevelLook()" not in light:
+        fail("LightingService does not sweep away a level's own post-processing when a region is "
+             "applied, so a level that ends mid-run leaves its look on the lobby.")
+    for named in ("HallsBloom", "HallsBlur", "HallsGrade"):
+        if named not in text:
+            fail("the halls' %s is unnamed, so the sweep in LightingService cannot tell it from "
+                 "one of the service's own." % named)
+
     # ---- A BASIN FITS BETWEEN THE LANE AND THE WALL.
     #
     # This is the one piece of furniture wide enough to reach the walkway, and it is a HOLE in

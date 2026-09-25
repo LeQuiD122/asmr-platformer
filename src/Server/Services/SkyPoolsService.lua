@@ -39,20 +39,47 @@ local Players = game:GetService("Players")
 local Debris = game:GetService("Debris")
 local CollectionService = game:GetService("CollectionService")
 local MaterialService = game:GetService("MaterialService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+-- THE SLIDE'S SHAPE AND TIMING ARE SHARED with the client, which draws the ride from them, so they
+-- live in one module both sides read. Looked for with a timeout for SunkenPath's reason: a bare
+-- WaitForChild here would stop the whole server if the file had not been pasted in.
+local skyPathModule = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("SkyPath", 10)
+local SkyPath: any = if skyPathModule and skyPathModule:IsA("ModuleScript") then require(skyPathModule) else nil
+if not SkyPath then
+	warn("SkyPoolsService: no ReplicatedStorage.Shared.SkyPath, so there is no slide. Paste "
+		.. "src/Shared/SkyPath.lua in as a ModuleScript named exactly SkyPath.")
+end
 
 local SkyPoolsService = {}
 
 -- ===== The terraces =====
+--
+-- A terrace is NOT A SQUARE. It is a narrow walk off the checkpoint, a wide middle with its corners
+-- taken off where the pool and the sun decks are, and a rounded nose past the pool where the water
+-- spills off into the clouds. The numbers below are shares of its width and length, so the scenery
+-- pools further out come out the same shape at their own sizes.
 local NECK = 9 -- the strip joining a terrace to its chunk; see terraceBeside for why nine
--- THE NECK IS DEEPER THAN THE DECK. The straight chunk has side shelves two studs under its top that
--- reach 13.4 out and hang six under it; a neck only as deep as the deck would leave their undersides
--- showing beneath it. 7.4 covers them from the cap's top down.
-local NECK_THICK = 7.4
+-- THE NECK IS DEEPER THAN THE DECK, so the chunk's own underside does not show beneath it. The
+-- straight chunk used to carry side shelves reaching 13.4 out and hanging six under its top, and
+-- this was 7.4 to swallow them; the shelves are gone (ChunkBuilder: they let you walk past the
+-- honey and caught you falling off the Needoh), so what is left to cover is the slab itself, which
+-- hangs 4.9 under the cap's top. blender/check_skypools.py holds this against the chunk's layout.
+local NECK_THICK = 5.4
 local TERRACE_W, TERRACE_L = 46, 36 -- outward from the neck, and along the route
 local POOL_W, POOL_L = 22, 14 -- the pool's opening, the same two ways
-local POOL_DEPTH = 3.5 -- shallow enough to stand in: a pool you walk through, not a hole
+-- DEEP ENOUGH TO SWIM IN. The pool used to be waist deep because it was a sheet of glass you walked
+-- through; it is terrain water now, and you only swim once the water is over you. Getting out is
+-- what the steps at the inner end are for, and the ladder at the deep one.
+local POOL_DEPTH = 9
 local DECK_THICK = POOL_DEPTH + 1 -- the deck is the pool's walls, so it is as deep as the pool
 local COLUMN_D = 6
+local ENTRY_SHARE = 0.33 -- the entry walk's half width, as a share of the terrace's length
+local POOL_FROM = 0.26 -- where the pool starts, as a share of the terrace's width
+local BEACH_STEPS = 4 -- the steps you walk in down at the inner end; each rise is under two studs
+local STEP_RUN = 2 -- and each tread is this deep
+local WATER_DROP = 0.35 -- the water's surface, this far under the deck
 
 -- ===== The cloud sea, the final pool, the tower, the sea =====
 -- The cloud sea's top sits this far above the kill plane, so a fall sinks into cloud just as it is
@@ -63,7 +90,9 @@ local CLOUD_REACH = 2400 -- far enough that its edge is lost in the haze rather 
 local CLOUD_UNDER_REACH = 900 -- the underside only matters where you can see it: from the final pool
 local FINAL_BELOW = 150 -- the final pool's surface, this far under the cloud sea's bottom
 local FINAL_RADIUS = 105
-local FINAL_DEEP = 3 -- waist deep
+-- DEEP ENOUGH TO SWIM IN, like the terrace pools: you land in it off the slide, and coming down
+-- through the clouds into water you sink into is the ending this level was always describing.
+local FINAL_DEEP = 10
 local TOWER_D = 34
 local TOWER_ABOVE = 90 -- the basin tops out this far above the start
 local BASIN_D = 76
@@ -77,28 +106,41 @@ local POOL_ABOVE_DESTROY = 60
 local LONGEST = 2000 -- a part stops at 2048 studs; anything longer is built in pieces
 
 -- ===== The slide =====
+--
+-- How wide it is, how fast it is ridden and how long that takes are SkyPath's, because the client
+-- works the ride out from the same numbers. What is left here is where it is put.
 local SLIDE_TURNS = 0.85 -- round the tower from the finale deck to the pool; never under itself
 local SLIDE_END_RADIUS = 70 -- where it lands: well inside the final pool, clear of the curtain
-local SLIDE_WIDE = 8
-local SLIDE_STEP = 9 -- studs of trough per segment
--- A SPEED, NOT A DURATION. The slide's length depends on how big the ring came out, and a fixed
--- time made a long slide a cannon. Clamped so a small ring is still a ride and a huge one ends.
-local SLIDE_SPEED = 70
-local SLIDE_MIN_SECONDS, SLIDE_MAX_SECONDS = 8, 15
-local SLIDE_RAMP = 0.15 -- the share of the ride spent speeding up from standing
-local WALK_L, WALK_W = 30, 18 -- the finale walkway, along the route and across it
+-- WHERE THE TOWER STANDS on a route that goes somewhere: this far to the SIDE of the slide's mouth,
+-- not ahead of it. The slide is an arc round the tower, and an arc's tangent is across its radius --
+-- so a tower straight ahead would send the first stud of the ride sideways off the end of the deck.
+-- Beside it, the ride leaves the mouth going the way the walkway points and curves round the tower
+-- from there.
+local TOWER_ASIDE = 150
+local SLIDE_WIDE = if SkyPath then SkyPath.WIDE else 10
+-- THE MOUTH IS KEPT CLEAR. Nothing is built within this of the first stretch of the trough, so
+-- nothing is in the way of the one thing you came down here to do.
+local MOUTH_CLEAR = 16
+local WALK_L, WALK_W = 34, 22 -- the finale walkway, along the route and across it
 
 -- ===== The pump room, under one terrace =====
 --
 -- A hatch in the deck with its lid standing open, a ladder down, and a small room slung under the
 -- deck on its own walls: two pumps feeding the pool above, a pipe carrying the overflow down to the
 -- sea, a lamp, and the log on the wall. The one closed-off place in the level, for whoever looks.
-local HATCH = 4
+-- BIG ENOUGH TO CLIMB OUT OF. It was four studs square, and the deck it is cut through is ten deep
+-- now that the pool is deep enough to swim in -- so getting out was a character-width shaft with a
+-- ladder in it, and it was reported as a place you get stuck. Six studs is wider than the ladder
+-- plus a shoulder either side, and the rim is chamfered so the last step up has somewhere to go.
+local HATCH = 6
 local HATCH_FROM = 1.5 -- the hatch's inner edge, this far out from the terrace's inner edge
-local HATCH_Z = -5.5 -- and its near side, this far along
+local HATCH_Z = -3 -- and its near side, this far along: the hatch is centred over the room
 local ROOM_DOWN = 10 -- the room's floor, this far under the deck's underside
 local ROOM_LONG = 22 -- outward, from the terrace's inner edge
-local ROOM_Z0, ROOM_Z1 = -9, 7 -- along the route: clear of the terrace's inner columns at +-13
+-- ALONG THE ROUTE, THE ROOM IS NARROW. The columns that carry the pool's inner corners come down
+-- either side of it at +-8, so the room keeps inside +-4.5 and they pass it with half a stud to
+-- spare. blender/check_skypools.py holds that gap open.
+local ROOM_Z0, ROOM_Z1 = -4.5, 4.5
 
 -- ===== More on the decks =====
 local CABANA_FROM = 7 -- the changing hut starts this far out from the pool's inner edge
@@ -118,11 +160,19 @@ local WATER = Color3.fromRGB(96, 196, 218)
 local FALL = Color3.fromRGB(184, 232, 244)
 local STONE = Color3.fromRGB(234, 238, 242)
 local BAND = Color3.fromRGB(200, 222, 236)
+local MOSAIC = Color3.fromRGB(58, 142, 172) -- the darker tile at the waterline and in the deck's inlay
 local SLIDE = Color3.fromRGB(180, 164, 236)
 local RAIL = Color3.fromRGB(246, 244, 252)
 local SEA = Color3.fromRGB(58, 132, 176)
-local CLOUD_TOP = Color3.fromRGB(255, 255, 255)
-local CLOUD_UNDER = Color3.fromRGB(224, 234, 248)
+-- THE CLOUDS ARE NOT PAPER WHITE, and this is the other half of the same fix.
+--
+-- Everything in this level that you look DOWN at is seen against the cloud sea, and the chunks the
+-- route is made of are translucent -- honey, jello, slime, ice. Pure white behind a pale translucent
+-- surface leaves nothing for the eye: from above the chunk was a faint outline and from the side it
+-- was itself. Taking the clouds two steps off white gives the material something to sit against,
+-- costs nothing, and still reads as cloud because cloud in daylight is never actually white.
+local CLOUD_TOP = Color3.fromRGB(236, 242, 250)
+local CLOUD_UNDER = Color3.fromRGB(202, 214, 234)
 local PASTELS = {
 	Color3.fromRGB(244, 176, 164),
 	Color3.fromRGB(168, 220, 200),
@@ -193,6 +243,33 @@ local function column(parent: Instance, name: string, diameter: number, at: Vect
 end
 
 -- A cylinder from one point to another: rods, rails, the ladder.
+-- A SEAT: furniture you can actually use. Roblox sits a character on any Seat it touches or that is
+-- clicked, and that is the whole of what was missing from the loungers and the lifeguard's chair --
+-- they were shapes of furniture rather than furniture.
+--
+-- The pad is the seat itself and it is the same size and place the cushion was, so nothing moves;
+-- what changes is that standing on it sits you down. A lounger is a seat lying back, so its pad is
+-- tipped with the frame it is part of and the character reclines with it.
+local function seat(parent: Instance, name: string, size: Vector3, cf: CFrame, colour: Color3,
+	material: Enum.Material): Seat
+	local pad = Instance.new("Seat")
+	pad.Name = name
+	pad.Size = size
+	pad.CFrame = cf
+	pad.Color = colour
+	pad.Material = material
+	pad.Anchored = true
+	pad.CanCollide = true
+	pad.CanTouch = true
+	pad.TopSurface = Enum.SurfaceType.Smooth
+	pad.BottomSurface = Enum.SurfaceType.Smooth
+	-- Nobody is thrown off it: this is a calm level, and a seat that ejects you at the first bump
+	-- would be the opposite of what a sun lounger is for.
+	pad.Disabled = false
+	pad.Parent = parent
+	return pad
+end
+
 local function rod(parent: Instance, name: string, from: Vector3, to: Vector3, diameter: number, colour: Color3)
 	local length = (to - from).Magnitude
 	if length < 0.05 then
@@ -244,10 +321,84 @@ local function waterSound(parent: Instance, name: string, speed: number, volume:
 	return s
 end
 
--- A FALL OF WATER: a thin sheet from `top` straight down to `bottomY`, `wide` across, facing
--- `facing`, with droplets coming off its lip. Pale and see-through, because a sheet of water this
--- thin is mostly light. With `roar`, the fall is heard out to that many studs from its lip: the
--- project's water sample pitched down, a little differently for every fall so no two beat together.
+-- ===== THE WATER YOU CAN SWIM IN =====
+--
+-- The pools used to be a glass plate you walked through. They are Roblox terrain water now, filled
+-- into the part-built basins, so you swim in them with the engine's own strokes, waves and
+-- underwater view.
+--
+-- Terrain is GLOBAL and it is not built per run, so every fill is remembered here and cleared when
+-- the level is torn down. Without that, the next level would start with pools of water hanging in
+-- its sky. The look (colour, waves, how far you can see) is global too, so the old values are kept
+-- and put back the same way LightingService puts the lobby's air back.
+local filled: { { cf: CFrame, size: Vector3 } } = {}
+local terrainWas: { [string]: any } = {}
+
+local function fillWater(cf: CFrame, size: Vector3)
+	local terrain = workspace.Terrain
+	terrain:FillBlock(cf, size, Enum.Material.Water)
+	table.insert(filled, { cf = cf, size = size })
+end
+
+local function fillWaterCylinder(cf: CFrame, height: number, radius: number)
+	local terrain = workspace.Terrain
+	terrain:FillCylinder(cf, height, radius, Enum.Material.Water)
+	-- Cleared as a block round it: FillBlock with Air over the cylinder's extent takes it all, and a
+	-- box of air where there is nothing anyway costs nothing.
+	table.insert(filled, { cf = cf, size = Vector3.new(radius * 2 + 4, height + 4, radius * 2 + 4) })
+end
+
+-- Puts every drop back. Called by Bootstrap before the next run is built, and by build() first, so
+-- a place that was stopped mid-run does not keep the water.
+function SkyPoolsService.clearWater()
+	local terrain = workspace.Terrain
+	for _, region in ipairs(filled) do
+		pcall(function()
+			terrain:FillBlock(region.cf, region.size + Vector3.new(2, 2, 2), Enum.Material.Air)
+		end)
+	end
+	table.clear(filled)
+	for name, value in pairs(terrainWas) do
+		pcall(function()
+			(terrain :: any)[name] = value
+		end)
+	end
+	table.clear(terrainWas)
+end
+
+-- The look of the water, for this level: pale tropical blue, small waves, and clear enough to see
+-- the tiles through. Remembered first, so clearWater can put the place back as it found it.
+local function poolWaterLook()
+	local terrain = workspace.Terrain
+	for name, value in pairs({
+		WaterColor = Color3.fromRGB(96, 200, 214),
+		WaterTransparency = 0.55,
+		WaterReflectance = 0.25,
+		WaterWaveSize = 0.05,
+		WaterWaveSpeed = 8,
+	}) do
+		pcall(function()
+			if terrainWas[name] == nil then
+				terrainWas[name] = (terrain :: any)[name]
+			end
+			(terrain :: any)[name] = value
+		end)
+	end
+end
+
+-- A FALL OF WATER: a veil from `top` down to `bottomY`, `wide` across, leaving the edge towards
+-- `facing`, with a rolled lip of foam on the edge and spray coming off it.
+--
+-- Three sheets rather than one. Water leaving an edge is bright and nearly solid where it goes over,
+-- and spreads and thins the further it falls, so each sheet behind the first is wider, softer and
+-- widens faster, and the whole thing reads as depth instead of a pane of glass. With `roar`, the
+-- fall is heard out to that many studs from its lip: the project's water sample pitched down, a
+-- little differently for every fall so no two beat together.
+local VEILS = {
+	{ out = 0, alpha = 0.42, spread = 0.08, thick = 1.1 },
+	{ out = 0.9, alpha = 0.64, spread = 0.3, thick = 2, tone = 0.4 },
+	{ out = -0.9, alpha = 0.8, spread = 0.55, thick = 2.8, tone = 0.7 },
+}
 local function waterfall(parent: Instance, top: Vector3, facing: Vector3, wide: number, bottomY: number, roar: number?)
 	local height = top.Y - bottomY
 	if height <= 1 then
@@ -255,34 +406,134 @@ local function waterfall(parent: Instance, top: Vector3, facing: Vector3, wide: 
 	end
 	local pieces = math.ceil(height / LONGEST)
 	local each = height / pieces
-	for index = 1, pieces do
-		local centre = Vector3.new(top.X, top.Y - (index - 0.5) * each, top.Z)
-		local sheet = block(parent, "Waterfall", Vector3.new(wide, each, 1.2), CFrame.lookAt(centre, centre + facing),
-			FALL, Enum.Material.Glass, false)
-		sheet.Transparency = 0.5
-		sheet.Reflectance = 0.08
-		if index == 1 then
-			local lip = Instance.new("Attachment")
-			lip.Name = "Lip"
-			lip.Position = Vector3.new(0, each / 2, 0)
-			lip.Parent = sheet
-			local drops = Instance.new("ParticleEmitter")
-			drops.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-			drops.Color = ColorSequence.new(Color3.fromRGB(236, 250, 255))
-			drops.LightEmission = 0.4
-			drops.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 0.1) })
-			drops.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
-			drops.Lifetime = NumberRange.new(1.2, 2.4)
-			drops.Speed = NumberRange.new(2, 5)
-			drops.SpreadAngle = Vector2.new(25, 10)
-			drops.Acceleration = Vector3.new(0, -40, 0)
-			drops.EmissionDirection = Enum.NormalId.Front
-			drops.Rate = math.clamp(wide * 1.2, 6, 30)
-			drops.Parent = lip
-			if roar then
-				waterSound(lip, "Roar", rng:NextNumber(0.38, 0.47), if roar > 150 then 0.35 else 0.3, 10, roar)
-			end
+	for veilIndex, veil in ipairs(VEILS) do
+		for index = 1, pieces do
+			local deep = (index - 0.5) * each
+			local centre = Vector3.new(top.X, top.Y - deep, top.Z) + facing * veil.out
+			local sheet = block(parent, "Waterfall",
+				Vector3.new(wide * (1 + veil.spread * deep / height), each, veil.thick),
+				CFrame.lookAt(centre, centre + facing), FALL:Lerp(Color3.new(1, 1, 1), veil.tone or 0),
+				Enum.Material.Glass, false)
+			sheet.Transparency = veil.alpha
+			sheet.Reflectance = 0.08
+			sheet.CastShadow = false
+			-- TAGGED, so the client can run the shimmer down it (SkyPoolsClient). A sheet of glass
+			-- is the right shape for falling water and the wrong amount of nothing: what says
+			-- "moving" is the light travelling down it, and that is done where it costs nobody
+			-- anything.
+			sheet:SetAttribute("Veil", index + veilIndex * 0.37)
+			sheet:SetAttribute("Alpha", veil.alpha)
+			CollectionService:AddTag(sheet, "SkyFall")
 		end
+	end
+
+	-- THE LIP: the foam on the edge itself, and the spray that comes off it. Only a fall with a real
+	-- edge gets the foam -- a shower head over a queue is a fall too, and a slab of white on it
+	-- would read as a mistake -- but every fall gets the spray.
+	local lipAt = CFrame.lookAt(Vector3.new(top.X, top.Y, top.Z), top + facing)
+	local foam = block(parent, "FallLip", if wide >= 4 then Vector3.new(wide + 1.4, 0.7, 2.8)
+		else Vector3.new(wide, 0.2, 0.6), lipAt, Color3.fromRGB(250, 254, 255), Enum.Material.Glass, false)
+	foam.Transparency = if wide >= 4 then 0.25 else 1
+	foam.CastShadow = false
+	local lip = Instance.new("Attachment")
+	lip.Name = "Lip"
+	lip.Position = Vector3.new(0, -0.4, 0)
+	lip.Parent = foam
+	local drops = Instance.new("ParticleEmitter")
+	drops.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	drops.Color = ColorSequence.new(Color3.fromRGB(236, 250, 255))
+	drops.LightEmission = 0.4
+	drops.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 0.1) })
+	drops.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+	drops.Lifetime = NumberRange.new(1.2, 2.4)
+	drops.Speed = NumberRange.new(2, 5)
+	drops.SpreadAngle = Vector2.new(25, 10)
+	drops.Acceleration = Vector3.new(0, -40, 0)
+	drops.EmissionDirection = Enum.NormalId.Front
+	drops.Rate = math.clamp(wide * 1.2, 6, 30)
+	drops.Parent = lip
+
+	-- THE WATER ITSELF, LEAVING. Long thin streaks thrown off the lip and pulled down, living long
+	-- enough to travel a good stretch of the fall: this is the part that reads as moving water,
+	-- because it is the only part that moves. Stretched by their own speed rather than drawn long,
+	-- so they lengthen as they gather pace the way falling water does.
+	local streaks = Instance.new("ParticleEmitter")
+	streaks.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	streaks.Color = ColorSequence.new(Color3.fromRGB(224, 246, 252))
+	streaks.LightEmission = 0.35
+	streaks.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.6), NumberSequenceKeypoint.new(0.3, 2.4),
+		NumberSequenceKeypoint.new(1, 1.2) })
+	streaks.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45),
+		NumberSequenceKeypoint.new(0.75, 0.6), NumberSequenceKeypoint.new(1, 1) })
+	streaks.Lifetime = NumberRange.new(2.2, 3.6)
+	streaks.Speed = NumberRange.new(12, 22)
+	streaks.SpreadAngle = Vector2.new(8, 4)
+	streaks.Acceleration = Vector3.new(0, -60, 0)
+	streaks.EmissionDirection = Enum.NormalId.Bottom
+	streaks.Rate = math.clamp(wide * 2.5, 12, 70)
+	-- SQUASHED BY SPEED: a drop is round when it leaves the lip and a streak by the time it has
+	-- fallen, which is what falling water looks like and what a round sprite never does.
+	streaks.Squash = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 2.2) })
+	streaks.Parent = lip
+
+	-- THE MIST it makes further down, drifting back up the way mist off a fall does, on its own
+	-- marker so it sits in the fall rather than on the lip. Only for a fall with room to make any:
+	-- a shower head over a queue does not need weather.
+	if height < 40 then
+		if roar then
+			waterSound(lip, "Roar", rng:NextNumber(0.38, 0.47), 0.3, 10, roar)
+		end
+		return
+	end
+	local mistAt = Vector3.new(top.X, top.Y - math.min(height * 0.35, 60), top.Z)
+	local marker = block(parent, "FallMist", Vector3.new(wide, 1, 1), CFrame.lookAt(mistAt, mistAt + facing), FALL,
+		Enum.Material.Glass, false)
+	marker.Transparency = 1
+	marker.CastShadow = false
+	local mist = Instance.new("ParticleEmitter")
+	mist.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	mist.Color = ColorSequence.new(Color3.fromRGB(244, 252, 255))
+	mist.LightEmission = 0.6
+	mist.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 6), NumberSequenceKeypoint.new(1, 22) })
+	mist.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.86), NumberSequenceKeypoint.new(0.4, 0.92),
+		NumberSequenceKeypoint.new(1, 1) })
+	mist.Lifetime = NumberRange.new(3, 6)
+	mist.Speed = NumberRange.new(1, 4)
+	mist.SpreadAngle = Vector2.new(40, 40)
+	mist.Acceleration = Vector3.new(0, 2, 0)
+	mist.Rate = 4
+	mist.Parent = marker
+	-- WHERE IT LANDS. A fall that simply stops at the sea is a sheet with an end; water arriving
+	-- makes foam, throws spray back up and boils for a few studs round the point it hits.
+	local at = Vector3.new(top.X, bottomY + 1.5, top.Z) + facing * (wide * 0.12)
+	local foamDisc = column(parent, "FallFoam", wide * 2.4, at, bottomY + 0.2, bottomY + 1.6,
+		Color3.fromRGB(246, 253, 255), Enum.Material.Glass, false)
+	if foamDisc then
+		foamDisc.Transparency = 0.35
+		foamDisc.CastShadow = false
+	end
+	local boil = block(parent, "FallBoil", Vector3.new(wide * 1.6, 1, wide * 1.6), CFrame.new(at),
+		Color3.fromRGB(236, 250, 255), Enum.Material.Glass, false)
+	boil.Transparency = 1
+	boil.CastShadow = false
+	local up = Instance.new("ParticleEmitter")
+	up.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	up.Color = ColorSequence.new(Color3.fromRGB(250, 254, 255))
+	up.LightEmission = 0.55
+	up.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, wide * 0.5),
+		NumberSequenceKeypoint.new(1, wide * 1.6) })
+	up.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55),
+		NumberSequenceKeypoint.new(0.5, 0.78), NumberSequenceKeypoint.new(1, 1) })
+	up.Lifetime = NumberRange.new(2.4, 4.4)
+	up.Speed = NumberRange.new(6, 14)
+	up.SpreadAngle = Vector2.new(50, 50)
+	up.Acceleration = Vector3.new(0, 3, 0)
+	up.EmissionDirection = Enum.NormalId.Top
+	up.Rate = math.clamp(wide * 0.8, 4, 22)
+	up.Parent = boil
+	if roar then
+		waterSound(lip, "Roar", rng:NextNumber(0.38, 0.47), if roar > 150 then 0.35 else 0.3, 10, roar)
+		waterSound(boil, "FallLanding", rng:NextNumber(0.3, 0.38), 0.3, 20, roar)
 	end
 end
 
@@ -430,7 +681,8 @@ local function lifeguard(parent: Instance, frame: CFrame, poolX: number, pz: num
 		local at = (frame * CFrame.new(poolX + corner[1], 0, cz + corner[2])).Position
 		column(parent, "ChairPost", 0.4, at, at.Y, at.Y + seatY, white, Enum.Material.SmoothPlastic, true)
 	end
-	block(parent, "ChairSeat", Vector3.new(3, 0.4, 3), frame * CFrame.new(poolX, seatY + 0.2, cz), white, Enum.Material.SmoothPlastic, true)
+	seat(parent, "ChairSeat", Vector3.new(3, 0.4, 3), frame * CFrame.new(poolX, seatY + 0.2, cz), white,
+		Enum.Material.SmoothPlastic)
 	block(parent, "ChairBack", Vector3.new(3, 2.6, 0.3), frame * CFrame.new(poolX, seatY + 1.7, cz - 1.35), white, Enum.Material.SmoothPlastic, true)
 	local ladder = Instance.new("TrussPart")
 	ladder.Name = "ChairLadder"
@@ -534,18 +786,34 @@ local function pumpRoom(parent: Instance, frame: CFrame, x0: number, px1: number
 	local lid = block(parent, "HatchLid", Vector3.new(0.3, HATCH, HATCH), frame * CFrame.new(hx0 + HATCH + 0.45, HATCH / 2, HATCH_Z + HATCH / 2),
 		BAND, Enum.Material.SmoothPlastic, true)
 	label(lid, Enum.NormalId.Left, "STAFF ONLY", Color3.fromRGB(60, 70, 80))
+	-- THE LADDER RUNS PAST THE DECK, not up to it. A ladder that stops level with the floor you are
+	-- climbing to leaves nothing to hold while you step off, which is the other half of why this
+	-- hole was hard to leave. TrussPart sizes come in twos, so this is the drop rounded up.
+	local ladderTop = 3.5
+	local ladderHigh = math.ceil((ladderTop - (floorTop - 1)) / 2) * 2
 	local ladder = Instance.new("TrussPart")
 	ladder.Name = "HatchLadder"
-	ladder.Size = Vector3.new(2, 16, 2)
-	ladder.CFrame = frame * CFrame.new(hx0 + 1, floorTop + 8, HATCH_Z + HATCH / 2)
+	ladder.Size = Vector3.new(2, ladderHigh, 2)
+	ladder.CFrame = frame * CFrame.new(hx0 + 1.4, floorTop - 1 + ladderHigh / 2, HATCH_Z + HATCH / 2)
 	ladder.Anchored = true
 	ladder.Color = RAIL
 	ladder.Material = Enum.Material.Metal
 	ladder.Parent = parent
+	-- A GRAB RAIL either side of the opening, at hand height, and a chamfer round the rim so the
+	-- last pull up meets a slope rather than a lip.
+	for _, side in ipairs({ -1, 1 }) do
+		local railAt = frame * Vector3.new(hx0 + HATCH / 2, 0, HATCH_Z + HATCH / 2 + side * (HATCH / 2 + 0.6))
+		rod(parent, "HatchRail", railAt + Vector3.new(0, 1.1, 0) - frame.RightVector * (HATCH / 2 - 0.4),
+			railAt + Vector3.new(0, 1.1, 0) + frame.RightVector * (HATCH / 2 - 0.4), 0.3, RAIL)
+		for _, post in ipairs({ -1, 1 }) do
+			local foot = railAt + frame.RightVector * (post * (HATCH / 2 - 0.4))
+			column(parent, "HatchRailPost", 0.3, foot, foot.Y, foot.Y + 1.1, RAIL, Enum.Material.Metal, false)
+		end
+	end
 
 	-- Two pumps feeding the pool overhead, each with its pipe up into the pool's floor.
-	for _, z in ipairs({ -4.5, 2.5 }) do
-		local at = frame * CFrame.new(rx1 - 7, floorTop, z)
+	for _, back in ipairs({ 6.5, 13.5 }) do
+		local at = frame * CFrame.new(rx1 - back, floorTop, -0.6)
 		block(parent, "PumpBase", Vector3.new(6, 1, 3), at * CFrame.new(0, 0.5, 0), Color3.fromRGB(90, 96, 104), Enum.Material.Metal, true)
 		local body = block(parent, "Pump", Vector3.new(5, 3, 3), at * CFrame.new(0, 2.5, 0), Color3.fromRGB(70, 130, 170),
 			Enum.Material.Metal, true)
@@ -578,7 +846,7 @@ local function pumpRoom(parent: Instance, frame: CFrame, x0: number, px1: number
 	light.Color = Color3.fromRGB(255, 220, 180)
 	light.Shadows = true
 	light.Parent = fixture
-	local drainAt = frame * Vector3.new(midX, floorTop, midZ)
+	local drainAt = frame * Vector3.new(rx0 + 4, floorTop, ROOM_Z1 - 2)
 	column(parent, "FloorDrain", 2, drainAt, drainAt.Y, drainAt.Y + 0.06, Color3.fromRGB(50, 54, 58), Enum.Material.Metal, false)
 	local bucketAt = frame * Vector3.new(rx0 + 2, floorTop, ROOM_Z1 - 2.5)
 	column(parent, "Bucket", 1.4, bucketAt, bucketAt.Y, bucketAt.Y + 1.4, Color3.fromRGB(90, 140, 190), Enum.Material.SmoothPlastic, false)
@@ -586,117 +854,339 @@ local function pumpRoom(parent: Instance, frame: CFrame, x0: number, px1: number
 		Color3.fromRGB(170, 140, 100))
 end
 
+-- ===== A SUN LOUNGER =====
+--
+-- Not a slab with a cushion on it. A frame on four feet, slats across it, a back tipped up on its
+-- own hinge with a prop under it and a pillow at the top, and a folded towel over the foot. Built
+-- in `at`, a frame standing on the deck whose +Z runs from the foot of the bed to its head, so
+-- whoever lies on it faces whatever is at -Z: the pool.
+local function lounger(parent: Instance, at: CFrame, colour: Color3)
+	local rail = Color3.fromRGB(246, 246, 244)
+	local shade = colour:Lerp(Color3.new(0, 0, 0), 0.12)
+	-- Feet, and the rails they hold up.
+	for _, side in ipairs({ -1, 1 }) do
+		for _, z in ipairs({ -2.3, 2.1 }) do
+			block(parent, "LoungerFoot", Vector3.new(0.3, 1.1, 0.3), at * CFrame.new(side * 1.1, 0.55, z), rail,
+				Enum.Material.Metal, false)
+		end
+		rod(parent, "LoungerRail", (at * CFrame.new(side * 1.1, 1.2, -2.9)).Position,
+			(at * CFrame.new(side * 1.1, 1.2, 2.5)).Position, 0.3, rail)
+	end
+	-- The bed: slats across the rails, with a cushion over them you can lie on.
+	for index = 0, 6 do
+		block(parent, "LoungerSlat", Vector3.new(2.4, 0.16, 0.5), at * CFrame.new(0, 1.34, -2.6 + index * 0.84), rail,
+			Enum.Material.SmoothPlastic, false)
+	end
+	-- THE CUSHION IS THE SEAT. Tipped back a few degrees with the bed, so lying on it puts you at the
+	-- angle the back is set to rather than bolt upright on a flat pad.
+	seat(parent, "LoungerCushion", Vector3.new(2.3, 0.32, 5.1),
+		at * CFrame.new(0, 1.56, -0.2) * CFrame.Angles(math.rad(-6), 0, 0), colour, Enum.Material.Fabric)
+	-- The back, leaning on its hinge over the head end, with the prop that holds it there.
+	local hinge = at * CFrame.new(0, 1.4, 2.3) * CFrame.Angles(math.rad(34), 0, 0)
+	for index = 0, 3 do
+		block(parent, "LoungerBackSlat", Vector3.new(2.4, 0.16, 0.5), hinge * CFrame.new(0, 0.5 + index * 0.75, 0) *
+			CFrame.Angles(math.rad(-90), 0, 0), rail, Enum.Material.SmoothPlastic, false)
+	end
+	block(parent, "LoungerBackCushion", Vector3.new(2.3, 2.8, 0.3), hinge * CFrame.new(0, 1.5, 0.22), colour,
+		Enum.Material.Fabric, false)
+	block(parent, "LoungerPillow", Vector3.new(1.8, 0.5, 0.9), hinge * CFrame.new(0, 2.7, 0.5), shade,
+		Enum.Material.Fabric, false)
+	rod(parent, "LoungerProp", (hinge * CFrame.new(0, 0.4, -0.1)).Position, (at * CFrame.new(0, 1.3, 0.9)).Position,
+		0.18, rail)
+	-- The towel somebody folded over the foot of it.
+	block(parent, "LoungerTowel", Vector3.new(2.2, 0.2, 1.3), at * CFrame.new(0, 1.8, -2.1), shade,
+		Enum.Material.Fabric, false)
+end
+
+-- ===== A PARASOL =====
+--
+-- A pole in a weighted base, eight ribs, eight panels in two tones with a scallop hung off each
+-- outer edge, a vent at the crown and a finial over it. At `x`, `z` on the deck, in the terrace's
+-- frame. The canopy is nine studs up, which clears anyone walking under it.
+local PARASOL_R = 5
+local function parasol(parent: Instance, frame: CFrame, x: number, z: number, colour: Color3)
+	local foot = (frame * CFrame.new(x, 0, z)).Position
+	local second = colour:Lerp(Color3.new(1, 1, 1), 0.55)
+	column(parent, "ParasolBase", 2.6, foot, foot.Y, foot.Y + 0.5, BAND, Enum.Material.Slate, true)
+	column(parent, "ParasolPole", 0.45, foot, foot.Y, foot.Y + 9.3, COPING, Enum.Material.Metal, true)
+	local hub = foot + Vector3.new(0, 8.3, 0)
+	for index = 0, 7 do
+		local rib = index * math.pi / 4
+		local out = Vector3.new(math.cos(rib), 0, math.sin(rib))
+		rod(parent, "ParasolRib", hub, hub + out * PARASOL_R - Vector3.new(0, 1, 0), 0.2, COPING)
+		local mid = rib + math.pi / 8
+		local dir = Vector3.new(math.cos(mid), -0.2, math.sin(mid)).Unit
+		local centre = hub + dir * (PARASOL_R / 2)
+		local panel = block(parent, "ParasolPanel", Vector3.new(2.5, 0.16, PARASOL_R + 0.4),
+			CFrame.lookAt(centre, centre + dir), if index % 2 == 0 then colour else second, Enum.Material.Fabric, false)
+		panel.CastShadow = false
+		-- The scallop on the panel's outer edge, which is what a parasol's hem actually looks like.
+		block(parent, "ParasolScallop", Vector3.new(2.5, 0.5, 0.3), panel.CFrame * CFrame.new(0, -0.2, -PARASOL_R / 2 - 0.1),
+			if index % 2 == 0 then colour else second, Enum.Material.Fabric, false)
+	end
+	column(parent, "ParasolVent", 2, foot, hub.Y + 0.5, hub.Y + 0.7, second, Enum.Material.Fabric, false)
+	ellipsoid(parent, "ParasolFinial", Vector3.new(0.7, 0.9, 0.7), CFrame.new(foot + Vector3.new(0, 9.5, 0)), COPING)
+end
+
+-- ===== A PERGOLA =====
+--
+-- Posts, beams across them and slats over the beams: shade that is drawn on the deck in stripes
+-- rather than thrown by a solid roof. Every post stands on the deck and carries the beams over it,
+-- which is the whole structure. `x`, `z` is its middle in the terrace's frame.
+local function pergola(parent: Instance, frame: CFrame, x: number, z: number, wide: number, long: number, colour: Color3)
+	local wood = Color3.fromRGB(226, 214, 192)
+	local high = 9
+	for _, dx in ipairs({ -1, 1 }) do
+		for _, dz in ipairs({ -1, 1 }) do
+			block(parent, "PergolaPost", Vector3.new(0.7, high, 0.7),
+				frame * CFrame.new(x + dx * wide / 2, high / 2, z + dz * long / 2), wood, Enum.Material.WoodPlanks, true)
+		end
+		-- The beam along this side, carried by the two posts under it.
+		block(parent, "PergolaBeam", Vector3.new(0.5, 0.8, long + 1.4),
+			frame * CFrame.new(x + dx * wide / 2, high + 0.4, z), wood, Enum.Material.WoodPlanks, false)
+	end
+	local slats = math.max(4, math.floor(long / 1.6))
+	for index = 0, slats do
+		block(parent, "PergolaSlat", Vector3.new(wide + 1.6, 0.3, 0.4),
+			frame * CFrame.new(x, high + 1, z - long / 2 + index * (long / slats)), wood, Enum.Material.WoodPlanks, false)
+	end
+	-- A climber up one post and along the beam, because a pergola without one is a frame.
+	for index = 0, 6 do
+		ellipsoid(parent, "PergolaLeaves", Vector3.new(1.6, 1.2, 1.6),
+			frame * CFrame.new(x - wide / 2, 2 + index * 1.2, z - long / 2 + index * 0.3),
+			Color3.fromRGB(150, 190, 150):Lerp(colour, 0.15))
+	end
+end
+
+-- ===== A PLANTER =====
+--
+-- A stone box of soil with a small tree in it, stood on the deck edge. Heavy, low, and the one
+-- green thing up here.
+local function planter(parent: Instance, frame: CFrame, x: number, z: number)
+	local stone = Color3.fromRGB(226, 226, 220)
+	block(parent, "Planter", Vector3.new(3.4, 2, 3.4), frame * CFrame.new(x, 1, z), stone, Enum.Material.Concrete, true)
+	block(parent, "PlanterSoil", Vector3.new(2.8, 0.3, 2.8), frame * CFrame.new(x, 2.05, z), Color3.fromRGB(96, 80, 66),
+		Enum.Material.Ground, false)
+	local foot = (frame * CFrame.new(x, 2, z)).Position
+	column(parent, "PlanterTrunk", 0.5, foot, foot.Y, foot.Y + 3.4, Color3.fromRGB(150, 124, 96), Enum.Material.Wood, false)
+	for _, leaf in ipairs({ { 0, 4.4, 0, 4.2, 2.4 }, { 0.9, 3.7, 0.6, 3, 1.8 }, { -0.8, 3.9, -0.7, 2.6, 1.6 } }) do
+		ellipsoid(parent, "PlanterLeaves", Vector3.new(leaf[4], leaf[5], leaf[4]),
+			frame * CFrame.new(x + leaf[1], leaf[2], z + leaf[3]), Color3.fromRGB(148, 192, 154))
+	end
+end
+
 -- ===== A POOL TERRACE =====
 --
 -- Built in `frame`: its origin is the terrace's inner edge at deck height, +X runs outward away from
--- the level, +Z along the route. The deck is laid as four strips round the pool's opening, so their
--- inner faces ARE the pool's walls, and the pool has a floor POOL_DEPTH down you can stand on.
--- Columns and the spill go down to `groundY`, the sea.
+-- the route, +Z along it.
+--
+-- THE OUTLINE IS NOT A SQUARE. A narrow walk off the checkpoint, shoulders where it flares, a wide
+-- middle holding the pool with a sun deck either side, and a rounded prow past the pool that the
+-- water spills off. The deck slabs ARE the pool's walls, so the pool is the gap between them.
+--
+-- WHAT HOLDS IT UP: columns to the sea under the pool's four corners, under both sun decks and
+-- under the prow. The walk in needs none, because it is a short span between the neck, which is
+-- part of the chunk, and the pool block, which is on columns. Nothing stands under the pump room.
+--
+-- The sun side is +Z and the shade side -Z, and everything that stands on the deck has its own
+-- place on one of them; blender/check_skypools.py holds that no two of them meet.
 local function terrace(parent: Instance, frame: CFrame, x0: number, wide: number, long: number,
 	groundY: number, dressing: { string })
 	local x1 = x0 + wide
-	local poolX = x0 + wide * 0.55
-	local px0, px1 = poolX - POOL_W / 2, poolX + POOL_W / 2
-	local pz = POOL_L / 2
 	local lz = long / 2
+	local entryHalf = math.max(6, long * ENTRY_SHARE)
+	local poolW = math.min(POOL_W, wide * 0.5)
+	local px0 = x0 + wide * POOL_FROM
+	local px1 = px0 + poolW
+	local pz = math.min(POOL_L, long * 0.42) / 2
+	local poolX = (px0 + px1) / 2
+	local noseR = math.min(lz - 4, wide * 0.22, x1 - px1 - 0.8)
+	local shoulder = math.min(6, (px0 - x0) * 0.6)
+	local function has(what: string): boolean
+		return table.find(dressing, what) ~= nil
+	end
 
 	local function strip(ax: number, bx: number, az: number, bz: number)
 		block(parent, "Deck", Vector3.new(bx - ax, DECK_THICK, bz - az),
 			frame * CFrame.new((ax + bx) / 2, -DECK_THICK / 2, (az + bz) / 2), DECK, Enum.Material.SmoothPlastic, true)
 	end
-	-- The inner strip, with the pump room's hatch cut out of it when this terrace has one.
-	local hasRoom = table.find(dressing, "pumproom") ~= nil
-	if hasRoom then
+	-- THE WALK IN, with the pump room's hatch cut out of it where this terrace has one.
+	if has("pumproom") then
 		local hx0, hx1 = x0 + HATCH_FROM, x0 + HATCH_FROM + HATCH
-		strip(x0, hx0, -lz, lz)
-		strip(hx1, px0, -lz, lz)
-		strip(hx0, hx1, -lz, HATCH_Z)
-		strip(hx0, hx1, HATCH_Z + HATCH, lz)
+		strip(x0, hx0, -entryHalf, entryHalf)
+		strip(hx1, px0, -entryHalf, entryHalf)
+		strip(hx0, hx1, -entryHalf, HATCH_Z)
+		strip(hx0, hx1, HATCH_Z + HATCH, entryHalf)
 	else
-		strip(x0, px0, -lz, lz)
+		strip(x0, px0, -entryHalf, entryHalf)
 	end
-	strip(px1, x1, -lz, lz)
+	-- THE SHOULDERS, where the walk flares out to the width of the pool deck.
+	strip(px0 - shoulder, px0, -(lz - 3), -entryHalf)
+	strip(px0 - shoulder, px0, entryHalf, lz - 3)
+	-- THE SUN DECKS either side of the pool, the widest part of the terrace.
 	strip(px0, px1, -lz, -pz)
 	strip(px0, px1, pz, lz)
+	-- THE BAND past the pool, and THE PROW: a disc on the end of it, which is the edge the water
+	-- goes over and the only round thing in the outline.
+	strip(px1, x1, -(lz - 5), lz - 5)
+	local prow = (frame * CFrame.new(x1, 0, 0)).Position
+	column(parent, "Prow", noseR * 2, prow, prow.Y - DECK_THICK, prow.Y, DECK, Enum.Material.SmoothPlastic, true)
 
-	-- The pool: its floor, its water, and a coping flush with the deck round the opening.
-	local floor = block(parent, "PoolFloor", Vector3.new(POOL_W, 1, POOL_L),
-		frame * CFrame.new(poolX, -POOL_DEPTH - 0.5, 0), TILE, tileMaterial or Enum.Material.SmoothPlastic, true)
-	if tileMaterial then
-		floor.MaterialVariant = TILE_VARIANT
+	-- ===== THE POOL =====
+	--
+	-- A floor at POOL_DEPTH, steps at the inner end to walk in down and back out, and terrain water
+	-- filled between them. The water is filled a little way into the walls so its edge is hidden
+	-- behind the tiling instead of stepping along the voxel grid in the open.
+	local function tiled(part: Part): Part
+		if tileMaterial then
+			part.MaterialVariant = TILE_VARIANT
+		end
+		return part
 	end
-	-- Tagged, so the client can splash and ripple when someone walks into it.
-	CollectionService:AddTag(water(parent, "PoolWater", Vector3.new(POOL_W, 0.3, POOL_L), frame * CFrame.new(poolX, -0.55, 0)),
-		"SkyPoolWater")
-	for _, edge in ipairs({ { 0, -pz, POOL_W + 2, 1.2 }, { 0, pz, POOL_W + 2, 1.2 },
-		{ -POOL_W / 2, 0, 1.2, POOL_L + 2 }, { POOL_W / 2, 0, 1.2, POOL_L + 2 } }) do
-		block(parent, "Coping", Vector3.new(edge[3], 0.14, edge[4]),
-			frame * CFrame.new(poolX + edge[1], 0.07, edge[2]), COPING, Enum.Material.SmoothPlastic, false)
+	tiled(block(parent, "PoolFloor", Vector3.new(poolW, 1, pz * 2), frame * CFrame.new(poolX, -POOL_DEPTH - 0.5, 0),
+		TILE, tileMaterial or Enum.Material.SmoothPlastic, true))
+	for index = 1, BEACH_STEPS do
+		local deep = POOL_DEPTH * index / (BEACH_STEPS + 1)
+		local ax = px0 + (index - 1) * STEP_RUN
+		tiled(block(parent, "PoolStep", Vector3.new(STEP_RUN, POOL_DEPTH - deep + 1, pz * 2),
+			frame * CFrame.new(ax + STEP_RUN / 2, -deep - (POOL_DEPTH - deep + 1) / 2, 0), TILE,
+			tileMaterial or Enum.Material.SmoothPlastic, true))
+	end
+	local stepsEnd = px0 + BEACH_STEPS * STEP_RUN
+	local deepWater = POOL_DEPTH - WATER_DROP
+	fillWater(frame * CFrame.new(poolX, -WATER_DROP - deepWater / 2, 0), Vector3.new(poolW + 2, deepWater, pz * 2 + 2))
+	-- The part left where the water is, invisible: the client reads it to know where the surface is,
+	-- and so do the toys floating on it (SkyPoolsClient).
+	local surface = block(parent, "PoolWater", Vector3.new(poolW, 0.2, pz * 2), frame * CFrame.new(poolX, -WATER_DROP, 0),
+		WATER, Enum.Material.SmoothPlastic, false)
+	surface.Transparency = 1
+	surface.CanQuery = false
+	surface.CastShadow = false
+	surface:SetAttribute("Deep", POOL_DEPTH)
+	CollectionService:AddTag(surface, "SkyPoolWater")
+
+	-- THE WATERLINE, a band of darker tile set into the walls where the water meets them, and the
+	-- two lights in the long walls under it, which are what makes a pool glow at dusk.
+	local bandY = -WATER_DROP - 0.55
+	for _, band in ipairs({ { (stepsEnd + px1) / 2, -pz + 0.1, px1 - stepsEnd, 0.2 },
+		{ (stepsEnd + px1) / 2, pz - 0.1, px1 - stepsEnd, 0.2 }, { px1 - 0.1, 0, 0.2, pz * 2 } }) do
+		block(parent, "Waterline", Vector3.new(band[3], 1.1, band[4]), frame * CFrame.new(band[1], bandY, band[2]),
+			MOSAIC, Enum.Material.SmoothPlastic, false)
+	end
+	for _, side in ipairs({ -1, 1 }) do
+		local fitting = block(parent, "PoolLight", Vector3.new(2.4, 1, 0.3),
+			frame * CFrame.new(poolX + side * poolW * 0.2, -POOL_DEPTH * 0.45, side * (pz - 0.15)),
+			Color3.fromRGB(232, 250, 254), Enum.Material.Glass, false)
+		local glow = Instance.new("SurfaceLight")
+		glow.Face = if side > 0 then Enum.NormalId.Front else Enum.NormalId.Back
+		glow.Brightness = 1.4
+		glow.Range = 20
+		glow.Angle = 140
+		glow.Color = Color3.fromRGB(196, 240, 250)
+		glow.Shadows = false
+		glow.Parent = fitting
 	end
 
-	-- The overflow: a shallow channel from the pool to the outer edge, and the fall off it.
-	local channel = 8
-	water(parent, "Spill", Vector3.new(x1 - px1, 0.2, channel), frame * CFrame.new((px1 + x1) / 2, 0.05, 0))
-	waterfall(parent, frame * Vector3.new(x1 + 0.7, -0.2, 0), frame.RightVector, channel, groundY, 90)
-
-	-- COLUMNS to the sea, under the terrace's four corners, each with a collar at the top.
-	for _, corner in ipairs({ { x0 + 5, -lz + 5 }, { x0 + 5, lz - 5 }, { x1 - 5, -lz + 5 }, { x1 - 5, lz - 5 } }) do
-		local top = frame * Vector3.new(corner[1], -DECK_THICK, corner[2])
-		column(parent, "Column", COLUMN_D, top, groundY, top.Y, STONE, Enum.Material.SmoothPlastic, true)
-		column(parent, "Collar", COLUMN_D + 2, top, top.Y - 2.4, top.Y, BAND, Enum.Material.SmoothPlastic, false)
+	-- THE COPING: a flat kerb round the opening with a rolled bullnose on its inner edge, which is
+	-- the edge you actually hold on to from the water.
+	for _, edge in ipairs({ { poolX, -pz - 1.1, poolW + 4.4, 2.2 }, { poolX, pz + 1.1, poolW + 4.4, 2.2 },
+		{ px0 - 1.1, 0, 2.2, pz * 2 }, { px1 + 1.1, 0, 2.2, pz * 2 } }) do
+		block(parent, "Coping", Vector3.new(edge[3], 0.2, edge[4]), frame * CFrame.new(edge[1], 0.1, edge[2]), COPING,
+			Enum.Material.SmoothPlastic, true)
+	end
+	for _, edge in ipairs({ { Vector3.new(px0, 0.18, -pz), Vector3.new(px1, 0.18, -pz) },
+		{ Vector3.new(px0, 0.18, pz), Vector3.new(px1, 0.18, pz) },
+		{ Vector3.new(px0, 0.18, -pz), Vector3.new(px0, 0.18, pz) },
+		{ Vector3.new(px1, 0.18, -pz), Vector3.new(px1, 0.18, pz) } }) do
+		rod(parent, "Bullnose", frame * edge[1], frame * edge[2], 0.5, COPING)
+	end
+	-- THE INLAY, a line of the same tile set into the deck a stride back from the coping, which is
+	-- what stops the deck reading as one flat slab.
+	for _, side in ipairs({ -1, 1 }) do
+		block(parent, "Inlay", Vector3.new(poolW + 9, 0.08, 0.5), frame * CFrame.new(poolX, 0.02, side * (pz + 4.2)),
+			MOSAIC, Enum.Material.SmoothPlastic, false)
 	end
 
-	-- ===== Furniture: things people leave by a pool =====
+	-- THE OVERFLOW: a channel from the pool's outer wall, across the band, over the prow's lip.
+	local channel = math.min(10, pz * 1.4)
+	local lipX = x1 + noseR - 0.5
+	water(parent, "Spill", Vector3.new(lipX - px1, 0.25, channel), frame * CFrame.new((px1 + lipX) / 2, 0.06, 0))
+	for _, side in ipairs({ -1, 1 }) do
+		block(parent, "SpillKerb", Vector3.new(lipX - px1, 0.55, 0.6),
+			frame * CFrame.new((px1 + lipX) / 2, 0.27, side * (channel / 2 + 0.3)), COPING, Enum.Material.SmoothPlastic, true)
+	end
+	waterfall(parent, frame * Vector3.new(lipX + 0.6, -0.25, 0), frame.RightVector, channel, groundY, 90)
+
+	-- ===== COLUMNS to the sea =====
+	--
+	-- Every one of them stands wholly under deck, so none comes up beside anything: the inner pair
+	-- pass either side of the pump room, the outer pair keep inside the band, and the four under the
+	-- sun decks keep inside the strips. The prow stands on the ninth.
+	local innerZ = math.min(8, lz - 6)
+	local outerZ = math.min(8, lz - 8.2)
+	for _, at in ipairs({ { px0 - 2.5, -innerZ }, { px0 - 2.5, innerZ }, { px1 + 2.5, -outerZ }, { px1 + 2.5, outerZ },
+		{ px0 + 3.5, -(lz - 3) }, { px0 + 3.5, lz - 3 }, { px1 - 3.5, -(lz - 3) }, { px1 - 3.5, lz - 3 },
+		{ x1, 0 } }) do
+		local under = frame * Vector3.new(at[1], -DECK_THICK, at[2])
+		column(parent, "Column", COLUMN_D, under, groundY, under.Y, STONE, Enum.Material.SmoothPlastic, true)
+		column(parent, "Collar", COLUMN_D + 2, under, under.Y - 2.4, under.Y, BAND, Enum.Material.SmoothPlastic, false)
+	end
+
+	-- ===== WHAT STANDS ON THE DECK =====
 	local colour = PASTELS[rng:NextInteger(1, #PASTELS)]
-	local innerX = (x0 + px0) / 2
+	-- The two rows things stand in, kept far enough off the coping to walk between and far enough
+	-- inside the edge that nothing hangs over it on the smaller terraces out in the sky.
+	local sunZ = math.min(pz + 4.6, lz - 4.3)
+	local shadeZ = -math.min(pz + 5, lz - 3)
+	local spread = math.max(3.4, poolW * 0.2)
 	for _, what in ipairs(dressing) do
 		if what == "loungers" then
-			-- Backrest at the inner end, so whoever lies here faces the pool and the sky past it.
-			for _, z in ipairs({ -lz * 0.45, lz * 0.45 }) do
-				local at = frame * CFrame.new(innerX, 0, z) * CFrame.Angles(0, math.pi / 2, 0)
-				block(parent, "Lounger", Vector3.new(2.6, 0.6, 6.2), at * CFrame.new(0, 0.9, 0), COPING,
-					Enum.Material.SmoothPlastic, true)
-				block(parent, "Cushion", Vector3.new(2.4, 0.3, 4.2), at * CFrame.new(0, 1.35, 0.9), colour,
-					Enum.Material.Fabric, false)
-				block(parent, "Backrest", Vector3.new(2.6, 0.5, 2.8),
-					at * CFrame.new(0, 2.0, -2.4) * CFrame.Angles(math.rad(-38), 0, 0), colour, Enum.Material.Fabric, false)
-				for _, leg in ipairs({ { -1, -2.6 }, { 1, -2.6 }, { -1, 2.6 }, { 1, 2.6 } }) do
-					block(parent, "LoungerLeg", Vector3.new(0.3, 0.6, 0.3), at * CFrame.new(leg[1] * 1.1, 0.3, leg[2]),
-						RAIL, Enum.Material.Metal, false)
-				end
+			-- Either side of where the parasol goes, feet to the water.
+			for _, dx in ipairs({ -spread, spread }) do
+				lounger(parent, frame * CFrame.new(poolX + dx, 0, sunZ), colour)
 			end
 		elseif what == "parasol" then
-			local foot = frame * Vector3.new(innerX, 0, 0)
-			column(parent, "ParasolPole", 0.5, foot, foot.Y, foot.Y + 9, COPING, Enum.Material.Metal, false)
-			column(parent, "ParasolBase", 2.2, foot, foot.Y, foot.Y + 0.4, BAND, Enum.Material.SmoothPlastic, false)
-			column(parent, "Parasol", 10, foot, foot.Y + 8.9, foot.Y + 9.5, colour, Enum.Material.Fabric, false)
+			parasol(parent, frame, poolX, sunZ, colour)
 		elseif what == "towel" then
-			-- A TOWEL SOMEBODY LEFT, half over the coping.
-			local at = frame * CFrame.new(px0 + 2, 0.12, pz + 2.6) * CFrame.Angles(0, math.rad(rng:NextNumber(-25, 25)), 0)
+			-- A TOWEL SOMEBODY LEFT on the deck, out past the loungers.
+			local at = frame * CFrame.new(math.min(poolX + poolW * 0.38, px1 - 2.2), 0.12, sunZ - 1)
+				* CFrame.Angles(0, math.rad(rng:NextNumber(-12, 12)), 0)
 			block(parent, "Towel", Vector3.new(3.2, 0.12, 5.4), at, colour, Enum.Material.Fabric, false)
 			block(parent, "TowelStripe", Vector3.new(3.22, 0.13, 0.8), at * CFrame.new(0, 0, 1.4), COPING,
 				Enum.Material.Fabric, false)
 		elseif what == "ladder" then
-			-- On the inner wall, so you climb out on the side you came from.
-			local x = px0 + 0.6
+			-- In the deep end's sun-side wall, where the water is over your head. The shade side is
+			-- where the diving board comes out over the pool, and its rails would meet the board.
+			local z = pz - 0.7
 			for _, side in ipairs({ -1, 1 }) do
-				local rail = frame * Vector3.new(x, 0, side * 1.2)
-				rod(parent, "LadderRail", rail + Vector3.new(0, -POOL_DEPTH, 0), rail + Vector3.new(0, 2.8, 0), 0.35, RAIL)
+				local rail = frame * Vector3.new(poolX + 4 + side * 1.2, 0, z)
+				rod(parent, "LadderRail", rail + Vector3.new(0, -POOL_DEPTH + 1, 0), rail + Vector3.new(0, 2.8, 0), 0.35, RAIL)
 			end
-			for index = 1, 3 do
-				local rung = frame * Vector3.new(x, -POOL_DEPTH + index * 1.1, 0)
-				rod(parent, "LadderRung", rung - frame.LookVector * 1.2, rung + frame.LookVector * 1.2, 0.25, RAIL)
+			for index = 1, 5 do
+				local rung = frame * Vector3.new(poolX + 4, -POOL_DEPTH + 1 + index * 1.6, z)
+				rod(parent, "LadderRung", rung - frame.RightVector * 1.2, rung + frame.RightVector * 1.2, 0.25, RAIL)
 			end
 		elseif what == "board" then
-			-- A DIVING BOARD, from the inner deck out over the pool. You can walk out on it and
-			-- jump off it into the water, which is all it is for.
-			local foot = frame * CFrame.new(px0 - 3, 0, -pz * 0.5)
+			-- A DIVING BOARD out over the deep end from the shade side. You can walk out on it and
+			-- jump off it, which is all it is for.
+			local foot = frame * CFrame.new(poolX + 4.5, 0, shadeZ - 1)
 			block(parent, "BoardStand", Vector3.new(3, 1.4, 3), foot * CFrame.new(0, 0.7, 0), BAND,
 				Enum.Material.SmoothPlastic, true)
-			block(parent, "DivingBoard", Vector3.new(12, 0.5, 3), foot * CFrame.new(4, 1.65, 0), COPING,
+			block(parent, "DivingBoard", Vector3.new(3, 0.5, 11), foot * CFrame.new(0, 1.65, 5), COPING,
 				Enum.Material.SmoothPlastic, true)
+			for _, side in ipairs({ -1, 1 }) do
+				rod(parent, "BoardRail", (foot * CFrame.new(side * 1.6, 1.9, 1)).Position,
+					(foot * CFrame.new(side * 1.6, 3.4, 4.6)).Position, 0.2, RAIL)
+			end
+		elseif what == "planters" then
+			for _, side in ipairs({ -1, 1 }) do
+				planter(parent, frame, px0 - shoulder - 2.4, side * (entryHalf - 2.2))
+			end
+		elseif what == "pergola" then
+			pergola(parent, frame, poolX, shadeZ - 1.5, 11, 6, colour)
 		elseif what == "duck" or what == "swimring" then
-			poolToy(parent, frame * CFrame.new(poolX, -0.4, 0), POOL_W / 2 - 3, POOL_L / 2 - 3, what)
+			poolToy(parent, frame * CFrame.new((stepsEnd + px1) / 2, -WATER_DROP, 0), (px1 - stepsEnd) / 2 - 3,
+				pz - 3, what)
 		elseif what == "pumproom" then
 			pumpRoom(parent, frame, x0, px1, groundY)
 		elseif what == "cabana" then
@@ -717,33 +1207,37 @@ local function capOf(model: Instance): BasePart?
 	return nil
 end
 
--- A terrace BESIDE a checkpoint chunk, on its outer side, flush with its top.
+-- A terrace BESIDE a checkpoint chunk, flush with its top.
+--
+-- `outward` is which way it faces: away from the middle on a level laid as a ring, and alternating
+-- sides of the route on one laid as a path or a meander, so two terraces never crowd each other and
+-- no terrace's columns come up beside its neighbour's deck.
 --
 -- The neck meets the chunk's cap edge and is only as long as the chunk. The terrace proper starts
 -- NECK studs further out, 16.4 from the route's centre line, because the widest chunk this level
 -- can put next door reaches 13.4 (the straight chunk's own shelves) -- so the terrace, which is
 -- longer than the chunk, overhangs its neighbours' ends with three studs to spare.
 -- blender/check_skypools.py holds that true for the whole chunk pool.
-local function terraceBeside(parent: Instance, chunk: Instance, centre: Vector3, groundY: number,
+local function terraceBeside(parent: Instance, chunk: Instance, outward: Vector3, groundY: number,
 	dressing: { string }): boolean
 	local cap = capOf(chunk)
 	if not cap then
 		return false
 	end
-	local flat = Vector3.new(cap.Position.X - centre.X, 0, cap.Position.Z - centre.Z)
-	if flat.Magnitude < 1 then
+	local flat = Vector3.new(outward.X, 0, outward.Z)
+	if flat.Magnitude < 0.01 then
 		return false
 	end
-	local outward = flat.Unit
+	local out = flat.Unit
 	local capCF = cap.CFrame
-	local halfOut = math.abs(capCF.RightVector:Dot(outward)) * cap.Size.X / 2
-		+ math.abs(capCF.LookVector:Dot(outward)) * cap.Size.Z / 2
-	local along = Vector3.yAxis:Cross(outward)
+	local halfOut = math.abs(capCF.RightVector:Dot(out)) * cap.Size.X / 2
+		+ math.abs(capCF.LookVector:Dot(out)) * cap.Size.Z / 2
+	local along = Vector3.yAxis:Cross(out)
 	local halfAlong = math.abs(capCF.RightVector:Dot(along)) * cap.Size.X / 2
 		+ math.abs(capCF.LookVector:Dot(along)) * cap.Size.Z / 2
 	local top = cap.Position.Y + cap.Size.Y / 2
-	local edge = Vector3.new(cap.Position.X, top, cap.Position.Z) + outward * halfOut
-	local frame = CFrame.fromMatrix(edge, outward, Vector3.yAxis)
+	local edge = Vector3.new(cap.Position.X, top, cap.Position.Z) + out * halfOut
+	local frame = CFrame.fromMatrix(edge, out, Vector3.yAxis)
 
 	block(parent, "Deck", Vector3.new(NECK, NECK_THICK, halfAlong * 2), frame * CFrame.new(NECK / 2, -NECK_THICK / 2, 0),
 		DECK, Enum.Material.SmoothPlastic, true)
@@ -773,8 +1267,11 @@ local function cloudSea(parent: Instance, centre: Vector3, top: number)
 				math.sin(angle) * reach)
 			local puff = ellipsoid(folder, "Cloud", Vector3.new(wide, tall, wide * rng:NextNumber(0.8, 1.0)),
 				CFrame.new(at) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0),
-				CLOUD_TOP:Lerp(CLOUD_UNDER, rng:NextNumber(0, 0.35)))
+				CLOUD_TOP:Lerp(CLOUD_UNDER, rng:NextNumber(0, 0.55)))
 			puff.Transparency = rng:NextNumber(0.03, 0.12)
+			-- No sky in them. A cloud with reflectance is a mirror the size of the horizon, and it
+			-- was adding the last of the white that hid the chunks.
+			puff.Reflectance = 0
 			if radius < CLOUD_UNDER_REACH and rng:NextNumber() < 0.7 then
 				local under = ellipsoid(folder, "Cloud", Vector3.new(wide * 1.1, tall * 1.2, wide),
 					CFrame.new(Vector3.new(at.X, top - CLOUD_THICK * 0.6, at.Z)) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0),
@@ -849,11 +1346,17 @@ local function finalPool(parent: Instance, centre: Vector3, surfaceY: number, se
 		local at = centre + Vector3.new(math.cos(angle), 0, math.sin(angle)) * (FINAL_RADIUS - 20)
 		column(parent, "FinalPoolColumn", 12, at, seaY, surfaceY - FINAL_DEEP - 10, STONE, Enum.Material.SmoothPlastic, true)
 	end
-	local surface = column(parent, "FinalPoolWater", FINAL_RADIUS * 2 - 2, centre, surfaceY - 0.4, surfaceY, WATER,
-		Enum.Material.Glass, false)
+	-- THE WATER, terrain again, filled between the floor and WATER_DROP under the rim. What is left
+	-- is the invisible marker the client reads for the splash and the ripples, as on a terrace.
+	fillWaterCylinder(CFrame.new(centre + Vector3.new(0, surfaceY - WATER_DROP - (FINAL_DEEP - WATER_DROP) / 2, 0)),
+		FINAL_DEEP - WATER_DROP, FINAL_RADIUS - 1)
+	local surface = column(parent, "FinalPoolWater", FINAL_RADIUS * 2 - 2, centre, surfaceY - WATER_DROP - 0.1,
+		surfaceY - WATER_DROP + 0.1, WATER, Enum.Material.SmoothPlastic, false)
 	if surface then
-		surface.Transparency = 0.3
-		surface.Reflectance = 0.12
+		surface.Transparency = 1
+		surface.CanQuery = false
+		surface.CastShadow = false
+		surface:SetAttribute("Deep", FINAL_DEEP)
 		CollectionService:AddTag(surface, "SkyPoolWater")
 	end
 	-- Where the tower's curtain comes down into the pool: the loudest water in the level, heard from
@@ -865,7 +1368,7 @@ local function finalPool(parent: Instance, centre: Vector3, surfaceY: number, se
 	-- Three toys adrift in it.
 	for index = 0, 2 do
 		local a = index * 2.1 + 0.4
-		poolToy(parent, CFrame.new(centre + Vector3.new(math.cos(a) * 50, surfaceY, math.sin(a) * 50)), 10, 10,
+		poolToy(parent, CFrame.new(centre + Vector3.new(math.cos(a) * 50, surfaceY - WATER_DROP, math.sin(a) * 50)), 10, 10,
 			if index == 1 then "duck" else "swimring")
 	end
 	local pieces = 40
@@ -894,92 +1397,58 @@ local function finalPool(parent: Instance, centre: Vector3, surfaceY: number, se
 end
 
 -- ===== THE SLIDE =====
-
-export type SlideSpec = {
-	centre: Vector3,
-	angle0: number,
-	radius0: number,
-	radius1: number,
-	y0: number,
-	y1: number,
-	turns: number,
-}
-
--- A point on the slide's floor at f in [0, 1]. Round the tower the way the route was going, in from
--- the finale deck to over the pool, and DOWN on a smoothstep, so it leaves the deck level, is
--- steepest in the clouds, and levels out over the water.
-local function slidePoint(spec: SlideSpec, f: number): Vector3
-	local theta = spec.angle0 + f * spec.turns * math.pi * 2
-	local radius = spec.radius0 + (spec.radius1 - spec.radius0) * f
-	local ease = f * f * (3 - 2 * f)
-	return Vector3.new(spec.centre.X + math.cos(theta) * radius, spec.y0 + (spec.y1 - spec.y0) * ease,
-		spec.centre.Z + math.sin(theta) * radius)
-end
-
--- The trough's up, banked into the turn so a rider leans the way a slide makes you lean.
-local function slideUp(spec: SlideSpec, f: number): Vector3
-	local here = slidePoint(spec, f)
-	local inward = Vector3.new(spec.centre.X - here.X, 0, spec.centre.Z - here.Z)
-	if inward.Magnitude < 0.01 then
-		return Vector3.yAxis
-	end
-	return (Vector3.yAxis + inward.Unit * 0.28).Unit
-end
-
--- Distance along the slide at 200 even steps of f, for riding it at a speed rather than a rate of
--- f: the ring is three times further round at the top than at the bottom, and riding f evenly
--- would be fastest at the start and slowest into the pool, which is backwards.
-local SAMPLES = 200
-local function slideTable(spec: SlideSpec): { number }
-	local distances = { 0 }
-	local last = slidePoint(spec, 0)
-	for index = 1, SAMPLES do
-		local here = slidePoint(spec, index / SAMPLES)
-		distances[index + 1] = distances[index] + (here - last).Magnitude
-		last = here
-	end
-	return distances
-end
-
-local function fAtDistance(distances: { number }, s: number): number
-	if s <= 0 then
+--
+-- Where it goes is SkyPath's (ReplicatedStorage/Shared/SkyPath.lua). What is here is the trough
+-- built along it: a floor with a film of water running down it, walls with a rolled lip you can see
+-- over from inside, hoops over the top every so often with pennants on them, and the rods that hang
+-- the whole thing off the tower. None of it collides, so a player who falls onto the slide drops
+-- through into the clouds and is caught like any other fall.
+local function buildSlide(parent: Instance, spec: any, towerTopY: number): number
+	if not SkyPath then
 		return 0
 	end
-	local total = distances[#distances]
-	if s >= total then
-		return 1
-	end
-	local low, high = 1, #distances
-	while high - low > 1 do
-		local mid = (low + high) // 2
-		if distances[mid] <= s then
-			low = mid
-		else
-			high = mid
-		end
-	end
-	local span = distances[high] - distances[low]
-	local within = if span > 0 then (s - distances[low]) / span else 0
-	return ((low - 1) + within) / SAMPLES
-end
-
-local function buildSlide(parent: Instance, spec: SlideSpec, towerTopY: number): number
 	local folder = Instance.new("Folder")
 	folder.Name = "Slide"
 	folder.Parent = parent
-	local distances = slideTable(spec)
-	local count = math.max(8, math.ceil(distances[#distances] / SLIDE_STEP))
+	local distances = SkyPath.distances(spec)
+	local long = SkyPath.length(distances)
+	local count = math.max(8, math.ceil(long / SkyPath.STEP))
 	local rodEvery = math.max(1, math.floor(count / 18))
+	local hoopEvery = math.max(2, math.floor(count / 12))
+	local wide = SkyPath.WIDE
 	for index = 0, count - 1 do
-		local a, b = slidePoint(spec, index / count), slidePoint(spec, (index + 1) / count)
-		local long = (b - a).Magnitude * 1.08 + 0.6
-		local frame = CFrame.lookAt((a + b) / 2, b, slideUp(spec, (index + 0.5) / count))
-		local floor = block(folder, "SlideFloor", Vector3.new(SLIDE_WIDE, 0.8, long), frame * CFrame.new(0, -0.4, 0), SLIDE,
+		local a, b = SkyPath.point(spec, index / count), SkyPath.point(spec, (index + 1) / count)
+		local run = (b - a).Magnitude * 1.08 + 0.6
+		local frame = CFrame.lookAt((a + b) / 2, b, SkyPath.up(spec, (index + 0.5) / count))
+		local floor = block(folder, "SlideFloor", Vector3.new(wide, 0.8, run), frame * CFrame.new(0, -0.4, 0), SLIDE,
 			Enum.Material.SmoothPlastic, false)
 		floor.Reflectance = 0.15
+		-- The film of water running down it, which is what makes it a water slide.
+		local film = block(folder, "SlideFilm", Vector3.new(wide - 0.8, 0.12, run), frame * CFrame.new(0, 0.06, 0), FALL,
+			Enum.Material.Glass, false)
+		film.Transparency = 0.55
+		film.Reflectance = 0.2
+		film.CastShadow = false
 		for _, side in ipairs({ -1, 1 }) do
-			block(folder, "SlideWall", Vector3.new(0.8, 2.6, long), frame * CFrame.new(side * (SLIDE_WIDE / 2 + 0.4), 0.9, 0),
+			block(folder, "SlideWall", Vector3.new(0.8, 2.6, run), frame * CFrame.new(side * (wide / 2 + 0.4), 0.9, 0),
 				RAIL, Enum.Material.SmoothPlastic, false)
+			-- The rolled lip along the top of the wall, which is the edge you watch go past.
+			local lip = block(folder, "SlideLip", Vector3.new(1, 1, run), frame * CFrame.new(side * (wide / 2 + 0.4), 2.2, 0),
+				SLIDE, Enum.Material.SmoothPlastic, false)
+			lip.Shape = Enum.PartType.Cylinder
+			lip.CFrame = frame * CFrame.new(side * (wide / 2 + 0.4), 2.2, 0) * CFrame.Angles(0, math.pi / 2, 0)
+		end
+		-- A HOOP over the trough, with a pennant hung off the top of it.
+		if index % hoopEvery == 0 and index > 1 then
+			for step = 0, 8 do
+				local a2 = math.pi * (step / 8)
+				block(folder, "SlideHoop", Vector3.new(0.55, 0.55, 0.55),
+					frame * CFrame.new(math.cos(a2) * (wide / 2 + 0.9), math.sin(a2) * (wide / 2 + 0.6) + 1.4, 0),
+					if (index // hoopEvery) % 2 == 0 then COPING else SLIDE, Enum.Material.SmoothPlastic, false)
+			end
+			local flag = block(folder, "SlidePennant", Vector3.new(0.12, 1.4, 1.8),
+				frame * CFrame.new(0, wide / 2 + 3.4, 0), PASTELS[(index % #PASTELS) + 1], Enum.Material.Fabric, false)
+			flag.CastShadow = false
 		end
 		-- HUNG FROM THE TOWER: a rod from the trough up and in to the tower's face, every so often,
 		-- climbing about one stud for every two it crosses, the way a cable-stayed deck is hung.
@@ -994,7 +1463,7 @@ local function buildSlide(parent: Instance, spec: SlideSpec, towerTopY: number):
 			end
 		end
 	end
-	return distances[#distances]
+	return long
 end
 
 -- ===== THE FINALE DECK, at the end of the route =====
@@ -1012,8 +1481,12 @@ local function finaleDeck(parent: Instance, finish: CFrame, groundY: number): CF
 		column(parent, "Column", COLUMN_D, top, groundY, top.Y, STONE, Enum.Material.SmoothPlastic, true)
 		column(parent, "Collar", COLUMN_D + 2, top, top.Y - 2.4, top.Y, BAND, Enum.Material.SmoothPlastic, false)
 	end
-	-- The terrace, sharing the walkway's outer edge; its own inner columns carry that side.
-	terrace(parent, finish * CFrame.new(halfW, 0, WALK_L / 2), 0, 34, WALK_L, groundY, { "loungers", "parasol", "towel", "swimring" })
+	-- The terrace, sharing the walkway's outer edge; its own inner columns carry that side. It stops
+	-- eight studs short of the mouth, because the last thing wanted at the top of a slide is
+	-- somebody's parasol beside it.
+	local terraceL = WALK_L - 8
+	terrace(parent, finish * CFrame.new(halfW, 0, terraceL / 2), 0, 34, terraceL, groundY,
+		{ "loungers", "parasol", "swimring" })
 
 	-- The rail: along the inner side, and across the end either side of the mouth.
 	local function railRun(from: Vector3, to: Vector3)
@@ -1033,28 +1506,59 @@ local function finaleDeck(parent: Instance, finish: CFrame, groundY: number): CF
 	railRun(finish * Vector3.new(-halfW + 0.4, 0, WALK_L - 0.4), finish * Vector3.new(-SLIDE_WIDE / 2 - 1, 0, WALK_L - 0.4))
 	railRun(finish * Vector3.new(SLIDE_WIDE / 2 + 1, 0, WALK_L - 0.4), finish * Vector3.new(halfW - 0.4, 0, WALK_L - 0.4))
 
-	-- An arch over the mouth, so the one way down reads as a way.
+	-- AN ARCH OVER THE MOUTH, so the one way down reads as a way. It stands a stud BEHIND the mouth
+	-- and wider than the trough, so you pass under it and nothing of it is over the slide itself.
 	local mouth = finish * CFrame.new(0, 0, WALK_L)
 	for _, side in ipairs({ -1, 1 }) do
-		local foot = (mouth * CFrame.new(side * (SLIDE_WIDE / 2 + 1.6), 0, -1)).Position
-		column(parent, "ArchPost", 1.6, foot, foot.Y, foot.Y + 12, COPING, Enum.Material.SmoothPlastic, true)
+		local foot = (mouth * CFrame.new(side * (SLIDE_WIDE / 2 + 2.6), 0, -1.4)).Position
+		column(parent, "ArchPost", 1.8, foot, foot.Y, foot.Y + 12, COPING, Enum.Material.SmoothPlastic, true)
+		-- The rinse over the queue: a head on the post, running, as showers at a pool do.
+		local head = (mouth * CFrame.new(side * (SLIDE_WIDE / 2 + 2.6), 0, -4.4)).Position
+		column(parent, "RinsePost", 0.4, head, head.Y, head.Y + 7, RAIL, Enum.Material.Metal, false)
+		column(parent, "RinseHead", 1.2, head, head.Y + 6.6, head.Y + 7, RAIL, Enum.Material.Metal, false)
+		waterfall(parent, head + Vector3.new(0, 6.5, 0), Vector3.new(0, 0, 1), 1, head.Y + 0.1)
 	end
-	block(parent, "ArchBeam", Vector3.new(SLIDE_WIDE + 6, 1.6, 2), mouth * CFrame.new(0, 12.6, -1), SLIDE,
+	local beam = block(parent, "ArchBeam", Vector3.new(SLIDE_WIDE + 9, 2, 2.2), mouth * CFrame.new(0, 12.8, -1.4), SLIDE,
 		Enum.Material.SmoothPlastic, false)
+	label(beam, Enum.NormalId.Front, "THE LONG WAY DOWN", Color3.fromRGB(255, 255, 255))
+	-- The lane painted on the deck up to the mouth, so where to stand is obvious from the walkway.
+	for index = 0, 5 do
+		block(parent, "MouthLane", Vector3.new(SLIDE_WIDE - 2, 0.06, 1.2), mouth * CFrame.new(0, 0.03, -3 - index * 2.4),
+			SLIDE, Enum.Material.SmoothPlastic, false)
+	end
 	return mouth
 end
 
 -- ===== THE SCENERY POOLS =====
+--
+-- Terraces out in the sky on their own columns, to be seen and not reached. `avoid` is the route
+-- itself: on a level laid as a ring they were always well outside it, but a route that goes
+-- somewhere wanders, so each pool is tried at a few angles until it finds one that keeps its
+-- distance from every chunk. A pool standing in the middle of the level you are running is worse
+-- than one fewer pool.
+local SCENERY_CLEAR = 300
 local function sceneryPools(parent: Instance, centre: Vector3, radius: number, lowY: number, highY: number,
-	groundY: number)
-	for index = 1, 8 do
-		local angle = (index / 8) * math.pi * 2 + rng:NextNumber(-0.25, 0.25)
-		local out = Vector3.new(math.cos(angle), 0, math.sin(angle))
-		local reach = radius + rng:NextNumber(300, 760)
-		local at = centre + out * reach + Vector3.new(0, rng:NextNumber(lowY, highY), 0)
-		local frame = CFrame.fromMatrix(at, out, Vector3.yAxis)
-		local dressing = if index % 2 == 0 then { "loungers", "parasol" } else { "parasol" }
-		terrace(parent, frame, 0, rng:NextNumber(34, 46), rng:NextNumber(28, 38), groundY, dressing)
+	groundY: number, avoid: { Vector3 })
+	for index = 1, 6 do
+		for try = 0, 13 do
+			local angle = (index / 6) * math.pi * 2 + rng:NextNumber(-0.25, 0.25) + try * 0.21
+			local out = Vector3.new(math.cos(angle), 0, math.sin(angle))
+			local reach = radius + rng:NextNumber(320, 780)
+			local at = centre + out * reach + Vector3.new(0, rng:NextNumber(lowY, highY), 0)
+			local clear = true
+			for _, keep in ipairs(avoid) do
+				if (Vector3.new(keep.X - at.X, 0, keep.Z - at.Z)).Magnitude < SCENERY_CLEAR then
+					clear = false
+					break
+				end
+			end
+			if clear then
+				local frame = CFrame.fromMatrix(at, out, Vector3.yAxis)
+				terrace(parent, frame, 0, rng:NextNumber(34, 46), rng:NextNumber(28, 38), groundY,
+					if index % 2 == 0 then { "loungers", "parasol" } else { "parasol" })
+				break
+			end
+		end
 	end
 end
 
@@ -1085,6 +1589,10 @@ function SkyPoolsService.build(level: any, parent: Instance): Model?
 	end
 	local variant = MaterialService:FindFirstChild(TILE_VARIANT)
 	tileMaterial = if variant and variant:IsA("MaterialVariant") then variant.BaseMaterial else nil
+	-- TERRAIN IS NOT PART OF THE MODEL and does not go when the model does, so anything a previous
+	-- run left is taken out before this one fills its own pools.
+	SkyPoolsService.clearWater()
+	poolWaterLook()
 
 	local base: Vector3 = level.centre or Vector3.zero
 	-- Heights below are world heights. The chunks' surfaceY is measured from the route's base, the
@@ -1132,18 +1640,35 @@ function SkyPoolsService.build(level: any, parent: Instance): Model?
 			end
 		end
 	end
-	-- The second terrace has no parasol, because its inner deck is where the pump room's hatch is.
+	-- WHAT IS ON EACH TERRACE. The sun side of a deck holds either the loungers and what goes with
+	-- them or the cabana, never both; the shade side holds one of the pergola, the board and the
+	-- lifeguard's chair. So no list below has two things that would stand in the same place, which
+	-- blender/check_skypools.py holds to.
 	local dressings = {
-		{ "loungers", "parasol", "ladder", "swimring" },
-		{ "loungers", "towel", "ladder", "pumproom", "duck" },
-		{ "parasol", "towel", "board", "duck", "lifeguard" },
-		{ "loungers", "parasol", "towel", "swimring", "cabana" },
-		{ "loungers", "ladder", "parasol", "duck" },
+		{ "loungers", "parasol", "ladder", "swimring", "pergola" },
+		{ "loungers", "towel", "ladder", "pumproom", "duck", "planters" },
+		{ "cabana", "board", "duck", "planters" },
+		{ "loungers", "parasol", "towel", "swimring", "lifeguard" },
+		{ "loungers", "parasol", "ladder", "duck", "pergola", "planters" },
 	}
+	-- WHICH WAY A TERRACE FACES. On a level laid as a ring, away from the middle. On one laid as a
+	-- path or a meander, alternating sides of the route: two terraces on the same side of a bend
+	-- would crowd each other, and it is a neighbour's columns coming up past your deck that made the
+	-- ring version look wrong.
+	local ringLaid = (level.layout or "ring") == "ring" and level.radius ~= nil
 	local terraces = 0
 	for index, entry in ipairs(chosen) do
-		if terraceBeside(model, entry.model, centre, h.seaY, dressings[(index - 1) % #dressings + 1]) then
-			terraces += 1
+		local cap = capOf(entry.model)
+		if cap then
+			local outward: Vector3
+			if ringLaid then
+				outward = Vector3.new(cap.Position.X - centre.X, 0, cap.Position.Z - centre.Z)
+			else
+				outward = cap.CFrame.RightVector * (if index % 2 == 0 then -1 else 1)
+			end
+			if terraceBeside(model, entry.model, outward, h.seaY, dressings[(index - 1) % #dressings + 1]) then
+				terraces += 1
+			end
 		end
 	end
 
@@ -1158,9 +1683,17 @@ function SkyPoolsService.build(level: any, parent: Instance): Model?
 	end
 	local mouth = finaleDeck(model, finish, h.seaY)
 	local start = mouth.Position
-	local flat = Vector3.new(start.X - centre.X, 0, start.Z - centre.Z)
-	local spec: SlideSpec = {
-		centre = centre,
+	-- WHERE THE TOWER STANDS. In the middle of a ring, which is what a ring goes round. On a route
+	-- that goes somewhere, beside the mouth instead (see TOWER_ASIDE) -- on the opposite side from
+	-- the terrace off the walkway, so the ride sets off forward and sweeps away from it.
+	local forward = (mouth * CFrame.new(0, 0, 1)).Position - start
+	forward = Vector3.new(forward.X, 0, forward.Z)
+	forward = if forward.Magnitude > 0.01 then forward.Unit else Vector3.new(0, 0, 1)
+	local aside = Vector3.new(finish.RightVector.X, 0, finish.RightVector.Z).Unit
+	local towerCentre = if ringLaid then centre else Vector3.new(start.X, 0, start.Z) - aside * TOWER_ASIDE
+	local flat = Vector3.new(start.X - towerCentre.X, 0, start.Z - towerCentre.Z)
+	local spec = {
+		centre = towerCentre,
 		angle0 = math.atan2(flat.Z, flat.X),
 		radius0 = flat.Magnitude,
 		radius1 = SLIDE_END_RADIUS,
@@ -1168,15 +1701,30 @@ function SkyPoolsService.build(level: any, parent: Instance): Model?
 		y1 = h.poolY + 0.4,
 		turns = SLIDE_TURNS,
 	}
+	-- WHICH WAY IT SWEEPS: the way that sets off along the walkway rather than back across it. With
+	-- the tower beside the mouth both ways run forward-ish, and this is the one that does. The first
+	-- MOUTH_CLEAR studs either side of it are checked in blender/check_skypools.py.
+	if SkyPath then
+		local early = SkyPath.point(spec, 0.03) - start
+		if early:Dot(forward) < 0 then
+			spec.turns = -SLIDE_TURNS
+		end
+	end
 	local slideLong = buildSlide(model, spec, h.topY)
 
 	-- ===== The tower, the pool it stands in, the clouds, the sky round it =====
-	finalPool(model, centre, h.poolY, h.seaY)
-	tower(model, centre, h.seaY, h.poolY, h.topY)
-	cloudSea(model, centre, h.cloudTop)
+	finalPool(model, towerCentre, h.poolY, h.seaY)
+	tower(model, towerCentre, h.seaY, h.poolY, h.topY)
+	cloudSea(model, towerCentre, h.cloudTop)
 	local radius: number = level.radius or flat.Magnitude
-	sceneryPools(model, centre, radius, h.cloudTop + 50, startY + 40, h.seaY)
-	balloons(model, centre, radius, startY)
+	-- The route, for the scenery to keep away from: every third chunk is close enough spacing, since
+	-- nothing out there comes within three chunks of anything.
+	local away: { Vector3 } = { start }
+	for index = 1, #chunks, 3 do
+		table.insert(away, chunks[index].model:GetPivot().Position)
+	end
+	sceneryPools(model, towerCentre, radius, h.cloudTop + 50, startY + 40, h.seaY, away)
+	balloons(model, towerCentre, math.max(radius, 420), startY)
 
 	-- The slide's shape, for attachSlide.
 	model:SetAttribute("SlideCentre", spec.centre)
@@ -1210,10 +1758,22 @@ end
 -- the pool. Held, not pressed, for the reason the Flooded Halls' flume is: a tap can happen by
 -- accident while running past, and this ends the level.
 --
--- The rider is moved by writing the root's CFrame each frame, as on the flume: a physical slide
--- this long needs a tube tuned never to snag, and a ride nobody steers gains nothing from physics.
+-- === Why a sled, and who moves it ===
+--
+-- The ride used to be the server writing the rider's root CFrame every frame. That is a whole
+-- character assembly replicated sixty times a second, and it rode badly: it stuttered, because the
+-- client was being corrected to where the server had just put it, and you stood bolt upright all
+-- the way down, because nothing ever sat you in anything.
+--
+-- So you sit in a SLED now. It is a seat, so the character sits in it the way it sits in anything,
+-- and it is one small part instead of a character. The server starts it, keeps the clock and decides
+-- where the ride ends; the rider's own client is handed the sled and draws every frame of it from
+-- SkyPath and the start time, which is smooth and costs no replication at all. If that client never
+-- answers -- the file is not pasted in, or it is still loading -- the server drives the sled itself
+-- and the ride still happens, exactly as long and ending in the same place.
 
 local riding: { [Player]: boolean } = {}
+local driving: { [Player]: boolean? } = {} -- whose client has taken the sled over
 local arrivedAt: { [Player]: number } = {}
 
 -- THE SLIDE OWNS ITS RIDER'S FALL. It ends in a pool a long way under the kill plane, which is set
@@ -1262,25 +1822,124 @@ local function splash(at: Vector3)
 	Debris:AddItem(host, 3)
 end
 
+-- ===== THE SLED =====
+--
+-- What you ride in: a round float with a seat in it, a back to lean on, grab handles, and spray off
+-- the front. The seat is the one part that is moved; everything else is welded to it, so the whole
+-- thing is one assembly a client can be handed.
+local function buildSled(at: CFrame): (Model, Seat)
+	local sled = Instance.new("Model")
+	sled.Name = "SkySled"
+	local seat = Instance.new("Seat")
+	seat.Name = "SledSeat"
+	seat.Size = Vector3.new(4, 1, 5)
+	seat.CFrame = at
+	seat.Anchored = true
+	seat.CanCollide = false
+	seat.Color = PASTELS[1]
+	seat.Material = Enum.Material.SmoothPlastic
+	seat.TopSurface = Enum.SurfaceType.Smooth
+	seat.Parent = sled
+	sled.PrimaryPart = seat
+
+	local function piece(name: string, size: Vector3, offset: CFrame, colour: Color3, round: boolean): BasePart
+		local part = Instance.new("Part")
+		part.Name = name
+		part.Size = size
+		part.CFrame = at * offset
+		part.Color = colour
+		part.Material = Enum.Material.SmoothPlastic
+		part.Anchored = false
+		part.CanCollide = false
+		part.CanTouch = false
+		part.CanQuery = false
+		part.Massless = true
+		part.TopSurface = Enum.SurfaceType.Smooth
+		part.BottomSurface = Enum.SurfaceType.Smooth
+		if round then
+			local mesh = Instance.new("SpecialMesh")
+			mesh.MeshType = Enum.MeshType.Sphere
+			mesh.Parent = part
+		end
+		part.Parent = sled
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = seat
+		weld.Part1 = part
+		weld.Parent = part
+		return part
+	end
+	-- The float: eight fat segments round the seat, the way a ring float is made.
+	for index = 0, 7 do
+		local angle = index * math.pi / 4
+		piece("SledFloat", Vector3.new(2.2, 1.8, 2.2), CFrame.Angles(0, angle, 0) * CFrame.new(0, 0, 2.9),
+			if index % 2 == 0 then PASTELS[2] else COPING, true)
+	end
+	piece("SledBack", Vector3.new(3.6, 2.2, 0.5), CFrame.new(0, 1.3, 2.2) * CFrame.Angles(math.rad(-12), 0, 0), PASTELS[2], false)
+	for _, side in ipairs({ -1, 1 }) do
+		piece("SledHandle", Vector3.new(0.4, 0.4, 1.8), CFrame.new(side * 2, 0.9, 0.4), RAIL, false)
+	end
+	-- The spray off the front, which is the ride telling you how fast you are going.
+	local nose = piece("SledNose", Vector3.new(2.4, 0.8, 1.2), CFrame.new(0, 0.2, -3), COPING, false)
+	nose.Transparency = 1
+	local spray = Instance.new("ParticleEmitter")
+	spray.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	spray.Color = ColorSequence.new(Color3.fromRGB(236, 250, 255))
+	spray.LightEmission = 0.5
+	spray.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.4), NumberSequenceKeypoint.new(1, 0.2) })
+	spray.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 1) })
+	spray.Lifetime = NumberRange.new(0.5, 1.1)
+	spray.Speed = NumberRange.new(6, 14)
+	spray.SpreadAngle = Vector2.new(35, 20)
+	spray.Acceleration = Vector3.new(0, -30, 0)
+	spray.EmissionDirection = Enum.NormalId.Front
+	spray.Rate = 40
+	spray.Parent = nose
+	return sled, seat
+end
+
+-- The event the rider's client answers on to say it is drawing the ride. Looked up when the level
+-- is built rather than at startup, because Bootstrap makes the folder after it requires this.
+local rideEvent: RemoteEvent? = nil
+local sledOf: { [Player]: Seat } = {}
+local function rideRemote(): RemoteEvent?
+	if rideEvent then
+		return rideEvent
+	end
+	local folder = ReplicatedStorage:FindFirstChild("RemoteEvents") or ReplicatedStorage:WaitForChild("RemoteEvents", 5)
+	local event = folder and (folder:FindFirstChild("SkyRide") or folder:WaitForChild("SkyRide", 5))
+	if event and event:IsA("RemoteEvent") then
+		rideEvent = event
+		event.OnServerEvent:Connect(function(player: Player)
+			-- The one thing a client may say: "I have the sled on screen." It is taken only from
+			-- someone who is actually on the slide, and it moves nobody: the server still owns the
+			-- clock and still decides where the ride ends.
+			local seat = sledOf[player]
+			if not (riding[player] and seat and not driving[player]) then
+				return
+			end
+			driving[player] = true
+			seat.Anchored = false
+			pcall(function()
+				seat:SetNetworkOwner(player)
+			end)
+		end)
+	end
+	return rideEvent
+end
+
 function SkyPoolsService.attachSlide(model: Model, onArrive: ((Player) -> ())?): () -> ()
 	local mouthValue = model:GetAttribute("SlideMouth")
-	local centre = model:GetAttribute("SlideCentre")
-	if typeof(mouthValue) ~= "CFrame" or typeof(centre) ~= "Vector3" then
+	if typeof(mouthValue) ~= "CFrame" or not SkyPath then
 		return function() end
 	end
 	local mouth: CFrame = mouthValue
-	local spec: SlideSpec = {
-		centre = centre,
-		angle0 = model:GetAttribute("SlideAngle0") :: number,
-		radius0 = model:GetAttribute("SlideRadius0") :: number,
-		radius1 = model:GetAttribute("SlideRadius1") :: number,
-		y0 = model:GetAttribute("SlideY0") :: number,
-		y1 = model:GetAttribute("SlideY1") :: number,
-		turns = model:GetAttribute("SlideTurns") :: number,
-	}
-	local distances = slideTable(spec)
-	local total = distances[#distances]
-	local seconds = math.clamp(total / SLIDE_SPEED, SLIDE_MIN_SECONDS, SLIDE_MAX_SECONDS)
+	local spec = SkyPath.read(model)
+	if not spec then
+		return function() end
+	end
+	local distances = SkyPath.distances(spec)
+	local seconds = SkyPath.seconds(distances)
+	local remote = rideRemote()
 
 	-- THE PROMPT SITS ON THE DECK, just short of the mouth, where you are standing when you see it.
 	local mount = Instance.new("Part")
@@ -1309,48 +1968,66 @@ function SkyPoolsService.attachSlide(model: Model, onArrive: ((Player) -> ())?):
 		local character = player.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart")
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		if not (root and root:IsA("BasePart") and humanoid) then
+		if not (root and root:IsA("BasePart") and humanoid and humanoid:IsA("Humanoid")) then
 			return
 		end
 		riding[player] = true
+		driving[player] = nil
 		arrivedAt[player] = nil
 
 		task.spawn(function()
-			-- PLATFORMSTAND, not Anchored, for the flume's reason: an anchored root arrives as a statue.
-			humanoid.PlatformStand = true
-			-- The rush of the slide, riding with you.
-			local rush = waterSound(root, "SlideRush", 0.8, 0.45, 10, 60)
-			local started = os.clock()
-			local norm = 1 - SLIDE_RAMP / 2
+			local startedAt = workspace:GetServerTimeNow()
+			local sled, seat = buildSled(SkyPath.rideFrame(spec, distances, 0))
+			sled:SetAttribute("Rider", player.UserId)
+			sled:SetAttribute("RideStart", startedAt)
+			sled:SetAttribute("RideSeconds", seconds)
+			-- The slide's shape, on the sled itself, so the client needs to find nothing else.
+			for _, name in ipairs({ "SlideCentre", "SlideAngle0", "SlideRadius0", "SlideRadius1", "SlideY0", "SlideY1",
+				"SlideTurns" }) do
+				sled:SetAttribute(name, model:GetAttribute(name))
+			end
+			sled.Parent = workspace
+			sledOf[player] = seat
+			CollectionService:AddTag(sled, "SkySled")
+			seat:Sit(humanoid)
+			-- No jumping out halfway down; put it back when the ride is over.
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+			local rush = waterSound(seat, "SlideRush", 0.8, 0.45, 10, 60)
+			if remote then
+				remote:FireClient(player, sled)
+			end
+
+			-- THE SERVER KEEPS THE CLOCK either way, and moves the sled itself until the rider's
+			-- client says it has it.
 			while true do
-				local u = (os.clock() - started) / seconds
-				if u >= 1 or not root.Parent then
+				local u = (workspace:GetServerTimeNow() - startedAt) / seconds
+				if u >= 1 or not seat.Parent or not root.Parent then
 					break
 				end
-				-- Distance along the slide: speeding up from standing over the first stretch, then
-				-- steady, so it sets off like a slide and does not fire you off the deck.
-				local share = if u < SLIDE_RAMP then (u * u / (2 * SLIDE_RAMP)) / norm else (u - SLIDE_RAMP / 2) / norm
-				local f = fAtDistance(distances, share * total)
-				local up = slideUp(spec, f)
-				local here = slidePoint(spec, f) + up * 2.6
-				local ahead = slidePoint(spec, fAtDistance(distances, share * total + 4)) + up * 2.6
-				if (ahead - here).Magnitude > 0.05 then
-					root.CFrame = CFrame.lookAt(here, ahead, up)
+				if not driving[player] then
+					seat.CFrame = SkyPath.rideFrame(spec, distances, u)
 				end
-				task.wait()
+				RunService.Heartbeat:Wait()
 			end
-			local landing = slidePoint(spec, 1)
+
+			local landing = SkyPath.point(spec, 1)
+			sledOf[player] = nil
+			driving[player] = nil
+			rush:Destroy()
+			sled:Destroy()
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+			humanoid.Sit = false
 			if root.Parent then
 				splash(landing)
-				-- Standing in the pool, where the slide ran out, facing on the way it was going.
-				local onward = landing - slidePoint(spec, 0.99)
+				-- Standing in the pool where the slide ran out, facing on the way it was going. The
+				-- server puts them there whatever the client did with the sled.
+				local onward = landing - SkyPath.point(spec, 0.99)
 				onward = Vector3.new(onward.X, 0, onward.Z)
 				local facing = if onward.Magnitude > 0.01 then onward.Unit else Vector3.new(0, 0, -1)
 				local stand = landing + Vector3.new(0, 3, 0)
+				task.wait()
 				root.CFrame = CFrame.lookAt(stand, stand + facing)
 			end
-			rush:Destroy()
-			humanoid.PlatformStand = false
 			riding[player] = nil
 			arrivedAt[player] = os.clock()
 			if onArrive then
@@ -1366,6 +2043,7 @@ end
 
 Players.PlayerRemoving:Connect(function(player: Player)
 	riding[player] = nil
+	driving[player] = nil
 	arrivedAt[player] = nil
 end)
 

@@ -647,6 +647,28 @@ local Materials: { [string]: MaterialDef } = {
 		sfxMinGap = 0.2,
 		deformationAnim = "wobble",
 	},
+	-- JELLYFISH: the Sunken City's own material, a bell floating level with the route.
+	--
+	-- Every other surface on that route is from the kit; this is the one that belongs to the
+	-- sea. It throws you up on EVERY landing, not on the first step the way slime does -- a
+	-- bell is a spring you keep landing on -- so crossing one is a run of bounces, and
+	-- crossing from one bell to the next is timing the last of them. Five studs up is a
+	-- jump's height: enough to clear a GAP_LENGTH gap from the bell's edge at a walk, and
+	-- not so much that the bounce stops being yours to steer. The cooldown lets a landing
+	-- finish before the next throw, so it bounces rather than buzzes.
+	--
+	-- PACE, because nothing about a bell drops you. The risk is the gap between two bells
+	-- (R39_JellyfishHop), which is the chunk's, not the material's.
+	Jellyfish = {
+		category = "pace",
+		speedMultiplier = 0.94,
+		microBounceHeight = 5,
+		bounceCooldown = 0.45,
+		decayDuration = 3,
+		sfxEvent = "slimeBoing",
+		sfxMinGap = 0.25,
+		deformationAnim = "wobble",
+	},
 	-- NEEDOH: dough in a skin, which is neither of the two soft things already here.
 	--
 	-- Jello is water held in a lattice -- it wobbles, it springs back in a moment, and it

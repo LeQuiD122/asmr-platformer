@@ -486,7 +486,48 @@ def check_dive_finale():
              % (float(found.group(1)), float(found.group(1)) / 2))
 
 
+# EVERY LEVEL'S PAD LOOKS LIKE ITS PLACE. A backdrop with no entry in HubService's THEME_LOOKS falls
+# back to the empty "no horizon yet" window, which is how Sky Pools and the Sunken City first sat in
+# the lobby looking like levels that had not been built.
+def check_pad_looks():
+    levels = read(LEVELS)
+    hub = read(HUB_SERVICE)
+    table = hub[hub.find("local THEME_LOOKS = {"):]
+    table = table[:table.find("\n}\n")]
+    looks = set(re.findall(r"^\t(\w+) = \{", table, re.M))
+    listed = re.search(r"LevelDefinitions\.All = \{(.*?)\}", levels, re.S)
+    for name in re.findall(r"LevelDefinitions\.(\w+)", listed.group(1) if listed else ""):
+        start = levels.find("LevelDefinitions.%s = {" % name)
+        block = levels[start:levels.find("\n}\n", start)] if start >= 0 else ""
+        backdrop = re.search(r'backdrop = "(\w+)"', block)
+        if backdrop and backdrop.group(1) != "none" and backdrop.group(1) not in looks:
+            fail("HubService", "has no THEME_LOOKS entry for %s's backdrop \"%s\", so its lobby pad "
+                               "shows an empty sky and \"no horizon yet\"." % (name, backdrop.group(1)))
+
+
+# THE COUNTDOWN TICKS ON THE SECOND. The server used to play each tick itself, and a sound made on
+# the server reaches a client when it replicates, in batches: the ticks were heard 0.8 then 1.2 of a
+# second apart. Each client plays its own now, from the end time on the shared clock.
+VOTE_CLIENT = os.path.join(ROOT, "src", "Client", "Services", "HubVoteService.lua")
+
+
+def check_countdown_ticks_evenly():
+    hub = read(HUB_SERVICE)
+    client = read(VOTE_CLIENT)
+    if "TICK_SOUND" in hub:
+        fail("HubService", "plays the countdown's tick on the server again, so it is heard when it replicates, not on the second")
+    for needle in ("countdownEndsAt = workspace:GetServerTimeNow() + COUNTDOWN_SECONDS", "endsAt = countdownEndsAt,"):
+        if needle not in hub:
+            fail("HubService", "does not tell the clients when the countdown ends: `%s`" % needle)
+    for needle in ("RunService.RenderStepped:Connect(function()", "workspace:GetServerTimeNow()", "TICK:Play()",
+                   "endsAt = deadline"):
+        if needle not in client:
+            fail("HubVoteService", "does not keep the countdown itself on the shared clock: `%s`" % needle)
+
+
 def main():
+    check_countdown_ticks_evenly()
+    check_pad_looks()
     check_dive_finale()
     check_level_fields()
     check_headline_materials()

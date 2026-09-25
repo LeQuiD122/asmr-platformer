@@ -49,6 +49,7 @@ L = lua_numbers(LEVEL_SOURCE)
 STEP_CHOICES = lua_list(LEVEL_SOURCE, "STEP_CHOICES")
 PACE_STEP_CHOICES = lua_list(LEVEL_SOURCE, "PACE_STEP_CHOICES")
 GAP = L["CHUNK_GAP"]
+MEANDER_STEP = L["MEANDER_STEP"]
 SPIRAL_RADIUS = L["SPIRAL_RADIUS"]
 BASE_SURFACE_Y = L["BASE_SURFACE_Y"]
 DESTROY_Y = -500  # Workspace.FallenPartsDestroyHeight's default, which this project never changes
@@ -87,8 +88,30 @@ def top_of(cid):
     return CAP_TOP if cid.startswith("S") else S1.y + S1.sy / 2
 
 
+class Meander:
+    """LevelService's meanderTo and meanderHeading. The route's heading swings from side to side on
+    a long sine, so where it has got to is only known by walking it -- in the same MEANDER_STEP
+    pieces, in the same order, so this lands where the Luau lands."""
+
+    def __init__(self, amplitude, wavelength):
+        self.amplitude, self.wavelength = amplitude, wavelength
+        self.pos, self.along = (0.0, 0.0), 0.0
+
+    def to(self, s):
+        while self.along < s - 0.001:
+            step = min(MEANDER_STEP, s - self.along)
+            heading = self.amplitude * math.sin(2 * math.pi * (self.along + step / 2) / self.wavelength)
+            self.pos = (self.pos[0] + math.sin(heading) * step, self.pos[1] + math.cos(heading) * step)
+            self.along += step
+        return self.pos
+
+    def heading(self, s):
+        heading = self.amplitude * math.sin(2 * math.pi * s / self.wavelength)
+        return (math.sin(heading), math.cos(heading))
+
+
 class RingLevel:
-    """One level definition that has a `ring`, and the ring LevelService would lay from it."""
+    """One level definition with a shape LevelService lays -- a ring or a meander -- and that route."""
 
     def __init__(self, name):
         start = DEFS.index("LevelDefinitions.%s = {" % name)
@@ -96,14 +119,18 @@ class RingLevel:
         self.pool_ids = re.findall(r'"(\w+)"', self.block[self.block.index("allowedChunkIds"):
                                                          self.block.index("allowedMaterials")])
         ring = re.search(r"ring = \{(.*)\},\n", self.block)
-        self.ring_text = ring.group(1) if ring else ""
+        meander = re.search(r"meander = \{(.*)\},\n", self.block)
+        self.ring_text = ring.group(1) if ring else (meander.group(1) if meander else "")
         self.has_ring = ring is not None
+        self.is_meander = meander is not None and 'layout = "meander"' in self.block
 
         def field(pattern, default):
             found = re.search(pattern, self.ring_text)
             return float(found.group(1)) if found else default
 
         self.turn = field(r"turn = ([\d.]+)", 0.75)
+        self.amplitude = field(r"amplitude = ([\d.]+)", 0.7)
+        self.wavelength = field(r"wavelength = ([\d.]+)", 900.0)
         self.step_scale = field(r"stepScale = ([\d.]+)", 1.0)
         self.descends = "descend = true" in self.ring_text
         wave = re.search(r"wave = \{\s*height = ([\d.]+),\s*every = ([\d.]+)\s*\}", self.ring_text)
@@ -134,10 +161,13 @@ class RingLevel:
         return max(SPIRAL_RADIUS, planned / (2 * math.pi * self.turn))
 
     def lay(self, count, seed):
-        """The ring as LevelService.startLevel lays it: (radius, chunks, finish height)."""
+        """The route as LevelService.startLevel lays it: (radius, chunks, finish height). `radius` is
+        None on a meander, which has no middle. Every chunk carries where it is and which way it
+        faces, so anything built beside it is placed the way the Luau places it whatever the shape."""
         rng = random.Random(seed)
         template = [self.slots[i % len(self.slots)] for i in range(count)]
-        radius = self.ring_radius(template)
+        radius = None if self.is_meander else self.ring_radius(template)
+        walk = Meander(self.amplitude, self.wavelength) if self.is_meander else None
         sign = -1 if self.descends else 1
         angle, y = 0.0, BASE_SURFACE_Y
         chunks = []
@@ -150,14 +180,24 @@ class RingLevel:
                     height, every = self.wave
                     y += height * (math.sin(2 * math.pi * index / every) - math.sin(2 * math.pi * (index - 1) / every))
             length, rise = CONTRACTS[cid]
-            chunks.append({"id": cid, "index": index, "angle": angle, "y": y, "length": length, "rise": rise})
-            angle += (length + GAP) / radius
+            if walk:
+                # `angle` is studs travelled on a meander, as it is in LevelService.
+                pos, tan = walk.to(angle), walk.heading(angle)
+                out = (tan[1], -tan[0])  # Vector3.yAxis:Cross(tangent), the chunk's right
+            else:
+                pos = (math.cos(angle) * radius, math.sin(angle) * radius)
+                out, tan = (math.cos(angle), math.sin(angle)), (-math.sin(angle), math.cos(angle))
+            chunks.append({"id": cid, "index": index, "angle": angle, "y": y, "length": length, "rise": rise,
+                           "pos": pos, "out": out, "tan": tan})
+            angle += (length + GAP) if walk else (length + GAP) / radius
             y += rise
         return radius, chunks, y
 
 
 def chunk_frame(radius, ch):
     """A chunk's entry point in plan, and its outward and along directions."""
+    if "pos" in ch:
+        return ch["pos"], ch["out"], ch["tan"]
     a = ch["angle"]
     out, tan = (math.cos(a), math.sin(a)), (-math.sin(a), math.cos(a))
     return (out[0] * radius, out[1] * radius), out, tan
@@ -175,15 +215,23 @@ def finish_frame(radius, chunks):
     return (origin[0] + tan[0] * last["length"], origin[1] + tan[1] * last["length"]), out, tan
 
 
-def beside_frame(radius, ch):
+def beside_frame(radius, ch, side=None):
     """The frame beside a checkpoint (SkyPoolsService.terraceBeside, SunkenCityService.besideFrame):
-    the cap's outer edge, outward from the middle, and along the route."""
-    origin, _, tan = chunk_frame(radius, ch)
+    the cap's outer edge, which way it faces, and along the route.
+
+    With no `side`, it faces away from the middle, which is what a ring is built round. With a side
+    of +1 or -1 it faces that way off the chunk itself, which is what a route that goes somewhere
+    has instead."""
+    origin, right, tan = chunk_frame(radius, ch)
     mid = (origin[0] + tan[0] * ch["length"] / 2, origin[1] + tan[1] * ch["length"] / 2)
-    m = math.hypot(*mid)
-    out = (mid[0] / m, mid[1] / m)
+    if side is None:
+        m = math.hypot(*mid)
+        out = (mid[0] / m, mid[1] / m)
+    else:
+        out = (right[0] * side, right[1] * side)
     edge = (mid[0] + out[0] * CAP_HALF, mid[1] + out[1] * CAP_HALF)
-    return edge, out, (-out[1], out[0])
+    # Vector3.yAxis:Cross(out), as terraceBeside takes it.
+    return edge, out, (out[1], -out[0])
 
 
 def rect(origin, out, tan, x0, x1, z0, z1, y0, y1, name):

@@ -55,6 +55,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local HallRoute = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HallRoute"))
 
+local Players = game:GetService("Players")
+
 local FloodedHallsService = {}
 
 -- ===== SCALE, and it is the one number worth understanding here =====
@@ -3365,6 +3367,30 @@ end
 -- seams, and gets you a rider stuck halfway down about one run in five. Driving the position
 -- directly is not a shortcut here, it is the only version that always works, and on a ride
 -- nobody steers there is nothing physics would have added.
+-- THE FLUME OWNS ITS RIDER'S FALL, and this is what was missing.
+--
+-- The ride ends in the void under the far chamber, well below the kill plane, which is set just
+-- under the lowest walkway so an ordinary fall into the water is caught. Bootstrap's plane was
+-- exempting the City Shore dive, the Sky Pools slide and the Sunken City's drain -- and not this.
+-- So a rider on a short run reached the plane part way down, the plane did what it does, and you
+-- were put back on the last chunk you had touched instead of finishing the level. From the moment
+-- you leave the mouth until the lobby takes you back, this says the fall is the flume's.
+local riding: { [Player]: boolean } = {}
+local arrivedAt: { [Player]: number } = {}
+
+function FloodedHallsService.ownsFall(player: Player): boolean
+	if riding[player] then
+		return true
+	end
+	local landed = arrivedAt[player]
+	return landed ~= nil and os.clock() - landed < 15
+end
+
+Players.PlayerRemoving:Connect(function(player: Player)
+	riding[player] = nil
+	arrivedAt[player] = nil
+end)
+
 function FloodedHallsService.attachSlide(halls: Model, onArrive: ((Player) -> ())?): () -> ()
 	local frame = halls:GetAttribute("SlideFrame")
 	if typeof(frame) ~= "CFrame" then
@@ -3392,8 +3418,6 @@ function FloodedHallsService.attachSlide(halls: Model, onArrive: ((Player) -> ()
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = mount
 
-	local riding: { [Player]: boolean } = {}
-
 	local connection = prompt.Triggered:Connect(function(player: Player)
 		if riding[player] then
 			return
@@ -3405,6 +3429,7 @@ function FloodedHallsService.attachSlide(halls: Model, onArrive: ((Player) -> ()
 			return
 		end
 		riding[player] = true
+		arrivedAt[player] = nil
 
 		task.spawn(function()
 			-- PLATFORMSTAND, not Anchored. Anchoring the root freezes the whole assembly and
@@ -3433,6 +3458,7 @@ function FloodedHallsService.attachSlide(halls: Model, onArrive: ((Player) -> ()
 			end
 			humanoid.PlatformStand = false
 			riding[player] = nil
+			arrivedAt[player] = os.clock()
 			if onArrive then
 				onArrive(player)
 			end
@@ -3923,6 +3949,7 @@ function FloodedHallsService.applyAtmosphere(): () -> ()
 	-- raw render never does: the highlights bleed, the far distance goes soft, and the colour
 	-- is graded. All three are one instance each in Roblox.
 	local bloom = Instance.new("BloomEffect")
+	bloom.Name = "HallsBloom"
 	-- Only the windows should pass it. With the exposure down the tiles no longer come close,
 	-- so the threshold can come down too -- which is what keeps the windows blooming while
 	-- everything around them stays dark.
@@ -3935,6 +3962,7 @@ function FloodedHallsService.applyAtmosphere(): () -> ()
 	bloom.Parent = lighting
 
 	local blur = Instance.new("DepthOfFieldEffect")
+	blur.Name = "HallsBlur"
 	-- FAR ONLY. Blurring anything near the player is a headache; the effect wanted is the far
 	-- end of a corridor going soft, which is the FarIntensity alone.
 	blur.NearIntensity = 0
@@ -3944,6 +3972,7 @@ function FloodedHallsService.applyAtmosphere(): () -> ()
 	blur.Parent = lighting
 
 	local grade = Instance.new("ColorCorrectionEffect")
+	grade.Name = "HallsGrade"
 	-- Down and with the contrast up. Lowering contrast was meant to read as washed-out film;
 	-- with everything already near-white it just removed the last of the separation.
 	-- CONTRAST EASED. A positive contrast pushes the darks down as hard as it lifts the

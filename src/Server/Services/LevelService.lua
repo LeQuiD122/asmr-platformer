@@ -97,6 +97,10 @@ local SPIRAL_RADIUS = 90
 -- overshoots.
 local CHUNK_GAP = 5
 
+-- How finely the meander is walked. Two studs is far under the shortest chunk and well under the
+-- scale of its bends, so the route's length is right to a fraction of a stud.
+local MEANDER_STEP = 2
+
 -- ===== TURNING A CORNER ON THE JUNCTION CHUNK =====
 --
 -- Where S2_Junction's arm is, read off its builder in ChunkBuilder: the arm is centred
@@ -280,6 +284,19 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 	-- it any more, but a level definition carrying it would otherwise silently fall back to a
 	-- spiral, which is the exact failure this field was added to prevent.
 	local pathLayout = level.layout == "path" or level.layout == "line"
+	-- ===== A MEANDER, FOR A LEVEL THAT ASKS FOR ONE =====
+	--
+	-- A ROUTE THAT GOES SOMEWHERE. The helix and the ring both come back to where they started, and
+	-- from inside either one most of the view is route you have already run. A meander sweeps
+	-- instead: its heading swings from side to side on a long sine, so the route bends one way and
+	-- then the other, never crosses itself, and what is ahead of you is somewhere you have not been.
+	--
+	-- How far it may swing is capped by the same thing the ring's radius is: how far a chunk's entry
+	-- face can turn from the last chunk's exit and still be landed on. The ring turns (length + gap)
+	-- over its radius, about seven degrees a chunk; the meander's worst is amplitude * 2pi over its
+	-- wavelength, and blender/check_skypools.py holds it under the same figure.
+	local meanderDef = level.meander
+	local meanderLayout = level.layout == "meander" and meanderDef ~= nil
 	-- FLAT, and this is a SEPARATE decision from the shape.
 	--
 	-- The straight-line layout still climbed. Only the chunk's own internal rise was being
@@ -304,10 +321,31 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 	local cursorY = BASE_SURFACE_Y
 	local placed = CFrame.new()
 	-- The ring's radius and direction, for a level that has one; the helix otherwise.
-	local radius = if pathLayout then SPIRAL_RADIUS else ringRadius(level, template)
-	local ringDef = level.ring
-	local stepSign = if ringDef and ringDef.descend then -1 else 1
-	local stepScale = if ringDef then ringDef.stepScale or 1 else 1
+	local radius = if pathLayout or meanderLayout then SPIRAL_RADIUS else ringRadius(level, template)
+	-- The descent and the swell come from whichever shape this level declared.
+	local shapeDef = level.ring or level.meander
+	local stepSign = if shapeDef and shapeDef.descend then -1 else 1
+	local stepScale = if shapeDef then shapeDef.stepScale or 1 else 1
+	-- WALKING THE MEANDER. Its heading is a function of distance travelled, so there is no closed
+	-- form to jump to: it is stepped along in short pieces, and where it got to is remembered,
+	-- because every chunk asks for a point further on than the last.
+	local meanderPos = Vector3.zero
+	local meanderAlong = 0
+	local function meanderTo(s: number): Vector3
+		local def = meanderDef
+		while def and meanderAlong < s - 0.001 do
+			local step = math.min(MEANDER_STEP, s - meanderAlong)
+			local heading = (def.amplitude or 0.7) * math.sin(2 * math.pi * (meanderAlong + step / 2) / (def.wavelength or 900))
+			meanderPos += Vector3.new(math.sin(heading), 0, math.cos(heading)) * step
+			meanderAlong += step
+		end
+		return meanderPos
+	end
+	local function meanderHeading(s: number): Vector3
+		local def = meanderDef
+		local heading = if def then (def.amplitude or 0.7) * math.sin(2 * math.pi * s / (def.wavelength or 900)) else 0
+		return Vector3.new(math.sin(heading), 0, math.cos(heading))
+	end
 	local placedChunks = {}
 	-- The last few chunks picked, oldest first, for levels that declare avoidRecent.
 	local recentIds: { string } = {}
@@ -343,7 +381,7 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 			-- the ring like a road over low hills, down near the water and up away from it again.
 			-- Added as the change since the last slot, so it stacks with the steps and with any
 			-- chunk's own rise, and one slot never changes by more than height * 2pi / every.
-			local wave = ringDef and ringDef.wave
+			local wave = shapeDef and shapeDef.wave
 			if wave then
 				cursorY += wave.height * (math.sin(2 * math.pi * slotIndex / wave.every)
 					- math.sin(2 * math.pi * (slotIndex - 1) / wave.every))
@@ -464,6 +502,17 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 				Vector3.new(0, 1, 0),
 				legDir
 			)
+		elseif meanderLayout then
+			-- On the meander: the point this far along it, facing the way it is heading there.
+			tangent = meanderHeading(along)
+			out = Vector3.new(0, 0, 0)
+			angle = along
+			placed = CFrame.fromMatrix(
+				base + meanderTo(along) + Vector3.new(0, cursorY, 0),
+				Vector3.new(0, 1, 0):Cross(tangent),
+				Vector3.new(0, 1, 0),
+				tangent
+			)
 		else
 			-- Position on the circle, and the tangent to face along.
 			--
@@ -516,6 +565,9 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 		if pathLayout then
 			along += length + CHUNK_GAP
 			angle = legBase + along
+		elseif meanderLayout then
+			along += length + CHUNK_GAP
+			angle = along
 		else
 			angle += (length + CHUNK_GAP) / radius
 		end
@@ -542,6 +594,11 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 			.. "time(s) where the chunks turned, surface y %d")
 			:format(level.levelId, #placedChunks, #template, math.floor(angle), legIndex - 1,
 				cursorY))
+	elseif meanderLayout then
+		-- A MEANDER'S LINE is in studs too: `angle` is how far along it the route got, and read as
+		-- degrees it was printing a lap count in the tens of thousands.
+		print(("LevelService: level %d placed %d/%d chunks along %d studs of meander, surface y %d to %d")
+			:format(level.levelId, #placedChunks, #template, math.floor(angle), BASE_SURFACE_Y, cursorY))
 	else
 		print(("LevelService: level %d placed %d/%d chunks, %d degrees round, surface y %d to %d")
 			:format(level.levelId, #placedChunks, #template,
@@ -574,7 +631,7 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 	--
 	-- On a path every route starts at the origin heading +Z -- both HallRoute.build and
 	-- fromLegs begin that way -- so eight studs along it IS eight studs up +Z.
-	local startPosition = if pathLayout
+	local startPosition = if pathLayout or meanderLayout
 		then base + Vector3.new(0, BASE_SURFACE_Y + 4, 8)
 		else base + Vector3.new(radius, BASE_SURFACE_Y + 4, 8)
 
@@ -587,7 +644,7 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 	spawn.CanCollide = false
 	spawn.Transparency = 1
 	spawn.Size = Vector3.new(8, 1, 8)
-	spawn.CFrame = CFrame.new(if pathLayout
+	spawn.CFrame = CFrame.new(if pathLayout or meanderLayout
 		then base + Vector3.new(0, BASE_SURFACE_Y + 0.5, 8)
 		else base + Vector3.new(radius, BASE_SURFACE_Y + 0.5, 8))
 	spawn.Neutral = true
@@ -621,9 +678,12 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 		spawn = spawn,
 		minSurfaceY = minSurfaceY,
 		killY = minSurfaceY - 40,
-		-- The route's centre and radius, for anything built round it (Sky Pools).
+		-- The route's centre and radius, for anything built round it (the Sunken City's ring). A
+		-- meander has no centre to be built round: what is built along it is placed from the chunks
+		-- and the finish frame instead, which every layout has.
 		centre = base,
-		radius = if pathLayout then nil else radius,
+		radius = if pathLayout or meanderLayout then nil else radius,
+		layout = if meanderLayout then "meander" elseif pathLayout then "path" else "ring",
 		-- ===== WHAT THE BUILDING NEEDS TO KNOW =====
 		--
 		-- Only meaningful on a path layout, and nil everywhere else so a caller that forgets

@@ -11,6 +11,27 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local LevelDefinitions = require(Shared:WaitForChild("LevelDefinitions"))
 
+-- WHICH LEVELS THIS PLACE HAS, said once at startup. The lobby builds a pad for each, named from
+-- this list, so when the lobby shows the wrong levels the question is always whether
+-- LevelDefinitions was pasted in. Levels 2 and 3 were Open Sky and Far Water before they became
+-- Sky Pools and the Sunken City: either old name still here means the copy in
+-- ReplicatedStorage.Shared is out of date.
+do
+	local names = {}
+	local stale = false
+	for _, level in ipairs(LevelDefinitions.All) do
+		table.insert(names, ("%d %s"):format(level.levelId, tostring(level.name)))
+		if level.name == "Open Sky" or level.name == "Far Water" then
+			stale = true
+		end
+	end
+	print("Bootstrap: the lobby's levels are " .. table.concat(names, ", ") .. ".")
+	if stale then
+		warn("Bootstrap: ReplicatedStorage.Shared.LevelDefinitions is an older copy (level 2 or 3 is still Open "
+			.. "Sky or Far Water), so the lobby shows the old levels. Paste src/Shared/LevelDefinitions.lua over it.")
+	end
+end
+
 -- ===== RemoteEvents / RemoteFunctions =====
 --
 -- ORDER MATTERS: these are created BEFORE any service is required.
@@ -104,6 +125,13 @@ local HardcoreTimerSync = ensureRemoteEvent(remoteEventsFolder, "HardcoreTimerSy
 -- telling you it noticed; HardcoreRetry is you saying you want another go.
 local PlayerFell = ensureRemoteEvent(remoteEventsFolder, "PlayerFell")
 local HardcoreRetry = ensureRemoteEvent(remoteEventsFolder, "HardcoreRetry")
+-- SKY POOLS' SLIDE. The rider's own client answers on this to say it is drawing the ride, and the
+-- server hands it the sled to drive; see SkyPoolsService.attachSlide for why. Made here with every
+-- other remote so it exists before any level is built.
+ensureRemoteEvent(remoteEventsFolder, "SkyRide")
+-- THE SUNKEN CITY'S DRAIN, for the same reason: the rider's own client draws the ride down the
+-- whirlpool and answers on this to say it has it.
+ensureRemoteEvent(remoteEventsFolder, "SunkenRide")
 
 -- ===== Services =====
 -- Safe to require now that the remotes above exist.
@@ -153,6 +181,33 @@ local sunkenTeardown: (() -> ())? = nil
 -- Undoes the halls' GLOBAL changes -- lighting, reverb, the caustic loop -- when a run
 -- ends. Left set, every other level would inherit a bathhouse.
 local hallsTeardown: (() -> ())? = nil
+
+-- ===== WHAT A LEVEL LEAVES BEHIND, TAKEN AWAY =====
+--
+-- Most of a level goes when Workspace.Levels is cleared, because that is where it is parented.
+-- Three things are not in there and do not:
+--
+--   THE FLOODED HALLS are their own model in the workspace, several hundred parts of the room you
+--   were standing in, with a caustic loop and a water loop still running.
+--   THEIR LOOK -- a bloom, a depth of field and a grade hung on Lighting.
+--   SKY POOLS' WATER, which is terrain, and terrain belongs to the place rather than to a model.
+--
+-- This used to run only when the NEXT level was built, so finishing a run and going back to the
+-- lobby left the lobby standing in the last level's weather with its rooms still in the world.
+-- It runs on the way home as well now.
+local function tearDownLevelWorld()
+	if hallsTeardown then
+		pcall(hallsTeardown)
+		hallsTeardown = nil
+	end
+	local oldHalls = workspace:FindFirstChild("FloodedHalls")
+	if oldHalls then
+		oldHalls:Destroy()
+	end
+	if SkyPoolsService and SkyPoolsService.clearWater then
+		pcall(SkyPoolsService.clearWater)
+	end
+end
 if not BackdropService then
 	warn(
 		"Bootstrap: no ServerScriptService.Services.BackdropService; running without a horizon. "
@@ -220,6 +275,19 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 		pcall(DiveFinaleService.stop)
 	end
 	levelInstance = LevelService.startLevel(level, players, origin)
+	-- A RING LEVEL ON AN OLD LEVELSERVICE lays the old tight spiral and hands back no centre, so
+	-- the pools or the city would be built round the wrong point. Said here, where it happens.
+	if level.ring and levelInstance and not levelInstance.centre then
+		warn(("Bootstrap: %s is laid on a ring, and this place's LevelService is an older copy that "
+			.. "cannot lay one -- re-paste src/Server/Services/LevelService.lua."):format(tostring(level.name)))
+	end
+	-- THE SAME, FOR A MEANDER. An older LevelService does not know the layout and quietly lays the
+	-- old spiral instead, which puts the pools and the tower round a route that is not there.
+	if level.layout == "meander" and levelInstance and levelInstance.layout ~= "meander" then
+		warn(("Bootstrap: %s asks to be laid as a meander and this place's LevelService laid a %s "
+			.. "instead -- re-paste src/Server/Services/LevelService.lua."):format(tostring(level.name),
+			tostring(levelInstance.layout or "spiral")))
+	end
 
 	-- AFTER the level, because the backdrop measures the level's extent to find the middle
 	-- to centre itself on. In a pcall for the same reason LightingService is: it is purely
@@ -240,14 +308,7 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 	-- is standing in, several hundred parts of it, and two overlapping is not a cosmetic
 	-- problem. Torn down unconditionally rather than only when leaving this level, because the
 	-- level that follows might be any of them.
-	if hallsTeardown then
-		hallsTeardown()
-		hallsTeardown = nil
-	end
-	local oldHalls = workspace:FindFirstChild("FloodedHalls")
-	if oldHalls then
-		oldHalls:Destroy()
-	end
+	tearDownLevelWorld()
 
 	if level.backdrop == "floodedHalls" and FloodedHallsService then
 		-- Each piece in a pcall, for the reason the backdrop is: this is atmosphere, and
@@ -462,6 +523,12 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 				skyTeardown = function()
 					if typeof(unride) == "function" then
 						pcall(unride)
+					end
+					-- THE POOLS' WATER IS TERRAIN, and terrain is not part of the level's model, so
+					-- it does not go when the model does. Taken out here, or the next level would
+					-- start with pools of water standing in its sky.
+					if SkyPoolsService.clearWater then
+						pcall(SkyPoolsService.clearWater)
 					end
 				end
 			end
@@ -1002,6 +1069,9 @@ function wireCheckpointing(players: { Player })
 				end
 			end
 			if not running then
+				-- THE LEVEL'S WORLD GOES WITH ITS AIR. Same condition, same moment: the last
+				-- runner is home, so the room gets its light back and the level stops existing.
+				tearDownLevelWorld()
 				pcall(LightingService.apply, "lobby")
 			end
 		end)
@@ -1209,10 +1279,17 @@ game:GetService("RunService").Heartbeat:Connect(function()
 		-- until the lobby takes them back. Sky Pools' slide is the same: it ends in a pool under the
 		-- clouds, far below the plane that catches an ordinary fall into them. And the Sunken City's
 		-- drain, which ends at the bottom of a shaft under the harbour floor.
+		--
+		-- AND THE FLOODED HALLS' FLUME, which was missing and is the whole of that bug: the ride
+		-- drops into the void under the far chamber, the plane caught the rider part way down, and
+		-- put them back on the last chunk they had touched. A ride that ends the level cannot be
+		-- something the plane interrupts.
 		if hrp.Position.Y < killY
 			and not (DiveFinaleService and DiveFinaleService.ownsFall(player))
 			and not (SkyPoolsService and SkyPoolsService.ownsFall(player))
-			and not (SunkenCityService and SunkenCityService.ownsFall(player)) then
+			and not (SunkenCityService and SunkenCityService.ownsFall(player))
+			and not (FloodedHallsService and FloodedHallsService.ownsFall
+				and FloodedHallsService.ownsFall(player)) then
 			local state = PlayerStateService.getState(player)
 			if not state then
 				continue

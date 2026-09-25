@@ -86,6 +86,10 @@ local LOOKS: { [string]: Look } = {
 	JelloSoda = { colour = Color3.fromRGB(246, 158, 92), shape = "droplet", size = 0.011, bits = 2,
 		alpha = 0.22, cap = 7, life = 4.0, slide = 8, tint = Color3.fromRGB(255, 166, 96),
 		saturation = 0.14 },
+	-- Sea water off a bell: clear drops that run off fast, and hardly any colour.
+	Jellyfish = { colour = Color3.fromRGB(226, 214, 244), shape = "droplet", size = 0.010, bits = 2,
+		alpha = 0.18, cap = 6, life = 3.0, slide = 10, tint = Color3.fromRGB(214, 196, 240),
+		saturation = 0.04 },
 	-- BARELY ANYTHING, and deliberately the quietest entry in this table. A Needoh is
 	-- sealed: nothing comes off it, so the only honest reason to put something on the
 	-- camera at all is the faint smear a hand leaves on a satin toy. Two bits, low alpha,

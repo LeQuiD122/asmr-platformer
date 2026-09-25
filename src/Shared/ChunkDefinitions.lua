@@ -167,6 +167,19 @@ ChunkDefinitions.P7_LambsEar = {
 	connections = { "south", "north" }, tags = { "straight", "flat" },
 	containsSlime = false, containsRisk = false,
 }
+-- The Sunken City's own: jellyfish bells (MaterialConfig.Jellyfish, gen_jellyfish.py).
+ChunkDefinitions.R39_JellyfishHop = {
+	id = "R39_JellyfishHop", name = "Jellyfish Hop", category = "risk",
+	materials = { Jellyfish = true }, sizeX = 20, sizeZ = 46,
+	connections = { "south", "north" }, tags = { "straight", "gap" },
+	containsSlime = false, containsRisk = true,
+}
+ChunkDefinitions.P29_JellyfishBloom = {
+	id = "P29_JellyfishBloom", name = "Jellyfish Bloom", category = "pace",
+	materials = { Jellyfish = true }, sizeX = 16, sizeZ = 12,
+	connections = { "south", "north" }, tags = { "straight", "flat" },
+	containsSlime = false, containsRisk = false,
+}
 ChunkDefinitions.P6_JelloSoda = {
 	id = "P6_JelloSoda", name = "Jello Soda", category = "pace",
 	materials = { JelloSoda = true }, sizeX = 16, sizeZ = 12,

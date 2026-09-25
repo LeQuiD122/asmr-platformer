@@ -79,13 +79,23 @@ local Appearances: { [string]: Appearance } = {
 	--
 	-- The base is darker and colder than the surface, so what shows through the sheet is
 	-- deep water rather than more ice.
+	--
+	-- ICE IS NOT GLASS, and that is why it vanished from above. A Glass part draws only what is
+	-- OPAQUE behind it: every transparent part behind it -- the Sunken City's sea, Sky Pools' cloud
+	-- and pools, the ice's own coating -- is simply left out. Looking down on a sheet of ice, the only
+	-- thing behind it IS transparent water, so the ice showed the drowned city straight through with
+	-- a faint pale wash and read as open water: you were standing on something that was not there.
+	-- From the side, with opaque scenery behind it, it looked fine, which is exactly how it was
+	-- reported. Roblox's own Ice material is translucent without that rule, and it is ice. A little
+	-- less transparent than the glass was, a little bluer, and less mirrored (the Ice material has its
+	-- own sheen), so the sheet reads as a sheet over the water rather than as a hole in it.
 	Ice = {
-		color = Color3.fromRGB(214, 238, 250),
-		material = Enum.Material.Glass,
-		transparency = 0.58,
-		reflectance = 0.42,
+		color = Color3.fromRGB(196, 228, 248),
+		material = Enum.Material.Ice,
+		transparency = 0.38,
+		reflectance = 0.2,
 		baseColor = Color3.fromRGB(74, 108, 138),
-		baseMaterial = Enum.Material.Glass,
+		baseMaterial = Enum.Material.Ice,
 	},
 	-- Amber soda, translucent and glossy, over a deeper syrup base. Warm on purpose: it
 	-- sits next to ice in the material list and the two should never be mistaken for each
@@ -263,6 +273,20 @@ local Appearances: { [string]: Appearance } = {
 		transparency = 0.22,
 		reflectance = 0.14,
 		baseColor = Color3.fromRGB(198, 108, 58),
+		baseMaterial = Enum.Material.SmoothPlastic,
+	},
+	-- A pale violet bell, see-through enough to show the tentacles hanging under it.
+	--
+	-- NOT GLASS, unlike jello and slime, and on purpose: its level is the Sunken City, where
+	-- the sea under the route is Glass, and Glass leaves out anything transparent behind it
+	-- -- a Glass bell would show no sea through itself, only a hole in it. SmoothPlastic with a
+	-- transparency shows everything behind it. A little reflectance for the wet sheen.
+	Jellyfish = {
+		color = Color3.fromRGB(222, 190, 240),
+		material = Enum.Material.SmoothPlastic,
+		transparency = 0.24,
+		reflectance = 0.08,
+		baseColor = Color3.fromRGB(168, 126, 196),
 		baseMaterial = Enum.Material.SmoothPlastic,
 	},
 	-- OPAQUE, and that is the point of the colour choice as much as the hue. Every other
@@ -500,7 +524,9 @@ local surfaceWarned: { [string]: boolean } = {}
 -- because its surface detail IS the drips and the film, and slime because its is the
 -- stringing. A Needoh is a smooth satin skin -- all of its detail is the six blocks in the
 -- geometry, and a normal map over that would be inventing texture the object does not have.
-local NO_MAPS_BY_DESIGN: { [string]: boolean } = { Needoh = true }
+-- A jellyfish's likewise: its canals, warts and horseshoes are geometry (gen_jellyfish.py), and
+-- the rest of it is a clear skin, which is the one thing a normal map cannot add to.
+local NO_MAPS_BY_DESIGN: { [string]: boolean } = { Needoh = true, Jellyfish = true }
 
 local function noteMissingSurface(part: BasePart, materialName: string?)
 	if not materialName or surfaceWarned[materialName] or not part:IsA("MeshPart") then
