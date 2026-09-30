@@ -522,6 +522,43 @@ what tells a listener this is snow and that it is cold. **0.25-0.45s.**
 
 ---
 
+## Stand-ins, generated (fifteenth pass)
+
+Every event below that had no recording now has four synthesised takes, written by
+`audio/gen_material_sfx.py` to `audio/materials/<event>_<n>.wav` and made to this brief (each maker
+in the script quotes the line of the brief it follows). They are stand-ins, and a real recording
+should replace any of them. To use them with no ids to copy: in Studio, Asset Manager, Bulk Import the
+files; make a Folder named `MaterialSounds` in SoundService; drag the imported sounds into it.
+AudioService gives each Sound to the event its name starts with (`iceCrack_3` is `iceCrack`). The
+keypad's `audio/buttons/` files can go in the same folder.
+
+## The Needoh, and the lava again (twenty-first pass)
+
+**The Needoh had no sound of its own**: it was borrowing clay's, so the squeeze toy and the clay press
+sounded the same. It has its own event now, `needohSquish`, and four generated takes of it
+(`audio/gen_ending_sfx.py`): a slow, gloopy squish of gel shifting inside a rubber skin, a faint creak as
+the skin stretches, and a soft wet suck as it swells back. All give and no slap, which is what clay is.
+A real recording would beat it: a Nee-Doh squeezed slowly, close, in a dry room, one squeeze and release
+per take.
+
+**The lava crust's takes are new** (`lavaCrust_1` to `_4`, same names, so they REPLACE the old four):
+heavier and hotter, a thick bubbling glop under the crust, the crack of it with a hiss out of it, and a
+spit of something molten. Still no roar.
+
+## The endings' own sounds (twenty-first pass)
+
+Every ending is scored on its own now, in `audio/endings/`, from `audio/gen_ending_sfx.py`. They go in
+`SoundService.StorySounds` with the others; each scene finds them there by name. A few (the board, the
+wind, the splash, the flume's plunge) have a built-in stand-in until imported; the rest are silent until
+then, rather than stand in badly.
+
+| Level | Sounds |
+|---|---|
+| City Shore | `DiveBoard` (the board letting go), `DiveWind` (the fall), `DiveSplash` (going in), `UnderwaterHum` (loop), `ShoreChord` (the last chord) |
+| Sky Pools | `SlideRush` (loop), `CloudWhoosh`, `SkimSlap` (each hop), `PoolPlunge`, `PoolsChord` |
+| The Sunken City | `WhirlRoar` (loop), `DrainFall`, `CulvertWash` (loop), `SunkenChord` |
+| Flooded Halls | `FlumeRush` (loop), `PlungeWind`, `HallsChord` (the only chord that resolves) |
+
 ## Where the ids go
 
 `src/Client/Services/AudioService.lua`, in `SOUND_IDS_BY_EVENT`:
@@ -540,10 +577,10 @@ local SOUND_IDS_BY_EVENT: { [string]: { string } } = {
 }
 ```
 
-Fill them in as you go — an empty list is silent, and the materials you have done already
+Fill them in as you go: an empty list is silent, and the materials you have done already
 work while the rest wait.
 
-Paste them into the repo copy of the file, not only into Studio — the next paste of
+Paste them into the repo copy of the file, not only into Studio: the next paste of
 `AudioService.lua` overwrites whatever is in Studio, and an empty string here is silent.
 
 **Never use `rbxassetid://0` as a placeholder.** It is a real request for an asset that does

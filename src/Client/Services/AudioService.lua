@@ -134,6 +134,9 @@ local SOUND_IDS_BY_EVENT: { [string]: { string } } = {
 	chocolateSnap = {},
 	claySquish = {},
 	cloudHush = {},
+	-- The Needoh's own (twenty-first pass): it was borrowing clay's. audio/gen_ending_sfx.py writes four
+	-- takes, needohSquish_1 to _4, for SoundService.MaterialSounds.
+	needohSquish = {},
 	-- The five newest. SOUND_BRIEF.md carries each in full; briefly, salt is a dry crunch
 	-- that dulls as the cell packs, lava is a low hiss with a glassy tick as crust forms,
 	-- oobleck is a thick squelch with no splash at all, the buttons are the sharpest click
@@ -193,6 +196,48 @@ for event, ids in pairs(SOUND_IDS_BY_EVENT) do
 		)
 	end
 	usableIds[event] = filled
+end
+
+-- AND ANY SOUND IN SoundService.MaterialSounds, with no ids to copy.
+--
+-- audio/gen_material_sfx.py writes takes named for their event (iceCrack_1.wav, iceCrack_2.wav...).
+-- Import them in Studio (Asset Manager, Bulk Import), make a Folder in SoundService called
+-- MaterialSounds, and drag them into it: each becomes a Sound named after its file, and here each is
+-- given to the event its name starts with. They add to whatever ids the table above already has.
+-- The keypad's files (audio/gen_button_sfx.py) are named for the switch, not the event.
+local ALIAS: { [string]: string } = {
+	button_clicky = "buttonClick",
+	button_linear = "buttonLinear",
+	button_tactile = "buttonTactile",
+	button_release = "buttonRelease",
+	button_combo = "buttonCombo",
+	button_circuit = "buttonCircuit",
+}
+do
+	local folder = SoundService:FindFirstChild("MaterialSounds")
+	local added, unknown = 0, {}
+	if folder then
+		for _, item in ipairs(folder:GetDescendants()) do
+			if item:IsA("Sound") and item.SoundId ~= "" then
+				local stem = string.match(item.Name, "^(.-)_%d+$") or item.Name
+				local event = ALIAS[stem] or stem
+				local list = usableIds[event]
+				if list then
+					if not table.find(list, item.SoundId) then
+						table.insert(list, item.SoundId)
+						added += 1
+					end
+				else
+					table.insert(unknown, item.Name)
+				end
+			end
+		end
+		print(("[client] Audio: %d take(s) from SoundService.MaterialSounds"):format(added))
+		if #unknown > 0 then
+			warn("[client] Audio: these sounds in MaterialSounds are not named for any event, so nothing plays them: "
+				.. table.concat(unknown, ", "))
+		end
+	end
 end
 
 local rng = Random.new()
@@ -320,6 +365,9 @@ function AudioService.playSfx(material: string, region: BasePart, mine: boolean?
 		event = asked
 	elseif not AudioService.hasTakes(event) and matDef.sfxFallback then
 		event = matDef.sfxFallback
+		-- A BORROWED SOUND AT ITS OWN PITCH: the Needoh borrowing clay's was the Needoh sounding exactly
+		-- like the clay chunk.
+		pitch = pitch or matDef.sfxFallbackPitch
 	end
 	local ids = usableIds[event]
 	if not ids or #ids == 0 then
