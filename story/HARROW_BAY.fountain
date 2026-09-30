@@ -1,0 +1,465 @@
+Title: HARROW BAY
+Credit: a screenplay for the game
+Source: LORE.md is the canon; this is how it plays
+Draft date: 29 September 2026
+Contact: story/HARROW_BAY.fountain
+
+/*
+HOW TO READ THIS
+
+This is the game written as a film, in Fountain: plain text that any screenwriting app (Beat, Highland,
+Fade In, WriterSolo) opens as a formatted screenplay, and that reads fine as it is. It is the order the
+story happens in and how every scene is meant to look and sound. The game follows it: a [[note]] after
+a scene says which part of the code plays it, and what the numbers are.
+
+Three rules it keeps, because the game does:
+- Nobody explains the Hold. The old-timers name it. That is all.
+- Quiet over loud. The scares are absences: a sound that stops, a room with nobody in it, a clock
+  that is right.
+- No dashes in anything a player reads.
+
+Scenes marked (OPTIONAL) are the secrets: the player only sees them if they go looking.
+*/
+
+FADE IN:
+
+EXT. THE LOBBY. NO TIME OF DAY
+
+A room with no water in it and no clock on the wall. Pads on the floor, each a different thing to stand on. A statue. A board of names.
+
+THE PLAYER stands among other players. Nobody here is from Harrow Bay. Nobody here has been anywhere yet.
+
+A pad lights under someone's feet. LEVEL 1: CITY SHORE. 9:14 AM.
+
+[[The lobby is outside the story: the one place with no time of day. HubService.]]
+
+SMASH CUT TO:
+
+# ACT ONE: CITY SHORE
+
+EXT. HARROW BAY, THE FRONT. 14 AUGUST, 9:14 AM
+
+Stepping stones in the sky, climbing in a spiral. Far below, seven hundred feet of nothing and then the sea, bright, calm, much too high up the beach.
+
+In the middle of the spiral, standing straight out of the sea, THE SIREN TOWER: red brick, stone bands, a clock stopped at 9:14, a copper dome, a red lamp on top.
+
+Low on the screen:
+
+SUPER: LEVEL 1. HARROW BAY.
+SUPER: 14 August. 9:14 in the morning. The tide has not gone out in three days.
+
+[[StoryService.opening: twelve seconds. AmbienceService: ShoreSea under everything, and under that the Hold, a drone you notice only when it stops.]]
+
+The player steps onto the first stone. It gives under them like honey. It is honey.
+
+A card slides down from the top of the screen.
+
+SUPER: KEEPSAKE 1 OF 27. A jar of Hale's honey.
+SUPER: Sal dropped it on the Front steps at twelve minutes past nine. It has been running down them ever since.
+
+[[KeepsakeService, from ScreenEffects.onStep: the first time on each material.]]
+
+An ice cream cart with a striped awning. SAL, apron, scoop.
+
+SAL
+Morning! You're my first customer since... well. Since this morning.
+
+The player walks on. Sal watches them go, the way you watch someone you think you know.
+
+SAL (CONT'D)
+(to herself)
+Funny. Every time I look up, the sea's a bit closer.
+
+EXT. THE FRONT. A STABLE CHUNK. CONTINUOUS
+
+Lying across the stone, a PRY BAR. A brass tag on it. The player picks it up.
+
+SUPER: A pry bar. BARLOW is scratched into the handle. Some things here only open to it.
+
+[[Interactables.pryBar: every level has one, early. The player keeps it for the session.]]
+
+Further up: PIP OKAFOR, eight, a bucket, a sandcastle with a paper flag.
+
+PIP
+Are you the key man? My dad went to find the key man.
+
+The player doesn't answer. Nobody in this story ever asks the player to answer.
+
+PIP (CONT'D)
+If you press the sand it keeps your footprint. Then it forgets. Everything here forgets.
+(beat)
+Not me.
+
+Under a stone by her feet, a crayon drawing. The player reads it.
+
+INSERT: THE DRAWING
+
+A stick man. A key. Three gates. The sea going out. "By Pip Okafor, age 8."
+
+BACK TO SCENE.
+
+EXT. THE SPIRAL. HALFWAY UP. CONTINUOUS
+
+A footbridge runs off one of the stones, inward, over nothing, to a door in the side of the Siren Tower.
+
+INT. THE SIREN ROOM. CONTINUOUS (OPTIONAL)
+
+A round room in the tower. A desk. A lamp on a cable, lit. A panel of switches with the lever up. A ladder to a hatch that will not open. Windows onto the spiral going round outside.
+
+On the desk, the SIREN LOG. The player reads it.
+
+INSERT: THE LOG
+
+11 AUG. 12:00 test. 00:00 NOT A TEST. The same, day after day, the hand getting worse. On the last line the midnight has no words after it.
+
+BACK TO SCENE.
+
+A patch of bricks in the wall, not quite the colour of the rest. The player sets the pry bar to them. They come out onto the floor one after another.
+
+The camera drifts in on the dark behind them, slow, the focus pulling to what is inside. A folded letter.
+
+SUPER: THE SIREN ROOM
+SUPER: Somebody has been sounding it every midnight.
+
+[[Interactables.looseBricks; StoryClient.moment: 6.5 seconds, a spline in, depth of field, the SecretSting. Then "Secret 1 of 5", then the letter to read.]]
+
+INSERT: THE LETTER
+
+"To whoever holds the key next. I have sounded it every midnight since. Go down. It is the only way on. R. Pell, Siren Keeper."
+
+EXT. THE TOP OF THE SPIRAL. THE DIVING DECK. LATER
+
+A tiled deck, a springboard out over the sea. MAREN, the lifeguard, whistle round her neck.
+
+MAREN
+You're from the pumping station. You've got the look. You're very late.
+
+The player walks out to the end of the board.
+
+MAREN (CONT'D)
+(shouting after them)
+OPEN THE GATES!
+
+THE HIGH DIVE.
+
+The ambience goes. All of it, the sea, the drone, in two seconds, and there is only wind.
+
+[[Cinema.begin hushes every Ambience sound, and they stay gone. CityShoreClient.]]
+
+SUPER: THE HIGH DIVE
+SUPER: Maren said it was the quickest way down. She said it was the only way.
+
+LOW ANGLE, from the tip of the board: the player leaves it in a swan, arms wide.
+
+ALONGSIDE, falling with them, circling: the spiral above, getting smaller. They turn over, head first, arms together.
+
+FROM THE WATER, looking up: they come down at us.
+
+The sea closes. Green. Bubbles going up. The camera follows them down into the dark, and far below, on a street that is under the sea, one street lamp is still on.
+
+SUPER: HARROW BAY
+SUPER: Somewhere under the water, a street lamp is still on.
+
+[[CityShoreClient: the fall held to 110 studs a second so it can be watched; the carry at 120.]]
+
+SUPER: LEVEL 1 COMPLETE
+
+CUT TO:
+
+# ACT TWO: THE SKY POOLS
+
+EXT. THE PROMENADE HOTEL ROOF. 14 AUGUST, 3:00 PM
+
+Pools on terraces over a sea of cloud. Towels drying on rails. Loungers. Far off, through a wall, a party playing the same four chords.
+
+SUPER: LEVEL 2. THE SKY POOLS, HARROW BAY.
+SUPER: 14 August. Three o'clock. Nobody has gone down since the street went under.
+
+DEV hands out towels at the first terrace.
+
+DEV
+Welcome to the Sky Pools. Towels are free. Everything's free now.
+(later)
+Some people call this the backrooms. It's a pool bar, mate.
+
+MRS OKAFOR sits on the edge of a lounger, her husband's towel folded beside her.
+
+MRS OKAFOR
+Is it three yet? It's always nearly three.
+
+On a lounger, a note under a stone: "Gone down to find the man with the keys. Back by three. Keep my seat. T."
+
+EXT. THE FIRST POOL. UNDERWATER. CONTINUOUS (OPTIONAL)
+
+The player swims down. On the tiled floor at the deep end, a small tin box, a thread of bubbles rising off it. The lid is rusted down. The pry bar has it up.
+
+The camera settles in the water beside it, the light moving over the tiles.
+
+SUPER: AT THE BOTTOM OF THE POOL
+SUPER: Somebody put it where nobody would look.
+
+INSERT: A PHOTOGRAPH
+
+Tobi and Pip on the Front, a sandcastle between them. On the back: "For the key holder. So you know what you are opening the gates for."
+
+EXT. THE TOP OF THE SLIDE. LATER
+
+RUDY behind a record deck, headphones on, the same song.
+
+RUDY
+The slide's the only way off the roof. Everyone takes it in the end.
+(as the player sits in the sled)
+SEE YOU AT THE BOTTOM!
+
+THE LONG WAY DOWN.
+
+The party stops mid-chord. The wind stops. Only the sled on the water.
+
+OVER THE SHOULDER, down the chute into the cloud. WIDE, from out in the sky, the tower and the spiral of the slide round it and the small figure going round and down, arms up. HEAD ON, just ahead of the sled, looking back at them. FROM THE POOL at the bottom as they come down into it, the tower going up out of the water behind.
+
+SUPER: THE LONG WAY DOWN
+SUPER: Everyone takes it in the end.
+
+[[SkyPoolsClient: about eighteen seconds at 36 studs a second; the pool held for 3.2 after the splash.]]
+
+SUPER: LEVEL 2 COMPLETE
+
+CUT TO:
+
+# ACT THREE: THE SUNKEN CITY
+
+EXT. HARBOUR STREET. 14 AUGUST, 11:52 PM
+
+A street under a few feet of black water, the stepping stones just above it. Shop fronts. A bus stop. A buoy with a bell, somewhere, once every few breaths. Something long moves under the street and the sound goes out of the world as it passes.
+
+SUPER: LEVEL 3. HARROW BAY.
+SUPER: 14 August. Eight minutes to midnight. The pumps never started.
+
+High on the Deco tower, on a ledge, a figure with no face, watching. THE WATCHER. He never speaks. His head follows the player the whole way.
+
+A notice blown flat on the stones: "HAVE YOU SEEN OUR PEOPLE?"
+
+INT. THE AQUARIUM GALLERY. CONTINUOUS
+
+A tunnel of glass, then a room with a window onto the harbour's dark. THE ATTENDANT, peaked cap, by a notice asking you not to tap on the glass.
+
+ATTENDANT
+We're still open. Technically. The clocks all stopped at eight minutes to midnight.
+
+Against the side wall, a staff locker. The lock has rusted into the door. (OPTIONAL) The pry bar. Inside: a peaked cap, a torch that still works, a letter.
+
+SUPER: STAFF LOCKER, AQUARIUM
+SUPER: It has not been opened since 1979.
+
+INSERT: THE LETTER
+
+"E. MARSH, OUTFALL 3. I waited for somebody to come and help. I waited so long I forgot what I looked like. Do not wait. Nobody comes. You are the one who comes."
+
+The player looks back up the tunnel, toward the harbour, toward the Deco tower, where a man with no face is watching.
+
+EXT. THE PIER. LATER
+
+MR WICK on a crate, rod over the rail.
+
+MR WICK
+Held the key myself once, forty years back. Wick, Outfall 3. Gave it back on time, mind.
+(beat)
+Don't go near the end of the pier. It pulls. Mind you... it's you it's pulling for, isn't it?
+
+The end of the pier. A whirlpool in the black water, turning.
+
+THE DRAIN.
+
+The sea goes silent. The harbour, the bell, the drone, all of it.
+
+The water takes them. Round the funnel three times, head over heels down the shaft, out through a door marked OUTFALL 3, and on down a culvert on their back, lamps going over one after another, writing on the walls: WHERE IS THE KEY MAN. A tally. KEY HOLDER ONLY BEYOND THIS POINT.
+
+INT. THE HARBOUR PUMPING STATION. CONTINUOUS
+
+They are set down on their feet. Three pumps with their gauges on zero. A lever down: GATES: CLOSED. A key board with hook 3 empty. A clock at 11:52. A rack of time cards, and one out of the rack.
+
+The camera closes in on it.
+
+INSERT: THE TIME CARD
+
+KEY HOLDER. [THE PLAYER'S NAME]. 14 AUG. NOT CLOCKED IN.
+
+SUPER: HARBOUR PUMPING STATION
+SUPER: Outfall 3. The gates are still closed.
+
+[[SunkenCityClient and SunkenCityService: the drain 13 seconds, the outfall 16, the reveal 7. The card is made out to player.DisplayName.]]
+
+SUPER: LEVEL 3 COMPLETE
+
+CUT TO:
+
+# ACT FOUR: THE CORPORATION BATHS
+
+INT. THE CORPORATION BATHS. 14 AUGUST, 11:56 PM
+
+Under the pumping station. Tiled halls going on further than a building can, flooded to the knee, columns, a dome. A hum like old strip lights. Somewhere, water.
+
+SUPER: LEVEL 4. THE CORPORATION BATHS.
+SUPER: 14 August. Four minutes to midnight. Under the pumping station, where the clocks are moving again.
+
+The clock on the end wall: four minutes to midnight. The hands are moving.
+
+MRS VENN behind a ticket desk. Cardigan. Glasses on a chain.
+
+MRS VENN
+Evening, love. Baths close at midnight. They've been closing at midnight for a very long time.
+(later, kindly)
+You call it the backrooms, don't you. They all do, the ones who come down from up there.
+(beat)
+It's the back rooms of the baths, dear. Staff only.
+
+TOBI OKAFOR on a bench, in his trunks, a red towel round his neck.
+
+TOBI
+I came down to find the man with the keys. I've been round these halls a hundred times. They're longer every time.
+(looking at the player properly for the first time)
+You've got his face. The key man's. Oh.
+(beat)
+Oh, it's you, isn't it.
+
+EXT. THE GANGWAY. THE LAST CHAMBER. LATER
+
+A timber bridge over a hole in the floor that has no bottom anyone can see. At the far end, the mouth of the flume. MR BARLOW, the night engineer, with a lit lantern.
+
+MR BARLOW
+The flume takes you all the way down. Mind what's at the bottom.
+(beat)
+It's not the water.
+
+On the tail of the gangway, four staff lockers. The player opens number 3 without deciding to.
+
+SUPER: LOCKER 3
+SUPER: Yours. You knew which one before you looked.
+
+INSERT: A NOTE IN THE PLAYER'S OWN HANDWRITING
+
+"I'll go in tomorrow."
+
+(OPTIONAL) By the far rail, a board that somebody has been lifting. The pry bar has it up.
+
+LOOKING STRAIGHT DOWN through the gap. The dark goes down forever. Then, a long way down, something in the dark opens its mouth a little. Teeth, pale, catching a light that is not there. It breathes. It closes.
+
+SUPER: UNDER THE BOARDS
+SUPER: Something down there is breathing.
+
+[[Interactables.loosePlank; StoryClient.peek; Maw built on this screen only, 240 studs down.]]
+
+THE FLUME.
+
+The halls go quiet. The hum stops.
+
+SUPER: THE CORPORATION BATHS
+SUPER: Staff only beyond the flume.
+
+OVER THE SHOULDER into the tube. FROM ACROSS THE SHAFT, the player going round the helix, arms crossed on their chest the way the sign says. FROM BELOW, as they shoot out of the end of the tube into the air. FROM ABOVE, falling with them into the dark.
+
+[[FloodedHallsClient: the flume, 9.2 seconds.]]
+
+THE MOUTH.
+
+FROM INSIDE IT. We are low in something's throat, looking up. Either side of frame, teeth: rows of them, long and thin and curved, lit from somewhere deep below by a light the colour of something that lives without the sun. Far above, the pale square of the shaft, and a small figure falling toward us, turning over, flailing.
+
+The jaws open wider. A sound from below everything: breath.
+
+FROM ABOVE, falling with them. The camera pulls back and narrows at the same moment, and the mouth under them rushes up to fill the world.
+
+[[Dolly zoom: the camera from eight to twenty four studs back while the field of view closes from seventy degrees to under thirty. Cinema.point, Cinema.focus.]]
+
+FROM THE SIDE, level with the teeth, as they pass between them.
+
+The jaws shut.
+
+The camera jolts.
+
+SMASH CUT TO BLACK.
+
+Silence. Then, from inside something, very slow, a heartbeat.
+
+SUPER: THE HOLD
+SUPER: It keeps what it is given.
+
+[[FloodedHallsClient.mawStep: six seconds. Maw.lua, from blender/gen_maw.py: only its mouth, ever.]]
+
+FADE IN:
+
+INT. THE GATE CHAMBER. ONE MINUTE TO MIDNIGHT
+
+Water. The player comes up out of a sump, as if they had been spat out, and climbs a ladder onto a concrete floor.
+
+A room at the very bottom of the waterworks. Pipes on brackets. Beams under the roof. One green lamp. A clock: one minute to midnight. On the wall, a rota: KEY HOLDER, OUTFALL 3: [THE PLAYER'S NAME].
+
+SUPER: OUTFALL GATES
+SUPER: Harrow Bay Corporation Waterworks. One minute to midnight.
+
+In the far wall, three outfalls. Gates 1 and 2 are up. OUTFALL 3, the big one, is shut behind a steel gate, its handwheel on a pedestal in front of it, and under the wheel a brass lock with a 3 on it.
+
+The player walks to the wheel.
+
+CLOSE ON THE HANDS. The player's right hand goes to their pocket and comes out with a key. Brass. A red tag.
+
+SUPER: THE KEY
+SUPER: It was in your pocket the whole time.
+
+The key goes in. It turns. A click, very small, in a very big room.
+
+WIDE, from behind the player. They turn the wheel, hand over hand. The gate grinds. It lifts. Under it, the bay starts to go out, a roar, spray, and at the far end of the outfall, sixty feet away, light. Daylight. The lamps come on one after another down the room. The sump drains.
+
+SUPER: OUTFALL 3
+SUPER: For the first time in three days, the tide is going out.
+
+CLOSE ON THE CLOCK. The minute hand moves.
+
+Twelve.
+
+Somewhere far above, the siren. Not a test.
+
+SUPER: MIDNIGHT
+SUPER: Somewhere far above, the siren. It is not a test.
+
+The camera pushes in past the player toward the open gate and the light at the end of it.
+
+SUPER: HARROW BAY
+SUPER: 14 August. 9:14 in the morning.
+
+[[FloodedHallsClient.chamberStep: thirty four seconds. The server puts the key in the player's hand for everyone to see; the gates, the lamps, the clock and the water change on the rider's own screen.]]
+
+SUPER: LEVEL 4 COMPLETE
+
+The room is theirs for six seconds. Nothing happens in it.
+
+CUT TO:
+
+EXT. THE LOBBY. NO TIME OF DAY
+
+No water. No clock. The pads. The statue. The player, back where they started.
+
+On one pad, very faint, as if it had always been there: LEVEL 1: CITY SHORE. 9:14 AM.
+
+FADE OUT.
+
+/* ================================================================== */
+
+# COMING: HILL HOUSE
+
+EXT. HILL HOUSE. 14 AUGUST, 8:00 AM
+
+A house on the hill over Harrow Bay, with a big clock on its gable. Before any of it. The tide is in, but only just.
+
+INT. HILL HOUSE. THE HALL. CONTINUOUS
+
+Two hooks by the front door. On one, on a green ribbon, the front door key. On the other, a brass key with a red tag: OUTFALL 3.
+
+THE PLAYER stands in their own hall, in their coat. They take the front door key. They look at the other one for a long time.
+
+They leave it on its hook.
+
+[[Never explained: how it is in their pocket at midnight. The Hold keeps what it is given.]]
+
+[[Not built. LORE.md, "Hooks for later": the reason the key holder did not go in, and the true ending, clocking in.]]
+
+THE END OF PART ONE
