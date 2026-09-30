@@ -46,12 +46,93 @@ local RunService = game:GetService("RunService")
 local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
 local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local SunkenPath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("SunkenPath"))
-local SeaRig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("SeaRig"))
+-- SEARIG (the meshes), LOOKED FOR WITH A TIMEOUT. This line used to wait for it forever: a place
+-- without ReplicatedStorage.Shared.SeaRig pasted in stopped this whole client right here, with no
+-- error, only an "Infinite yield possible" line in Output -- and the animals, the flood, the Ferris
+-- wheel turning, the serpent and the ride down the drain were all simply never drawn. Without it
+-- now, every animal is built from parts, and Output, the report and the Studio panel all say so.
+-- And an OLD copy of it, missing something this file calls as it loads, would stop it just the same
+-- with an error; so what it has is checked, and anything short of the whole of it is set aside.
+local SeaRig: any = (function()
+	local found = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("SeaRig", 15)
+	local why = "there is no ReplicatedStorage.Shared.SeaRig"
+	if found and found:IsA("ModuleScript") then
+		local ok, loaded = pcall(require, found)
+		if not ok or type(loaded) ~= "table" then
+			why = "ReplicatedStorage.Shared.SeaRig failed to load (" .. tostring(loaded) .. ")"
+		else
+			why = ""
+			for _, name in ipairs({ "template", "place", "chain", "follow", "bend", "bend2", "summary", "numbered" }) do
+				if type(loaded[name]) ~= "function" then
+					why = "ReplicatedStorage.Shared.SeaRig is an older copy, with no " .. name
+					break
+				end
+			end
+			if why == "" then
+				return loaded
+			end
+		end
+	end
+	warn(("SunkenCityClient: %s, so every animal is built from parts. Paste src/Shared/SeaRig.lua in as a "
+		.. "ModuleScript named exactly SeaRig to draw the meshes."):format(why))
+	local stand = {
+		ACROSS = Vector3.xAxis,
+		UP = Vector3.yAxis,
+		FORWARD = -Vector3.zAxis,
+		BONES = {} :: { [string]: { string } },
+		SIZE = {} :: { [string]: Vector3 },
+	}
+	function stand.numbered(prefix: string, count: number): { string }
+		local names = {}
+		for index = 1, count do
+			table.insert(names, prefix .. index)
+		end
+		return names
+	end
+	function stand.template(_: string): Instance?
+		return nil
+	end
+	function stand.place(...: any): any
+		return nil
+	end
+	function stand.summary(): string
+		return "no meshes: " .. why .. ", so every animal is built from parts"
+	end
+	return stand
+end)()
+-- The rig and the chain SeaRig hands back, as this file uses them.
+type Rig = { model: Instance, part: MeshPart, bones: { [string]: Bone }, rest: { [Bone]: CFrame } }
+type Chain = { bones: { Bone }, heads: { Vector3 }, tails: { Vector3 }, base: CFrame }
+
+-- THE POSES (the flail) and THE CINEMA (the camera, the bars, the captions), both looked for with a
+-- timeout: without them the ride is still drawn, just not as a scene, and Output says why.
+local Poses: any = (function()
+	local found = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Poses", 15)
+	if found and found:IsA("ModuleScript") then
+		return require(found)
+	end
+	warn("SunkenCityClient: no ReplicatedStorage.Shared.Poses, so nobody flails on the way down the drain. Paste "
+		.. "src/Shared/Poses.lua in as a ModuleScript named exactly Poses.")
+	return nil
+end)()
+local Cinema: any = (function()
+	local found = script.Parent and script.Parent:WaitForChild("Cinema", 15)
+	if found and found:IsA("ModuleScript") then
+		return require(found)
+	end
+	warn("SunkenCityClient: no StarterPlayerScripts.Services.Cinema, so the drain is not played as a scene. Paste "
+		.. "src/Client/Services/Cinema.lua in as a ModuleScript named exactly Cinema.")
+	return nil
+end)()
 
 local SunkenCityClient = {}
+-- WHICH CODE IS RUNNING, said in Output as it starts, in the report and on the Studio panel: the
+-- first question whenever something that should be there is not.
+SunkenCityClient.VERSION = "twenty-first pass, 2026-09-30"
 
 local SEGMENTS = SunkenPath.SEGMENTS
 local SPACING = SunkenPath.SPACING
@@ -72,7 +153,7 @@ local folder: Folder? = nil
 local segments: { BasePart } = {}
 -- THE SERPENT (blender/gen_serpent.py, Sea_Serpent), when it is imported: one body bent through the
 -- same nineteen points the part-built one is laid on, its eyes still pale parts carried on its head.
-type ThingMesh = { rig: SeaRig.Rig, chain: SeaRig.Chain, eyes: { BasePart }, eyeRest: { CFrame },
+type ThingMesh = { rig: Rig, chain: Chain, eyes: { BasePart }, eyeRest: { CFrame },
 	headRest: CFrame, posed: { CFrame }, joints: { Vector3 } }
 local thingMesh: ThingMesh? = nil
 local thingPoints: { Vector3 } = {}
@@ -95,8 +176,8 @@ local surfacing: Surfacing? = nil
 local rings: { [Model]: { centre: Vector3, spin: number, rest: CFrame } } = {}
 local buoys: { [Model]: { rest: CFrame, phase: number } } = {}
 local hands: { [BasePart]: { rest: CFrame, pivot: CFrame } } = {}
-local shoals: { [BasePart]: { fish: { Model }, rigs: { SeaRig.Rig }?, holder: Folder, radius: number, speed: number,
-	phase: number, along: Vector3? } } = {}
+local shoals: { [BasePart]: { fish: { Model }, rigs: { Rig }?, holder: Folder, radius: number, speed: number,
+	phase: number, along: Vector3?, turn: number?, turnedAt: number? } } = {}
 local zones: { BasePart } = {}
 local mirrors: { [BasePart]: { face: { BasePart } } } = {}
 local mirrorLamps: { BasePart } = {}
@@ -392,8 +473,10 @@ local moodWritten = -1
 -- The level's ambient sounds (SunkenAmbience) and the volume each was made at, kept by their tag.
 local ambientSounds: { [Sound]: number } = {}
 local function applyMood()
+	-- HUSHED by an ending's scene (Cinema.hush): the level's own sounds stay at nothing from then on.
+	local hush = if Players.LocalPlayer:GetAttribute("Hushed") then 0 else 1
 	local key = math.floor(nearness * 200) + 201 * (math.floor(inside * 200) + 201 * (math.floor(rain * 200)
-		+ 201 * math.floor(drowning * 200)))
+		+ 201 * math.floor(drowning * 200))) + hush * 1e10
 	if key == moodWritten and shade then
 		return
 	end
@@ -403,14 +486,14 @@ local function applyMood()
 	cc.Saturation = -0.2 * nearness - 0.1 * inside - 0.1 * rain
 	cc.TintColor = Color3.new(1, 1, 1):Lerp(Color3.fromRGB(200, 220, 225), nearness):Lerp(Color3.fromRGB(184, 226, 226), inside * 0.8)
 		:Lerp(Color3.fromRGB(120, 196, 190), drowning * 0.7)
-	ensureRumble().Volume = 0.55 * nearness
+	ensureRumble().Volume = 0.55 * nearness * hush
 	for part, base in pairs(waterBase) do
 		if part.Parent then
 			part.Color = base.colour:Lerp(DARK_WATER, 0.6 * nearness)
 			part.Transparency = base.transparency - 0.15 * nearness
 		end
 	end
-	local quiet = (1 - 0.85 * nearness) * (1 - 0.6 * inside)
+	local quiet = (1 - 0.85 * nearness) * (1 - 0.6 * inside) * hush
 	for s, baseVolume in pairs(ambientSounds) do
 		if s.Parent then
 			s.Volume = baseVolume * quiet
@@ -668,20 +751,224 @@ end
 -- it hands the ride over, this draws every frame of it from the same numbers. Your own character is
 -- already yours to move -- the client owns it -- so this costs nothing and is smooth, which the
 -- server writing it sixty times a second was not.
-type Drain = { spec: any, startAt: number, seconds: number }
+-- `who`: the character that went in, so a reset part-way down does not drag the next one after it.
+-- `outfall` and `reveal`: where the culvert runs and what the station shows (SunkenCityService).
+type Drain = { spec: any, startAt: number, seconds: number, who: Instance?, outfall: any?, reveal: any?,
+	landed: boolean?, roar: Sound?, dropped: boolean?, wash: Sound? }
 local drain: Drain? = nil
 local drainRemote: RemoteEvent? = nil
 
+-- ===== THE RIDE, AS A SCENE =====
+--
+-- Going down the drain is not yours to steer, so it is not played as if it were. It is a scene in
+-- three movements, and the camera is its own (Cinema: the bars close in, your controls are off):
+--
+--   THE DRAIN     close on your face as the whirlpool takes you; circling as it drags you round
+--                 and down; from over the shaft looking down as you go head over heels; from low
+--                 in the sluice, looking up, as you come down into it.
+--   THE OUTFALL   the water does not stop there. It lifts you off the grating and carries you on
+--                 your back, feet first, through the sluice's burst door and down OUTFALL 3: seen
+--                 from ahead as you come at the camera past the lamps, from alongside, and over
+--                 your shoulder toward the light at the end, where it sets you on your feet.
+--   THE REVEAL    the pumping station, held: the camera goes to the time card on the wall, which
+--                 has your name on it. Then the camera is yours again, with a few seconds to look
+--                 round before the lobby takes you.
+--
+-- SCORED (Cinema.sound; audio/endings): the whirlpool's roar round you from the moment it takes you,
+-- the rush of the drop as you go down the shaft, the culvert's wash carrying you along (the roar
+-- falling away behind), and the last chord as the station comes into view.
+--
+-- And on every client (SunkenCityService fires "flail" to all of them, because joints turned on one
+-- client are seen on that client only) your arms are thrown up and waving, your legs kick and your
+-- head goes back -- weaker once the current has you -- while you shout for help over your head.
+local cutscene = {
+	CIRCLE = { out = 15, up = 8, turn = 0.45 }, -- the funnel's shot: how far out, how high, how fast round
+	SHAFT_UP = 7, -- the shaft's shot: this far over the top of it
+	FOV = 62,
+	-- Everyone being flailed, on this client, and their joints (found once a character). `calm`: after
+	-- this many seconds it is the current carrying them, not the whirlpool, and they flail less.
+	flailing = {} :: { [Player]: { began: number, seconds: number, calm: number, model: Instance?, joints: { [string]: any }? } },
+	stepped = nil :: RBXScriptConnection?,
+}
+
+function cutscene.start()
+	if Cinema then
+		Cinema.begin()
+	end
+end
+
+-- And back: the camera behind you again, the bars gone, your controls yours.
+function cutscene.finish()
+	if Cinema then
+		Cinema.finish()
+	end
+end
+
+-- Pulled in toward `at` if something stands between it and `eye`.
+local function clearOf(eye: Vector3, at: Vector3): Vector3
+	local character = Players.LocalPlayer.Character
+	return if Cinema then Cinema.clear(eye, at, if character then { character } else {}) else eye
+end
+
+-- THE DRAIN'S SHOTS, `u` of the way down, of a rider whose middle is at `at`, cut like a scene:
+--   THE GRAB (to 0.1): close on their face as it takes them, from the open water side.
+--   THE FUNNEL (to 0.45): wider, above, circling as they go round and down.
+--   THE SHAFT (to 0.9): from over the top of it, straight down at them tumbling away, closing in.
+--   THE BOTTOM (to the end): from low in the sluice, looking up.
+function cutscene.drainShot(spec: any, u: number, at: Vector3, clock: number)
+	if not (Cinema and Cinema.active()) then
+		return
+	end
+	local head = at + Vector3.new(0, 1.5, 0)
+	if u < 0.1 then
+		local out = Vector3.new(at.X - spec.vortex.X, 0, at.Z - spec.vortex.Z)
+		out = if out.Magnitude > 0.1 then out.Unit else Vector3.xAxis
+		Cinema.point(CFrame.lookAt(clearOf(head + out * 7 + Vector3.new(0, 1.2, 0), head), head), 46)
+		return
+	end
+	if u >= 0.9 then
+		local eye = Vector3.new(spec.vortex.X + 4.2, spec.bottomY - 1.2, spec.vortex.Z + 3)
+		Cinema.point(CFrame.lookAt(clearOf(eye, head), head), 72)
+		return
+	end
+	-- DOWN THE SHAFT WITH THEM: once they are through the funnel, the camera falls just under them in
+	-- the middle of the drain, looking up past them at the swirl and the light they came from, the
+	-- flanges and the lamps going up past it and the water pouring down the walls.
+	if at.Y < spec.funnelY - 8 then
+		-- (A jump this far is a new shot to Cinema: it cuts rather than pans.)
+		local eye = Vector3.new(spec.vortex.X + 1.4, at.Y - 11, spec.vortex.Z + 1.1)
+		Cinema.point(CFrame.lookAt(eye, head + Vector3.new(0, 6, 0), Vector3.zAxis), 78)
+		return
+	end
+	local a = clock * cutscene.CIRCLE.turn
+	local round = clearOf(head + Vector3.new(math.cos(a) * cutscene.CIRCLE.out, cutscene.CIRCLE.up, math.sin(a) * cutscene.CIRCLE.out), head)
+	local circling = CFrame.lookAt(round, head)
+	local over = Vector3.new(spec.vortex.X, spec.funnelY + cutscene.SHAFT_UP, spec.vortex.Z)
+	local down = CFrame.lookAt(over, head, Vector3.zAxis)
+	local blend = math.clamp((u - 0.44) / 0.1, 0, 1)
+	blend = blend * blend * (3 - 2 * blend)
+	Cinema.point(circling:Lerp(down, blend), cutscene.FOV - 14 * blend * u)
+end
+
+-- THE OUTFALL'S SHOTS, `v` of the way down the culvert.
+function cutscene.outfallShot(o: any, reveal: any, v: number, at: Vector3)
+	if not (Cinema and Cinema.active()) then
+		return
+	end
+	local _, run = SunkenPath.outfallAt(o, v)
+	local head = at + Vector3.new(0, 0.6, 0)
+	local side = run:Cross(Vector3.yAxis)
+	if v < 0.3 then
+		-- From ahead, low, leading them: they come at the camera past the lamps.
+		Cinema.point(CFrame.lookAt(clearOf(head + run * 10 + Vector3.new(0, 1.8, 0), head), head), 58)
+	elseif v < 0.62 then
+		-- Alongside: carried, turning, flailing weakly.
+		Cinema.point(CFrame.lookAt(clearOf(head + side * 3.6 - run * 1 + Vector3.new(0, 1.6, 0), head), head), 52)
+	elseif v < 0.9 then
+		-- Over the shoulder, down the culvert to the light at the end of it.
+		local eye = clearOf(head - run * 6 + Vector3.new(0, 3, 0), head)
+		Cinema.point(CFrame.lookAt(eye, head + run * 30), 64)
+	else
+		-- The station, from high in its corner, as they are set down on the landing.
+		Cinema.point(CFrame.lookAt(reveal.eye, head), 70)
+	end
+end
+
+-- THE REVEAL, `r` of the way through: from the corner, in to the time card with their name on it.
+function cutscene.revealShot(reveal: any, r: number)
+	if not (Cinema and Cinema.active()) then
+		return
+	end
+	local e = r * r * (3 - 2 * r)
+	local eye = reveal.eye:Lerp(reveal.cardEye, e)
+	local look = reveal.eye:Lerp(reveal.card, math.min(1, e * 1.6))
+	Cinema.point(CFrame.lookAt(eye, look:Lerp(reveal.card, e)), 70 - 30 * e, true)
+end
+
+-- The joints of one character, by name, whichever kind they are (Poses.joints), found once.
+function cutscene.rest(joints: { [string]: any })
+	for _, joint in pairs(joints) do
+		Poses.drive(joint, CFrame.identity)
+	end
+end
+
+-- THE FLAIL, `t` seconds in, at `w` of its full swing: Poses', the same numbers the server uses when
+-- a rider's own client is not running, written where an animation writes.
+function cutscene.pose(j: { [string]: any }, t: number, w: number)
+	local r6 = Poses.isR6(j)
+	for name, joint in pairs(j) do
+		local turn = Poses.flail(name, t, w, r6)
+		if turn then
+			Poses.drive(joint, turn)
+		end
+	end
+end
+
+-- Every frame, after the animations: everyone being flailed. The joints go back to rest when the
+-- ride is over, and the frame hook goes when nobody is riding.
+function cutscene.flailStep()
+	local now = workspace:GetServerTimeNow()
+	for player, f in pairs(cutscene.flailing) do
+		local character = player.Character
+		local t = now - f.began
+		if not character or not player.Parent or t >= f.seconds then
+			if f.joints then
+				cutscene.rest(f.joints)
+			end
+			cutscene.flailing[player] = nil
+		elseif t >= 0 then
+			if f.model ~= character then
+				if f.joints then
+					cutscene.rest(f.joints)
+				end
+				f.model = character
+				f.joints = Poses.joints(character)
+			end
+			local joints = f.joints
+			if joints then
+				cutscene.pose(joints, t, Poses.weight(t, f.seconds) * (if t > f.calm then 0.4 else 1))
+			end
+		end
+	end
+	local hook = cutscene.stepped
+	if hook and next(cutscene.flailing) == nil then
+		hook:Disconnect()
+		cutscene.stepped = nil
+	end
+end
+
+function cutscene.flail(player: any, began: any, seconds: any, calm: any)
+	if not Poses or typeof(player) ~= "Instance" or not player:IsA("Player") or typeof(began) ~= "number"
+		or typeof(seconds) ~= "number" then
+		return
+	end
+	cutscene.flailing[player] = { began = began, seconds = seconds, calm = if typeof(calm) == "number" then calm else seconds }
+	if not cutscene.stepped then
+		cutscene.stepped = RunService.Stepped:Connect(function()
+			guard("the flailing on the way down the drain", cutscene.flailStep)
+		end)
+	end
+end
+
 local function drainStarted(vortex: Vector3, from: Vector3, funnelY: number, bottomY: number,
-	startAt: number, seconds: number)
+	startAt: number, seconds: number, outfall: any, reveal: any)
 	if typeof(vortex) ~= "Vector3" or typeof(from) ~= "Vector3" or typeof(startAt) ~= "number"
 		or typeof(seconds) ~= "number" then
 		return
 	end
+	local fine = type(outfall) == "table" and typeof(outfall.from) == "Vector3" and typeof(outfall.mouth) == "Vector3"
+		and typeof(outfall.to) == "Vector3" and typeof(outfall.waterY) == "number"
+		and type(reveal) == "table" and typeof(reveal.eye) == "Vector3" and typeof(reveal.card) == "Vector3"
+		and typeof(reveal.cardEye) == "Vector3"
 	drain = { spec = { vortex = vortex, from = from, funnelY = funnelY, bottomY = bottomY },
-		startAt = startAt, seconds = seconds }
+		startAt = startAt, seconds = seconds, who = Players.LocalPlayer.Character,
+		outfall = if fine then outfall else nil, reveal = if fine then reveal else nil }
 	if drainRemote then
 		drainRemote:FireServer()
+	end
+	guard("the ride's camera", cutscene.start)
+	if Cinema and drain then
+		drain.roar = Cinema.sound("WhirlRoar", 0.7, { looped = true, fadeIn = 1.5 })
 	end
 end
 
@@ -692,12 +979,65 @@ local function moveRider(serverNow: number)
 	end
 	local character = Players.LocalPlayer.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
-	local u = (serverNow - current.startAt) / current.seconds
-	if u >= 1 or not (root and root:IsA("BasePart")) then
+	if character ~= current.who or not (root and root:IsA("BasePart")) then
 		drain = nil
+		cutscene.finish()
 		return
 	end
-	(root :: BasePart).CFrame = SunkenPath.drainFrame(current.spec, math.max(0, u))
+	local rider = root :: BasePart
+	local clock = os.clock()
+	local t = serverNow - current.startAt
+	local o = current.outfall
+	-- NOTHING BUILDS UP: gravity adds to their speed every frame this holds them, and all of it at
+	-- once at the end once put a rider straight through the sluice's floor.
+	rider.AssemblyLinearVelocity = Vector3.zero
+	rider.AssemblyAngularVelocity = Vector3.zero
+	if t < current.seconds then
+		local u = math.max(0, t / current.seconds)
+		local frame = SunkenPath.drainFrame(current.spec, u) * SunkenPath.tumble(u, clock)
+		rider.CFrame = frame
+		-- DOWN THE SHAFT: the rush of the drop, once.
+		if Cinema and not current.dropped and frame.Position.Y < current.spec.funnelY - 8 then
+			current.dropped = true
+			Cinema.sound("DrainFall", 0.9, { keep = true })
+		end
+		cutscene.drainShot(current.spec, u, frame.Position, clock)
+		return
+	end
+	if not o then
+		-- A server without the outfall: the old ending, in the sluice.
+		drain = nil
+		cutscene.finish()
+		return
+	end
+	local v = (t - current.seconds) / SunkenPath.OUTFALL_SECONDS
+	if v < 1 then
+		local frame = SunkenPath.outfallFrame(o, v, clock)
+		rider.CFrame = frame
+		-- THE CULVERT: its wash carrying them, the whirlpool's roar falling away behind.
+		if Cinema and not current.wash then
+			Cinema.fade(current.roar, 2.5)
+			current.wash = Cinema.sound("CulvertWash", 0.6, { looped = true, fadeIn = 1 })
+		end
+		cutscene.outfallShot(o, current.reveal, v, frame.Position)
+		return
+	end
+	local r = (v - 1) * SunkenPath.OUTFALL_SECONDS / SunkenPath.REVEAL_SECONDS
+	if r < 1 then
+		if not current.landed then
+			current.landed = true
+			rider.CFrame = SunkenPath.outfallFrame(o, 1, clock)
+			if Cinema then
+				Cinema.caption("Harbour Pumping Station", "Outfall 3. The gates are still closed.", 7)
+				Cinema.fade(current.wash, 3)
+				Cinema.sound("SunkenChord", 0.7, { keep = true, fadeIn = 0.8 })
+			end
+		end
+		cutscene.revealShot(current.reveal, r)
+		return
+	end
+	drain = nil
+	cutscene.finish()
 end
 
 -- ===== WHAT LIVES HERE, AND WHAT THE CITY DOES ON ITS OWN =====
@@ -761,7 +1101,7 @@ local POD = { Vector3.new(0, 0, 0), Vector3.new(-2.6, -0.4, 3.2), Vector3.new(2.
 
 type Swimmer = { kind: string, parts: { BasePart }, marker: BasePart, range: number, across: number,
 	speed: number, phase: number, along: Vector3, scale: number, bob: number, holder: Folder,
-	rigs: { SeaRig.Rig }?, shell: BasePart? }
+	rigs: { Rig }?, shell: BasePart? }
 local swimmers: { [BasePart]: Swimmer } = {}
 
 local function makeSwimmer(holder: Folder, kind: string, k: number, clear: boolean): { BasePart }
@@ -836,14 +1176,16 @@ end
 
 -- THE SAME ANIMALS AS MESHES, when they are imported: which mesh each kind is, and its colour (a
 -- mesh takes one, so a ray is the grey of its back and a dolphin its own blue all over).
+-- LIGHT ENOUGH TO SEE: under this water a dark animal is no animal at all, and in play the dark
+-- greys and greens were exactly that. Each is the palest its kind honestly comes in.
 local SWIMMER_MESH: { [string]: { name: string, colour: Color3 } } = {
-	ray = { name = "Sea_Ray", colour = Color3.fromRGB(64, 78, 82) },
-	turtle = { name = "Sea_Turtle", colour = Color3.fromRGB(120, 124, 92) },
-	jelly = { name = "Sea_Jelly", colour = Color3.fromRGB(226, 196, 232) },
-	eel = { name = "Sea_Eel", colour = Color3.fromRGB(48, 58, 50) },
-	dolphins = { name = "Sea_Dolphin", colour = Color3.fromRGB(112, 130, 146) },
-	shark = { name = "Sea_Shark", colour = Color3.fromRGB(92, 104, 112) },
-	grouper = { name = "Sea_Grouper", colour = Color3.fromRGB(96, 92, 80) },
+	ray = { name = "Sea_Ray", colour = Color3.fromRGB(122, 138, 150) },
+	turtle = { name = "Sea_Turtle", colour = Color3.fromRGB(168, 164, 112) },
+	jelly = { name = "Sea_Jelly", colour = Color3.fromRGB(240, 196, 232) },
+	eel = { name = "Sea_Eel", colour = Color3.fromRGB(150, 156, 76) },
+	dolphins = { name = "Sea_Dolphin", colour = Color3.fromRGB(150, 170, 186) },
+	shark = { name = "Sea_Shark", colour = Color3.fromRGB(160, 172, 182) },
+	grouper = { name = "Sea_Grouper", colour = Color3.fromRGB(186, 142, 92) },
 }
 -- HOW HARD EACH SWIMS, in radians a bone. check_sunkencity.py restates the ones that decide how near
 -- something a fin or a wing tip can come: the ray's wings over the tunnel's roof above all, and how
@@ -867,14 +1209,14 @@ local SWIM = {
 
 -- The meshes for one swimmer (three for the pod, and the turtle's shell as well as its body), or
 -- nil if any of them is not imported, in which case it is drawn the old way whole.
-local function makeSwimmerMesh(holder: Folder, kind: string, clear: boolean): ({ SeaRig.Rig }?, BasePart?)
+local function makeSwimmerMesh(holder: Folder, kind: string, clear: boolean): ({ Rig }?, BasePart?)
 	local spec = SWIMMER_MESH[kind]
 	if not spec or not SeaRig.template(spec.name) or (kind == "turtle" and not SeaRig.template("Sea_TurtleShell")) then
 		return nil, nil
 	end
 	local shell: BasePart? = nil
 	if kind == "turtle" then
-		local rig = SeaRig.place(holder, "Sea_TurtleShell", Color3.fromRGB(86, 96, 62))
+		local rig = SeaRig.place(holder, "Sea_TurtleShell", Color3.fromRGB(138, 112, 70))
 		shell = rig and rig.part
 	end
 	local rigs = {}
@@ -1033,7 +1375,7 @@ end
 -- THE MESHES SWIM BY BENDING: a wave down a fish's body, a ray's wings from the root out, a turtle's
 -- flippers rowing and flapping, a jellyfish's bell pulling in and letting go.
 local function moveSwimmerMesh(s: Swimmer, clock: number)
-	local rig = (s.rigs :: { SeaRig.Rig })[1]
+	local rig = (s.rigs :: { Rig })[1]
 	if not rig then
 		return
 	end
@@ -1100,6 +1442,80 @@ local function moveSwimmerMesh(s: Swimmer, clock: number)
 	end
 end
 
+-- ONE ANIMAL, this frame.
+local function moveOneSwimmer(s: Swimmer, clock: number)
+	local p = s.parts
+	local k = s.scale
+	if s.kind == "dolphins" then
+		moveDolphins(s, clock)
+		return
+	end
+	if s.rigs then
+		moveSwimmerMesh(s, clock)
+		return
+	end
+	if s.kind == "eel" then
+		-- Each segment is where the head was a moment before, facing the one ahead of it.
+		local lag = 2.2 * k / math.max(0.5, 0.1 * s.speed * s.range * 0.6)
+		local ahead = swimmerAt(s, clock + lag)
+		for index, part in ipairs(p) do
+			local at = swimmerAt(s, clock - (index - 1) * lag)
+			part.CFrame = if (ahead - at).Magnitude > 0.01 then CFrame.lookAt(at, ahead) else CFrame.new(at)
+			ahead = at
+		end
+		return
+	end
+	local here = swimmerAt(s, clock)
+	local ahead = swimmerAt(s, clock + 0.25)
+	local heading = if (ahead - here).Magnitude > 0.01 then CFrame.lookAt(here, ahead) else CFrame.new(here)
+	if s.kind == "ray" then
+		-- Wings hinge at the body's edge, not at their own middle.
+		local beat = math.sin(clock * 2.2 + s.phase) * 0.45
+		p[1].CFrame = heading
+		p[2].CFrame = heading * CFrame.new(-1.3 * k, 0, 0.3 * k) * CFrame.Angles(0, 0, beat) * CFrame.new(-1.5 * k, 0, 0)
+		p[3].CFrame = heading * CFrame.new(1.3 * k, 0, 0.3 * k) * CFrame.Angles(0, 0, -beat) * CFrame.new(1.5 * k, 0, 0)
+		p[4].CFrame = heading * CFrame.new(0, 0, 4 * k) * CFrame.Angles(0, math.sin(clock * 3 + s.phase) * 0.3, 0)
+	elseif s.kind == "turtle" then
+		local paddle = math.sin(clock * 1.6 + s.phase) * 0.5
+		p[1].CFrame = heading
+		p[2].CFrame = heading * CFrame.new(0, 0.1 * k, -2.8 * k)
+		p[3].CFrame = heading * CFrame.new(-2 * k, 0, -1.2 * k) * CFrame.Angles(0, paddle, -0.3)
+		p[4].CFrame = heading * CFrame.new(2 * k, 0, -1.2 * k) * CFrame.Angles(0, -paddle, 0.3)
+		p[5].CFrame = heading * CFrame.new(-1.6 * k, 0, 1.8 * k) * CFrame.Angles(0, -paddle * 0.5, -0.3)
+		p[6].CFrame = heading * CFrame.new(1.6 * k, 0, 1.8 * k) * CFrame.Angles(0, paddle * 0.5, 0.3)
+	elseif s.kind == "jelly" then
+		-- The bell pulses and the tendrils trail and sway under it.
+		local pulse = 1 + 0.12 * math.sin(clock * 2 + s.phase)
+		p[1].Size = Vector3.new(2.4 * pulse, 1.8 / pulse, 2.4 * pulse) * k
+		p[1].CFrame = CFrame.new(here)
+		for index = 2, 5 do
+			local a = index * math.pi / 2
+			p[index].CFrame = CFrame.new(here + Vector3.new(math.cos(a) * 0.6, -2.4, math.sin(a) * 0.6) * k)
+				* CFrame.Angles(math.sin(clock * 1.3 + index) * 0.25, 0, math.cos(clock * 1.1 + index) * 0.25)
+		end
+	elseif s.kind == "shark" then
+		local wag = math.sin(clock * 1.8 + s.phase)
+		local body = heading * CFrame.Angles(0, wag * 0.06, 0)
+		p[1].CFrame = body
+		p[2].CFrame = body * CFrame.new(0, -0.55 * k, 0.3 * k)
+		p[3].CFrame = body * CFrame.new(0, 1.9 * k, 0.2 * k) * CFrame.Angles(0.45, 0, 0)
+		local root = body * CFrame.new(0, 0, 5 * k) * CFrame.Angles(0, wag * 0.45, 0)
+		p[4].CFrame = root * CFrame.new(0, 1.1 * k, 0.4 * k) * CFrame.Angles(0.6, 0, 0)
+		p[5].CFrame = root * CFrame.new(0, -0.6 * k, 0.2 * k) * CFrame.Angles(-0.5, 0, 0)
+		p[6].CFrame = body * CFrame.new(-1.5 * k, -0.6 * k, -1.2 * k) * CFrame.Angles(0, 0, 0.35)
+		p[7].CFrame = body * CFrame.new(1.5 * k, -0.6 * k, -1.2 * k) * CFrame.Angles(0, 0, -0.35)
+		p[8].CFrame = body * CFrame.new(-0.85 * k, 0.35 * k, -4.1 * k)
+		p[9].CFrame = body * CFrame.new(0.85 * k, 0.35 * k, -4.1 * k)
+	else
+		local wag = math.sin(clock * 2.4 + s.phase) * 0.35
+		p[1].CFrame = heading
+		p[2].CFrame = heading * CFrame.new(0, 0, 3.4 * k) * CFrame.Angles(0, wag, 0)
+		p[3].CFrame = heading * CFrame.new(0, 1.6 * k, 0.4 * k)
+		p[4].CFrame = heading * CFrame.new(0.9 * k, 0.4 * k, -2.2 * k)
+		p[5].CFrame = heading * CFrame.new(-0.9 * k, 0.4 * k, -2.2 * k)
+	end
+end
+
 local function moveSwimmers(clock: number)
 	for marker, s in pairs(swimmers) do
 		if not marker.Parent then
@@ -1109,75 +1525,11 @@ local function moveSwimmers(clock: number)
 		if (marker.Position - eyeAt).Magnitude > SEEN.water + s.range then
 			continue
 		end
-		local p = s.parts
-		local k = s.scale
-		if s.kind == "dolphins" then
-			moveDolphins(s, clock)
-			continue
-		end
-		if s.rigs then
-			moveSwimmerMesh(s, clock)
-			continue
-		end
-		if s.kind == "eel" then
-			-- Each segment is where the head was a moment before, facing the one ahead of it.
-			local lag = 2.2 * k / math.max(0.5, 0.1 * s.speed * s.range * 0.6)
-			local ahead = swimmerAt(s, clock + lag)
-			for index, part in ipairs(p) do
-				local at = swimmerAt(s, clock - (index - 1) * lag)
-				part.CFrame = if (ahead - at).Magnitude > 0.01 then CFrame.lookAt(at, ahead) else CFrame.new(at)
-				ahead = at
-			end
-			continue
-		end
-		local here = swimmerAt(s, clock)
-		local ahead = swimmerAt(s, clock + 0.25)
-		local heading = if (ahead - here).Magnitude > 0.01 then CFrame.lookAt(here, ahead) else CFrame.new(here)
-		if s.kind == "ray" then
-			-- Wings hinge at the body's edge, not at their own middle.
-			local beat = math.sin(clock * 2.2 + s.phase) * 0.45
-			p[1].CFrame = heading
-			p[2].CFrame = heading * CFrame.new(-1.3 * k, 0, 0.3 * k) * CFrame.Angles(0, 0, beat) * CFrame.new(-1.5 * k, 0, 0)
-			p[3].CFrame = heading * CFrame.new(1.3 * k, 0, 0.3 * k) * CFrame.Angles(0, 0, -beat) * CFrame.new(1.5 * k, 0, 0)
-			p[4].CFrame = heading * CFrame.new(0, 0, 4 * k) * CFrame.Angles(0, math.sin(clock * 3 + s.phase) * 0.3, 0)
-		elseif s.kind == "turtle" then
-			local paddle = math.sin(clock * 1.6 + s.phase) * 0.5
-			p[1].CFrame = heading
-			p[2].CFrame = heading * CFrame.new(0, 0.1 * k, -2.8 * k)
-			p[3].CFrame = heading * CFrame.new(-2 * k, 0, -1.2 * k) * CFrame.Angles(0, paddle, -0.3)
-			p[4].CFrame = heading * CFrame.new(2 * k, 0, -1.2 * k) * CFrame.Angles(0, -paddle, 0.3)
-			p[5].CFrame = heading * CFrame.new(-1.6 * k, 0, 1.8 * k) * CFrame.Angles(0, -paddle * 0.5, -0.3)
-			p[6].CFrame = heading * CFrame.new(1.6 * k, 0, 1.8 * k) * CFrame.Angles(0, paddle * 0.5, 0.3)
-		elseif s.kind == "jelly" then
-			-- The bell pulses and the tendrils trail and sway under it.
-			local pulse = 1 + 0.12 * math.sin(clock * 2 + s.phase)
-			p[1].Size = Vector3.new(2.4 * pulse, 1.8 / pulse, 2.4 * pulse) * k
-			p[1].CFrame = CFrame.new(here)
-			for index = 2, 5 do
-				local a = index * math.pi / 2
-				p[index].CFrame = CFrame.new(here + Vector3.new(math.cos(a) * 0.6, -2.4, math.sin(a) * 0.6) * k)
-					* CFrame.Angles(math.sin(clock * 1.3 + index) * 0.25, 0, math.cos(clock * 1.1 + index) * 0.25)
-			end
-		elseif s.kind == "shark" then
-			local wag = math.sin(clock * 1.8 + s.phase)
-			local body = heading * CFrame.Angles(0, wag * 0.06, 0)
-			p[1].CFrame = body
-			p[2].CFrame = body * CFrame.new(0, -0.55 * k, 0.3 * k)
-			p[3].CFrame = body * CFrame.new(0, 1.9 * k, 0.2 * k) * CFrame.Angles(0.45, 0, 0)
-			local root = body * CFrame.new(0, 0, 5 * k) * CFrame.Angles(0, wag * 0.45, 0)
-			p[4].CFrame = root * CFrame.new(0, 1.1 * k, 0.4 * k) * CFrame.Angles(0.6, 0, 0)
-			p[5].CFrame = root * CFrame.new(0, -0.6 * k, 0.2 * k) * CFrame.Angles(-0.5, 0, 0)
-			p[6].CFrame = body * CFrame.new(-1.5 * k, -0.6 * k, -1.2 * k) * CFrame.Angles(0, 0, 0.35)
-			p[7].CFrame = body * CFrame.new(1.5 * k, -0.6 * k, -1.2 * k) * CFrame.Angles(0, 0, -0.35)
-			p[8].CFrame = body * CFrame.new(-0.85 * k, 0.35 * k, -4.1 * k)
-			p[9].CFrame = body * CFrame.new(0.85 * k, 0.35 * k, -4.1 * k)
-		else
-			local wag = math.sin(clock * 2.4 + s.phase) * 0.35
-			p[1].CFrame = heading
-			p[2].CFrame = heading * CFrame.new(0, 0, 3.4 * k) * CFrame.Angles(0, wag, 0)
-			p[3].CFrame = heading * CFrame.new(0, 1.6 * k, 0.4 * k)
-			p[4].CFrame = heading * CFrame.new(0.9 * k, 0.4 * k, -2.2 * k)
-			p[5].CFrame = heading * CFrame.new(-0.9 * k, 0.4 * k, -2.2 * k)
+		-- EACH ON ITS OWN: one animal that throws stops only itself, and says which kind, once.
+		local ok, err = pcall(moveOneSwimmer, s, clock)
+		if not ok and not failures["the " .. s.kind] then
+			failures["the " .. s.kind] = true
+			warn(("SunkenCityClient: the %s failed to move, and the other animals carry on: %s"):format(s.kind, tostring(err)))
 		end
 	end
 end
@@ -1187,7 +1539,7 @@ end
 -- White over grey, black-tipped, circling their points over the street: flapping for a while, then
 -- gliding with the wings held, banked into the turn.
 type Gull = { marker: BasePart, parts: { BasePart }, radius: number, speed: number, phase: number, holder: Folder,
-	body: BasePart?, wings: SeaRig.Rig? }
+	body: BasePart?, wings: Rig? }
 local gulls: { [BasePart]: Gull } = {}
 local GULL_SIZE = 1.4
 
@@ -1315,7 +1667,7 @@ end
 type Kelp = { marker: BasePart, height: number, phase: number, lean: Vector3, across: Vector3, joints: number,
 	parts: { BasePart }, blades: { { part: BasePart, joint: number, side: number, long: number } },
 	floats: { { part: BasePart, joint: number, side: number } }, holder: Folder,
-	rig: SeaRig.Rig?, chain: SeaRig.Chain?, canopy: SeaRig.Rig?, frame: CFrame?, jointBuf: { Vector3 } }
+	rig: Rig?, chain: Chain?, canopy: Rig?, frame: CFrame?, jointBuf: { Vector3 } }
 local kelps: { [BasePart]: Kelp } = {}
 local KELP_NEAR = 300
 local KELP_STIPE = Color3.fromRGB(96, 88, 48)
@@ -1690,7 +2042,7 @@ local function stepRain(t: number, dt: number, clock: number, at: Vector3?)
 		drops.Rate = 700 * rain
 	end
 	if rainSound then
-		rainSound.Volume = 0.22 * rain
+		rainSound.Volume = if Players.LocalPlayer:GetAttribute("Hushed") then 0 else 0.22 * rain
 	end
 	-- Rings on the water round you, a few at a time.
 	local b = brief
@@ -1808,193 +2160,48 @@ local function stepLeviathan(t: number)
 end
 
 
--- ===== THE FLOOD =====
+-- ===== UNDER THE WATER =====
 --
--- When the glass goes (SunkenCityService writes `Flood` and `FloodAt` on the model), every client
--- sees the same thing: the pane bursts inward in shards, a jet of water comes through the hole, and
--- the tower, the tunnel and the gallery fill to the top over the time the server gives it. Inside
--- the water the view goes green and soft. The server washes everyone out once it is up; when it
--- writes `Flood` back to 0 the water goes down again.
+-- The water you can swim in here is Roblox terrain water: the flooded floor under the dry flat, and
+-- the aquarium once its glass goes (SunkenCityService fills it). Roblox already turns the view murky
+-- under it; what it does not do is the SOUND, which stays as crisp as on dry land. So with the camera
+-- under terrain water everything you hear goes dull and close (the UnderWater reverb), and comes back
+-- when you surface. One voxel looked at, a few times a second.
 local floodVolumes: { BasePart } = {}
-type FloodWater = { part: Part, volume: BasePart, axis: number, sign: number }
-local floodWater: { FloodWater } = {}
-local floodBegan = 0
-local floodDrainFrom = 0
-local floodBlur: BlurEffect? = nil
-local shards: { { part: BasePart, velocity: Vector3, spin: Vector3, born: number } } = {}
-local FLOOD_RISE, FLOOD_DRAIN = 3.5, 4
-
--- Which of a part's own axes is nearest to world up, and whether it points up or down: a volume
--- can be a box standing up or a cylinder lying on its side stood on end.
-local function upAxis(part: BasePart): (number, number)
-	local best, sign, most = 2, 1, -1
-	for axis, v in ipairs({ part.CFrame.RightVector, part.CFrame.UpVector, -part.CFrame.LookVector }) do
-		local d = v:Dot(Vector3.yAxis)
-		if math.abs(d) > most then
-			best, sign, most = axis, if d >= 0 then 1 else -1, math.abs(d)
-		end
-	end
-	return best, sign
-end
-
-local function setWater(w: FloodWater, share: number)
-	local size = w.volume.Size
-	local full = if w.axis == 1 then size.X elseif w.axis == 2 then size.Y else size.Z
-	local h = math.max(0.05, full * share)
-	local offset = (-full / 2 + h / 2) * w.sign
-	if w.axis == 1 then
-		w.part.Size = Vector3.new(h, size.Y, size.Z)
-		w.part.CFrame = w.volume.CFrame * CFrame.new(offset, 0, 0)
-	elseif w.axis == 2 then
-		w.part.Size = Vector3.new(size.X, h, size.Z)
-		w.part.CFrame = w.volume.CFrame * CFrame.new(0, offset, 0)
-	else
-		w.part.Size = Vector3.new(size.X, size.Y, h)
-		w.part.CFrame = w.volume.CFrame * CFrame.new(0, 0, offset)
-	end
-end
+local FLOOD = { under = false, nextLook = 0, reverb = nil :: Enum.ReverbType? }
 
 local function clearFlood()
-	for _, w in ipairs(floodWater) do
-		w.part:Destroy()
+	local was = FLOOD.reverb
+	if was then
+		SoundService.AmbientReverb = was
+		FLOOD.reverb = nil
 	end
-	floodWater = {}
-	floodDrainFrom = 0
-	for _, shard in ipairs(shards) do
-		shard.part:Destroy()
-	end
-	shards = {}
-	if floodBlur then
-		floodBlur:Destroy()
-		floodBlur = nil
-	end
+	FLOOD.under = false
 	drowning = 0
 end
 
-local function startFlood(model: Instance)
-	clearFlood()
-	for _, volume in ipairs(floodVolumes) do
-		if volume.Parent and volume:IsDescendantOf(model) and volume:IsA("Part") then
-			local axis, sign = upAxis(volume)
-			local water = localPart(workspace, "FloodWater", Vector3.new(1, 1, 1), Color3.fromRGB(56, 116, 118), false)
-			water.Shape = volume.Shape
-			water.Transparency = 0.4
-			local w: FloodWater = { part = water, volume = volume, axis = axis, sign = sign }
-			setWater(w, 0)
-			table.insert(floodWater, w)
-		end
-	end
-	floodBegan = os.clock()
-	local at = model:GetAttribute("FloodAt")
-	if typeof(at) ~= "Vector3" then
-		return
-	end
-	-- Inward: toward the middle of the nearest of the spaces that flood.
-	local inward = Vector3.xAxis
-	local gap = math.huge
-	for _, w in ipairs(floodWater) do
-		local d = (w.volume.Position - at).Magnitude
-		if d < gap then
-			gap = d
-			local flat = Vector3.new(w.volume.Position.X - at.X, 0, w.volume.Position.Z - at.Z)
-			inward = if flat.Magnitude > 0.1 then flat.Unit else Vector3.xAxis
-		end
-	end
-	local camera = workspace.CurrentCamera
-	if camera and (camera.CFrame.Position - at).Magnitude < 160 then
-		longSound(SoundService, CRUMBLE_SOUND, 1.3, 1.1)
-		longSound(SoundService, WATER_SOUND, 0.45, 1.3)
-		longSound(SoundService, THUD_SOUND, 0.35, 1)
-	end
-	for _ = 1, 16 do
-		local shard = localPart(workspace, "Shard", Vector3.new(0.1 + math.random() * 0.1, 0.5 + math.random() * 0.9,
-			0.4 + math.random() * 0.7), Color3.fromRGB(200, 230, 232), false)
-		shard.Transparency = 0.35
-		shard.CFrame = CFrame.new(at + Vector3.new((math.random() - 0.5) * 3, (math.random() - 0.5) * 3, (math.random() - 0.5) * 3))
-			* CFrame.Angles(math.random() * 6, math.random() * 6, math.random() * 6)
-		table.insert(shards, { part = shard, velocity = inward * (14 + math.random() * 12)
-			+ Vector3.new((math.random() - 0.5) * 8, math.random() * 6, (math.random() - 0.5) * 8),
-			spin = Vector3.new(math.random() * 8, math.random() * 8, math.random() * 8), born = os.clock() })
-	end
-	-- The jet, through the hole, for as long as the water is coming up.
-	local jet = localPart(workspace, "Jet", Vector3.new(1, 1, 1), BODY, false)
-	jet.Transparency = 1
-	jet.CFrame = CFrame.lookAt(at, at + inward)
-	local spray = Instance.new("ParticleEmitter")
-	spray.Texture = "rbxasset://textures/particles/smoke_main.dds"
-	spray.Color = ColorSequence.new(Color3.fromRGB(206, 234, 232))
-	spray.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 4.5) })
-	spray.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) })
-	spray.Lifetime = NumberRange.new(0.5, 0.8)
-	spray.Speed = NumberRange.new(28, 40)
-	spray.EmissionDirection = Enum.NormalId.Front
-	spray.SpreadAngle = Vector2.new(12, 12)
-	spray.Acceleration = Vector3.new(0, -20, 0)
-	spray.Rate = 140
-	spray.Parent = jet
-	task.delay(FLOOD_RISE + 1.5, function()
-		jet:Destroy()
-	end)
-end
-
 local function stepFlood(clock: number, dt: number)
-	if #floodWater > 0 then
-		local share
-		if floodDrainFrom > 0 then
-			share = 1 - (clock - floodDrainFrom) / FLOOD_DRAIN
-			if share <= 0 then
-				clearFlood()
-				return
-			end
-		else
-			share = math.min(1, (clock - floodBegan) / FLOOD_RISE)
+	if clock >= FLOOD.nextLook then
+		FLOOD.nextLook = clock + 0.15
+		local camera = workspace.CurrentCamera
+		local under = false
+		if camera then
+			local p = camera.CFrame.Position
+			local low = Vector3.new(math.floor(p.X / 4) * 4, math.floor(p.Y / 4) * 4, math.floor(p.Z / 4) * 4)
+			local materials, occupancies = workspace.Terrain:ReadVoxels(Region3.new(low, low + Vector3.new(4, 4, 4)), 4)
+			-- Under its surface, not merely in a voxel with some water in it.
+			under = materials[1][1][1] == Enum.Material.Water and occupancies[1][1][1] >= (p.Y - low.Y) / 4
 		end
-		share = share * share * (3 - 2 * share)
-		for _, w in ipairs(floodWater) do
-			setWater(w, share)
-		end
+		FLOOD.under = under
 	end
-	for index = #shards, 1, -1 do
-		local shard = shards[index]
-		if clock - shard.born > 2 then
-			shard.part:Destroy()
-			table.remove(shards, index)
-		else
-			-- Sinking through water, not falling through air: heavy drag, light gravity.
-			shard.velocity = (shard.velocity + Vector3.new(0, -14 * dt, 0)) * (1 - math.min(0.9, 2.2 * dt))
-			shard.part.CFrame = (shard.part.CFrame + shard.velocity * dt)
-				* CFrame.Angles(shard.spin.X * dt, shard.spin.Y * dt, shard.spin.Z * dt)
-		end
-	end
-	-- INSIDE THE WATER: the view goes green and soft.
-	local under = false
-	local camera = workspace.CurrentCamera
-	if camera then
-		local eye = camera.CFrame.Position
-		for _, w in ipairs(floodWater) do
-			local p = w.part.CFrame:PointToObjectSpace(eye)
-			local half = w.part.Size / 2
-			if math.abs(p.X) <= half.X and math.abs(p.Y) <= half.Y and math.abs(p.Z) <= half.Z then
-				under = true
-			end
-		end
-	end
-	drowning = ease(drowning, if under then 1 else 0, 2.5, dt)
-	if drowning > 0.01 then
-		local blur = floodBlur
-		if not blur then
-			local made = Instance.new("BlurEffect")
-			made.Name = "SunkenFloodBlur"
-			made.Parent = Lighting
-			floodBlur = made
-			blur = made
-		end
-		if blur then
-			blur.Size = 12 * drowning
-		end
-	elseif floodBlur then
-		floodBlur:Destroy()
-		floodBlur = nil
+	drowning = ease(drowning, if FLOOD.under then 1 else 0, 2.5, dt)
+	local was = FLOOD.reverb
+	if drowning > 0.5 and not was then
+		FLOOD.reverb = SoundService.AmbientReverb
+		SoundService.AmbientReverb = Enum.ReverbType.UnderWater
+	elseif drowning <= 0.5 and was then
+		SoundService.AmbientReverb = was
+		FLOOD.reverb = nil
 	end
 end
 
@@ -2137,6 +2344,12 @@ local function moveSmallThings(clock: number)
 	local bolt = if startled > 0 then startled / 2.5 else 0
 	-- The mesh fish are moved together (BulkMoveTo), which is far cheaper than one CFrame at a time.
 	local moved: { BasePart }, frames: { CFrame } = {}, {}
+	-- AND THEY GET OUT OF YOUR WAY: a fish within SCATTER of you darts off from you, harder the nearer,
+	-- and drifts back into its shoal as you go.
+	local character = Players.LocalPlayer.Character
+	local me = character and character:FindFirstChild("HumanoidRootPart")
+	local mine: Vector3? = if me and me:IsA("BasePart") then me.Position else nil
+	local SCATTER = 13
 	for marker, shoal in pairs(shoals) do
 		if marker.Parent and (marker.Position - eyeAt).Magnitude < SEEN.water + shoal.radius then
 			-- A shoal in the street goes round a loop laid along it and is nowhere near the glass,
@@ -2145,18 +2358,33 @@ local function moveSmallThings(clock: number)
 			local startle = if along then 0 else bolt
 			local rigs = shoal.rigs
 			local count = if rigs then #rigs else #shoal.fish
-			local radius = shoal.radius * (1 + startle * 0.8)
-			local speed = shoal.speed * (1 + startle * 2.2)
+			local radius = shoal.radius * (1 + startle * 0.5)
+			local speed = shoal.speed * (1 + startle * 0.7)
 			local side = if along then Vector3.new(-along.Z, 0, along.X) else Vector3.zAxis
 			local run = along or Vector3.xAxis
+			-- THE TURN IS ADDED UP, not worked out from the clock. `clock * speed` with the speed doubling on a
+			-- tap jumped every fish thousands of radians round its loop in one frame, which is the spinning
+			-- that looked like a glitch. Now a startled shoal only speeds up from where it is, and gently.
+			local lastAt = shoal.turnedAt or clock
+			shoal.turnedAt = clock
+			shoal.turn = (shoal.turn or 0) + math.clamp(clock - lastAt, 0, 0.1) * speed
 			for index = 1, count do
-				local a = clock * speed + index * 2 * math.pi / count + shoal.phase
+				local a = shoal.turn + index * 2 * math.pi / count + shoal.phase
 				local wobble = 1 + 0.15 * math.sin(a * 3 + index)
 				local rise = 1.2 * math.sin(clock * 0.8 + index) + startle * 3 * math.sin(index * 1.7)
-				local here = marker.Position + run * (math.cos(a) * radius * wobble) + side * (math.sin(a) * radius * 0.6)
+				local here = marker.Position + run * (math.cos(a) * radius * wobble) + side * (math.sin(a) * radius * 0.35)
 					+ Vector3.new(0, rise, 0)
-				local ahead = marker.Position + run * (math.cos(a + 0.1) * radius * wobble) + side * (math.sin(a + 0.1) * radius * 0.6)
+				local ahead = marker.Position + run * (math.cos(a + 0.1) * radius * wobble) + side * (math.sin(a + 0.1) * radius * 0.35)
 					+ Vector3.new(0, rise, 0)
+				if mine then
+					local away = here - mine
+					local d = away.Magnitude
+					if d < SCATTER and d > 0.01 then
+						local push = away.Unit * (SCATTER - d) * 0.9
+						here += push
+						ahead = here + away.Unit * 2
+					end
+				end
 				local rig = rigs and rigs[index]
 				if rig then
 					-- A mesh fish beats its tail, faster when it bolts.
@@ -2281,7 +2509,7 @@ local function step(dt: number)
 		guard("the thing on the horizon", stepLeviathan, t)
 		guard("the strange sounds", stepStrange, clock, at)
 		guard("what looks in at the window", stepDeep, t, clock, at)
-	elseif leviathan or rainHost or tolled ~= nil or #floodWater > 0 or deepThing then
+	elseif leviathan or rainHost or tolled ~= nil or FLOOD.reverb or deepThing then
 		guard("clearing up the level", clearWeather)
 	end
 end
@@ -2303,6 +2531,121 @@ local function fell()
 	end)
 end
 
+-- ===== WHAT THIS CLIENT IS DRAWING, ON SCREEN (in Studio only) =====
+--
+-- Play in Studio and a small panel at the top left says, twice a second, what this client has
+-- actually built: which version is running, whether SeaRig was found and which meshes it refused,
+-- how many animals there are and from what, the nearest one, the flood, the ride, and anything that
+-- has failed. It starts HIDDEN: F7 shows it and hides it again, and so does the x in its corner. None
+-- of it exists in a published game.
+--
+-- (F7 did nothing before: the listener ignored any key Roblox had marked as already handled, and in
+-- Studio that can be every function key. It now listens regardless, except while you are typing.)
+local panel = { on = false }
+
+local function countOf(set: { [any]: any }): number
+	local n = 0
+	for _ in pairs(set) do
+		n += 1
+	end
+	return n
+end
+
+function panel.lines(): string
+	local meshes, nearest, kind = 0, math.huge, "none"
+	for marker, each in pairs(swimmers) do
+		if each.rigs then
+			meshes += 1
+		end
+		local d = (marker.Position - eyeAt).Magnitude
+		if d < nearest then
+			nearest, kind = d, each.kind
+		end
+	end
+	local broken = {}
+	for name in pairs(failures) do
+		table.insert(broken, name)
+	end
+	return table.concat({
+		"SunkenCityClient, " .. SunkenCityClient.VERSION .. " (F7 hides this)",
+		SeaRig.summary(),
+		("animals: %d, %d of them meshes; nearest: %s"):format(countOf(swimmers), meshes,
+			if nearest < math.huge then ("a %s, %d studs away"):format(kind, math.floor(nearest)) else "none on this client"),
+		("shoals %d, kelp %d, gulls %d, Ferris pieces turning %d, whirlpool rings %d"):format(countOf(shoals),
+			countOf(kelps), countOf(gulls), countOf(ferris), countOf(rings)),
+		"the thing under the route: " .. (if thingMesh then "the serpent mesh" elseif #segments > 0 then #segments .. " pieces" else "not here"),
+		"under terrain water: " .. (if FLOOD.under then "yes, and the sound is muffled" else "no"),
+		"the drain: " .. (if drain then "riding it now" else "not riding"),
+		if #broken == 0 then "nothing has failed" else "FAILED: " .. table.concat(broken, ", "),
+	}, "\n")
+end
+
+function panel.start()
+	if not RunService:IsStudio() then
+		return
+	end
+	local gui = Players.LocalPlayer:WaitForChild("PlayerGui", 20)
+	if not gui then
+		return
+	end
+	local holder = Instance.new("ScreenGui")
+	holder.Name = "SunkenCityPanel"
+	holder.ResetOnSpawn = false
+	holder.DisplayOrder = 30
+	local label = Instance.new("TextLabel")
+	label.Position = UDim2.fromOffset(12, 12)
+	label.Size = UDim2.fromOffset(560, 0)
+	label.AutomaticSize = Enum.AutomaticSize.Y
+	label.BackgroundColor3 = Color3.fromRGB(14, 20, 24)
+	label.BackgroundTransparency = 0.25
+	label.BorderSizePixel = 0
+	label.Font = Enum.Font.Code
+	label.TextSize = 14
+	label.TextColor3 = Color3.fromRGB(214, 236, 232)
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextYAlignment = Enum.TextYAlignment.Top
+	label.TextWrapped = true
+	label.Text = "SunkenCityClient, " .. SunkenCityClient.VERSION
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
+	pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
+	pad.Parent = label
+	label.Visible = panel.on
+	label.Parent = holder
+	local shut = Instance.new("TextButton")
+	shut.Name = "Hide"
+	shut.AnchorPoint = Vector2.new(1, 0)
+	shut.Position = UDim2.new(1, -4, 0, 4)
+	shut.Size = UDim2.fromOffset(22, 22)
+	shut.BackgroundColor3 = Color3.fromRGB(60, 70, 76)
+	shut.BorderSizePixel = 0
+	shut.Font = Enum.Font.GothamBold
+	shut.TextSize = 14
+	shut.TextColor3 = Color3.fromRGB(236, 240, 238)
+	shut.Text = "x"
+	shut.Parent = label
+	local function toggle()
+		panel.on = not panel.on
+		label.Visible = panel.on
+	end
+	shut.Activated:Connect(toggle)
+	holder.Parent = gui
+	local input = game:GetService("UserInputService")
+	input.InputBegan:Connect(function(key: InputObject)
+		if key.KeyCode == Enum.KeyCode.F7 and not input:GetFocusedTextBox() then
+			toggle()
+		end
+	end)
+	print("SunkenCityClient: Studio only, F7 shows and hides this client's report panel.")
+	while holder.Parent do
+		if panel.on then
+			local ok, text = pcall(panel.lines)
+			label.Text = if ok then text else "SunkenCityClient panel: " .. tostring(text)
+		end
+		task.wait(0.5)
+	end
+end
+
 -- A REPORT, ten seconds after the level is up, of what this client is actually drawing: the line to
 -- look for in Output when something that should move does not.
 local function reportLater(model: Instance)
@@ -2322,7 +2665,8 @@ local function reportLater(model: Instance)
 			table.insert(broken, name)
 		end
 		print(("SunkenCityClient: drawing the thing (%s), %d swimmers, %d shoals, %d strands of kelp, %d gulls, "
-			.. "%d whirlpool rings, %d turning pieces of the Ferris wheel; %s; %s"):format(
+			.. "%d whirlpool rings, %d turning pieces of the Ferris wheel; %s; %s; running the "
+			.. SunkenCityClient.VERSION):format(
 			if thingMesh then "the serpent mesh" else #segments .. " pieces", count(swimmers),
 			count(shoals), count(kelps), count(gulls), count(rings), count(ferris),
 			if #broken == 0 then "nothing has failed" else "FAILED: " .. table.concat(broken, ", "), SeaRig.summary()))
@@ -2330,6 +2674,10 @@ local function reportLater(model: Instance)
 end
 
 function SunkenCityClient.start()
+	print("SunkenCityClient: running, " .. SunkenCityClient.VERSION)
+	task.spawn(function()
+		guard("the Studio panel", panel.start)
+	end)
 	track("SunkenSea", function(model: Instance)
 		reportLater(model)
 		seaArrived(model)
@@ -2385,7 +2733,7 @@ function SunkenCityClient.start()
 		-- The street's shoals are drawn big, to be seen from the route through the water: the large
 		-- fish mesh for them, the small one for the tank's and the flat's.
 		local meshName = if size >= 1.8 then "Sea_FishLarge" else "Sea_Fish"
-		local rigs: { SeaRig.Rig }? = nil
+		local rigs: { Rig }? = nil
 		if SeaRig.template(meshName) then
 			local made = {}
 			for index = 1, many do
@@ -2693,14 +3041,7 @@ function SunkenCityClient.start()
 			scatterUntil = os.clock() + 2.5
 			oneShot(1.3, 0.35)
 		end)
-		model:GetAttributeChangedSignal("Flood"):Connect(function()
-			local value = model:GetAttribute("Flood")
-			if typeof(value) == "number" and value > 0 then
-				startFlood(model)
-			elseif #floodWater > 0 and floodDrainFrom == 0 then
-				floodDrainFrom = os.clock()
-			end
-		end)
+		-- (The flood is not a signal: stepFlood asks the level for it every frame.)
 	end
 	for _, item in ipairs(CollectionService:GetTagged("SunkenSea")) do
 		local level = item.Parent
@@ -2758,9 +3099,26 @@ function SunkenCityClient.start()
 	local rideEvent = remotes and remotes:WaitForChild("SunkenRide", 20)
 	if rideEvent and rideEvent:IsA("RemoteEvent") then
 		drainRemote = rideEvent
-		rideEvent.OnClientEvent:Connect(drainStarted)
+		-- The ride is yours alone; the flailing is anyone's, yours included.
+		rideEvent.OnClientEvent:Connect(function(first: any, a: any, b: any, c: any, d: any, e: any, f: any, g: any)
+			if first == "flail" then
+				cutscene.flail(a, b, c, d)
+			else
+				drainStarted(first, a, b, c, d, e, f, g)
+			end
+		end)
+		-- AND THE SERVER IS TOLD THIS IS RUNNING, and which version: it says so in Output, and in
+		-- Studio it puts a notice on your screen when it never hears this.
+		rideEvent:FireServer("hello", SunkenCityClient.VERSION)
 	end
 	RunService.RenderStepped:Connect(step)
+end
+
+-- PASTED AS A LOCALSCRIPT instead of a ModuleScript, this file would define everything and start
+-- nothing, because only Bootstrap calls start() and it requires ModuleScripts. So as a LocalScript it
+-- starts itself (and SunkenCityService's check in Studio says it should be a ModuleScript).
+if (script :: any):IsA("LocalScript") then
+	task.spawn(SunkenCityClient.start)
 end
 
 return SunkenCityClient

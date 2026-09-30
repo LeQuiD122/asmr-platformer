@@ -1,4 +1,5 @@
 --!strict
+-- ServerScriptService/ChunkProps.server.lua
 -- Dressing for chunk templates: tints and scattered props, applied after ChunkBuilder.
 --
 -- === Why this is a separate script and not part of ChunkBuilder ===

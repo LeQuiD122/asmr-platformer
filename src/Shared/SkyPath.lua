@@ -25,8 +25,9 @@ SkyPath.STEP = 9 -- studs of trough per segment
 SkyPath.BANK = 0.3 -- how far it leans into the turn
 
 -- The ride. A speed rather than a duration: the slide's length depends on how the run came out.
-SkyPath.SPEED = 70
-SkyPath.MIN_SECONDS, SkyPath.MAX_SECONDS = 8, 15
+-- Half what it first was: the slide is played as a scene, slow enough to be watched.
+SkyPath.SPEED = 36
+SkyPath.MIN_SECONDS, SkyPath.MAX_SECONDS = 16, 30
 SkyPath.RAMP = 0.15 -- the share of the ride spent getting up to speed
 SkyPath.SAMPLES = 200
 SkyPath.SIT_HEIGHT = 1.6 -- the sled's seat, this far over the trough's floor
@@ -132,6 +133,64 @@ function SkyPath.share(u: number): number
 		return (u * u / (2 * ramp)) / norm
 	end
 	return (u - ramp / 2) / norm
+end
+
+-- ===== THE SKIM =====
+--
+-- THE SLIDE DOES NOT JUST STOP AT THE WATER. Where the trough runs out, level, at the pool's surface,
+-- the sled carries on across the pool: it skips, three hops each lower than the last, throwing spray at
+-- every touch, slews round as it slows, and settles; then you tip out into the water. The end of the
+-- ride was a stop and a splash; this is the part with the action in it. Straight on from the trough's
+-- last stretch, so it only ever goes further round the pool, never in at the tower.
+SkyPath.SKIM_SECONDS = 2.8
+-- Each hop: when it leaves the water, when it comes down, and how high it goes.
+SkyPath.HOPS = {
+	{ 0, 0.8, 3.4 },
+	{ 0.8, 1.45, 1.8 },
+	{ 1.45, 1.9, 0.7 },
+}
+
+-- The way the trough is going as it runs out, level.
+local function runOut(spec: Spec): Vector3
+	local last = SkyPath.point(spec, 1)
+	local before = SkyPath.point(spec, 0.985)
+	local flat = Vector3.new(last.X - before.X, 0, last.Z - before.Z)
+	return if flat.Magnitude > 0.01 then flat.Unit else Vector3.new(0, 0, -1)
+end
+
+-- Where the sled is `s` seconds into the skim.
+function SkyPath.skimFrame(spec: Spec, s: number): CFrame
+	local skim = SkyPath.SKIM_SECONDS
+	local t = math.clamp(s, 0, skim)
+	local dir = runOut(spec)
+	local speed = SkyPath.SPEED
+	-- Slowing evenly to a stop at the end.
+	local along = speed * t - 0.5 * (speed / skim) * t * t
+	local hop = 0
+	for _, h in ipairs(SkyPath.HOPS) do
+		if t >= h[1] and t < h[2] then
+			local u = (t - h[1]) / (h[2] - h[1])
+			hop = h[3] * 4 * u * (1 - u)
+		end
+	end
+	-- Settling into the water over the last half second.
+	local sink = if t > skim - 0.5 then (t - (skim - 0.5)) / 0.5 * 1.2 else 0
+	local at = SkyPath.point(spec, 1) + Vector3.new(0, SkyPath.SIT_HEIGHT, 0) + dir * along + Vector3.new(0, hop - sink, 0)
+	local slew = 1.3 * (t / skim) ^ 1.6
+	-- Nose up on the way up a hop and down on the way down, a little.
+	local pitch = 0
+	for _, h in ipairs(SkyPath.HOPS) do
+		if t >= h[1] and t < h[2] then
+			pitch = 0.18 * (1 - 2 * (t - h[1]) / (h[2] - h[1])) * h[3] / 3.4
+		end
+	end
+	return CFrame.lookAt(at, at + dir) * CFrame.Angles(0, slew, 0) * CFrame.Angles(pitch, 0, 0)
+end
+
+-- Where the skim stops, on the water's surface: where the rider tips out.
+function SkyPath.skimEnd(spec: Spec): Vector3
+	local speed = SkyPath.SPEED
+	return SkyPath.point(spec, 1) + runOut(spec) * (speed * SkyPath.SKIM_SECONDS * 0.5)
 end
 
 -- Where the sled sits at `u` of the ride, facing the way it is going and leaning with the trough.

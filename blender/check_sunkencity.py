@@ -588,6 +588,11 @@ if '"SunkenCityClient"' not in CLIENT_BOOT:
     fail("the client Bootstrap never starts SunkenCityClient, so the thing never swims")
 written = set(re.findall(r'sea:SetAttribute\("(\w+)"', CITY_SOURCE))
 written_anywhere = set(re.findall(r':SetAttribute\("(\w+)"', CITY_SOURCE))
+# Written by the client's own camera and ambience (Hushed: an ending has silenced the level), which the
+# mood reads; and tags read by any other file (Ambience by Cinema, StorySpot by StoryService).
+OTHER_SOURCES = "\n".join(path.read_text(encoding="utf-8") for path in SRC.rglob("*.lua")
+                          if path.name != "SunkenCityService.lua")
+written_anywhere |= set(re.findall(r':SetAttribute\("(\w+)"', OTHER_SOURCES))
 readers = CLIENT_SOURCE + PATH_SOURCE
 read = set(re.findall(r'num\("(\w+)"\)', readers)) | set(re.findall(r'GetAttribute\("(\w+)"\)', readers)) \
     | set(re.findall(r'numbers\("(\w+)"\)', readers))
@@ -601,7 +606,7 @@ for name in sorted(read - written_anywhere):
 tags = set(re.findall(r'AddTag\([^,]+,\s*"(\w+)"\)', CITY_SOURCE))
 server_reads = set(re.findall(r'tagged\(model, "(\w+)"\)', CITY_SOURCE))
 for tag in sorted(tags):
-    if '"%s"' % tag not in CLIENT_SOURCE and tag not in server_reads:
+    if '"%s"' % tag not in OTHER_SOURCES and tag not in server_reads:
         fail("SunkenCityService tags %s and nothing ever looks for it" % tag)
 if 'require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("SunkenPath"))' not in CLIENT_SOURCE \
         or 'WaitForChild("SunkenPath"' not in CITY_SOURCE:
@@ -697,19 +702,21 @@ for needle, why in (
      "the ray's wing is not where this check thinks it is"),
     ("side * (math.sin(k * 0.43 + 1.7) * s.across)", "a swimmer's wander across the street is not held to Across"),
     ("local startle = if along then 0 else bolt", "the street's shoals bolt when the aquarium's glass is tapped"),
-    ("run * (math.cos(a) * radius * wobble) + side * (math.sin(a) * radius * 0.6)",
+    ("run * (math.cos(a) * radius * wobble) + side * (math.sin(a) * radius * 0.35)",
      "a shoal no longer circles a loop laid along the street"),
 ):
     if needle not in CLIENT_SOURCE:
         fail(why)
 for needle, why in (
-    ("local across = SWIM_REACH - math.abs(out)", "a swimmer's Across is not measured from SWIM_REACH"),
+    ("local across = math.min(SWIM_REACH - math.abs(out), math.abs(out) - ROUTE_REACH + 2)",
+     "a swimmer's Across is not held inside SWIM_REACH and past the route's edge"),
     ("blocked(home, math.max(range, across) + 6)",
      "a swimmer can be given a home whose wander takes it through the aquarium or the dry flat"),
     ("swimmers(sea, route, h.floor, rng, blocked)", "the swimmers are placed without knowing what is blocked"),
     ("shoals(sea, route, h.floor, rng, blocked)", "the shoals are placed without knowing what is blocked"),
     ("local reachable = route.total - harbourAlong(route)", "a swimmer can be put in the harbour's whirlpool"),
-    ("local spot = at + side * rng:NextNumber(-SHOAL_OUT, SHOAL_OUT)", "a shoal is not held to SHOAL_OUT"),
+    ("local spot = at + side * ((if index % 2 == 0 then 1 else -1) * rng:NextNumber(15, SHOAL_OUT))",
+     "a shoal is not held to its lane"),
     ("local radius = rng:NextNumber(12, 20)", "a shoal's size is not what this check allows for"),
     ('marker:SetAttribute("Along", dir)', "the street's markers do not say which way the street runs"),
 ):
@@ -723,7 +730,7 @@ MESH_REACH = max([reach_of(n) for n in ("Sea_Ray", "Sea_Shark", "Sea_Grouper", "
 widest = K["SWIM_REACH"] + max(RAY_HALF_SPAN, MESH_REACH) + BEND
 if widest > leg_face - 0.5:
     fail("a ray's wing reaches %.1f across the street and the road signs' legs stand at %.1f" % (widest, leg_face))
-shoal_widest = K["SHOAL_OUT"] + 20 * 0.6 + max(3.2 / 2, reach_of("Sea_FishLarge")) + BEND
+shoal_widest = K["SHOAL_OUT"] + 20 * 0.35 + max(3.2 / 2, reach_of("Sea_FishLarge")) + BEND
 if shoal_widest > leg_face - 0.5:
     fail("a shoal reaches %.1f across the street and the road signs' legs stand at %.1f" % (shoal_widest, leg_face))
 # THE TANK'S: over the tunnel's roof and under the surface, and inside the tank.
@@ -862,27 +869,71 @@ if float(deep.group(1)) + 13 > K["WINDOW_DEEP"] + 22 if deep else False:
 tap = {name: float(value) for name, value in re.findall(r"^\t(\w+) = ([\d.]+),", (re.search(r"local TAP = \{(.*?)\n\}", CITY_SOURCE, re.S) or [None, ""])[1], re.M)}
 if not (0 < tap.get("crack", 0) < tap.get("crack2", 0) < tap.get("breaks", 0)):
     fail("the glass does not crack, crack further and then break, in that order")
-if tap.get("hold", 0) <= tap.get("rise", 0) + 3:
-    fail("the flood drains before anyone inside could have been washed out")
+# A FLOOD TO SWIM IN: it fills slowly enough to watch the sea come in (a few seconds read as the glass
+# vanishing and then a teleport), stays long enough to swim about in, and goes down slowly.
+if tap.get("rise", 0) < 6:
+    fail("the gallery fills in %.1f seconds, too fast to see the sea come in" % tap.get("rise", 0))
+if tap.get("hold", 0) < tap.get("rise", 0) + 20:
+    fail("the flood goes %.0f seconds after the gallery is full, too soon to swim in it"
+         % (tap.get("hold", 0) - tap.get("rise", 0)))
+if tap.get("drain", 0) < 3:
+    fail("the flood drains in an instant")
+if "wash" in tap:
+    fail("the flood washes people out again; it is somewhere to swim")
 for needle, why in (
     ("for _, connection in ipairs(glass(model, onTaken)) do", "attach does not hand the glass the way to send someone to the start"),
-    ('(item.Name == "TunnelGlass" and item.Size.Y > 1)', "the tunnel's own panes cannot be tapped"),
+    ('if item:IsA("BasePart") and item.Name == "ViewingWindow" then', "the window with the notice cannot be tapped"),
     ("prompt.Parent = pane", "the panes have no prompt"),
-    ("if isHardcore(player) then\n\t\t\tif onTaken then\n\t\t\t\tonTaken(player)", "a Hardcore player is not sent to the start by the flood"),
-    ("root.CFrame = CFrame.new(state.checkpointPosition + Vector3.new(0, 4, 0))", "a Chill player is not sent back to the checkpoint by the flood"),
-    ("inAny(zones, root.Position)", "the flood washes out people who are not inside"),
     ('model:SetAttribute("Flood", 0)', "the water never goes down"),
     ("pane.Transparency = was", "the broken pane never comes back"),
 ):
     if needle not in CITY_SOURCE:
         fail(why)
+# THE SEA COMING IN IS THE SERVER'S, and it is TERRAIN WATER you swim in: drawn only on the clients it
+# was never seen by a client that was not running, and as see-through parts it was boxes filling up.
 for needle, why in (
-    ('GetAttributeChangedSignal("Flood")', "the client never sees the glass break"),
-    ("local function startFlood", "nothing fills with water"),
-    ("drowning", "being inside the flood looks like nothing"),
+    ("slab(space, space.bottom, depth, Enum.Material.Water)", "the flood is not water anyone can swim in"),
+    ("slab(space, space.top - over, over + 1, Enum.Material.Air)", "the water never goes down, or leaves its old level behind"),
+    ("terrain:FillCylinder(", "the tower does not fill"),
+    ("local rate = (room.top - room.bottom) / TAP.rise", "the water does not fill the gallery in TAP.rise"),
+    ("swimWater.look()", "the flood's water does not look like the flooded floor's"),
+    ("table.insert(swimWater.fills, { cf = space.volume.CFrame, size = space.volume.Size })",
+     "a flood still up when the level goes is left behind in the next one"),
+    ("Enum.Material.Air)\n\t\tend\n\t\tfor _, thing in ipairs(made) do",
+     "the water is never cleared away when the flood is over"),
+    ('loose("SeaPouringIn"', "the sea does not pour in through the hole"),
+    ("falls.Rate = 220 * above", "the torrent does not stop once the hole is under the water"),
+    ("inrush.Rate = if rising and level > holeBottom then 70 * (1 - above) else 0", "nothing comes through the hole once it is under"),
+    ('loose("SeaLanding"', "nothing churns where the torrent lands"),
+    ('loose("Leaflet"', "nothing floats up on the water"),
+    ("if math.abs(level - written) > 0.02 then", "the terrain is rewritten every step even while the water stands still"),
+    ("shatter(pane, inward, was)", "the pane just vanishes instead of bursting"),
+    ('tooth.Name = "GlassTooth"', "nothing of the pane is left in the frame"),
+    ("for _, bit in ipairs(flood.bits) do", "the teeth are left behind when the glass is whole"),
+    ("local ok, err = pcall(runFlood, pane, inward)", "a flood that fails leaves the glass broken for good"),
+):
+    if needle not in CITY_SOURCE:
+        fail(why)
+if '"FloodWater"' in CITY_SOURCE or 'loose("SeaPouring",' in CITY_SOURCE:
+    fail("the flood is boxes of see-through parts again")
+glass_rng = CITY_SOURCE.find("\tlocal rng = Random.new(1847)")
+if glass_rng < 0 or CITY_SOURCE.find("\tlocal function shatter(") < glass_rng:
+    fail("the glass's shards are made before its Random exists, so they read a nil global")
+for needle, why in (
+    ("workspace.Terrain:ReadVoxels(", "the client never knows it is under the water"),
+    ("SoundService.AmbientReverb = Enum.ReverbType.UnderWater", "the sound under the water is as crisp as on land"),
+    ("drowning = ease(drowning, if FLOOD.under then 1 else 0, 2.5, dt)", "being under the water looks like nothing"),
 ):
     if needle not in CLIENT_SOURCE:
         fail(why)
+if 'localPart(workspace, "FloodWater"' in CLIENT_SOURCE or 'localPart(workspace, "Pour"' in CLIENT_SOURCE:
+    fail("the client draws water of its own on top of the server's")
+# ONLY THE WINDOW WITH THE NOTICE: the tunnel's panes must not answer a tap.
+glass_body = CITY_SOURCE[CITY_SOURCE.find("local function glass("):CITY_SOURCE.find("-- THE CRACKS MEND")]
+if "washCard" in CITY_SOURCE or "state.checkpointPosition" in glass_body:
+    fail("the flood washes people out again; it is somewhere to swim")
+if "TunnelGlass" in glass_body:
+    fail("the tunnel's panes can be tapped and cracked again; only the window with the notice should be")
 
 # THE AQUARIUM'S GLASS IS NOT GLASS: Roblox's Glass leaves out everything transparent behind it.
 if "local PANE = Enum.Material.SmoothPlastic" not in CITY_SOURCE:
@@ -995,7 +1046,8 @@ if not (lamp_face + 1 > furniture_at - 2 and furniture_at + 6 < K["BOULEVARD_HAL
 for needle in ('local depth = if kind == "jelly" then rng:NextNumber(3.5, 7)',
                'elseif kind == "dolphins" then rng:NextNumber(4, 6)',
                'elseif kind == "turtle" then rng:NextNumber(5, 10)',
-               'elseif kind == "ray" or kind == "shark" then rng:NextNumber(7, 16)',
+               'elseif kind == "ray" then rng:NextNumber(5.5, 11)',
+               'elseif kind == "shark" then rng:NextNumber(7, 12)',
                'local bob = if kind == "jelly" then 1.2 elseif kind == "dolphins" then 1 elseif kind == "turtle" then 2 else 3',
                'marker:SetAttribute("Bob", bob)'):
     if needle not in CITY_SOURCE:
@@ -1009,7 +1061,7 @@ fin_sway = (math.hypot(ext("Sea_Dolphin", "hi", 1) - ext("Sea_Dolphin", "lo", 1)
 for kind, shallowest, bob, over in (("jelly", 3.5, 1.2, max(0.9 * 1.12 * scale.get("jelly", 0), ext("Sea_Jelly", "hi", 2) + 0.25)),
                                     ("turtle", 5, 2, max(0.75 * scale.get("turtle", 0), ext("Sea_TurtleShell", "hi", 2))),
                                     ("dolphins", 4, 1, max(0.9 + 0.65, ext("Sea_Dolphin", "hi", 2) + fin_sway)),
-                                    ("ray", 7, 3, max((0.15 + 1.5 * math.sin(0.45)) * RAY, ext("Sea_Ray", "hi", 2), ray_tip)),
+                                    ("ray", 5.5, 3, max((0.15 + 1.5 * math.sin(0.45)) * RAY, ext("Sea_Ray", "hi", 2), ray_tip)),
                                     ("shark", 7, 3, max((1.9 + 1.2) * scale.get("shark", 0), ext("Sea_Shark", "hi", 2)))):
     if shallowest - bob - over < 0.5:
         fail("a %s can come up to %.1f under the surface when it is not meant to" % (kind, shallowest - bob - over))
@@ -1086,6 +1138,24 @@ if re.search(r'"Whirl", Vector3[^\n]*\n[^\n]*\n[^\n]*\n\s*tone, Enum\.Material\.
     fail("the whirlpool's rings are Glass again, so each one hides the others")
 if "CollectionService:AddTag(piece, \"SunkenWhirlFlow\")" not in CITY_SOURCE:
     fail("the whirlpool's water does not flow")
+# AND IT IS WATER MOVING, NOT A MODEL (eighteenth pass): spray carriers the client turns with the rings,
+# throwing spray in toward the middle so the surface is spiral arms of foam; the hole pouring down; and a
+# shaft lined like a drain, with the water coming down its walls.
+for needle, why in (
+    ('swirl.Name = "WhirlSwirl"', "the whirlpool has no swirl over it, so it reads as a solid cone again"),
+    ('CollectionService:AddTag(swirl, "SunkenWhirlRing")', "nothing turns the whirlpool's swirl"),
+    ("streak.Orientation = Enum.ParticleOrientation.VelocityPerpendicular", "the swirl's spray is not drawn along the water"),
+    ('"WhirlPour"', "nothing pours down the hole in the middle"),
+    ('"ShaftFlange"', "the drain shaft is bare panels again"),
+    ('"ShaftPour"', "no water comes down the drain shaft's walls"),
+):
+    if needle not in CITY_SOURCE:
+        fail(why)
+if "local eye = Vector3.new(spec.vortex.X + 1.4, at.Y - 11, spec.vortex.Z + 1.1)" not in CLIENT_SOURCE:
+    fail("the ride has no shot falling down the shaft with the rider")
+# THE FISH DO NOT SPIN when the glass is tapped: their turn is added up, not worked out from the clock.
+if "local a = clock * speed + index" in CLIENT_SOURCE or "shoal.turn = (shoal.turn or 0)" not in CLIENT_SOURCE:
+    fail("the aquarium's fish work their place round the loop out from the clock again, and spin when tapped")
 
 # THE CLIENT: every piece of a frame guarded, and a report of what it drew.
 step_body = CLIENT_SOURCE[CLIENT_SOURCE.find("local function step(dt: number)"):]
@@ -1182,8 +1252,10 @@ else:
                     at_, dir_ = along_route(route_, s_)
                     spot_ = (at_[0] - side_ * dir_[1] * F["out"], at_[1] + side_ * dir_[0] * F["out"])
                     near_, _ = near_route(route_, spot_)
+                    # And out of the view past the gallery's window (FERRIS.window).
                     if (s_ < route_["total"] - harbour_along(route_) - F["clear"]
                             and near_ - F["reach"] >= K["EMERGE_CLEAR"] + K["ROUTE_REACH"]
+                            and (aq_ is None or math.dist(spot_, aq_["far"]) > F["window"])
                             and not claimed(spot_, F["clear"], -side_)):
                         found_ = True
                         break
@@ -1218,6 +1290,310 @@ for needle, why in (
 ):
     if needle not in CLIENT_SOURCE + PATH_SOURCE:
         fail(why)
+
+# THE LANDMARKS: the service's heights are the meshes', each covers no more ground than its `reach`
+# (a lean's top counted), the leaning one's base is sunk as far as the lean lifts its front edge, and
+# on every run each has somewhere to stand: out of the harbour, off the route, and short of where the
+# things at the back swim.
+LANDMARK_GEN = (BLENDER / "gen_landmarks.py").read_text(encoding="utf-8")
+LM = re.findall(r'\{ name = "(\w+)", height = ([\d.]+), reach = ([\d.]+), share = ([\d.]+), out = ([\d.]+), '
+                r'side = (-?\d+), lean = ([\d.]+), sink = ([\d.]+),', CITY_SOURCE)
+FIRST_MESH = {"Deco": "Landmark_DecoStone", "Needle": "Landmark_NeedleShaft", "Twin": "Landmark_TwinBody",
+              "Lean": "Landmark_LeanFrame"}
+horror_edge = K["HORROR_OUT"] * 0.8 - 250
+if len(LM) != 4:
+    fail("cannot find the four landmarks in SunkenCityService")
+if "rng:NextNumber(120, 240))" not in CITY_SOURCE or "near + spec.reach <= HORROR_OUT * 0.8 - 250" not in CITY_SOURCE:
+    fail("the landmarks are not kept short of the things at the back, or those swim further than this allows for")
+if "near - spec.reach >= EMERGE_CLEAR + ROUTE_REACH" not in CITY_SOURCE:
+    fail("the landmarks are placed without keeping off the route")
+for name, height, reach, share, out, side, lean, sink in LM:
+    box_ = EXT.get(FIRST_MESH.get(name, ""))
+    if not box_:
+        fail("the %s landmark's mesh is not in sealife_extents.json: run gen_landmarks.py" % name)
+        continue
+    built = box_["box_hi"][2] - box_["box_lo"][2]
+    if abs(built - float(height)) > 0.5:
+        fail("SunkenCityService stands the %s landmark %s tall and gen_landmarks.py builds it %.1f" % (name, height, built))
+    half_x = max(abs(box_["box_lo"][0]), box_["box_hi"][0])
+    half_y = max(abs(box_["box_lo"][1]), box_["box_hi"][1])
+    tilt = math.radians(float(lean))
+    plan = math.hypot(half_x, half_y) + float(height) * math.sin(tilt)
+    if plan > float(reach) + 0.5:
+        fail("the %s landmark covers %.1f from its middle and its reach is %s" % (name, plan, reach))
+    if float(sink) < half_y * math.sin(tilt) - 0.05:
+        fail("the %s landmark leans %s degrees and its front edge lifts off the floor" % (name, lean))
+    if float(out) + float(reach) > horror_edge:
+        fail("the %s landmark stands where the things at the back swim" % name)
+for label_, count_ in LEVEL.runs:
+    for seed_ in range(0, 120, 7):
+        radius_, chunks_, finish_y_ = LEVEL.lay(count_, seed_)
+        route_ = route_of(radius_, chunks_, finish_y_)
+        for name, height, reach, share, out, side, lean, sink in LM:
+            for mirror in (1, -1):
+                found_ = False
+                for step_ in range(9):
+                    for turn_ in (1, -1):
+                        sh = float(share) + turn_ * step_ * 0.03
+                        s_ = route_["total"] * sh
+                        if sh <= 0.04 or s_ >= route_["total"] - harbour_along(route_) - float(reach):
+                            continue
+                        at_, dir_ = along_route(route_, s_)
+                        k = mirror * int(side) * float(out)
+                        spot_ = (at_[0] - k * dir_[1], at_[1] + k * dir_[0])
+                        near_, _ = near_route(route_, spot_)
+                        if (near_ - float(reach) >= K["EMERGE_CLEAR"] + K["ROUTE_REACH"]
+                                and near_ + float(reach) <= horror_edge):
+                            found_ = True
+                if not found_:
+                    fail("%s seed %d: nowhere for the %s landmark to stand" % (label_, seed_, name))
+# The one on the Deco tower's ledge stands on the first setback, not in the air.
+tiers = re.search(r"DECO_TIERS = \(\(([\d.]+), ([\d.]+), ([\d.]+)\), \(([\d.]+), ([\d.]+), ([\d.]+)\)", LANDMARK_GEN)
+if not tiers or "deco * CFrame.new(0, 160, -20)" not in CITY_SOURCE:
+    fail("cannot find where the one who watches stands on the Deco tower")
+else:
+    t1_half, t1_top, t2_half = float(tiers.group(1)) / 2, float(tiers.group(3)), float(tiers.group(4)) / 2
+    if t1_top != 160 or not (t2_half + 0.8 <= 20 <= t1_half - 0.8):
+        fail("the one who watches stands off the Deco tower's ledge")
+
+# THE SIDE STREETS AND THE METRO: everything in them that stands out of the water keeps past
+# EMERGE_CLEAR of the route's reach -- the corner signs' blades (2.5 long) included.
+emerge = K["EMERGE_CLEAR"] + K["ROUTE_REACH"]
+for needle, why in (
+    ("if row % 2 == 0 and near >= 70 and near <= 250", "the utility poles can stand near the route"),
+    ("if row % 2 == 1 and near >= 80 and near <= 300", "the boats can float near the route"),
+    ("near >= BOULEVARD_HALF + 2 and near <= BOULEVARD_HALF + 6", "the street signs can stand near the route"),
+    ("local foot = at + side * ((if index % 2 == 0 then 1 else -1) * (BOULEVARD_HALF + 3))", "the metro can stand near the route"),
+    ("nearRoute(route, foot) - 1 >= EMERGE_CLEAR + ROUTE_REACH", "the metro is not held off the route"),
+):
+    if needle not in CITY_SOURCE:
+        fail(why)
+if min(70, 80 - 9, K["BOULEVARD_HALF"] + 2 - 2.5 - 0.5, K["BOULEVARD_HALF"] + 3 - 1.6 - 1) < emerge:
+    fail("something in the side streets or the metro stands out of the water within reach of the route")
+
+# THE PEOPLE: the module is there and the service stands them; the attendant hears the glass.
+NPC_SOURCE = (SRC / "Server" / "Services" / "Townsfolk.lua").read_text(encoding="utf-8")
+POSES_SOURCE = (SRC / "Shared" / "Poses.lua").read_text(encoding="utf-8")
+for needle, why in (
+    ('script.Parent:WaitForChild("Townsfolk", 5)', "SunkenCityService does not look for the people with a timeout"),
+    ('Townsfolk.spawn(model, "Attendant", aq.keeper, "stand"', "nobody stands in the aquarium's gallery"),
+    ('Townsfolk.react(heard)', "the attendant does not hear the glass"),
+    ('Townsfolk.react("burst")', "the attendant says nothing when the glass goes"),
+):
+    if needle not in CITY_SOURCE:
+        fail(why)
+for needle, why in (
+    ("Players:CreateHumanoidModelFromDescription", "the people are not built as characters"),
+    ("plainFigure(name, colours)", "a character that cannot be built leaves nobody"),
+    ("function Townsfolk.react", "the attendant cannot react"),
+):
+    if needle not in NPC_SOURCE:
+        fail(why)
+
+# THE CLIENT STARTS WITHOUT SEARIG: waiting for it forever stopped the whole client, silently, and
+# every animal, the flood and the ride with it.
+if 'WaitForChild("SeaRig"))' in CLIENT_SOURCE or 'WaitForChild("SeaRig", ' not in CLIENT_SOURCE:
+    fail("the client waits forever for SeaRig, so a place without it draws nothing of this level")
+for needle, why in (
+    ("function stand.summary()", "without SeaRig the client has nothing to stand in for it"),
+    ("function stand.numbered(", "without SeaRig the client throws building its bone names"),
+    ('print("SunkenCityClient: running, " .. SunkenCityClient.VERSION)', "the client does not say which code is running"),
+    ("if not RunService:IsStudio() then", "the Studio panel would show in a published game"),
+    ('guard("the Studio panel", panel.start)', "the Studio panel is not started, or not guarded"),
+    ("local ok, err = pcall(moveOneSwimmer, s, clock)", "one broken animal stops every animal after it"),
+):
+    if needle not in CLIENT_SOURCE:
+        fail(why)
+
+# THE RIDE AS A SCENE: everyone flails the rider, the rider's own camera takes the shot, and it all
+# goes back when they land.
+for needle, why in (
+    ('remote:FireAllClients("flail", player, began, total, seconds)', "nobody else sees the rider flail"),
+    ('gui.Name = "DrainCry"', "the rider does not shout for help"),
+    ("cry:Destroy()", "the rider's shouting outlives the ride"),
+    ("did not take the ride down the drain", "a client that never takes the ride goes unexplained"),
+    ("frame *= SunkenPath.tumble(u, os.clock())", "the server's own ride is the stiff one"),
+    ("Poses.turn(joint, turn)", "without its client, the rider goes down without flailing"),
+    ("root:SetNetworkOwner(nil)", "the server's ride leaves the rider's own client adding speed they land with"),
+    ('trail.Name = "DrainTrail"', "nothing streams off the rider on the way down"),
+    ("thud(Vector3.new(vortex.X, spec.bottomY - 2.6, vortex.Z), 45)", "nothing splashes where the rider lands"),
+    ("splashes:Emit(count)", "the splash where the rider lands throws up nothing"),
+    ("thud(outfall.path.to - Vector3.new(0, 2.6, 0), 20)", "nothing splashes where the outfall sets the rider down"),
+    ("\t\tend\n\t\ttask.wait()\n\tend\n\tgiveBack()", "the server leaves the rider's joints turned after the ride"),
+    ('if what == "hello" then', "the server never hears whether a client is running"),
+    ("task.spawn(drainRemote)", "the server is not listening when a client says hello"),
+    ("ok, result = pcall(require, found)", "in Studio, nothing says why the client does not run"),
+    ("task.defer(studio.check)", "in Studio, the client check never runs"),
+    ("studio.notice(player)", "in Studio, nobody is told on screen that their client is not running"),
+):
+    if needle not in CITY_SOURCE:
+        fail(why)
+for needle, why in (
+    ('if first == "flail" then', "the client does not tell the flailing from the ride"),
+    ("cutscene.flail(a, b, c, d)", "the client never flails anyone"),
+    ('guard("the ride\'s camera", cutscene.start)', "the ride is not played as a scene"),
+    ("* SunkenPath.tumble(u, clock)", "the rider goes down stood stiff and upright"),
+    ("local turn = Poses.flail(name, t, w, r6)", "the client's flail is not the shared one"),
+    ('rideEvent:FireServer("hello", SunkenCityClient.VERSION)', "the client never tells the server it is running"),
+    ('if (script :: any):IsA("LocalScript") then', "pasted as a LocalScript, the client would never start"),
+    ("cutscene.drainShot(current.spec, u, frame.Position, clock)", "the camera does not take the shot"),
+    ("RunService.Stepped:Connect(function()", "the flail is set before the animations, which then overwrite it"),
+    ("Poses.drive(joint, CFrame.identity)", "the rider's joints are left flailing after the ride"),
+    ("rider.AssemblyLinearVelocity = Vector3.zero", "the client's ride lets speed build up, and the rider lands through the floor"),
+    ("if u < 0.1 then", "the scene has no close shot of the grab"),
+    ("if u >= 0.9 then", "the scene has no shot from the bottom"),
+    ("cutscene.revealShot(current.reveal, r)", "the camera leaves before the station has been seen"),
+    ("cutscene.outfallShot(o, current.reveal, v, frame.Position)", "the ride down the outfall is not a scene"),
+    ("Cinema.finish()", "the camera is never given back"),
+):
+    if needle not in CLIENT_SOURCE:
+        fail(why)
+rider = re.search(r"\nlocal function moveRider\(.*?\n(.*?)\nend\n", CLIENT_SOURCE, re.S)
+if not rider or "if character ~= current.who or not (root and root:IsA(\"BasePart\")) then\n\t\tdrain = nil\n\t\tcutscene.finish()" \
+        not in rider.group(1) or not rider.group(1).rstrip().endswith("drain = nil\n\tcutscene.finish()"):
+    fail("the scene is not finished when the ride is over, or when the rider's character changes")
+# THE CINEMA gives everything back: the camera, the field of view, the controls.
+CINEMA_SOURCE = (SRC / "Client" / "Services" / "Cinema.lua").read_text(encoding="utf-8")
+for needle, why in (
+    ("camera.CameraType = Enum.CameraType.Custom", "the camera is never given back after a scene"),
+    ("camera.FieldOfView = current.fov", "a scene leaves the camera's field of view changed"),
+    ("found:Enable()", "a scene never gives the player their controls back"),
+):
+    if needle not in CINEMA_SOURCE:
+        fail(why)
+
+# JOINTS OF EITHER KIND: a player's character here has AnimationConstraints and no Motor6D, and a flail
+# or a pose that only turns Motor6Ds turns nothing on it.
+for needle, why in (
+    ('elseif item:IsA("AnimationConstraint") and not found[item.Name] then', "the newer avatar joints are not found"),
+    ("attachment.CFrame = joint.rest * by", "the newer avatar joints are found but never turned"),
+    ("(joint.driver :: any).Transform = by", "the client cannot drive a joint of either kind"),
+):
+    if needle not in POSES_SOURCE:
+        fail(why)
+for needle, why in (
+    ("local flip = 4 * math.pi * e * e * (3 - 2 * e)", "the rider does not go head over heels down the shaft"),
+    ("local grab = 1 - math.clamp(u / 0.05, 0, 1)", "the rider is not thrown back as the whirlpool takes them"),
+):
+    if needle not in PATH_SOURCE:
+        fail(why)
+m_ = re.search(r'"ShaftFloor", Vector3\.new\(DRAIN_R \* 2 \+ 2, ([\d.]+),', CITY_SOURCE)
+if not m_ or float(m_.group(1)) < 4:
+    fail("the sluice's floor is thin enough for a fast body to pass through in a step")
+
+# THE ATTENDANT, WHEN THE GLASS GOES: startled, runs, swims, treads water, walks back.
+for needle, why in (
+    ("Poses.joints(model)", "the people's joints are Motor6Ds only, so they cannot sit or move"),
+    ("function Townsfolk.panic(", "the attendant just stands there when the glass goes"),
+    ('knockOff(npc, "Cap")', "the attendant's cap stays on through all of it"),
+    ("function POSES.run(", "the attendant does not run"),
+    ("function POSES.swim(", "the attendant does not swim"),
+    ("function POSES.tread(", "the attendant does not tread water"),
+    ("function POSES.walk(", "the attendant does not walk back"),
+    ("putBack(npc)", "the attendant's cap is never put back"),
+):
+    if needle not in NPC_SOURCE:
+        fail(why)
+for needle, why in (
+    ("Townsfolk.panic(function(): number", "the flood never tells the attendant to run"),
+    ('Townsfolk.route("Attendant", aq.escape)', "the attendant has no way out"),
+    ("escape = {", "the aquarium has no way out for the attendant"),
+    ("flood.level = level", "the attendant cannot tell where the water is"),
+    ('loose("CrackJet"', "no jets come through the cracks round the frame"),
+    ('loose("SillCurtain"', "nothing runs down the wall under the window"),
+    ('loose("Surge"', "no surge crosses the floor when the glass goes"),
+    ("torn.part.CFrame = torn.rest", "the notice torn off by the flood never goes back on its wall"),
+    ('block(parent, "WhirlThroat"', "the whirlpool's throat is still"),
+    ("studio.loads = true", "in Studio, nothing tells an unstarted client from a broken one"),
+    ("widest.MaxSize = Vector2.new(640, math.huge)", "the Studio notice runs off a narrow screen"),
+    ("for _, side in ipairs({ 1, -1 }) do", "the Ferris wheel only ever tries one side of the street"),
+    ('NO Ferris wheel (nowhere clear: " .. ferrisWhy', "a missing Ferris wheel does not say why"),
+):
+    if needle not in CITY_SOURCE:
+        fail(why)
+CLIENT_BOOT_SOURCE = (SRC / "Client" / "Bootstrap.client.lua").read_text(encoding="utf-8")
+if '"SunkenCityClient"' not in CLIENT_BOOT_SOURCE or "service.start()" not in CLIENT_BOOT_SOURCE \
+        or '[client] %s failed to start' not in CLIENT_BOOT_SOURCE:
+    fail("the client Bootstrap does not start SunkenCityClient, or does not say when it fails to")
+
+# THE SHARED POSES: the flail and the tumble, the same on the server and every client.
+for needle in ("function SunkenPath.tumble(", "function SunkenPath.outfallFrame(", "function SunkenPath.outfallAt("):
+    if needle not in PATH_SOURCE:
+        fail("SunkenPath has no %s, which the ride needs" % needle[9:-1])
+for needle in ("function Poses.flail(", "function Poses.weight(", "function Poses.joints(", "function Poses.turn(",
+               "function Poses.drive(", "function Poses.dive(", "function Poses.sled("):
+    if needle not in POSES_SOURCE:
+        fail("Poses has no %s, which the rides and the people need" % needle[9:-1])
+
+# THE JELLYFISH IS NOT SLIME: its rings, tendrils and light are violet, not slime's green.
+DEFORM = (SRC / "Client" / "Services" / "DeformationRenderer.lua").read_text(encoding="utf-8")
+for name in ("JELLY_RING", "JELLY_TENDRIL"):
+    found = re.search(r"SLIME\.%s = Color3\.fromRGB\((\d+), (\d+), (\d+)\)" % name, DEFORM)
+    if not found:
+        fail("the jellyfish has no %s colour of its own" % name)
+    else:
+        r_, g_, b_ = (int(v) for v in found.groups())
+        if not (b_ > g_ and r_ > g_):
+            fail("the jellyfish's %s (%d, %d, %d) is not violet" % (name, r_, g_, b_))
+for needle, why in (
+    ("SLIME.glow(tile)", "a jellyfish does not light up where you land"),
+    ('local ringColour = if ctx.material == "Jellyfish" then SLIME.JELLY_RING', "a jellyfish's rings are slime green"),
+    ('strand.Color = SLIME.JELLY_TENDRIL', "a jellyfish's strands are slime green"),
+):
+    if needle not in DEFORM:
+        fail(why)
+
+# THE CHEST: the right way round (gen_treasure.py builds its front facing +Y, which arrives facing the
+# part's LookVector, away from the window it is seen through), and every piece the service places is a
+# mesh SeaRig knows the size of.
+if "rig.part.CFrame = chestAt * CFrame.new(0, -1.55, 0) * CFrame.Angles(0, math.pi, 0)" not in CITY_SOURCE:
+    fail("the chest faces away from the window again")
+for name in sorted(set(re.findall(r'"(Treasure_\w+)"', CITY_SOURCE))):
+    if "\t%s = Vector3.new(" % name not in RIG_SOURCE:
+        fail("the chest places %s, which SeaRig has no size for, so it is never drawn" % name)
+if 'shine.Name = "GoldShine"' not in CITY_SOURCE:
+    fail("the gold has no light of its own")
+
+# THE FERRIS WHEEL keeps out of what the gallery's window looks at.
+ferris_window = re.search(r"\twindow = (\d+),", (re.search(r"local FERRIS = \{(.*?)\n\}", CITY_SOURCE, re.S) or [None, ""])[1])
+if not ferris_window or float(ferris_window.group(1)) < K.get("WINDOW_DEEP", 60) + 100 \
+        or "and outOfWindow and not blocked(spot, FERRIS.clear)" not in CITY_SOURCE:
+    fail("the Ferris wheel can stand in the view out of the gallery's window")
+
+# THE PEOPLE'S WORDS can be read wherever they stand.
+say_body = NPC_SOURCE[NPC_SOURCE.find("function Townsfolk.say"):]
+say_body = say_body[:say_body.find("\nend\n")]
+if "gui.AlwaysOnTop = true" not in say_body:
+    fail("a speech bubble can be hidden behind the room")
+# ONE SIZE OF TEXT FOR EVERY LINE (twentieth pass): the bubble fits the words, the words never fit the bubble.
+if "label.TextSize = if shout then SHOUT_TEXT else SPEECH_TEXT" not in say_body or "TextScaled" in say_body         or "label.AutomaticSize = Enum.AutomaticSize.XY" not in say_body:
+    fail("a speech bubble's words are scaled to its box again, so the same person shouts one line and mutters the next")
+# EVERYTHING THEY SAY, from the lines to the end of the reactions, however long the lines grow (a
+# fixed window stopped short of the reactions once the story got longer).
+said_from = NPC_SOURCE.find("local LINES")
+said_to = NPC_SOURCE.find("\n}", NPC_SOURCE.find("local REACTIONS"))
+said = NPC_SOURCE[said_from:said_to] if 0 <= said_from < said_to else NPC_SOURCE
+if "--" in "".join(re.findall(r'"([^"\n]*)"', said)):
+    fail("a line the people say has a double dash in it")
+
+# THE ENDING LASTS: the ride goes on through the outfall to the end of the tunnel, and the station is
+# held on screen before LEVEL COMPLETE. Either cut short and the ending is the fall and a cut again.
+outfall_s = re.search(r"SunkenPath\.OUTFALL_SECONDS = ([\d.]+)", PATH_SOURCE)
+reveal_s = re.search(r"SunkenPath\.REVEAL_SECONDS = ([\d.]+)", PATH_SOURCE)
+if not outfall_s or not reveal_s:
+    fail("SunkenPath no longer says how long the outfall and the reveal last")
+else:
+    if float(outfall_s.group(1)) < 6:
+        fail("the ride down the outfall lasts %s seconds; the tunnel is seen for at least six" % outfall_s.group(1))
+    if float(reveal_s.group(1)) < 2.5:
+        fail("the pumping station is held for %s seconds; it needs time to be looked at" % reveal_s.group(1))
+# THE FISH: plenty of them, and they get out of your way.
+scatter = re.search(r"local SCATTER = ([\d.]+)", CLIENT_SOURCE)
+if not scatter or float(scatter.group(1)) < 8 or "here += push" not in CLIENT_SOURCE:
+    fail("the fish no longer dart out of a swimmer's way")
+every = re.search(r"^local SHOAL_EVERY = ([\d.]+)", CITY_SOURCE, re.M)
+if not every or float(every.group(1)) > 60:
+    fail("the shoals are spaced so far apart that the street reads as empty again")
 
 # ===================================================================== report
 

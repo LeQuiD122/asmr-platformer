@@ -1025,12 +1025,90 @@ def main():
         fail("%s is built but main() does not export it, so importing the kit will not "
              "produce one." % name)
 
+    # ---- THE END IS A PLACE, NOT THE VOID.
+    #
+    # The flume dropped you into the dark and the level was over, which was reported as "there is
+    # just a void at the end". It still drops you into the shaft, but the fall ends in the GATE
+    # CHAMBER, where the last scene of the story plays and the run is finished by it.
+    client = SRC / "Client" / "Services" / "FloodedHallsClient.lua"
+    client_text = client.read_text(encoding="utf-8") if client.exists() else ""
+    client_boot = SRC / "Client" / "Bootstrap.client.lua"
+    client_boot_text = client_boot.read_text(encoding="utf-8") if client_boot.exists() else ""
+    for needle, why in (
+        ("pcall(buildGates, halls, endFrame, pitAt)", "the gate chamber is never built, so the flume ends in the void"),
+        ("root.CFrame = arrive", "the rider is never taken into the gate chamber"),
+        ("chamberFrame * CFrame.new(0, -40, 0)", "the finish is not put out of reach, so the run could end on the way "
+                                                 "down instead of at the end of the scene"),
+        ("insideGates(workspace:FindFirstChild(\"FloodedHalls\"), root.Position)",
+         "the kill plane is not told about the gate chamber, which is well under it"),
+        ('remote:FireAllClients("flume", player, workspace:GetServerTimeNow(), SLIDE_SECONDS,',
+         "the flume is never played as a scene"),
+        ("giveKey(character)", "the key never appears in the rider's hand"),
+        ("Enum.Material.Air", "the sump's terrain water is never taken out with the level"),
+    ):
+        if needle not in text:
+            fail("THE ENDING: " + why + ".")
+    seconds = number(text, r"local SLIDE_SECONDS = ([\d.]+)", "SLIDE_SECONDS")
+    if seconds is not None and seconds < 8:
+        fail("The flume takes %g seconds; it is a scene now, and has to be slow enough to watch." % seconds)
+    gate_seconds = number(text, r"\n\tSECONDS = ([\d.]+),", "GATES.SECONDS")
+    key_at = number(text, r"\n\tKEY_AT = ([\d.]+),", "GATES.KEY_AT")
+    below = number(text, r"\n\tBELOW = ([\d.]+),", "GATES.BELOW")
+    sump = number(text, r"\n\tSUMP_DEEP = ([\d.]+),", "GATES.SUMP_DEEP")
+    if None not in (gate_seconds, key_at) and not (25 <= gate_seconds and 0 < key_at < gate_seconds - 10):
+        fail("The gate chamber's scene is %g seconds with the key at %g: too short to play, or the key comes too "
+             "late for the wheel and the gate after it." % (gate_seconds, key_at))
+    # Roblox deletes anything that falls below -500. The route stands about 24 up; everything in the
+    # chamber has to be well clear of that line or the rider is deleted at the end of the story.
+    if None not in (below, sump, floor_drop) and 24 - floor_drop - below - sump - 4 < -440:
+        fail("The gate chamber's sump bottom is at about %g, too near the -500 where Roblox deletes a character."
+             % (24 - floor_drop - below - sump - 4))
+    for needle, why in (
+        ('kind ~= "flume"', "never hears the ride start"),
+        ("mawStep(current, root, humanoid, t - current.slide)", "never plays the mouth at the bottom of the fall"),
+        ("Maw.build(Maw.facing(", "never builds the mouth"),
+        ("Cinema.black(true)", "never cuts to black when the jaws shut"),
+        ('"The Hold", "It keeps what it is given."', "no longer says what the Hold does, in the dark"),
+        ("Cinema.finish()", "never gives the camera back"),
+        ("humanoid.WalkSpeed = current.speed", "leaves the rider walking slowly after the scene"),
+        ("humanoid.PlatformStand = false", "leaves the rider lying down after the climb"),
+        ('"14 August. 9:14 in the morning."', "no longer ends on the last line of the story"),
+        ("pcall(endScene)", "keeps the camera when the scene fails"),
+    ):
+        if needle not in client_text:
+            fail("FloodedHallsClient " + why + ".")
+    # THE RIDE IS THE RIDER'S (eighteenth pass): the server writes the path down once and the rider's own
+    # client draws the ride from it; the server writing the root every frame was the lag.
+    for needle, why in (
+        ('samples.Name = "FlumePath"', "the flume's path is never written down for the rider's client"),
+        ("if drawing[player] or os.clock() - started < 0.5 then", "the server keeps moving a rider whose own "
+                                                                 "client is drawing the ride"),
+        ('if said == "riding" and riding[who] then', "the flume's remote takes a client's word without checking "
+                                                   "it is riding"),
+    ):
+        if needle not in text:
+            fail("THE FLUME: " + why + ".")
+    for needle, why in (
+        ("root.CFrame = pathAt(path, f)", "never draws the ride from the path"),
+        ('hallsEvent:FireServer("riding")', "never tells the server it is drawing the ride"),
+    ):
+        if needle not in client_text:
+            fail("FloodedHallsClient " + why + ".")
+    maw_text = (SRC / "Client" / "Services" / "Maw.lua").read_text(encoding="utf-8") \
+        if (SRC / "Client" / "Services" / "Maw.lua").exists() else ""
+    if 'throat.Name = "Throat"' in maw_text or "Enum.PartType.Cylinder" in maw_text:
+        fail("THE MOUTH: the throat's cylinder is back, and its end is a black disc lying in the mouth.")
+    if '"FloodedHallsClient"' not in client_boot_text:
+        fail("the client Bootstrap never starts FloodedHallsClient, so the ending is not played.")
+    if boot.exists() and 'ensureRemoteEvent(remoteEventsFolder, "HallsCinema")' not in boot.read_text(encoding="utf-8"):
+        fail("Bootstrap never makes the HallsCinema remote.")
+
     print("flooded halls: scale %g, bay %g, lane +/-%g inside a %g-wide corridor, walkway %g "
           "studs above the water, %d mesh kinds placed."
           % (scale, bay, lane_half, hall_half_studs * 2, floor_drop, len(wanted)))
     if not problems:
         print("route and room agree: one shape module, path layout, flat route, lane guarded, "
-              "flume reachable and landing in the void.")
+              "flume reachable, dropping into the shaft and on into the gate chamber, where the story ends.")
     return report()
 
 

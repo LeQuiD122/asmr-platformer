@@ -590,10 +590,12 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 		-- A DIFFERENT LINE FOR A PATH, because "degrees round" means nothing on one and the
 		-- numbers that do mean something -- how far it went, how many corners it took -- are
 		-- the ones the halls are then built to.
-		print(("LevelService: level %d placed %d/%d chunks along %d studs of route, turning %d "
-			.. "time(s) where the chunks turned, surface y %d")
-			:format(level.levelId, #placedChunks, #template, math.floor(angle), legIndex - 1,
-				cursorY))
+		-- The corner pieces are laid by the route itself on top of the level's own list, so they are
+		-- counted apart from it: "23 of 22" read as a bug.
+		print(("LevelService: level %d placed %d of its %d chunks, plus %d corner piece(s), along %d studs of "
+			.. "route, turning %d time(s) where the chunks turned, surface y %d")
+			:format(level.levelId, #placedChunks - (legIndex - 1), #template, legIndex - 1, math.floor(angle),
+				legIndex - 1, cursorY))
 	elseif meanderLayout then
 		-- A MEANDER'S LINE is in studs too: `angle` is how far along it the route got, and read as
 		-- degrees it was printing a lap count in the tens of thousands.

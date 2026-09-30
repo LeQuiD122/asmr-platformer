@@ -1,4 +1,5 @@
 --!strict
+-- ServerScriptService/Services/FloodedHallsService.lua
 -- The flooded halls: a tiled bathhouse standing in still green water.
 --
 -- === What this is ===
@@ -242,7 +243,11 @@ local RIDE_SINK = SLIDE_BORE - 3.6
 -- How much of the ride is spent inside the tube. The rest is the fall.
 local SLIDE_HELIX = 0.68
 local SLIDE_PLUNGE = 108
-local SLIDE_SECONDS = 4.6
+-- Twice what it was, so the ride can be watched: it is played as a scene now (FloodedHallsClient). And
+-- a little longer again now that the rider's own client draws it, smooth enough to be worth watching.
+local SLIDE_SECONDS = 11
+-- THE RIDE, WRITTEN DOWN for the rider's client: this many steps along it (FlumePath).
+local FLUME_SAMPLES = 220
 -- ===== HOW FAR OUT THE MOUTH SITS =====
 --
 -- Pushed out from 60 to 100, and the reason is the pit rather than the walk. The pit is centred
@@ -2657,6 +2662,22 @@ local function buildEnd(halls: Model, endFrame: CFrame, surfaceY: number): (CFra
 		bar.Reflectance = 0.18
 	end
 	local railTo = deckTo - 4
+	-- WHERE THE NIGHT ENGINEER STANDS (StoryService stands him there): on the deck near its far rail,
+	-- a little short of the mouth, facing the way people come along it.
+	local engineerAt = (endFrame * CFrame.new(deckTo - 20, -1.0, deckWide - 4)).Position
+	halls:SetAttribute("EngineerSpot", CFrame.lookAt(engineerAt, engineerAt - endFrame.RightVector))
+	-- STORY SPOTS on the deck (StoryService): a row of staff lockers on the tail, backs to its rail,
+	-- facing the way in; and one board by the far rail, over the shaft, that somebody has been lifting.
+	for _, spot in ipairs({ { "StaffLockers", Vector3.new(deckFrom + 1.4, -1.0, deckWide / 2) },
+		{ "LoosePlank", Vector3.new(deckTo - 40, -1.0, deckWide - 6) } }) do
+		local at = (endFrame * CFrame.new(spot[2] :: Vector3)).Position
+		local marker = fitting(halls, "StorySpot", Vector3.new(1, 1, 1), CFrame.lookAt(at, at + endFrame.RightVector),
+			VOID_COLOUR, Enum.Material.SmoothPlastic)
+		marker.Transparency = 1
+		marker.CanQuery = false
+		marker:SetAttribute("Kind", spot[1] :: string)
+		game:GetService("CollectionService"):AddTag(marker, "StorySpot")
+	end
 	railRun(Vector3.new(16, 0, 0.3), Vector3.new(railTo, 0, 0.3))
 	railRun(Vector3.new(deckFrom + 0.3, 0, deckWide - 0.3), Vector3.new(railTo, 0, deckWide - 0.3))
 	railRun(Vector3.new(deckFrom + 0.3, 0, 0.3), Vector3.new(deckFrom + 0.3, 0, deckWide - 0.3))
@@ -2900,6 +2921,304 @@ local function buildEnd(halls: Model, endFrame: CFrame, surfaceY: number): (CFra
 	return slideFrame, pitAt
 end
 
+-- ===== THE GATES, AT THE BOTTOM OF IT ALL =====
+--
+-- The flume used to end in the dark: you rode it down, fell out of the end of the tube into a black
+-- shaft, and that was the level. It still drops you into the shaft (whose bottom is never seen from
+-- the rim, and that is kept), but at the bottom of the fall the picture dips to black and you come
+-- up in the sump of the GATE CHAMBER: the lowest room of the Harrow Bay Waterworks, under the baths,
+-- where the outfall gates are. The last scene of the story is played here (FloodedHallsClient):
+--
+--   You climb out of the sump. Gates 1 and 2 are already up; OUTFALL 3, the big one, is shut, and
+--   its handwheel stands on a pedestal in front of it with a keyhole under the wheel. You walk to it.
+--   The key is in your pocket: it always was. It turns. You turn the wheel, the gate grinds up, the
+--   whole bay starts to go out through it, the lamps come on one by one, the clock reaches midnight.
+--   And the last line on the screen is 14 August, 9:14 in the morning.
+--
+-- A room of its own far off the end of the building and well under it, so nothing of it is seen
+-- from the halls; the dip to black is the way in. Everything in it stands on the floor or hangs on
+-- its walls, and the lamps and the daylight at the end of the outfall are real lights, off until the
+-- scene turns them on (on the rider's own screen: each rider opens their own gates).
+--
+-- In its own frame: the floor's top at y = 0, the gates in the wall at -Z, the sump at +Z.
+local GATES = {
+	-- how far past the flume's pit, along the route's last direction, and how far under the floor
+	AWAY = 700,
+	BELOW = 150,
+	HALF_W = 30,
+	HALF_L = 38,
+	HIGH = 42,
+	WALL = 3,
+	SUMP = Vector3.new(0, 0, 24),
+	SUMP_HALF = 9,
+	SUMP_DEEP = 16,
+	WATER_DOWN = 4,
+	WHEEL = Vector3.new(-8, 0, -24),
+	STAND = Vector3.new(-8, 0, -20.2),
+	CONCRETE = Color3.fromRGB(128, 124, 114),
+	IRON = Color3.fromRGB(48, 58, 60),
+	GATE = Color3.fromRGB(46, 84, 88),
+	BRASS = Color3.fromRGB(196, 160, 84),
+	-- how long the scene in the chamber lasts, and when in it the key comes out: long enough now for
+	-- every caption in it to be read twice
+	SECONDS = 42,
+	KEY_AT = 14,
+	-- how long the mouth at the bottom of the fall takes, between the flume and the chamber: the fall
+	-- into it, the jaws, and the dark with its one line in it
+	MAW = 8.5,
+}
+
+local function buildGates(halls: Model, endFrame: CFrame, pitAt: Vector3)
+	local g = GATES
+	local look = Vector3.new(endFrame.LookVector.X, 0, endFrame.LookVector.Z).Unit
+	local at = Vector3.new(pitAt.X, hallFloorY - g.BELOW, pitAt.Z) + look * g.AWAY
+	local frame = CFrame.lookAt(at, at + look)
+	local model = Instance.new("Model")
+	model.Name = "GateChamber"
+	local function solid(name: string, size: Vector3, offset: Vector3, colour: Color3, material: Enum.Material): Part
+		local part = fitting(model, name, size, frame * CFrame.new(offset), colour, material)
+		part.CanCollide = true
+		return part
+	end
+	local function painted(part: BasePart, face: Enum.NormalId, words: string, ink: Color3)
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = face
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 30
+		gui.Parent = part
+		local text = Instance.new("TextLabel")
+		text.Name = "Words"
+		text.Size = UDim2.fromScale(1, 1)
+		text.BackgroundTransparency = 1
+		text.TextScaled = true
+		text.Font = Enum.Font.GothamBlack
+		text.TextColor3 = ink
+		text.Text = words
+		text.Parent = gui
+	end
+	local W, L, H, T = g.HALF_W, g.HALF_L, g.HIGH, g.WALL
+	local s0, sh = g.SUMP, g.SUMP_HALF
+
+	-- THE FLOOR, round the sump.
+	solid("GateFloor", Vector3.new(W * 2, 2, s0.Z - sh + L), Vector3.new(0, -1, (-L + s0.Z - sh) / 2), g.CONCRETE, Enum.Material.Concrete)
+	solid("GateFloor", Vector3.new(W * 2, 2, L - s0.Z - sh), Vector3.new(0, -1, (L + s0.Z + sh) / 2), g.CONCRETE, Enum.Material.Concrete)
+	for _, side in ipairs({ -1, 1 }) do
+		solid("GateFloor", Vector3.new(W - sh, 2, sh * 2), Vector3.new(side * (W + sh) / 2, -1, s0.Z), g.CONCRETE, Enum.Material.Concrete)
+	end
+	-- THE SUMP: walls under the floor's edge and a bottom, and the ladder up its gate-side wall.
+	local deep = g.SUMP_DEEP
+	for _, side in ipairs({ -1, 1 }) do
+		solid("SumpWall", Vector3.new(2, deep, sh * 2 + 4), Vector3.new(side * (sh + 1), -2 - deep / 2 + 1, s0.Z), g.CONCRETE, Enum.Material.Concrete)
+		solid("SumpWall", Vector3.new(sh * 2, deep, 2), Vector3.new(0, -2 - deep / 2 + 1, s0.Z + side * (sh + 1)), g.CONCRETE, Enum.Material.Concrete)
+	end
+	solid("SumpBottom", Vector3.new(sh * 2 + 4, 2, sh * 2 + 4), Vector3.new(0, -deep - 1, s0.Z), g.CONCRETE, Enum.Material.Concrete)
+	local ladderZ = s0.Z - sh + 0.45
+	for _, x in ipairs({ -1.1, 1.1 }) do
+		fitting(model, "SumpLadder", Vector3.new(0.25, deep - 2, 0.25), frame * CFrame.new(x, -deep / 2 + 1, ladderZ), g.IRON, Enum.Material.Metal)
+	end
+	for rung = 0, math.floor((deep - 3) / 1.2) do
+		fitting(model, "SumpRung", Vector3.new(2.4, 0.18, 0.18), frame * CFrame.new(0, -deep + 2 + rung * 1.2, ladderZ), g.IRON, Enum.Material.Metal)
+	end
+
+	-- THE WALLS, the far one round three openings, and the roof on them with its beams.
+	for _, side in ipairs({ -1, 1 }) do
+		solid("GateWall", Vector3.new(T, H + 2, L * 2 + T * 2), Vector3.new(side * (W + T / 2), H / 2 - 1, 0), g.CONCRETE, Enum.Material.Concrete)
+	end
+	solid("GateWall", Vector3.new(W * 2 + T * 2, H + 2, T), Vector3.new(0, H / 2 - 1, L + T / 2), g.CONCRETE, Enum.Material.Concrete)
+	local farZ = -L - T / 2
+	for _, piece in ipairs({
+		{ Vector3.new(22, H - 28, T), Vector3.new(0, 28 + (H - 28) / 2, farZ) }, -- over Outfall 3
+		{ Vector3.new(7, H + 2, T), Vector3.new(14.5, H / 2 - 1, farZ) },
+		{ Vector3.new(7, H + 2, T), Vector3.new(-14.5, H / 2 - 1, farZ) },
+		{ Vector3.new(8, H - 12, T), Vector3.new(22, 12 + (H - 12) / 2, farZ) }, -- over Outfall 2
+		{ Vector3.new(8, H - 12, T), Vector3.new(-22, 12 + (H - 12) / 2, farZ) }, -- over Outfall 1
+		{ Vector3.new(W - 26 + T, H + 2, T), Vector3.new((26 + W + T) / 2, H / 2 - 1, farZ) },
+		{ Vector3.new(W - 26 + T, H + 2, T), Vector3.new(-(26 + W + T) / 2, H / 2 - 1, farZ) },
+	}) do
+		solid("GateWall", piece[1], piece[2], g.CONCRETE, Enum.Material.Concrete)
+	end
+	solid("GateRoof", Vector3.new(W * 2 + T * 2, 3, L * 2 + T * 2), Vector3.new(0, H + 1.5, 0), g.CONCRETE, Enum.Material.Concrete)
+	for _, z in ipairs({ -24, -8, 8, 24 }) do
+		fitting(model, "GateBeam", Vector3.new(W * 2, 2.4, 1.4), frame * CFrame.new(0, H - 1.2, z), g.IRON, Enum.Material.Metal)
+	end
+
+	-- THE OUTFALLS behind the openings: the big one sixty studs long, with daylight at its end once the
+	-- gate is up; the two small ones shorter, already open, running dark.
+	local function culvert(x: number, halfW: number, high: number, long: number, lit: boolean)
+		local z0 = -L - T
+		solid("OutfallFloor", Vector3.new(halfW * 2 + 4, 2, long), Vector3.new(x, -1, z0 - long / 2), g.CONCRETE, Enum.Material.Concrete)
+		solid("OutfallRoof", Vector3.new(halfW * 2 + 4, 2, long), Vector3.new(x, high + 1, z0 - long / 2), g.CONCRETE, Enum.Material.Concrete)
+		for _, side in ipairs({ -1, 1 }) do
+			solid("OutfallWall", Vector3.new(2, high, long), Vector3.new(x + side * (halfW + 1), high / 2, z0 - long / 2), g.CONCRETE, Enum.Material.Concrete)
+		end
+		local back = solid("OutfallEnd", Vector3.new(halfW * 2, high, 1), Vector3.new(x, high / 2, z0 - long - 0.5),
+			if lit then Color3.fromRGB(214, 224, 226) else VOID_COLOUR, Enum.Material.SmoothPlastic)
+		if lit then
+			back.Name = "Daylight"
+			local light = Instance.new("SurfaceLight")
+			light.Face = Enum.NormalId.Front
+			light.Color = Color3.fromRGB(226, 236, 240)
+			light.Brightness = 0
+			light.Range = 60
+			light.Angle = 110
+			light.Parent = back
+			-- The bars across the end, standing on the outfall's floor.
+			for k = -5, 5 do
+				fitting(model, "OutfallGrille", Vector3.new(0.35, high, 0.35), frame * CFrame.new(x + k * halfW / 5.5, high / 2, z0 - long + 1.5),
+					g.IRON, Enum.Material.Metal)
+			end
+		end
+	end
+	culvert(0, 11, 28, 60, true)
+	culvert(22, 4, 12, 30, false)
+	culvert(-22, 4, 12, 30, false)
+
+	-- OUTFALL 3'S GATE: a plate in guides a stud into the wall each side, stiffened, its name on it.
+	local gate = Instance.new("Model")
+	gate.Name = "Gate3"
+	local plate = fitting(gate, "GatePlate", Vector3.new(24, 29, 1.4), frame * CFrame.new(0, 14.5, -L - T - 0.8), g.GATE, Enum.Material.DiamondPlate)
+	plate.CanCollide = true
+	for k = 1, 5 do
+		fitting(gate, "GateRib", Vector3.new(21.6, 0.8, 0.8), frame * CFrame.new(0, k * 5, -L - T + 0.3), g.IRON, Enum.Material.Metal)
+	end
+	local nameplate = fitting(gate, "GateName", Vector3.new(10, 2.6, 0.2), frame * CFrame.new(0, 17.5, -L - T - 0.0), Color3.fromRGB(226, 222, 206),
+		Enum.Material.SmoothPlastic)
+	painted(nameplate, Enum.NormalId.Back, "OUTFALL 3", Color3.fromRGB(150, 30, 30))
+	gate.PrimaryPart = plate
+	gate.Parent = model
+	-- The guides on the wall's face either side, up to the headstock.
+	for _, side in ipairs({ -1, 1 }) do
+		fitting(model, "GateGuide", Vector3.new(1, 31, 1.2), frame * CFrame.new(side * 11.6, 15.5, -L + 0.6), g.IRON, Enum.Material.Metal)
+	end
+	fitting(model, "Headstock", Vector3.new(30, 3, 3), frame * CFrame.new(0, 32.5, -L + 1.5), g.IRON, Enum.Material.Metal)
+	fitting(model, "Gearbox", Vector3.new(5, 4, 3.4), frame * CFrame.new(-10, 36, -L + 1.7), g.IRON, Enum.Material.Metal)
+	-- The small gates' guides and their names over the openings.
+	for index, x in ipairs({ -22, 22 }) do
+		for _, side in ipairs({ -1, 1 }) do
+			fitting(model, "GateGuide", Vector3.new(0.8, 13, 1), frame * CFrame.new(x + side * 4.4, 6.5, -L + 0.5), g.IRON, Enum.Material.Metal)
+		end
+		local sign = fitting(model, "GateSign", Vector3.new(6, 1.6, 0.2), frame * CFrame.new(x, 14, -L + 0.1), Color3.fromRGB(226, 222, 206),
+			Enum.Material.SmoothPlastic)
+		painted(sign, Enum.NormalId.Back, ("OUTFALL %d  OPEN"):format(index), Color3.fromRGB(40, 60, 70))
+	end
+	local plaque = fitting(model, "Plaque", Vector3.new(20, 3, 0.3), frame * CFrame.new(0, 37.5, -L + 0.15), g.BRASS, Enum.Material.Metal)
+	painted(plaque, Enum.NormalId.Back, "HARROW BAY CORPORATION WATERWORKS. OUTFALL GATES. 1911", Color3.fromRGB(60, 40, 20))
+
+	-- THE HANDWHEEL, on a pedestal in front of Outfall 3, with the key's lock under it. The wheel is a
+	-- model of its own so the scene can turn it round its axle (WheelAxis).
+	local w = g.WHEEL
+	solid("Pedestal", Vector3.new(2, 4.4, 2), Vector3.new(w.X, 2.2, w.Z), g.IRON, Enum.Material.Metal)
+	solid("PedestalFoot", Vector3.new(3, 0.5, 3), Vector3.new(w.X, 0.25, w.Z), g.IRON, Enum.Material.Metal)
+	fitting(model, "AxleHousing", Vector3.new(1.3, 1.6, 1.6), frame * CFrame.new(w.X, 5.2, w.Z + 0.6), g.IRON, Enum.Material.Metal)
+	local lock = fitting(model, "KeyLock", Vector3.new(0.9, 0.8, 0.5), frame * CFrame.new(w.X, 2.3, w.Z + 1.2), g.BRASS, Enum.Material.Metal)
+	painted(lock, Enum.NormalId.Back, "3", Color3.fromRGB(60, 40, 20))
+	local notice = fitting(model, "KeyNotice", Vector3.new(0.1, 1.2, 1.8), frame * CFrame.new(w.X - 1.06, 1.6, w.Z), Color3.fromRGB(226, 222, 206),
+		Enum.Material.SmoothPlastic)
+	painted(notice, Enum.NormalId.Left, "KEY HOLDER ONLY", Color3.fromRGB(150, 30, 30))
+	local axis = frame * CFrame.new(w.X, 5.2, w.Z + 1.6)
+	local wheel = Instance.new("Model")
+	wheel.Name = "Wheel"
+	local hub = fitting(wheel, "WheelHub", Vector3.new(0.8, 0.9, 0.9), axis * CFrame.Angles(0, math.pi / 2, 0), g.IRON, Enum.Material.Metal,
+		Enum.PartType.Cylinder)
+	for k = 0, 15 do
+		local a = k * math.pi / 8
+		fitting(wheel, "WheelRim", Vector3.new(0.3, 0.86, 0.3), axis * CFrame.Angles(0, 0, a) * CFrame.new(2.1, 0, 0),
+			Color3.fromRGB(150, 40, 36), Enum.Material.Metal)
+	end
+	for k = 0, 5 do
+		fitting(wheel, "WheelSpoke", Vector3.new(2.1, 0.22, 0.22), axis * CFrame.Angles(0, 0, k * math.pi / 3) * CFrame.new(1.05, 0, 0),
+			Color3.fromRGB(150, 40, 36), Enum.Material.Metal)
+	end
+	wheel.PrimaryPart = hub
+	wheel.Parent = model
+	model:SetAttribute("WheelAxis", axis)
+	-- The drive: a shaft from the pedestal along the floor to the wall beside the gate, and a rack up
+	-- the wall to the gearbox.
+	fitting(model, "DriveShaft", Vector3.new(0.5, 0.5, 13), frame * CFrame.new(w.X, 0.25, (w.Z - L) / 2), g.IRON, Enum.Material.Metal)
+	fitting(model, "DriveRack", Vector3.new(0.8, 34, 0.8), frame * CFrame.new(w.X - 2, 17, -L + 0.5), g.IRON, Enum.Material.Metal)
+
+	-- PIPES along the west wall on brackets, and the lamps: caged, on the side walls, off until the
+	-- gates open; one green emergency lamp over the sump, on.
+	for _, y in ipairs({ 8, 12.5 }) do
+		fitting(model, "Pipe", Vector3.new(L * 2 - 4, 2.2, 2.2), frame * CFrame.new(-W + 1.8, y, 0) * CFrame.Angles(0, math.pi / 2, 0), g.IRON,
+			Enum.Material.Metal, Enum.PartType.Cylinder)
+	end
+	for z = -32, 32, 16 do
+		fitting(model, "PipeBracket", Vector3.new(3, 7.5, 1), frame * CFrame.new(-W + 1.5, 10.2, z), g.IRON, Enum.Material.Metal)
+	end
+	for index, spot in ipairs({ { -1, -24 }, { 1, -24 }, { -1, 0 }, { 1, 0 }, { -1, 24 }, { 1, 24 } }) do
+		local x, z = spot[1] * (W - 0.8), spot[2]
+		fitting(model, "LampBracket", Vector3.new(1.6, 0.4, 0.8), frame * CFrame.new(x, 23.6, z), g.IRON, Enum.Material.Metal)
+		local bulb = fitting(model, "GateLamp", Vector3.new(1, 1.4, 1), frame * CFrame.new(x - spot[1] * 0.4, 22.7, z), Color3.fromRGB(255, 232, 190),
+			Enum.Material.SmoothPlastic)
+		bulb.Transparency = 0.2
+		bulb:SetAttribute("Order", index)
+		local light = Instance.new("PointLight")
+		light.Color = Color3.fromRGB(255, 214, 160)
+		light.Brightness = 0
+		light.Range = 30
+		light.Shadows = true
+		light.Parent = bulb
+	end
+	local emergency = fitting(model, "EmergencyLamp", Vector3.new(1.4, 0.8, 0.6), frame * CFrame.new(0, 12, L - 0.3), Color3.fromRGB(120, 210, 150),
+		Enum.Material.SmoothPlastic)
+	local green = Instance.new("PointLight")
+	green.Color = Color3.fromRGB(110, 220, 150)
+	green.Brightness = 0.7
+	green.Range = 34
+	green.Parent = emergency
+
+	-- THE CLOCK, on the east wall: one minute to midnight. The scene moves its hands (ClockFace).
+	local face = frame * CFrame.new(W, 15, -12) * CFrame.Angles(0, -math.pi / 2, 0)
+	fitting(model, "GateClockRim", Vector3.new(0.6, 5.6, 5.6), face * CFrame.new(0, 0, 0.3) * CFrame.Angles(0, math.pi / 2, 0),
+		g.IRON, Enum.Material.Metal, Enum.PartType.Cylinder)
+	fitting(model, "GateClockFace", Vector3.new(0.3, 5, 5), face * CFrame.new(0, 0, 0.6) * CFrame.Angles(0, math.pi / 2, 0),
+		Color3.fromRGB(236, 232, 218), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+	for _, hand in ipairs({ { "GateClockHour", (11 + 59 / 60) * 30, 1.3 }, { "GateClockMinute", 59 * 6, 2 } }) do
+		local turn = math.rad(hand[2] :: number)
+		local long = hand[3] :: number
+		fitting(model, hand[1] :: string, Vector3.new(0.25, long, 0.12),
+			face * CFrame.new(0, 0, 0.85) * CFrame.Angles(0, 0, -turn) * CFrame.new(0, long / 2, 0), Color3.fromRGB(30, 30, 32),
+			Enum.Material.SmoothPlastic)
+	end
+	model:SetAttribute("ClockFace", face * CFrame.new(0, 0, 0.85))
+	-- THE ROTA on the east wall by the pedestal; the scene writes the rider's own name on it.
+	local rota = fitting(model, "RotaBoard", Vector3.new(0.2, 3.2, 4.6), frame * CFrame.new(W - 0.1, 5, -20), Color3.fromRGB(236, 230, 212),
+		Enum.Material.SmoothPlastic)
+	painted(rota, Enum.NormalId.Left, "KEY HOLDER, OUTFALL 3: ...", Color3.fromRGB(44, 38, 32))
+
+	-- THE WATER IN THE SUMP, which is terrain, so it can be swum in (and drained, on the scene's screen).
+	local waterTop = -g.WATER_DOWN
+	local sumpCentre = frame * Vector3.new(s0.X, (-deep + waterTop) / 2, s0.Z)
+	local sumpSize = Vector3.new(sh * 2, deep + waterTop, sh * 2)
+	pcall(function()
+		workspace.Terrain:FillBlock(CFrame.new(sumpCentre) * (frame - frame.Position), sumpSize, Enum.Material.Water)
+	end)
+	model:SetAttribute("Frame", frame)
+	model:SetAttribute("SumpCentre", sumpCentre)
+	model:SetAttribute("SumpSize", sumpSize)
+	model:SetAttribute("WaterY", (frame * Vector3.new(0, waterTop, 0)).Y)
+	-- Where the rider comes up (under the water, in the middle of the sump, facing the gates), and
+	-- where they stand at the wheel.
+	model:SetAttribute("Arrive", frame * CFrame.new(s0.X, waterTop - 3, s0.Z + 2))
+	model:SetAttribute("Ladder", frame * Vector3.new(0, 0, ladderZ))
+	model:SetAttribute("Stand", frame * CFrame.new(g.STAND))
+	model:SetAttribute("Seconds", g.SECONDS)
+	model.Parent = halls
+end
+
+-- True when `where` is inside the gate chamber or its outfalls: the kill plane leaves them alone.
+local function insideGates(halls: Instance?, where: Vector3): boolean
+	local model = halls and halls:FindFirstChild("GateChamber")
+	local frame = model and model:GetAttribute("Frame")
+	if typeof(frame) ~= "CFrame" then
+		return false
+	end
+	local rel = frame:PointToObjectSpace(where)
+	return math.abs(rel.X) < GATES.HALF_W + 8 and rel.Y > -GATES.SUMP_DEEP - 8 and rel.Y < GATES.HIGH + 8
+		and rel.Z < GATES.HALF_L + 8 and rel.Z > -GATES.HALF_L - 110
+end
+
 -- ===== PIERS UNDER THE WALKWAY INSIDE THE LAST CHAMBER =====
 --
 -- buildLeg carries the walkway on a pier per bay, but it skips every bay inside the last
@@ -3003,10 +3322,10 @@ local function buildClock(halls: Model, face: CFrame)
 			Vector3.new(if major then 0.7 else 0.4, if major then 2.4 else 1.4, 0.2),
 			if major then 5.9 else 6.9, 0.95)
 	end
-	-- STOPPED, at thirteen minutes to five. Not midnight and not a round number: a time that means
-	-- nothing is the one that reads as the moment it actually stopped.
-	mark("ClockHand", (4 + 47 / 60) * 30, Vector3.new(0.8, 5, 0.3), -1, 1.1)
-	mark("ClockHand", 47 * 6, Vector3.new(0.55, 7.4, 0.3), -1, 1.3)
+	-- FOUR MINUTES TO MIDNIGHT. Every clock in Harrow Bay stopped at eight minutes to; down here,
+	-- under the pumping station, they have started again, and they are nearly there.
+	mark("ClockHand", (11 + 56 / 60) * 30, Vector3.new(0.8, 5, 0.3), -1, 1.1)
+	mark("ClockHand", 56 * 6, Vector3.new(0.55, 7.4, 0.3), -1, 1.3)
 	fitting(halls, "ClockPin", Vector3.new(0.4, 1.3, 1.3), face * CFrame.new(0, 0, 1.5) * turn,
 		ink, Enum.Material.Metal, Enum.PartType.Cylinder)
 end
@@ -3199,6 +3518,12 @@ function FloodedHallsService.build(origin: Vector3, level: any?): Model
 	-- BEFORE THE FLOOR, because the floor has a hole in it and this is what decides where.
 	local slideFrame, pitAt = buildEnd(halls, endFrame, surfaceY)
 	buildChamberPiers(halls, pitAt)
+	-- AND UNDER IT ALL, THE GATES, where the story ends.
+	local gatesOk, gatesErr = pcall(buildGates, halls, endFrame, pitAt)
+	if not gatesOk then
+		warn("FloodedHallsService: the gate chamber could not be built, so the flume ends in the dark as it used to: "
+			.. tostring(gatesErr))
+	end
 
 	-- ===== THE FLOODED FLOOR, THE CEILING AND THE WATER =====
 	--
@@ -3345,8 +3670,41 @@ function FloodedHallsService.build(origin: Vector3, level: any?): Model
 	-- Recorded on the model so Bootstrap can move the finish here without this module having to
 	-- know what a finish is.
 	halls:SetAttribute("SlideFrame", slideFrame)
+	-- Where the fall out of the tube ends, for the mouth under it (FloodedHallsClient).
+	halls:SetAttribute("PlungeEnd", slideFrame * CFrame.new(slidePoint(1)))
 	halls:SetAttribute("SlideTop", slideFrame * CFrame.new(slidePoint(0)))
-	halls:SetAttribute("SlideLanding", slideFrame * CFrame.new(slidePoint(1)))
+	-- THE RIDE, WRITTEN DOWN: where the rider's root is at every step of it, facing along it and banked
+	-- with the trough, for the rider's own client to draw the ride from (FloodedHallsClient). The server
+	-- used to write the rider's root every frame, and a character moved from the server is corrected
+	-- back and forth by its own client: the ride was reported as laggy, and it was.
+	local samples = Instance.new("Folder")
+	samples.Name = "FlumePath"
+	local lastLook = slideFrame.LookVector
+	for k = 0, FLUME_SAMPLES do
+		local f = k / FLUME_SAMPLES
+		local here = (slideFrame * CFrame.new(slidePoint(f))).Position
+		local ahead = (slideFrame * CFrame.new(slidePoint(math.min(1, f + 0.02)))).Position
+		local look = if (ahead - here).Magnitude > 0.05 then (ahead - here).Unit else lastLook
+		lastLook = look
+		local up = slideFrame:VectorToWorldSpace(slideUp(f))
+		-- Straight down, the trough's up is no help: the rider's back is to the shaft's middle instead.
+		if math.abs(look:Dot(up)) > 0.98 then
+			local inward = Vector3.new(slideFrame.Position.X - here.X, 0, slideFrame.Position.Z - here.Z)
+			up = if inward.Magnitude > 0.1 then inward.Unit else Vector3.xAxis
+		end
+		local value = Instance.new("CFrameValue")
+		value.Name = tostring(k)
+		value.Value = CFrame.lookAt(here, here + look, up)
+		value.Parent = samples
+	end
+	samples:SetAttribute("Samples", FLUME_SAMPLES)
+	samples.Parent = halls
+	-- The finish is put somewhere nobody can reach (under the gate chamber's floor), because the run is
+	-- finished by the end of the scene in the chamber, not by touching anything on the way down to it.
+	local chamber = halls:FindFirstChild("GateChamber")
+	local chamberFrame = chamber and chamber:GetAttribute("Frame")
+	halls:SetAttribute("SlideLanding", if typeof(chamberFrame) == "CFrame" then chamberFrame * CFrame.new(0, -40, 0)
+		else slideFrame * CFrame.new(slidePoint(1)))
 
 	halls.Parent = workspace
 	print(("FloodedHallsService: %d legs over %d studs, %d corners, walkway %d studs above "
@@ -3357,7 +3715,7 @@ end
 
 -- ===== RIDING IT =====
 --
--- Hold E at the mouth, and the flume carries you down and drops you.
+-- Hold E at the mouth, and the flume carries you down and drops you -- into the gate chamber.
 --
 -- HELD, NOT PRESSED, and for the same reason the benches are: a tap is something you can do by
 -- accident while running past, and this one ends the level. A hold is a decision.
@@ -3377,18 +3735,71 @@ end
 -- you leave the mouth until the lobby takes you back, this says the fall is the flume's.
 local riding: { [Player]: boolean } = {}
 local arrivedAt: { [Player]: number } = {}
+-- Whose own client has said it is drawing their ride (FlumePath): the server leaves those riders alone.
+local drawing: { [Player]: boolean } = {}
+local listening = false
 
 function FloodedHallsService.ownsFall(player: Player): boolean
 	if riding[player] then
 		return true
 	end
+	-- ANYONE IN THE GATE CHAMBER, which is well under the plane, for as long as they are in it: the
+	-- scene, and the seconds after LEVEL COMPLETE before the lobby takes them.
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if root and root:IsA("BasePart") and insideGates(workspace:FindFirstChild("FloodedHalls"), root.Position) then
+		return true
+	end
+	-- A minute after the scene, not fifteen seconds: the lobby waits for the ending to be watched.
 	local landed = arrivedAt[player]
-	return landed ~= nil and os.clock() - landed < 15
+	return landed ~= nil and os.clock() - landed < 60
+end
+
+-- The scene's remote (Bootstrap makes it): the ride's pose on everyone's screen, and the rider's scene.
+local function hallsRemote(): RemoteEvent?
+	local folder = game:GetService("ReplicatedStorage"):FindFirstChild("RemoteEvents")
+	local event = folder and folder:FindFirstChild("HallsCinema")
+	return if event and event:IsA("RemoteEvent") then event else nil
+end
+
+-- THE KEY, in the rider's right hand: small, brass, with a tag. Everyone sees it.
+local function giveKey(character: Model)
+	local hand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
+	if not (hand and hand:IsA("BasePart")) then
+		return
+	end
+	local function bit(name: string, size: Vector3, offset: CFrame, colour: Color3, shape: Enum.PartType?)
+		local part = Instance.new("Part")
+		part.Name = name
+		if shape then
+			part.Shape = shape
+		end
+		part.Size = size
+		part.Color = colour
+		part.Material = Enum.Material.Metal
+		part.CanCollide = false
+		part.CanTouch = false
+		part.CanQuery = false
+		part.Massless = true
+		part.CFrame = hand.CFrame * offset
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = hand
+		weld.Part1 = part
+		weld.Parent = part
+		part.Parent = character
+		game:GetService("Debris"):AddItem(part, GATES.SECONDS)
+	end
+	local brass = GATES.BRASS
+	bit("OutfallKey", Vector3.new(0.12, 0.12, 0.9), CFrame.new(0, -0.35, -0.55), brass)
+	bit("OutfallKeyBow", Vector3.new(0.1, 0.42, 0.42), CFrame.new(0, -0.35, -0.05) * CFrame.Angles(0, math.pi / 2, 0), brass,
+		Enum.PartType.Cylinder)
+	bit("OutfallKeyTag", Vector3.new(0.05, 0.4, 0.3), CFrame.new(0, -0.62, 0.05), Color3.fromRGB(150, 30, 30))
 end
 
 Players.PlayerRemoving:Connect(function(player: Player)
 	riding[player] = nil
 	arrivedAt[player] = nil
+	drawing[player] = nil
 end)
 
 function FloodedHallsService.attachSlide(halls: Model, onArrive: ((Player) -> ())?): () -> ()
@@ -3430,6 +3841,24 @@ function FloodedHallsService.attachSlide(halls: Model, onArrive: ((Player) -> ()
 		end
 		riding[player] = true
 		arrivedAt[player] = nil
+		drawing[player] = nil
+		-- THE SCENE, told to everyone: the rider's pose on every screen, and on the rider's own the
+		-- ride down and the gates after it (FloodedHallsClient).
+		local chamber = halls:FindFirstChild("GateChamber")
+		local remote = hallsRemote()
+		-- The one thing a rider's client may say: "I am drawing my ride." Taken only from someone riding.
+		if remote and not listening then
+			listening = true
+			remote.OnServerEvent:Connect(function(who: Player, said: any)
+				if said == "riding" and riding[who] then
+					drawing[who] = true
+				end
+			end)
+		end
+		if remote then
+			remote:FireAllClients("flume", player, workspace:GetServerTimeNow(), SLIDE_SECONDS,
+				if chamber then GATES.SECONDS else 0, if chamber then GATES.MAW else 0)
+		end
 
 		task.spawn(function()
 			-- PLATFORMSTAND, not Anchored. Anchoring the root freezes the whole assembly and
@@ -3442,6 +3871,13 @@ function FloodedHallsService.attachSlide(halls: Model, onArrive: ((Player) -> ()
 				if f >= 1 or not root.Parent then
 					break
 				end
+				-- THE RIDER'S OWN CLIENT DRAWS THE RIDE, once it says it has it (within a moment of the
+				-- start): the server only keeps the clock. Without that client, the server moves the rider
+				-- itself, as it always did, and the ride still happens.
+				if drawing[player] or os.clock() - started < 0.5 then
+					task.wait()
+					continue
+				end
 				local here = slideFrame * CFrame.new(slidePoint(f))
 				-- Facing along the flume rather than fixed, so the rider turns through the
 				-- bend instead of going down it sideways -- and looks straight down once the
@@ -3453,11 +3889,29 @@ function FloodedHallsService.attachSlide(halls: Model, onArrive: ((Player) -> ()
 					slideFrame:VectorToWorldSpace(slideUp(f)))
 				task.wait()
 			end
-			if root.Parent then
+			local arrive = chamber and chamber.Parent and chamber:GetAttribute("Arrive")
+			if root.Parent and typeof(arrive) == "CFrame" then
+				-- THE MOUTH FIRST: the rider's own client carries them on down into it and shuts it on
+				-- them (FloodedHallsClient, Maw). Nothing is moved here until it has.
+				task.wait(GATES.MAW)
+				-- INTO THE GATE CHAMBER, while the rider's screen is black: up out of the sump, to the
+				-- wheel, the key, the gates (the rider's own client plays it). The run is finished when
+				-- the scene is, whether or not a client is there to play it.
+				root.AssemblyLinearVelocity = Vector3.zero
+				root.CFrame = arrive
+				humanoid.PlatformStand = false
+				task.delay(GATES.KEY_AT, function()
+					if character.Parent and player.Character == character then
+						giveKey(character)
+					end
+				end)
+				task.wait(GATES.SECONDS)
+			elseif root.Parent then
 				root.CFrame = slideFrame * CFrame.new(slidePoint(1))
 			end
 			humanoid.PlatformStand = false
 			riding[player] = nil
+			drawing[player] = nil
 			arrivedAt[player] = os.clock()
 			if onArrive then
 				onArrive(player)
@@ -3467,6 +3921,16 @@ function FloodedHallsService.attachSlide(halls: Model, onArrive: ((Player) -> ()
 
 	return function()
 		connection:Disconnect()
+		-- The sump's water is terrain, which belongs to the place: taken out with the level.
+		local chamber = halls:FindFirstChild("GateChamber")
+		local centre, size = chamber and chamber:GetAttribute("SumpCentre"), chamber and chamber:GetAttribute("SumpSize")
+		local chamberFrame = chamber and chamber:GetAttribute("Frame")
+		if typeof(centre) == "Vector3" and typeof(size) == "Vector3" and typeof(chamberFrame) == "CFrame" then
+			pcall(function()
+				workspace.Terrain:FillBlock(CFrame.new(centre) * (chamberFrame - chamberFrame.Position), size + Vector3.new(8, 8, 8),
+					Enum.Material.Air)
+			end)
+		end
 	end
 end
 
@@ -3803,6 +4267,8 @@ function FloodedHallsService.applySound(halls: Model): () -> ()
 			drip.RollOffMaxDistance = 70 * SCALE
 			drip.RollOffMode = Enum.RollOffMode.InverseTapered
 			drip.Parent = host
+			-- AMBIENCE: faded out on the rider's screen when the ending's scene starts (Cinema).
+			game:GetService("CollectionService"):AddTag(drip, "Ambience")
 			task.spawn(function()
 				while drip.Parent do
 					-- Irregular by design. The wait is randomised every time rather than set

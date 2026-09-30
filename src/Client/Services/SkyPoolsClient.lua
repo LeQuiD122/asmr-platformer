@@ -58,7 +58,19 @@ local skyPathModule = ReplicatedStorage:WaitForChild("Shared", 10)
 skyPathModule = if skyPathModule then skyPathModule:WaitForChild("SkyPath", 10) else nil
 local SkyPath: any = if skyPathModule and skyPathModule:IsA("ModuleScript") then require(skyPathModule) else nil
 
+-- THE POSES (arms up in the sled) and THE CINEMA (the slide played as a scene), both looked for with
+-- a timeout: without them the ride is drawn as it always was.
+local Poses: any = (function()
+	local found = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Poses", 15)
+	return if found and found:IsA("ModuleScript") then require(found) else nil
+end)()
+local Cinema: any = (function()
+	local found = script.Parent and script.Parent:WaitForChild("Cinema", 15)
+	return if found and found:IsA("ModuleScript") then require(found) else nil
+end)()
+
 local SkyPoolsClient = {}
+SkyPoolsClient.VERSION = "twenty-first pass, 2026-09-30"
 
 local WATER_SOUND = "rbxasset://sounds/impact_water.mp3"
 local RIPPLE_EVERY = 0.45 -- seconds between rings while wading
@@ -80,6 +92,8 @@ local balloons: { [Model]: { centre: Vector3, orbit: number, height: number, pha
 local flocks: { [Instance]: { centre: Vector3, list: { Flock } } } = {}
 local pools: { BasePart } = {}
 local toys: { [Model]: { rest: CFrame, drift: Vector2, phase: number } } = {}
+-- RUDY'S RECORD, going round: each piece turned about the deck's spindle (SkyTurntable, its Axis and Spin).
+local turntables: { [BasePart]: { rest: CFrame, axis: Vector3, spin: number } } = {}
 local ripples: { Ripple } = {}
 local wasIn = false
 local lastRipple = 0
@@ -282,6 +296,194 @@ type Ride = { sled: Model, seat: BasePart, spec: any, distances: { number }, sta
 local ride: Ride? = nil
 local rideRemote: RemoteEvent? = nil
 
+-- ===== THE SLIDE, AS A SCENE =====
+--
+-- On the rider's own screen (Cinema), the long way down is shot like the end of a film:
+--   THE PUSH OFF (to 0.1)    over their shoulder, down the slide ahead of them.
+--   THE TRACK                above the clouds: alongside them, out past the slide's edge and a
+--                            little over it, going round the tower with them.
+--   THROUGH THE CLOUDS       from UNDER the cloud sea, looking up at where the slide comes out of it,
+--                            and they burst through in a puff of cloud. The camera is never inside a
+--                            cloud: twice the whole picture went white.
+--   THE FACE                 from ahead of the sled, looking back at them, arms up: fourteen studs
+--                            off, not seven, where they were too close to see.
+--   THE POOL (from 0.86)     from the water, as they come down into it.
+--   THE SKIM                 they do not stop at the water: the sled skips across the pool, three
+--                            hops lower each time, spray at every touch, slews round and settles
+--                            (SkyPath.skimFrame). Low over the water, alongside.
+--   THE LANDING              held a moment on the pool after they tip out, then the camera is theirs.
+-- And on everyone's, the rider sits with their arms up the whole way down (Poses.sled).
+-- SCORED (Cinema.sound; audio/endings): the rush of the slide under them the whole way down, a whoosh as
+-- they go into the cloud, a slap at every skip across the pool, the plunge as they tip out, and the
+-- last chord over the pool.
+local scene = { landedAt = nil :: number?, spec = nil :: any, landing = nil :: Vector3?,
+	riders = {} :: { [Player]: { began: number, seconds: number, model: Instance?, joints: { [string]: any }? } },
+	stepped = nil :: RBXScriptConnection?, shot = nil :: string?, burst = false, hops = 0, told = false,
+	rush = nil :: Sound?, whooshed = false }
+local HOLD = 4.5 -- seconds the pool is held on screen after the splash (and longer if a caption is up)
+
+-- A new shot is a cut: the camera does not pan from one to the next.
+function scene.cutTo(name: string)
+	if scene.shot ~= name then
+		scene.shot = name
+		Cinema.cut()
+	end
+end
+
+function scene.shoot(current: Ride, u: number)
+	if not (Cinema and Cinema.active()) then
+		return
+	end
+	local here = current.seat.Position
+	local ahead = SkyPath.rideFrame(current.spec, current.distances, math.min(1, u + 0.02)).Position
+	local run = ahead - here
+	run = if run.Magnitude > 0.01 then run.Unit else Vector3.new(0, 0, -1)
+	local flat = Vector3.new(run.X, 0, run.Z)
+	flat = if flat.Magnitude > 0.01 then flat.Unit else Vector3.new(0, 0, -1)
+	local out = Vector3.new(here.X - current.spec.centre.X, 0, here.Z - current.spec.centre.Z)
+	out = if out.Magnitude > 0.01 then out.Unit else Vector3.xAxis
+	local character = Players.LocalPlayer.Character
+	local ignore = if character then { character, current.sled } else { current.sled }
+	local cloudTop = current.sled:GetAttribute("CloudTop")
+	local cloudBottom = current.sled:GetAttribute("CloudBottom")
+	local clouds = typeof(cloudTop) == "number" and typeof(cloudBottom) == "number"
+	if u < 0.1 then
+		scene.cutTo("push")
+		local eye = Cinema.clear(here - flat * 10 + Vector3.new(0, 5.5, 0), here, ignore)
+		Cinema.point(CFrame.lookAt(eye, SkyPath.rideFrame(current.spec, current.distances, math.min(1, u + 0.12)).Position), 64)
+	elseif clouds and here.Y > (cloudTop :: number) + 22 then
+		-- THE TRACK: alongside, out past the edge and over it, well above the cloud tops.
+		scene.cutTo("track")
+		local eye = here + out * 24 + Vector3.new(0, 9, 0) - flat * 6
+		Cinema.point(CFrame.lookAt(eye, here + Vector3.new(0, 1, 0)), 52)
+	elseif clouds and here.Y > (cloudBottom :: number) - 12 then
+		-- THROUGH THE CLOUDS: from under them, looking up at where the slide comes out.
+		scene.cutTo("under")
+		if not scene.whooshed then
+			scene.whooshed = true
+			Cinema.sound("CloudWhoosh", 0.8)
+		end
+		local exitY = (cloudBottom :: number) - 12
+		local eye = Vector3.new(here.X, exitY - 30, here.Z) + out * 34 + flat * 40
+		Cinema.point(CFrame.lookAt(eye, Vector3.new(here.X, math.max(exitY, here.Y), here.Z) + flat * 6), 60, true)
+	elseif u < 0.86 then
+		-- THE PUFF as they come out of the cloud, once.
+		if clouds and not scene.burst then
+			scene.burst = true
+			scene.puff(here)
+		end
+		-- THE FACE: ahead of them looking back, far enough off to see all of them.
+		scene.cutTo("face")
+		local eye = Cinema.clear(here + run * 14 + Vector3.new(0, 4.5, 0), here, ignore)
+		Cinema.point(CFrame.lookAt(eye, here + Vector3.new(0, 1.2, 0)), 58)
+	else
+		scene.cutTo("pool")
+		local landing = SkyPath.point(current.spec, 1)
+		local last = SkyPath.point(current.spec, 0.97)
+		local away = Vector3.new(landing.X - last.X, 0, landing.Z - last.Z)
+		away = if away.Magnitude > 0.01 then away.Unit else Vector3.xAxis
+		local side = Vector3.new(-away.Z, 0, away.X)
+		Cinema.point(CFrame.lookAt(landing + away * 20 + side * 10 + Vector3.new(0, 2.5, 0), here), 58)
+	end
+end
+
+-- THE SKIM, `s` seconds in: low over the water, alongside, the sled skipping past.
+function scene.skimShot(current: Ride, s: number)
+	if not (Cinema and Cinema.active()) then
+		return
+	end
+	local at = current.seat.Position
+	local landing = SkyPath.point(current.spec, 1)
+	local last = SkyPath.point(current.spec, 0.97)
+	local dir = Vector3.new(landing.X - last.X, 0, landing.Z - last.Z)
+	dir = if dir.Magnitude > 0.01 then dir.Unit else Vector3.xAxis
+	local side = Vector3.new(-dir.Z, 0, dir.X)
+	scene.cutTo("skim")
+	-- Keeping pace a little behind at first, and letting it go on past as it slows.
+	local eye = Vector3.new(at.X, landing.Y + 2.2, at.Z) + side * 13 - dir * (4 - s * 2.2)
+	Cinema.point(CFrame.lookAt(eye, at + Vector3.new(0, 0.5, 0)), 56)
+end
+
+-- A PUFF OF CLOUD where they came out of it, on this screen.
+function scene.puff(at: Vector3)
+	local host = Instance.new("Part")
+	host.Name = "CloudPuff"
+	host.Size = Vector3.new(1, 1, 1)
+	host.CFrame = CFrame.new(at + Vector3.new(0, 4, 0))
+	host.Anchored = true
+	host.CanCollide = false
+	host.CanTouch = false
+	host.CanQuery = false
+	host.Transparency = 1
+	host.Parent = workspace
+	local puff = Instance.new("ParticleEmitter")
+	puff.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	puff.Color = ColorSequence.new(Color3.fromRGB(240, 244, 250))
+	puff.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 4), NumberSequenceKeypoint.new(1, 14) })
+	puff.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) })
+	puff.Lifetime = NumberRange.new(1.2, 2.2)
+	puff.Speed = NumberRange.new(6, 14)
+	puff.SpreadAngle = Vector2.new(180, 180)
+	puff.Drag = 2
+	puff.Rate = 0
+	puff.Parent = host
+	puff:Emit(36)
+	task.delay(3, function()
+		host:Destroy()
+	end)
+end
+
+-- THE POSE, for everyone riding, after the animations every frame.
+function scene.poseRiders()
+	local now = workspace:GetServerTimeNow()
+	for player, r in pairs(scene.riders) do
+		local character = player.Character
+		local t = now - r.began
+		if not character or not player.Parent or t >= r.seconds then
+			if r.joints then
+				for _, joint in pairs(r.joints) do
+					Poses.drive(joint, CFrame.identity)
+				end
+			end
+			scene.riders[player] = nil
+		elseif t >= 0 then
+			if r.model ~= character then
+				r.model = character
+				r.joints = Poses.joints(character)
+			end
+			local joints = r.joints
+			if joints then
+				local r6 = Poses.isR6(joints)
+				local w = Poses.weight(t, r.seconds)
+				for name, joint in pairs(joints) do
+					local turn = Poses.sled(name, t, w, r6)
+					if turn then
+						Poses.drive(joint, turn)
+					end
+				end
+			end
+		end
+	end
+	local hook = scene.stepped
+	if hook and next(scene.riders) == nil then
+		hook:Disconnect()
+		scene.stepped = nil
+	end
+end
+
+function scene.posed(player: any, began: any, seconds: any)
+	if not Poses or typeof(player) ~= "Instance" or not player:IsA("Player") or typeof(began) ~= "number"
+		or typeof(seconds) ~= "number" then
+		return
+	end
+	scene.riders[player] = { began = began, seconds = seconds }
+	if not scene.stepped then
+		scene.stepped = RunService.Stepped:Connect(function()
+			pcall(scene.poseRiders)
+		end)
+	end
+end
+
 -- ===== WHAT THE RIDE LOOKS LIKE FROM INSIDE IT =====
 --
 -- The slide was eight to fifteen seconds with nothing on screen to say it was happening. This is
@@ -365,6 +567,10 @@ local function ensureRideGui()
 end
 
 local function showRide(on: boolean)
+	-- THE SCENE'S BARS instead, where there is a scene: no bands, no counter on a film.
+	if Cinema then
+		return
+	end
 	ensureRideGui()
 	local gui = rideGui
 	if not gui then
@@ -391,8 +597,18 @@ end
 local function splashFlash()
 	ensureRideGui()
 	local flash = rideParts.flash
-	if not flash then
+	local gui = rideGui
+	if not (flash and gui) then
 		return
+	end
+	-- Shown on its own when there is a scene (the bands and the counter stay off then).
+	gui.Enabled = true
+	if Cinema then
+		task.delay(0.7, function()
+			if gui.Parent and not ride then
+				gui.Enabled = false
+			end
+		end)
 	end
 	flash.BackgroundTransparency = 0.45
 	TweenService:Create(flash, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
@@ -400,7 +616,7 @@ local function splashFlash()
 end
 
 local function rideStarted(sled: Instance)
-	if not (SkyPath and sled:IsA("Model")) then
+	if not (SkyPath and typeof(sled) == "Instance" and sled:IsA("Model")) then
 		return
 	end
 	local spec = SkyPath.read(sled)
@@ -413,6 +629,17 @@ local function rideStarted(sled: Instance)
 	ride = { sled = sled, seat = seat, spec = spec, distances = SkyPath.distances(spec), startAt = startAt,
 		seconds = seconds }
 	showRide(true)
+	scene.landedAt = nil
+	scene.shot = nil
+	scene.burst = false
+	scene.hops = 0
+	scene.told = false
+	scene.whooshed = false
+	if Cinema then
+		Cinema.begin()
+		Cinema.caption("The Long Way Down", "Everyone takes it in the end.", 7)
+		scene.rush = Cinema.sound("SlideRush", 0.55, { looped = true, fadeIn = 1.2 })
+	end
 	-- The one thing this says back: the sled is on screen, so the server may hand it over.
 	if rideRemote then
 		rideRemote:FireServer()
@@ -427,22 +654,91 @@ local function moveSled(serverNow: number)
 	if not current.sled.Parent or not current.seat.Parent then
 		ride = nil
 		showRide(false)
+		if Cinema and Cinema.active() then
+			Cinema.finish()
+		end
 		return
 	end
-	local u = (serverNow - current.startAt) / current.seconds
+	local elapsed = serverNow - current.startAt
+	local u = elapsed / current.seconds
 	if u >= 1 then
+		local s = elapsed - current.seconds
+		if s < SkyPath.SKIM_SECONDS then
+			-- THE SKIM: across the pool, spray at every touch.
+			current.seat.CFrame = SkyPath.skimFrame(current.spec, s)
+			current.seat.AssemblyLinearVelocity = Vector3.zero
+			current.seat.AssemblyAngularVelocity = Vector3.zero
+			local touched = 0
+			for _, h in ipairs(SkyPath.HOPS) do
+				if s >= h[1] then
+					touched += 1
+				end
+			end
+			if touched > scene.hops then
+				scene.hops = touched
+				splash(Vector3.new(current.seat.Position.X, SkyPath.point(current.spec, 1).Y, current.seat.Position.Z))
+				if Cinema and Cinema.active() then
+					Cinema.shake(0.6)
+					-- Each skip smaller than the last, and a little higher.
+					Cinema.sound("SkimSlap", 0.95 - touched * 0.18, { pitch = 1 + touched * 0.07, keep = true })
+					if touched == 1 then
+						Cinema.fade(scene.rush, 0.5)
+					end
+				end
+			end
+			pcall(scene.skimShot, current, s)
+			return
+		end
 		ride = nil
 		splashFlash()
 		showRide(false)
+		if Cinema and Cinema.active() then
+			Cinema.sound("PoolPlunge", 0.9, { keep = true })
+		end
+		-- THE POOL, held a moment after the splash, then the camera is theirs.
+		scene.landedAt = os.clock()
+		scene.spec = current.spec
+		scene.landing = SkyPath.skimEnd(current.spec)
 		return
 	end
 	-- How far there is left to fall, which is the one number worth showing on a slide.
 	local left = math.max(0, current.seat.Position.Y - current.spec.y1)
-	rideParts.drop.Text = ("%d studs"):format(left)
+	if rideParts.drop then
+		rideParts.drop.Text = ("%d studs"):format(left)
+	end
 	current.seat.CFrame = SkyPath.rideFrame(current.spec, current.distances, u)
 	-- It is unanchored while this client has it, so gravity would pull at it between frames.
 	current.seat.AssemblyLinearVelocity = Vector3.zero
 	current.seat.AssemblyAngularVelocity = Vector3.zero
+	pcall(scene.shoot, current, u)
+end
+
+-- After the splash: the pool from its far side, the tower going up out of it, then back to the player.
+local function holdLanding()
+	local landedAt = scene.landedAt
+	if not landedAt or not (Cinema and Cinema.active()) then
+		return
+	end
+	if os.clock() - landedAt > HOLD then
+		scene.landedAt = nil
+		Cinema.finish()
+		return
+	end
+	local spec = scene.spec
+	local landing = scene.landing or SkyPath.point(spec, 1)
+	local last = SkyPath.point(spec, 0.97)
+	local away = Vector3.new(landing.X - SkyPath.point(spec, 1).X, 0, landing.Z - SkyPath.point(spec, 1).Z)
+	if away.Magnitude < 0.01 then
+		away = Vector3.new(landing.X - last.X, 0, landing.Z - last.Z)
+	end
+	away = if away.Magnitude > 0.01 then away.Unit else Vector3.xAxis
+	if not scene.told then
+		scene.told = true
+		Cinema.caption("The Sky Pools", "Everybody who came up for the party is still up there. You are the only one who came down.", 8)
+		Cinema.sound("PoolsChord", 0.7, { keep = true, fadeIn = 1 })
+		Cinema.done()
+	end
+	Cinema.point(CFrame.lookAt(landing + away * 26 + Vector3.new(0, 7, 0), landing + Vector3.new(0, 14, 0)), 70)
 end
 
 local function step()
@@ -450,6 +746,7 @@ local function step()
 	local serverNow = workspace:GetServerTimeNow()
 	moveSky(serverNow, now)
 	moveSled(serverNow)
+	holdLanding()
 	moveFalls(now)
 	local character = Players.LocalPlayer.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
@@ -499,6 +796,14 @@ local function step()
 		end
 	end
 
+	for part, deck in pairs(turntables) do
+		if part.Parent then
+			local about = CFrame.new(deck.axis)
+			part.CFrame = about * CFrame.Angles(0, -now * deck.spin, 0) * about:Inverse() * deck.rest
+		else
+			turntables[part] = nil
+		end
+	end
 	for model, toy in pairs(toys) do
 		if model.Parent then
 			local t = now + toy.phase
@@ -544,6 +849,16 @@ function SkyPoolsClient.start()
 		toyAdded(item)
 	end
 	CollectionService:GetInstanceAddedSignal("SkyPoolToy"):Connect(toyAdded)
+	local function deckAdded(item: Instance)
+		local axis, spin = item:GetAttribute("Axis"), item:GetAttribute("Spin")
+		if item:IsA("BasePart") and typeof(axis) == "Vector3" and typeof(spin) == "number" then
+			turntables[item] = { rest = item.CFrame, axis = axis, spin = spin }
+		end
+	end
+	for _, item in ipairs(CollectionService:GetTagged("SkyTurntable")) do
+		deckAdded(item)
+	end
+	CollectionService:GetInstanceAddedSignal("SkyTurntable"):Connect(deckAdded)
 	CollectionService:GetInstanceRemovedSignal("SkyPoolToy"):Connect(function(item)
 		if item:IsA("Model") then
 			toys[item] = nil
@@ -589,7 +904,14 @@ function SkyPoolsClient.start()
 	local event = remotes and remotes:FindFirstChild("SkyRide")
 	if event and event:IsA("RemoteEvent") then
 		rideRemote = event
-		event.OnClientEvent:Connect(rideStarted)
+		-- The ride is the rider's alone; the arms-up pose is anyone's.
+		event.OnClientEvent:Connect(function(first: any, a: any, b: any, c: any)
+			if first == "pose" then
+				scene.posed(a, b, c)
+			else
+				rideStarted(first)
+			end
+		end)
 	end
 
 	RunService.RenderStepped:Connect(step)

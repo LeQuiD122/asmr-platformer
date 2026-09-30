@@ -67,6 +67,14 @@ end
 -- built from parts in the same place.
 local rigModule = game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("SeaRig", 10)
 local SeaRig: any = if rigModule and rigModule:IsA("ModuleScript") then require(rigModule) else nil
+-- And the people still here (Townsfolk): without the module the level simply has nobody in it.
+local npcModule = script.Parent:FindFirstChild("Townsfolk") or script.Parent:WaitForChild("Townsfolk", 5)
+local Townsfolk: any = if npcModule and npcModule:IsA("ModuleScript") then require(npcModule) else nil
+-- And the poses (Poses): a rider whose own client is not running is flailed by them from here.
+local Poses: any = (function()
+	local found = game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Poses", 10)
+	return if found and found:IsA("ModuleScript") then require(found) else nil
+end)()
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -83,20 +91,22 @@ local MURK_DEPTH = 35
 -- A SHOAL of fish this often along the street, in the open water under the route: within SHOAL_OUT
 -- of the centre line. They were ninety studs off it, which is inside the drowned blocks, so every
 -- fish in the city was swimming inside a wall and nobody had ever seen one.
-local SHOAL_EVERY = 70
-local SHOAL_OUT = 8
+local SHOAL_EVERY = 45
+local SHOAL_OUT = 19 -- the far side of a shoal's lane; its near side is 15, clear of the chunks overhead
 local HORRORS = 4 -- and, far out where the haze takes over, four things that are not fish
 local HORROR_OUT = 780
 -- THE SWIMMERS: single animals with somewhere to be, rather than a shoal going round in a ring. A ray,
 -- a turtle, a jellyfish, an eel, a big old grouper -- one every so often along the street, each with a
 -- home it wanders round. The client makes and moves them; this only says where and what.
-local SWIMMER_EVERY = 38
-local SWIMMER_KINDS = { "ray", "turtle", "jelly", "dolphins", "shark", "grouper", "jelly", "turtle", "ray", "jelly",
-	"dolphins", "eel" }
--- They swim in the street's open water, under the route where you look down: a home within SWIM_OUT
--- of the centre line and never further across than SWIM_REACH from it, which is inside the road
--- signs' legs and far inside the lamp posts -- so nothing has to be kept away from those.
-local SWIM_OUT = 10
+local SWIMMER_EVERY = 30
+local SWIMMER_KINDS = { "ray", "turtle", "dolphins", "jelly", "shark", "grouper", "turtle", "dolphins", "ray", "jelly",
+	"eel", "turtle" }
+-- THEY SWIM BESIDE THE ROUTE, NOT UNDER IT. In play nobody saw one: they wandered up to SWIM_REACH
+-- either side of the centre line, so half the time they were under the chunks, and the chunks are
+-- what you are looking at. Now each has a lane on one side, its home SWIM_LANE from the centre line,
+-- and wanders across no further than keeps it past the route's edge on one side and inside
+-- SWIM_REACH on the other -- which is inside the road signs' legs and far inside the lamp posts.
+local SWIM_LANE = { 15, 19 }
 -- GULLS over the street: one every GULL.every studs, circling a point within GULL.out of the centre
 -- line at up to GULL.radius, never lower than GULL.low over the water.
 local GULL = { every = 70, out = 16, radius = 28, low = 32 }
@@ -208,15 +218,17 @@ local WINDOW_DEEP = 60
 local KELP_TUNNEL = 13 -- a strand in the tank stands at least this far off the tunnel's line
 -- THE GLASS, tapped: it cracks at TAP.crack, cracks further at TAP.crack2 and goes at TAP.breaks.
 -- Every tap adds one; one drains away every TAP.ease seconds, so it takes a player meaning it.
--- Then the aquarium floods for TAP.hold seconds, and everyone still inside after TAP.rise is
--- washed out: to their checkpoint in Chill, to the start in Hardcore. And the glass is back.
+-- Then the aquarium floods with water you can swim in: the sea pours in and the gallery is full
+-- after TAP.rise, slow enough to watch; it stays until TAP.hold, then goes down over TAP.drain, and
+-- the glass is back. Nobody is washed out: the flood is somewhere to be.
 local TAP = {
 	crack = 3, -- taps of strain on one pane before it cracks
 	crack2 = 5, -- before the crack spreads and weeps
 	breaks = 7, -- before it goes
 	ease = 4, -- seconds for one tap's strain to drain away
-	rise = 3.5, -- seconds for the water to come up
-	hold = 14, -- seconds before it is gone and the glass is whole
+	rise = 8, -- seconds for the gallery to fill
+	hold = 40, -- seconds from the glass going to the water starting to go down
+	drain = 6, -- seconds for it to go down, before the glass is whole
 }
 -- KELP, as markers the client grows and sways (SunkenCityClient): in the tank, and in beds along the
 -- street's kerbs, KELP_KERB off the centre line, halfway between one lamp post and the next.
@@ -243,7 +255,7 @@ local FUNNEL_DEPTH = 16
 local CAPTURE_R = 20
 local DRAIN_R = 7
 local SHAFT_DEPTH = 60 -- under the sea floor; the rider ends at the bottom, in the dark
-local DRAIN_SECONDS = 6.5
+local DRAIN_SECONDS = 13
 
 -- ===== Colours =====
 local DEEP = Color3.fromRGB(24, 50, 56)
@@ -420,6 +432,8 @@ local function ambience(parent: BasePart, name: string, speed: number, volume: n
 	s.RollOffMinDistance = near
 	s:SetAttribute("BaseVolume", volume)
 	CollectionService:AddTag(s, "SunkenAmbience")
+	-- And ambience of the game's kind: faded out when the ending's scene starts (Cinema).
+	CollectionService:AddTag(s, "Ambience")
 	s:Play()
 	return s
 end
@@ -1217,6 +1231,20 @@ local function tower(parent: Instance, frame: CFrame, w: number, d: number, top:
 		CollectionService:AddTag(beacon, "SunkenBlink")
 	else
 		cityBlock(parent, "RoofHouse", Vector3.new(d * 0.3, 3, w * 0.25), frame * CFrame.new(-d / 5, main + 1.5, -w / 5), facade)
+		-- A SIGN ON THE ROOF, now and then, lettered on a board on two legs and turned to the street:
+		-- what the building was, which is the most city thing a skyline can say.
+		if top > waterLevel + 8 and rng:NextNumber() < 0.2 then
+			local words = ({ "HOTEL", "BANK", "CINEMA", "RADIO", "GRAND HOTEL", "TELEGRAPH", "OFFICES", "DAIRY" })[rng:NextInteger(1, 8)]
+			local long = math.min(w * 0.7, 6 + #words * 1.6)
+			for _, z in ipairs({ -long * 0.35, long * 0.35 }) do
+				cityBlock(parent, "SignLeg", Vector3.new(0.5, 3, 0.5), frame * CFrame.new(-d / 2 + 2, main + 1.5, z),
+					Color3.fromRGB(80, 84, 88), Enum.Material.Metal)
+			end
+			local board = cityBlock(parent, "RoofSign", Vector3.new(0.4, 3.4, long), frame * CFrame.new(-d / 2 + 2, main + 4.7, 0),
+				FADED[rng:NextInteger(1, #FADED)]:Lerp(Color3.new(1, 1, 1), 0.2))
+			label(board, Enum.NormalId.Left, words, Color3.fromRGB(246, 242, 232))
+			label(board, Enum.NormalId.Right, words, Color3.fromRGB(246, 242, 232))
+		end
 		if rng:NextNumber() < 0.4 then
 			local at = frame * Vector3.new(d / 5, main, w / 6)
 			column(parent, "TankLegs", 2.6, at, at.Y, at.Y + 2.5, Color3.fromRGB(90, 80, 70), false, true)
@@ -1667,7 +1695,10 @@ local FERRIS = {
 	spin = 0.02, -- radians a second: once round in five minutes
 	reach = 40, -- the most it covers from its middle, frame and all
 	clear = 48, -- and the square the city leaves it
-	shares = { 0.55, 0.62, 0.48, 0.7, 0.3 }, -- where along the street it may stand, first choice first
+	window = 190, -- and how far it keeps from the open water past the aquarium's window
+	-- Where along the street it may stand, first choice first. Many, because the aquarium's view,
+	-- the flat, the plaza and the harbour each rule some out, and five left it nowhere on some runs.
+	shares = { 0.55, 0.62, 0.48, 0.7, 0.3, 0.4, 0.66, 0.35, 0.52, 0.25, 0.44, 0.75, 0.58, 0.2, 0.8, 0.15 },
 	colours = { Color3.fromRGB(214, 170, 170), Color3.fromRGB(170, 204, 186), Color3.fromRGB(222, 206, 150),
 		Color3.fromRGB(160, 186, 214) },
 }
@@ -1766,6 +1797,92 @@ local function ferrisWheel(parent: Instance, at: Vector3, toward: Vector3, floor
 	return model
 end
 
+-- ===== THE LANDMARKS (blender/gen_landmarks.py) =====
+--
+-- Four tall buildings the skyline is read by: the city was blocks, and blocks from any distance are a
+-- field of flat tops. The Deco tower with its brass crown, the Needle with its pod, the Twin towers
+-- and their skybridge, and a glass block that has started to go over. Each stands on the sea floor in
+-- its own square of open water (`blocked` keeps the city off it), far enough off the route for
+-- something that breaks the surface and short of where the things at the back swim (HORROR_OUT):
+-- the check holds both. Its meshes share one box and go at one CFrame, front to the street; the
+-- leaning one leans away from it. With the meshes not imported, tiers of parts stand in the same
+-- place, and the spires' aviation lights are real lights either way.
+--
+-- Each: `height` is the mesh's (floor to tip), `reach` how far it covers from its middle in plan,
+-- `out` how far off the route it stands and `side` which way, `share` where along the street it
+-- would like to be, `lean` degrees, `sink` how far its base goes into the sand.
+local LANDMARKS = {
+	{ name = "Deco", height = 282, reach = 38, share = 0.22, out = 330, side = 1, lean = 0, sink = 0,
+		meshes = { { "Landmark_DecoStone", Color3.fromRGB(210, 198, 172), Enum.Material.Concrete, 0 },
+			{ "Landmark_DecoGlass", Color3.fromRGB(40, 48, 58), Enum.Material.SmoothPlastic, 0.18 },
+			{ "Landmark_DecoCrown", Color3.fromRGB(190, 156, 88), Enum.Material.Metal, 0.1 } },
+		plain = { { 44, 0, 160, 0 }, { 36, 160, 196, 0 }, { 28, 196, 220, 0 }, { 20, 220, 252, 0 } },
+		tips = { Vector3.new(0, 282.5, 0) } },
+	{ name = "Needle", height = 300, reach = 28, share = 0.47, out = 330, side = -1, lean = 0, sink = 0,
+		meshes = { { "Landmark_NeedleShaft", Color3.fromRGB(206, 204, 196), Enum.Material.Concrete, 0 },
+			{ "Landmark_NeedlePod", Color3.fromRGB(228, 226, 218), Enum.Material.SmoothPlastic, 0.05 },
+			{ "Landmark_NeedleGlass", Color3.fromRGB(46, 62, 76), Enum.Material.SmoothPlastic, 0.2 } },
+		plain = { { 12, 0, 232, 0 }, { 34, 232, 252, 0 }, { 2.4, 252, 298, 0 } },
+		tips = { Vector3.new(0, 300.5, 0) } },
+	{ name = "Twin", height = 300, reach = 38, share = 0.68, out = 320, side = 1, lean = 0, sink = 0,
+		meshes = { { "Landmark_TwinBody", Color3.fromRGB(178, 184, 190), Enum.Material.Metal, 0.08 },
+			{ "Landmark_TwinGlass", Color3.fromRGB(54, 70, 86), Enum.Material.SmoothPlastic, 0.2 } },
+		plain = { { 20, 0, 250, -22 }, { 20, 0, 250, 22 } },
+		tips = { Vector3.new(-22, 300.5, 0), Vector3.new(22, 300.5, 0) } },
+	{ name = "Lean", height = 209, reach = 44, share = 0.86, out = 300, side = -1, lean = 5, sink = 1.5,
+		meshes = { { "Landmark_LeanFrame", Color3.fromRGB(188, 188, 182), Enum.Material.Concrete, 0 },
+			{ "Landmark_LeanGlass", Color3.fromRGB(78, 106, 126), Enum.Material.SmoothPlastic, 0.25 } },
+		plain = { { 32, 0, 205, 0 } },
+		tips = {} },
+}
+
+-- Stands one. `toward` is the way to the street. Returns its base, on the floor, for anything that
+-- goes on it (the one who watches from the Deco tower's ledge).
+local function landmark(parent: Instance, spec: any, at: Vector3, toward: Vector3, floorY: number): CFrame
+	local model = Instance.new("Model")
+	model.Name = "Landmark" .. spec.name
+	model.Parent = parent
+	local foot = Vector3.new(at.X, floorY, at.Z)
+	local base = CFrame.lookAt(foot, foot + Vector3.new(toward.X, 0, toward.Z)) * CFrame.Angles(math.rad(spec.lean), 0, 0)
+		* CFrame.new(0, -spec.sink, 0)
+	local placed: { Instance } = {}
+	local whole = SeaRig ~= nil
+	for _, m in ipairs(spec.meshes) do
+		local rig = if SeaRig then SeaRig.place(model, m[1]) else nil
+		if rig then
+			rig.part.CFrame = base * CFrame.new(0, spec.height / 2, 0)
+			rig.part.Color = m[2]
+			rig.part.Material = m[3]
+			rig.part.Reflectance = m[4]
+			rig.part.CastShadow = true
+			table.insert(placed, rig.model)
+		else
+			whole = false
+		end
+	end
+	if not whole then
+		for _, item in ipairs(placed) do
+			item:Destroy()
+		end
+		for _, tier in ipairs(spec.plain) do
+			block(model, "Landmark", Vector3.new(tier[1], tier[3] - tier[2], tier[1]),
+				base * CFrame.new(tier[4], (tier[2] + tier[3]) / 2, 0), spec.meshes[1][2], Enum.Material.Concrete, false)
+		end
+	end
+	for _, tip in ipairs(spec.tips) do
+		local beacon = block(model, "AviationLight", Vector3.new(1, 1, 1), base * CFrame.new(tip),
+			Color3.fromRGB(220, 60, 50), Enum.Material.Glass, false)
+		local red = Instance.new("PointLight")
+		red.Brightness = 1.4
+		red.Range = 24
+		red.Color = Color3.fromRGB(255, 70, 50)
+		red.Shadows = false
+		red.Parent = beacon
+		CollectionService:AddTag(beacon, "SunkenBlink")
+	end
+	return base
+end
+
 -- A STRAND OF KELP: a holdfast gripping the floor, and a marker saying how tall the strand is and
 -- which way the current leans it. The client grows the stipe, the blades and the floats from it and
 -- sways the whole thing, top most, a wave running up it (SunkenCityClient).
@@ -1789,6 +1906,185 @@ local function kelp(parent: Instance, foot: Vector3, height: number, rng: Random
 	end
 	marker:SetAttribute("Canopy", canopy == true)
 	CollectionService:AddTag(marker, "SunkenKelp")
+end
+
+-- ===== THE SIDE STREETS =====
+--
+-- The cross streets between the blocks, which were water with nothing in them. Now: utility poles
+-- down one side of every other one, their wires sagging between them over the water; boats in the
+-- others, moored along the kerb, a few turned over (gen_boats.py; SunkenBuoy, so they bob); and at
+-- every corner on the boulevard a street sign, the street's name on one blade and the boulevard's on
+-- the other. Everything here that stands out of the water is past EMERGE_CLEAR of the route's reach.
+local STREET_NAMES = { "HARBOUR ST", "ALBERT RD", "MARKET ST", "QUAY LANE", "BRIDGE ST", "CHAPEL ROW", "MILL LANE",
+	"NORTH PARADE", "ELM ST", "WATER LANE", "STATION RD", "KING ST", "ROPEWALK", "TIDE ST" }
+
+-- A boat at `at`, which is on the water's surface, heading along its Z. Its model is a buoy.
+function streetKit.boat(parent: Instance, at: CFrame, rng: Random): Model
+	local model = Instance.new("Model")
+	model.Name = "Boat"
+	local pick = rng:NextNumber()
+	local kind = if pick < 0.5 then "row" elseif pick < 0.82 then "launch" else "capsized"
+	local frame = if kind == "capsized" then at * CFrame.Angles(0, 0, math.pi) else at
+	local specs = if kind == "row" then { { "Boat_Row", Color3.fromRGB(150, 112, 74), Enum.Material.WoodPlanks } }
+		else { { "Boat_LaunchHull", FADED[rng:NextInteger(1, #FADED)]:Lerp(Color3.new(1, 1, 1), 0.55), Enum.Material.SmoothPlastic },
+			{ "Boat_LaunchTop", Color3.fromRGB(46, 64, 98), Enum.Material.SmoothPlastic } }
+	local whole = SeaRig ~= nil
+	local placed: { Instance } = {}
+	for _, spec in ipairs(specs) do
+		local rig = if SeaRig then SeaRig.place(model, spec[1]) else nil
+		if rig then
+			rig.part.CFrame = frame
+			rig.part.Color = spec[2]
+			rig.part.Material = spec[3]
+			table.insert(placed, rig.model)
+		else
+			whole = false
+		end
+	end
+	if not whole then
+		for _, item in ipairs(placed) do
+			item:Destroy()
+		end
+		local long = if kind == "row" then 8 else 16
+		local hullColour = if kind == "row" then Color3.fromRGB(150, 112, 74) else Color3.fromRGB(220, 220, 212)
+		block(model, "Hull", Vector3.new(if kind == "row" then 3 else 5.2, 1.8, long), frame * CFrame.new(0, 0.2, 0), hullColour,
+			Enum.Material.SmoothPlastic, false)
+		if kind ~= "row" then
+			block(model, "Cabin", Vector3.new(4, 2.2, 6), frame * CFrame.new(0, 2.2, 2.2), Color3.fromRGB(46, 64, 98),
+				Enum.Material.SmoothPlastic, false)
+		end
+	end
+	model.WorldPivot = at
+	model.Parent = parent
+	CollectionService:AddTag(model, "SunkenBuoy")
+	return model
+end
+
+function streetKit.sideStreets(parent: Instance, route: Route, floorY: number, rng: Random,
+	blocked: (Vector3, number) -> boolean): number
+	local pitch = BLOCK + STREET
+	local from = -CITY_BEYOND
+	local rows = math.max(1, math.floor((route.total + 2 * CITY_BEYOND) / pitch))
+	local reachable = route.total - harbourAlong(route)
+	local wood, wire, metal = Color3.fromRGB(104, 84, 64), Color3.fromRGB(30, 32, 34), Color3.fromRGB(90, 96, 100)
+	local things = 0
+	for row = 1, rows do
+		local s = from + row * pitch
+		local line = route.points[1] + route.forward * s
+		local named = STREET_NAMES[(row - 1) % #STREET_NAMES + 1]
+		for _, sign in ipairs({ -1, 1 }) do
+			local poles: { Vector3 } = {}
+			local cornered = false
+			local boats = 0
+			for step = 0, 110 do
+				local across = sign * step * 3
+				local spot = line + route.side * across
+				local near = nearRoute(route, spot)
+				if alongOf(route, spot) > reachable then
+					continue
+				end
+				-- THE CORNER, where the street meets the boulevard's pavement: the sign.
+				if not cornered and near >= BOULEVARD_HALF + 2 and near <= BOULEVARD_HALF + 6 then
+					cornered = true
+					local post = spot + route.forward * (STREET / 2 + 1.2)
+					if not blocked(post, 3) then
+						column(parent, "SignPost", 0.5, post, floorY, waterLevel + 7, metal, false)
+						for index, words in ipairs({ named, "SEA BOULEVARD" }) do
+							local blade = block(parent, "StreetSign", Vector3.new(0.2, 1, 5),
+								CFrame.fromMatrix(post + Vector3.new(0, waterLevel + 6.2 - index * 1.2 - post.Y, 0),
+									if index == 1 then route.forward else route.side, Vector3.yAxis)
+									* CFrame.new(0, 0, 0), Color3.fromRGB(38, 92, 62), Enum.Material.SmoothPlastic, false)
+							label(blade, Enum.NormalId.Right, words, Color3.fromRGB(236, 240, 232))
+							label(blade, Enum.NormalId.Left, words, Color3.fromRGB(236, 240, 232))
+						end
+						things += 1
+					end
+				end
+				-- Poles every 36 studs down one side, from past the pavement to 250 out.
+				if row % 2 == 0 and near >= 70 and near <= 250 and step % 12 == 0 then
+					local foot = spot + route.forward * (STREET / 2 - 2)
+					if not blocked(foot, 4) then
+						table.insert(poles, foot)
+					end
+				end
+				-- Boats in the other streets, moored along a kerb.
+				if row % 2 == 1 and near >= 80 and near <= 300 and boats < 2 and step % 9 == 0 and rng:NextNumber() < 0.35 then
+					local where = spot + route.forward * (rng:NextNumber(-7, 7))
+					if not blocked(where, 10) then
+						local heading = CFrame.lookAt(Vector3.new(where.X, waterLevel, where.Z),
+							Vector3.new(where.X, waterLevel, where.Z) + route.side * sign)
+						streetKit.boat(parent, heading * CFrame.Angles(0, rng:NextNumber(-0.3, 0.3), 0), rng)
+						boats += 1
+						things += 1
+					end
+				end
+			end
+			-- The poles, and the wires between each pair that stand next to each other.
+			local top = waterLevel + 12
+			for index, foot in ipairs(poles) do
+				column(parent, "UtilityPole", 0.9, foot, floorY, top, wood, false, true)
+				local arm = CFrame.fromMatrix(Vector3.new(foot.X, top - 1, foot.Z), route.forward, Vector3.yAxis)
+				block(parent, "Crossarm", Vector3.new(5.4, 0.4, 0.4), arm, wood, Enum.Material.Wood, false)
+				if index % 3 == 0 then
+					column(parent, "Transformer", 1.6, foot + route.forward * 0.9, top - 5, top - 2.6, metal, false)
+				end
+				local after = poles[index + 1]
+				if after and (after - foot).Magnitude < 40 then
+					for _, off in ipairs({ -2.2, 2.2 }) do
+						local a = Vector3.new(foot.X, top - 0.7, foot.Z) + route.forward * off
+						local b = Vector3.new(after.X, top - 0.7, after.Z) + route.forward * off
+						local points = { a }
+						for k = 1, 2 do
+							local t = k / 3
+							table.insert(points, a:Lerp(b, t) - Vector3.new(0, 1.4 * 4 * t * (1 - t), 0))
+						end
+						table.insert(points, b)
+						for k = 1, #points - 1 do
+							rod(parent, "Wire", points[k], points[k + 1], 0.12, wire)
+						end
+					end
+				end
+				things += 1
+			end
+		end
+	end
+	return things
+end
+
+-- THE METRO: a totem on the boulevard's pavement with the M on it, which is how you know the street
+-- had a station under it. The entrance is a hundred studs down with the street; the totem is what
+-- stands up out of the water.
+function streetKit.metro(parent: Instance, route: Route, floorY: number, rng: Random, blocked: (Vector3, number) -> boolean,
+	alongs: { number }): number
+	local made = 0
+	for index, share in ipairs({ 0.3, 0.64 }) do
+		local s = route.total * share
+		local clear = true
+		for _, g in ipairs(alongs) do
+			if math.abs(g - s) < 30 then
+				clear = false
+			end
+		end
+		local at, dir = alongRoute(route, s)
+		local side = Vector3.yAxis:Cross(dir)
+		local foot = at + side * ((if index % 2 == 0 then 1 else -1) * (BOULEVARD_HALF + 3))
+		if clear and not blocked(foot, 6) and nearRoute(route, foot) - 1 >= EMERGE_CLEAR + ROUTE_REACH then
+			column(parent, "MetroTotem", 0.9, foot, floorY, waterLevel + 9, Color3.fromRGB(70, 74, 80), false)
+			local face = CFrame.fromMatrix(Vector3.new(foot.X, waterLevel + 9.8, foot.Z), dir, Vector3.yAxis)
+			local disc = block(parent, "MetroSign", Vector3.new(0.5, 3.2, 3.2), face, Color3.fromRGB(196, 44, 40),
+				Enum.Material.SmoothPlastic, false)
+			disc.Shape = Enum.PartType.Cylinder
+			local board = block(parent, "MetroBoard", Vector3.new(4.4, 1.1, 0.3),
+				CFrame.fromMatrix(Vector3.new(foot.X, waterLevel + 7.6, foot.Z), dir, Vector3.yAxis),
+				Color3.fromRGB(28, 44, 96), Enum.Material.SmoothPlastic, false)
+			label(board, Enum.NormalId.Front, "METRO", Color3.fromRGB(236, 238, 242))
+			label(board, Enum.NormalId.Back, "METRO", Color3.fromRGB(236, 238, 242))
+			label(disc, Enum.NormalId.Right, "M", Color3.fromRGB(246, 244, 238))
+			label(disc, Enum.NormalId.Left, "M", Color3.fromRGB(246, 244, 238))
+			made += 1
+		end
+	end
+	return made
 end
 
 -- ===== THE BOULEVARD ITSELF =====
@@ -2302,21 +2598,22 @@ end
 local function shoals(parent: Instance, route: Route, floorY: number, rng: Random,
 	blocked: (Vector3, number) -> boolean)
 	-- Each shoal circles a long loop laid ALONG the street (`Along`), so it stays in the street
-	-- however the street bends: out to its radius along it, three fifths of that across.
+	-- however the street bends: out to its radius along it, a third of that across -- and, like the
+	-- swimmers, in a lane beside the route rather than under it.
 	local reachable = route.total - harbourAlong(route)
 	local count = math.max(3, math.floor(reachable / SHOAL_EVERY))
 	for index = 1, count do
 		local s = (index - 0.5) * (reachable / count)
 		local at, dir = alongRoute(route, s)
 		local side = Vector3.yAxis:Cross(dir)
-		local spot = at + side * rng:NextNumber(-SHOAL_OUT, SHOAL_OUT)
+		local spot = at + side * ((if index % 2 == 0 then 1 else -1) * rng:NextNumber(15, SHOAL_OUT))
 		local radius = rng:NextNumber(12, 20)
 		if not blocked(spot, radius + 4) then
 			local marker = block(parent, "Shoal", Vector3.new(1, 1, 1),
 				CFrame.new(spot.X, waterLevel - rng:NextNumber(3.5, 10), spot.Z), SURFACE,
 				Enum.Material.SmoothPlastic, false)
 			marker.Transparency = 1
-			marker:SetAttribute("Count", rng:NextInteger(10, 16))
+			marker:SetAttribute("Count", rng:NextInteger(14, 22))
 			marker:SetAttribute("Radius", radius)
 			marker:SetAttribute("Speed", rng:NextNumber(0.25, 0.45))
 			marker:SetAttribute("Length", rng:NextNumber(2.2, 3.2))
@@ -2373,15 +2670,17 @@ local function swimmers(parent: Instance, route: Route, floorY: number, rng: Ran
 		-- a little deeper and the grouper and the eels deeper still. How far each rises and sinks
 		-- (`Bob`) is what keeps the top of it under the surface; the dolphins' leap and the turtles'
 		-- breath are the two things that are meant to break it, and they do it on the client.
+		-- A LITTLE NEARER THE TOP than they were: twenty studs of this water hides anything.
 		local depth = if kind == "jelly" then rng:NextNumber(3.5, 7)
 			elseif kind == "dolphins" then rng:NextNumber(4, 6)
 			elseif kind == "turtle" then rng:NextNumber(5, 10)
-			elseif kind == "ray" or kind == "shark" then rng:NextNumber(7, 16)
-			else rng:NextNumber(9, 20)
+			elseif kind == "ray" then rng:NextNumber(5.5, 11)
+			elseif kind == "shark" then rng:NextNumber(7, 12)
+			else rng:NextNumber(7, 14)
 		local bob = if kind == "jelly" then 1.2 elseif kind == "dolphins" then 1 elseif kind == "turtle" then 2 else 3
 		local range = if kind == "jelly" then 10 else rng:NextNumber(22, 40)
-		local out = rng:NextNumber(-SWIM_OUT, SWIM_OUT)
-		local across = SWIM_REACH - math.abs(out)
+		local out = (if index % 2 == 0 then 1 else -1) * rng:NextNumber(SWIM_LANE[1], SWIM_LANE[2])
+		local across = math.min(SWIM_REACH - math.abs(out), math.abs(out) - ROUTE_REACH + 2)
 		local home = at + side * out
 		if not blocked(home, math.max(range, across) + 6) and s + range < reachable then
 			local marker = block(parent, "Swimmer", Vector3.new(1, 1, 1), CFrame.new(home.X, waterLevel - depth, home.Z),
@@ -2497,7 +2796,8 @@ end
 -- Built in the frame beside its checkpoint. Returns the round tower's centre (for the water's hole)
 -- and the far end of the gallery (for keeping lots out of the way), plus the gallery's window.
 
-type Aquarium = { tower: Vector3, far: Vector3, window: BasePart, light: PointLight, hum: Sound }
+type Aquarium = { tower: Vector3, far: Vector3, window: BasePart, light: PointLight, hum: Sound, keeper: CFrame,
+	escape: { Vector3 } }
 
 -- The solid height ranges of one wall segment, from `bottom` to `top`, minus the openings it
 -- crosses, each cut at the murk and at the surface so the drowned colour follows the depth.
@@ -2992,14 +3292,56 @@ local function aquarium(parent: Instance, frame: CFrame, floorY: number, rng: Ra
 	rockStack(parent, Vector3.new(chestRock.X, 0, chestRock.Z), floorY, tunnelY - 3, rng, false)
 	local chestAt = CFrame.lookAt(Vector3.new(chestRock.X, tunnelY - 3 + 1.6, chestRock.Z),
 		(frame * Vector3.new(roomFar, 0, 0)) * Vector3.new(1, 0, 1) + Vector3.new(0, tunnelY - 1.4, 0))
-	block(parent, "Chest", Vector3.new(5, 3, 3.4), chestAt, Color3.fromRGB(112, 78, 50), Enum.Material.WoodPlanks, false)
-	for _, x in ipairs({ -1.8, 1.8 }) do
-		block(parent, "ChestBand", Vector3.new(0.35, 3.1, 3.5), chestAt * CFrame.new(x, 0, 0), BRASS, Enum.Material.Metal, false)
+	-- THE CHEST (gen_treasure.py): a planked sea chest with its barrel lid thrown open, iron bands,
+	-- brackets and a torn hasp, a heap of coins with a crown and a goblet on it, rubies, a string of
+	-- pearls over the edge and coins spilled on the rock. Five meshes, one box, its base on the rock.
+	-- A faint warm light on the gold, which is the one thing down here that should catch the eye.
+	-- With the meshes not imported, the old chest of parts.
+	local TREASURE = {
+		{ "Treasure_Wood", Color3.fromRGB(116, 80, 52), Enum.Material.WoodPlanks, 0 },
+		{ "Treasure_Iron", Color3.fromRGB(58, 60, 64), Enum.Material.Metal, 0.05 },
+		{ "Treasure_Gold", Color3.fromRGB(238, 190, 86), Enum.Material.Metal, 0.35 },
+		{ "Treasure_Gems", Color3.fromRGB(200, 26, 44), Enum.Material.SmoothPlastic, 0.3 },
+		{ "Treasure_Pearls", Color3.fromRGB(242, 238, 228), Enum.Material.SmoothPlastic, 0.2 },
+	}
+	local whole = SeaRig ~= nil
+	for _, spec in ipairs(TREASURE) do
+		if whole and not SeaRig.template(spec[1]) then
+			whole = false
+		end
 	end
-	local gold = ellipsoid(parent, "Gold", Vector3.new(4.2, 1.2, 2.8), chestAt * CFrame.new(0, 1.5, 0), Color3.fromRGB(230, 190, 90))
-	gold.Material = Enum.Material.Metal
-	local lid = block(parent, "ChestLid", Vector3.new(5, 0.6, 3.4), chestAt * CFrame.new(0, 1.5, 1.7) * CFrame.Angles(math.rad(38), 0, 0)
-		* CFrame.new(0, 0, -1.7), Color3.fromRGB(112, 78, 50), Enum.Material.WoodPlanks, false)
+	local lid: BasePart
+	if whole then
+		for _, spec in ipairs(TREASURE) do
+			local rig = SeaRig.place(parent, spec[1])
+			if rig then
+				-- Turned round: its front, with the hasp, to the window, and the open lid behind the gold.
+				rig.part.CFrame = chestAt * CFrame.new(0, -1.55, 0) * CFrame.Angles(0, math.pi, 0)
+				rig.part.Color = spec[2]
+				rig.part.Material = spec[3]
+				rig.part.Reflectance = spec[4]
+			end
+		end
+		lid = block(parent, "ChestBubbles", Vector3.new(1, 1, 1), chestAt * CFrame.new(0, 3.4, 2.6), FOAM,
+			Enum.Material.SmoothPlastic, false)
+		lid.Transparency = 1
+		local shine = Instance.new("PointLight")
+		shine.Name = "GoldShine"
+		shine.Color = Color3.fromRGB(255, 206, 120)
+		shine.Brightness = 0.7
+		shine.Range = 10
+		shine.Shadows = false
+		shine.Parent = lid
+	else
+		block(parent, "Chest", Vector3.new(5, 3, 3.4), chestAt, Color3.fromRGB(112, 78, 50), Enum.Material.WoodPlanks, false)
+		for _, x in ipairs({ -1.8, 1.8 }) do
+			block(parent, "ChestBand", Vector3.new(0.35, 3.1, 3.5), chestAt * CFrame.new(x, 0, 0), BRASS, Enum.Material.Metal, false)
+		end
+		local gold = ellipsoid(parent, "Gold", Vector3.new(4.2, 1.2, 2.8), chestAt * CFrame.new(0, 1.5, 0), Color3.fromRGB(230, 190, 90))
+		gold.Material = Enum.Material.Metal
+		lid = block(parent, "ChestLid", Vector3.new(5, 0.6, 3.4), chestAt * CFrame.new(0, 1.5, 1.7) * CFrame.Angles(math.rad(38), 0, 0)
+			* CFrame.new(0, 0, -1.7), Color3.fromRGB(112, 78, 50), Enum.Material.WoodPlanks, false)
+	end
 	for _, host in ipairs({ valve, lid }) do
 		local stream = Instance.new("ParticleEmitter")
 		stream.Name = "Bubbles"
@@ -3138,11 +3480,32 @@ local function aquarium(parent: Instance, frame: CFrame, floorY: number, rng: Ra
 		frame * CFrame.new(xc, (roofY + tunnelY) / 2 - landingY, 0), FOAM, Enum.Material.SmoothPlastic, false)
 	towerShelter.Transparency = 1
 	CollectionService:AddTag(towerShelter, "SunkenShelter")
+	-- A STORY SPOT against the gallery's side wall, well away from the attendant's way out: a staff
+	-- locker goes there (StoryService). Its front faces into the room.
+	local lockerSpot = block(parent, "StorySpot", Vector3.new(1, 1, 1), room * CFrame.new(-5, ty, -ROOM_W / 2 + 0.7)
+		* CFrame.Angles(0, math.pi, 0), FOAM, Enum.Material.SmoothPlastic, false)
+	lockerSpot.Transparency = 1
+	lockerSpot.CanQuery = false
+	lockerSpot:SetAttribute("Kind", "AquariumLocker")
+	CollectionService:AddTag(lockerSpot, "StorySpot")
 
 	return {
 		tower = towerAt.Position,
 		far = (frame * CFrame.new(roomX + ROOM_L / 2 + WINDOW_DEEP, 0, 0)).Position,
 		window = window,
+		-- Where the attendant stands: by the notice, facing the way in from the tunnel.
+		keeper = CFrame.lookAt((room * CFrame.new(ROOM_L / 2 - 2.6, ty, 9.6)).Position,
+			(room * CFrame.new(ROOM_L / 2 - 3.6, ty, 9.3)).Position),
+		-- And their way out when the glass goes (Townsfolk.panic), on the floor: past the end of the
+		-- bench, through the tunnel's doorway, down the middle of the tunnel and into the tower, clear
+		-- of its stair's newel.
+		escape = {
+			(room * CFrame.new(1.5, ty, 6.5)).Position,
+			(room * CFrame.new(-ROOM_L / 2 + 1.5, ty, 0)).Position,
+			(frame * CFrame.new(tunnelFrom + TUNNEL_L * 0.5, ty, 0)).Position,
+			(frame * CFrame.new(tunnelFrom + 2, ty, 0)).Position,
+			(frame * CFrame.new(xc + (ROT_R - ROT_WALL) * 0.55, ty, 0)).Position,
+		},
 		light = light,
 		hum = hum,
 	}
@@ -3156,10 +3519,8 @@ end
 -- with its pools, and the water's look is put back as it was found.
 local swimWater = { fills = {} :: { { cf: CFrame, size: Vector3 } }, was = {} :: { [string]: any } }
 
-local function fillSwimWater(cf: CFrame, size: Vector3)
-	workspace.Terrain:FillBlock(cf, size, Enum.Material.Water)
-	table.insert(swimWater.fills, { cf = cf, size = size })
-	-- Dark and green, the colour of a flooded room, not of a pool.
+-- Dark and green, the colour of a flooded room, not of a pool; the look is remembered as found.
+function swimWater.look()
 	for name, value in pairs({ WaterColor = Color3.fromRGB(40, 84, 80), WaterTransparency = 0.35,
 		WaterReflectance = 0.1, WaterWaveSize = 0.02, WaterWaveSpeed = 4 }) do
 		pcall(function()
@@ -3169,6 +3530,12 @@ local function fillSwimWater(cf: CFrame, size: Vector3)
 			(workspace.Terrain :: any)[name] = value
 		end)
 	end
+end
+
+local function fillSwimWater(cf: CFrame, size: Vector3)
+	workspace.Terrain:FillBlock(cf, size, Enum.Material.Water)
+	table.insert(swimWater.fills, { cf = cf, size = size })
+	swimWater.look()
 end
 
 function SunkenCityService.clearWater()
@@ -3547,8 +3914,10 @@ local function finale(parent: Instance, finish: CFrame, floorY: number, rng: Ran
 				CFrame.new(vortex) * CFrame.Angles(0, -beta, 0) * CFrame.new((outerR + innerR) / 2, -(topD + bottomD) / 2, 0)
 					* CFrame.Angles(0, 0, slope),
 				tone, Enum.Material.SmoothPlastic, false)
-			piece.Transparency = 0.18 - ring * 0.02
-			piece.Reflectance = 0.08
+			-- SEE-THROUGH, and more so further in: a solid cone of panels read as a model standing in the
+			-- sea. The water's skin, darkening into the hole, with the swirl drawn over it doing the moving.
+			piece.Transparency = 0.3 + ring * 0.07
+			piece.Reflectance = 0.1
 			local flow = Instance.new("Texture")
 			flow.Name = "Flow"
 			flow.Face = Enum.NormalId.Top
@@ -3635,6 +4004,108 @@ local function finale(parent: Instance, finish: CFrame, floorY: number, rng: Ran
 	debris.Parent = parent
 	CollectionService:AddTag(debris, "SunkenWhirlRing")
 
+	-- ===== THE SWIRL =====
+	--
+	-- WATER, NOT A MODEL. The funnel's rings are only the water's skin; what makes it read as a real
+	-- whirlpool is water MOVING over it, the way the sea came through the aquarium's glass: streaks of
+	-- spray and foam drawn out along the way the water goes. Carriers ride round the funnel at every
+	-- depth (tagged with the rings, so each client turns them with the rings, faster further in), and
+	-- each throws spray gently IN, toward the middle and down: a carrier going round while its spray
+	-- drifts in draws a spiral, so the whole surface is spiral arms of foam winding into the hole, never
+	-- the same twice. Streaks laid along their own speed, as the torrent at the aquarium's window is.
+	do
+		local swirl = Instance.new("Model")
+		swirl.Name = "WhirlSwirl"
+		local SMOKE = "rbxasset://textures/particles/smoke_main.dds"
+		local SPARK = "rbxasset://textures/particles/sparkles_main.dds"
+		for index = 0, 17 do
+			local share = (index % 6) / 6 + 0.08
+			local r = VORTEX_R * (1 - share * 0.85)
+			local beta = index * 2 * math.pi / 18 * 7
+			local drop = FUNNEL_DEPTH * share ^ 1.6
+			local at = CFrame.new(vortex) * CFrame.Angles(0, -beta, 0) * CFrame.new(r, -drop + 0.4, 0)
+			-- The carrier's -X looks in at the middle; its front is the way round the water goes.
+			local carrier = block(swirl, "SwirlCarrier", Vector3.new(1, 1, 1), at * CFrame.Angles(0, math.pi / 2, 0), FOAM,
+				Enum.Material.SmoothPlastic, false)
+			carrier.Transparency = 1
+			local inward = Instance.new("Attachment")
+			inward.Name = "In"
+			-- Emitting toward the middle, and a little down the funnel's slope.
+			inward.CFrame = CFrame.lookAt(Vector3.zero, Vector3.new(0, -0.35, 1))
+			inward.Parent = carrier
+			local streak = Instance.new("ParticleEmitter")
+			streak.Texture = SMOKE
+			streak.Color = ColorSequence.new(FOAM:Lerp(Color3.fromRGB(150, 196, 196), share))
+			streak.LightEmission = 0.15
+			streak.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.1 - share * 0.5), NumberSequenceKeypoint.new(1, 2.4 - share)})
+			streak.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(0.6, 0.72),
+				NumberSequenceKeypoint.new(1, 1) })
+			streak.Lifetime = NumberRange.new(1.4, 2.4)
+			streak.Speed = NumberRange.new(2.5, 5)
+			streak.SpreadAngle = Vector2.new(10, 10)
+			streak.Acceleration = Vector3.new(0, -3, 0)
+			streak.Drag = 0.6
+			streak.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+			streak.EmissionDirection = Enum.NormalId.Front
+			streak.Rate = 14
+			streak.Parent = inward
+			-- Glints on it, the light catching the water as it goes round.
+			local glint = Instance.new("ParticleEmitter")
+			glint.Texture = SPARK
+			glint.Color = ColorSequence.new(Color3.fromRGB(230, 246, 242))
+			glint.LightEmission = 0.5
+			glint.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 0.05) })
+			glint.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) })
+			glint.Lifetime = NumberRange.new(0.6, 1.1)
+			glint.Speed = NumberRange.new(1, 3)
+			glint.SpreadAngle = Vector2.new(30, 30)
+			glint.EmissionDirection = Enum.NormalId.Front
+			glint.Rate = 6
+			glint.Parent = inward
+		end
+		swirl:SetAttribute("Centre", vortex)
+		-- Faster than the outer rings: the water speeds up as it goes in, and the arms trail behind it.
+		swirl:SetAttribute("Spin", 1.1)
+		swirl.Parent = parent
+		CollectionService:AddTag(swirl, "SunkenWhirlRing")
+		-- THE HOLE POURS: at the bottom of the funnel, streaks of water going down into the drain, fast.
+		local pour = block(parent, "WhirlPour", Vector3.new(4, 1, 4), CFrame.new(vortex - Vector3.new(0, FUNNEL_DEPTH - 0.5, 0)),
+			FOAM, Enum.Material.SmoothPlastic, false)
+		pour.Transparency = 1
+		local down = Instance.new("ParticleEmitter")
+		down.Texture = SMOKE
+		down.Color = ColorSequence.new(Color3.fromRGB(170, 212, 206))
+		down.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.8), NumberSequenceKeypoint.new(1, 0.8) })
+		down.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 1) })
+		down.Lifetime = NumberRange.new(0.6, 1)
+		down.Speed = NumberRange.new(14, 22)
+		down.SpreadAngle = Vector2.new(12, 12)
+		down.Acceleration = Vector3.new(0, -30, 0)
+		down.Orientation = Enum.ParticleOrientation.VelocityParallel
+		down.Squash = NumberSequence.new(1.4)
+		down.EmissionDirection = Enum.NormalId.Bottom
+		down.Rate = 40
+		down.Parent = pour
+	end
+
+	-- THE THROAT BREATHES: a column of bubbles rising out of the drain up the middle of the funnel, and
+	-- spray thrown up where it meets the surface -- moving whatever the client is doing.
+	local breath = block(parent, "WhirlThroat", Vector3.new(3, 1, 3), CFrame.new(vortex - Vector3.new(0, FUNNEL_DEPTH, 0)),
+		FOAM, Enum.Material.SmoothPlastic, false)
+	breath.Transparency = 1
+	local rising = Instance.new("ParticleEmitter")
+	rising.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	rising.Color = ColorSequence.new(Color3.fromRGB(226, 244, 240))
+	rising.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 0.8) })
+	rising.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+	rising.Lifetime = NumberRange.new(1.4, 2.2)
+	rising.Speed = NumberRange.new(6, 10)
+	rising.EmissionDirection = Enum.NormalId.Top
+	rising.SpreadAngle = Vector2.new(18, 18)
+	rising.RotSpeed = NumberRange.new(-180, 180)
+	rising.Rate = 28
+	rising.Parent = breath
+
 	-- SPRAY blown off the rim, all the way round, and THE ROAR of it, which you hear from along the
 	-- route before the pier.
 	for index = 0, 7 do
@@ -3705,23 +4176,93 @@ local function finale(parent: Instance, finish: CFrame, floorY: number, rng: Ran
 	rushHost.Transparency = 1
 	ambience(rushHost, "WhirlpoolRush", 0.7, 0.55, 20, 140)
 
-	-- THE DRAIN: a concrete collar on the harbour floor, bars across it, and a black shaft under it
-	-- with a floor at the bottom where the rider ends up.
+	-- THE DRAIN: a concrete collar on the harbour floor, bars across it, and the SHAFT under it with a
+	-- floor at the bottom where the rider ends up. The shaft was sixteen flat black panels, and falling
+	-- down it looked like falling past cardboard. It is a lined drain now: old wet brick in courses, an
+	-- iron flange every ten studs where its sections were bolted, a rusted service ladder down one side,
+	-- a caged lamp every twenty studs that still works (just: they flicker, SunkenCityClient), and the
+	-- harbour pouring down its walls in streaks, the way the sea poured through the aquarium's glass.
 	local collarR = 12
-	for index = 0, 15 do
-		local beta = index * 2 * math.pi / 16
-		cityBlock(parent, "DrainCollar", Vector3.new(collarR - DRAIN_R, 1.6, 2 * math.pi * collarR / 16 + 0.3),
-			CFrame.new(vortex.X, floorY + 0.8, vortex.Z) * CFrame.Angles(0, -beta, 0) * CFrame.new((collarR + DRAIN_R) / 2, 0, 0), STONE)
-		block(parent, "ShaftWall", Vector3.new(1, SHAFT_DEPTH, 2 * math.pi * (DRAIN_R + 0.5) / 16 + 0.3),
+	local brickWet = Color3.fromRGB(46, 42, 40)
+	for index = 0, 19 do
+		local beta = index * 2 * math.pi / 20
+		if index < 16 then
+			local b16 = index * 2 * math.pi / 16
+			cityBlock(parent, "DrainCollar", Vector3.new(collarR - DRAIN_R, 1.6, 2 * math.pi * collarR / 16 + 0.3),
+				CFrame.new(vortex.X, floorY + 0.8, vortex.Z) * CFrame.Angles(0, -b16, 0) * CFrame.new((collarR + DRAIN_R) / 2, 0, 0), STONE)
+		end
+		local wall = block(parent, "ShaftWall", Vector3.new(1, SHAFT_DEPTH, 2 * math.pi * (DRAIN_R + 0.5) / 20 + 0.3),
 			CFrame.new(vortex.X, floorY - SHAFT_DEPTH / 2, vortex.Z) * CFrame.Angles(0, -beta, 0) * CFrame.new(DRAIN_R + 0.5, 0, 0),
-			SHAFT, Enum.Material.SmoothPlastic, false)
+			brickWet:Lerp(SHAFT, (index % 3) * 0.2), Enum.Material.Brick, false)
+		wall.Reflectance = 0.06
+	end
+	do
+		-- THE FLANGES, every ten studs down.
+		for depth = 6, SHAFT_DEPTH - 4, 10 do
+			for index = 0, 15 do
+				local beta = index * 2 * math.pi / 16
+				block(parent, "ShaftFlange", Vector3.new(0.7, 0.7, 2 * math.pi * DRAIN_R / 16 + 0.2),
+					CFrame.new(vortex.X, floorY - depth, vortex.Z) * CFrame.Angles(0, -beta, 0) * CFrame.new(DRAIN_R - 0.15, 0, 0),
+					Color3.fromRGB(78, 60, 50), Enum.Material.CorrodedMetal, false)
+			end
+		end
+		-- THE LADDER, rails and rungs, down the side away from the outfall.
+		local side = CFrame.new(vortex.X, floorY, vortex.Z) * CFrame.new(DRAIN_R - 0.9, 0, 0)
+		for _, dz in ipairs({ -0.8, 0.8 }) do
+			block(parent, "ShaftLadder", Vector3.new(0.2, SHAFT_DEPTH, 0.2), side * CFrame.new(0, -SHAFT_DEPTH / 2, dz),
+				Color3.fromRGB(96, 70, 54), Enum.Material.CorrodedMetal, false)
+		end
+		for depth = 1.5, SHAFT_DEPTH - 1, 1.6 do
+			block(parent, "ShaftRung", Vector3.new(0.18, 0.18, 1.6), side * CFrame.new(0, -depth, 0),
+				Color3.fromRGB(96, 70, 54), Enum.Material.CorrodedMetal, false)
+		end
+		-- THE LAMPS, caged, on alternating sides, and a real light in each.
+		for k, depth in ipairs({ 14, 34, 52 }) do
+			local beta = k * 2.1
+			local at = CFrame.new(vortex.X, floorY - depth, vortex.Z) * CFrame.Angles(0, -beta, 0) * CFrame.new(DRAIN_R - 0.5, 0, 0)
+			local fitting = block(parent, "SluiceLamp", Vector3.new(0.6, 1.2, 1), at, Color3.fromRGB(240, 222, 180),
+				Enum.Material.SmoothPlastic, false)
+			local bulb = Instance.new("PointLight")
+			bulb.Brightness = 1
+			bulb.Range = 16
+			bulb.Color = Color3.fromRGB(255, 214, 160)
+			bulb.Parent = fitting
+			CollectionService:AddTag(fitting, "SunkenSluiceLamp")
+			for bar = -1, 1 do
+				block(parent, "LampCage", Vector3.new(0.12, 1.4, 0.12), at * CFrame.new(-0.4, 0, bar * 0.4),
+					Color3.fromRGB(46, 44, 42), Enum.Material.Metal, false)
+			end
+		end
+		-- THE HARBOUR POURING DOWN THE WALLS: four streams of streaks from the collar to the sluice.
+		for k = 0, 3 do
+			local beta = k * math.pi / 2 + 0.4
+			local top = block(parent, "ShaftPour", Vector3.new(0.4, 0.4, 3),
+				CFrame.new(vortex.X, floorY - 0.5, vortex.Z) * CFrame.Angles(0, -beta, 0) * CFrame.new(DRAIN_R - 0.6, 0, 0),
+				FOAM, Enum.Material.SmoothPlastic, false)
+			top.Transparency = 1
+			local sheet = Instance.new("ParticleEmitter")
+			sheet.Texture = "rbxasset://textures/particles/smoke_main.dds"
+			sheet.Color = ColorSequence.new(Color3.fromRGB(170, 206, 200))
+			sheet.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 2) })
+			sheet.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1) })
+			sheet.Lifetime = NumberRange.new(1.6, 2.2)
+			sheet.Speed = NumberRange.new(10, 16)
+			sheet.SpreadAngle = Vector2.new(4, 20)
+			sheet.Acceleration = Vector3.new(0, -24, 0)
+			sheet.Orientation = Enum.ParticleOrientation.VelocityParallel
+			sheet.Squash = NumberSequence.new(1.3)
+			sheet.EmissionDirection = Enum.NormalId.Bottom
+			sheet.Rate = 16
+			sheet.Parent = top
+		end
 	end
 	for index = 0, 2 do
 		cityBlock(parent, "Grate", Vector3.new(0.5, 0.5, DRAIN_R * 2), CFrame.new(vortex.X, floorY + 1.2, vortex.Z)
 			* CFrame.Angles(0, index * math.pi / 3, 0), Color3.fromRGB(60, 58, 54), Enum.Material.Metal)
 	end
-	block(parent, "ShaftFloor", Vector3.new(DRAIN_R * 2 + 2, 1, DRAIN_R * 2 + 2),
-		CFrame.new(vortex.X, floorY - SHAFT_DEPTH - 0.5, vortex.Z), SHAFT, Enum.Material.SmoothPlastic, true)
+	-- Thick, its top where it always was: a thin floor is one a fast body can pass through in a step.
+	block(parent, "ShaftFloor", Vector3.new(DRAIN_R * 2 + 2, 6, DRAIN_R * 2 + 2),
+		CFrame.new(vortex.X, floorY - SHAFT_DEPTH - 3, vortex.Z), SHAFT, Enum.Material.SmoothPlastic, true)
 
 	-- ===== AND SOMEWHERE TO ARRIVE =====
 	--
@@ -3732,12 +4273,19 @@ local function finale(parent: Instance, finish: CFrame, floorY: number, rng: Ran
 	-- for the few seconds before the banner, and it is the last thing the level says.
 	local bottom = floorY - SHAFT_DEPTH
 	local brick = Color3.fromRGB(58, 54, 50)
+	-- OUTFALL 3 leaves the sluice on its -X side (where its door always was): the three lengths of
+	-- wall facing that way are left out, and a lintel spans the gap over the culvert's roof.
+	local OUT_L, OUT_HALF, OUT_H = 140, 5, 9
 	for index = 0, 15 do
 		local beta = index * 2 * math.pi / 16
-		block(parent, "SluiceWall", Vector3.new(2, 16, 2 * math.pi * (DRAIN_R + 1) / 16 + 0.4),
-			CFrame.new(vortex.X, bottom + 8, vortex.Z) * CFrame.Angles(0, -beta, 0) * CFrame.new(DRAIN_R + 1, 0, 0),
-			brick, Enum.Material.Brick, true)
+		if index < 7 or index > 9 then
+			block(parent, "SluiceWall", Vector3.new(2, 16, 2 * math.pi * (DRAIN_R + 1) / 16 + 0.4),
+				CFrame.new(vortex.X, bottom + 8, vortex.Z) * CFrame.Angles(0, -beta, 0) * CFrame.new(DRAIN_R + 1, 0, 0),
+				brick, Enum.Material.Brick, true)
+		end
 	end
+	block(parent, "SluiceLintel", Vector3.new(2, 16 - OUT_H, OUT_HALF * 2 + 4),
+		CFrame.new(vortex.X - DRAIN_R - 1, bottom + OUT_H + (16 - OUT_H) / 2, vortex.Z), brick, Enum.Material.Brick, true)
 	-- The grating you land on, and the sump under it.
 	for index = -3, 3 do
 		block(parent, "SluiceGrate", Vector3.new(DRAIN_R * 2 - 1, 0.3, 0.6),
@@ -3764,8 +4312,9 @@ local function finale(parent: Instance, finish: CFrame, floorY: number, rng: Ran
 	spatter.Rate = 26
 	spatter.Parent = splashHost
 	ambience(splashHost, "SluiceFall", 0.55, 0.4, 10, 60)
-	-- The bulkhead lamp, in its cage, on the wall opposite the inflow.
-	local lampAt = CFrame.new(vortex.X - DRAIN_R + 1.2, bottom + 9, vortex.Z)
+	-- The bulkhead lamp, in its cage, on the wall across from the ladder (the wall it was on opposite
+	-- the inflow is the way out now).
+	local lampAt = CFrame.new(vortex.X, bottom + 9, vortex.Z + DRAIN_R - 1.2) * CFrame.Angles(0, math.pi / 2, 0)
 	local fitting = block(parent, "SluiceLamp", Vector3.new(1.2, 2.2, 2.2), lampAt, Color3.fromRGB(240, 226, 190),
 		Enum.Material.Glass, false)
 	fitting.Transparency = 0.2
@@ -3789,10 +4338,244 @@ local function finale(parent: Instance, finish: CFrame, floorY: number, rng: Ran
 	ladder.Color = Color3.fromRGB(70, 68, 62)
 	ladder.Material = Enum.Material.Metal
 	ladder.Parent = parent
+	-- The door to OUTFALL 3, burst open by the water and flat back against the culvert's wall.
 	local door = block(parent, "SluiceDoor", Vector3.new(0.5, 8, 5),
-		CFrame.new(vortex.X - DRAIN_R + 0.6, bottom + 4, vortex.Z - 3), Color3.fromRGB(80, 90, 86),
-		Enum.Material.Metal, true)
+		CFrame.new(vortex.X - DRAIN_R - 4, bottom + 4, vortex.Z + OUT_HALF - 0.9) * CFrame.Angles(0, math.rad(78), 0),
+		Color3.fromRGB(80, 90, 86), Enum.Material.Metal, false)
 	label(door, Enum.NormalId.Right, "OUTFALL 3", Color3.fromRGB(216, 222, 214))
+
+	-- ===== OUTFALL 3, AND THE PUMPING STATION AT ITS END =====
+	--
+	-- The water at the bottom of the drain goes somewhere, and so does the rider (SunkenPath.outfall):
+	-- a brick culvert OUT_L long running out under the harbour, a concrete rib every twelve studs, two
+	-- rusted pipes along its roof, a caged lamp every twenty-four studs on alternating walls, and the
+	-- stream down the middle of its floor that carries you. Things written on its walls. At its end
+	-- the HARBOUR PUMPING STATION: three dead pumps with their gauges at nothing, the desk with the
+	-- gate lever down and a note on it, the key board with one hook empty, and by the door the time
+	-- clock, stopped at eight minutes to midnight, and a card sticking out of the rack with the
+	-- rider's own name on it: key holder, not clocked in (written when a ride starts). One door further
+	-- on, shut: the lower gallery. All of it far under the sea floor, where nothing else is.
+	local HALL_L, HALL_W, HALL_H = 32, 36, 16
+	local concrete = Color3.fromRGB(84, 86, 84)
+	local iron = Color3.fromRGB(66, 70, 74)
+	local rust = Color3.fromRGB(112, 72, 50)
+	local x0 = vortex.X - DRAIN_R - 0.5 -- where the culvert leaves the sluice
+	local x1 = x0 - OUT_L -- where it opens into the station
+	local oz = vortex.Z
+	local waterY = bottom + 0.7
+	local function site(x: number, y: number, dz: number): CFrame
+		return CFrame.new(x, bottom + y, oz + dz)
+	end
+	local midX = (x0 + x1) / 2
+	block(parent, "OutfallFloor", Vector3.new(OUT_L + 2, 1, OUT_HALF * 2 + 4), site(midX, -0.5, 0), concrete, Enum.Material.Concrete, true)
+	block(parent, "OutfallRoof", Vector3.new(OUT_L + 2, 1.5, OUT_HALF * 2 + 4), site(midX, OUT_H + 0.75, 0), concrete, Enum.Material.Concrete, true)
+	for _, side in ipairs({ -1, 1 }) do
+		block(parent, "OutfallWall", Vector3.new(OUT_L + 2, OUT_H, 2), site(midX, OUT_H / 2, side * (OUT_HALF + 1)), brick,
+			Enum.Material.Brick, true)
+		local pipe = block(parent, "OutfallPipe", Vector3.new(OUT_L, 1, 1), site(midX, OUT_H - 1.6, side * (OUT_HALF - 1.4)), rust,
+			Enum.Material.CorrodedMetal, false)
+		pipe.Shape = Enum.PartType.Cylinder
+	end
+	-- The stream, its water sliding down the culvert (SunkenCityClient moves the texture, as the
+	-- whirlpool's).
+	local stream = block(parent, "OutfallStream", Vector3.new(OUT_L + 1, 0.7, OUT_HALF * 2 - 2.4), site(midX, 0.35, 0), SURFACE,
+		Enum.Material.SmoothPlastic, false)
+	stream.Transparency = 0.3
+	stream.Reflectance = 0.08
+	local streamFlow = Instance.new("Texture")
+	streamFlow.Name = "Flow"
+	streamFlow.Face = Enum.NormalId.Top
+	streamFlow.Texture = "rbxasset://textures/water/normal_1.dds"
+	streamFlow.StudsPerTileU, streamFlow.StudsPerTileV = 9, 9
+	streamFlow.Transparency = 0.5
+	streamFlow.Color3 = Color3.fromRGB(226, 242, 238)
+	streamFlow.Parent = stream
+	stream:SetAttribute("Ring", 3)
+	CollectionService:AddTag(stream, "SunkenWhirlFlow")
+	for x = x0 - 6, x1 + 4, -12 do
+		for _, side in ipairs({ -1, 1 }) do
+			block(parent, "OutfallRib", Vector3.new(1.4, OUT_H, 0.8), site(x, OUT_H / 2, side * (OUT_HALF - 0.3)), concrete,
+				Enum.Material.Concrete, true)
+		end
+		block(parent, "OutfallRib", Vector3.new(1.4, 0.9, OUT_HALF * 2), site(x, OUT_H - 0.45, 0), concrete, Enum.Material.Concrete, false)
+	end
+	local lampCount = 0
+	for x = x0 - 12, x1 + 8, -24 do
+		lampCount += 1
+		local side = if lampCount % 2 == 0 then 1 else -1
+		local fitting = block(parent, "SluiceLamp", Vector3.new(1.4, 0.8, 0.8), site(x, OUT_H - 2.2, side * (OUT_HALF - 0.4)),
+			Color3.fromRGB(240, 226, 190), Enum.Material.SmoothPlastic, false)
+		fitting.Transparency = 0.2
+		local glow = Instance.new("PointLight")
+		glow.Brightness = 1.3
+		glow.Range = 20
+		glow.Color = Color3.fromRGB(255, 214, 160)
+		glow.Parent = fitting
+		CollectionService:AddTag(fitting, "SunkenSluiceLamp")
+		block(parent, "LampCage", Vector3.new(1.6, 0.15, 1), site(x, OUT_H - 1.75, side * (OUT_HALF - 0.4)), iron, Enum.Material.Metal, false)
+	end
+	-- THINGS WRITTEN ON ITS WALLS, faint.
+	for _, writing in ipairs({ { 8, 1, "OUTFALL 3" }, { 46, -1, "WHERE IS THE KEY MAN" }, { 84, 1, "IIII IIII IIII IIII II" },
+		{ 118, -1, "KEY HOLDER ONLY BEYOND THIS POINT" } }) do
+		local side = writing[2] :: number
+		local plate = block(parent, "OutfallWriting", Vector3.new(10, 2.2, 0.1), site(x0 - (writing[1] :: number), 4.6, side * (OUT_HALF - 0.05)),
+			brick, Enum.Material.Brick, false)
+		plate.Transparency = 1
+		label(plate, if side > 0 then Enum.NormalId.Front else Enum.NormalId.Back, writing[3] :: string, Color3.fromRGB(196, 190, 172))
+	end
+
+	-- THE STATION.
+	local hallX = x1 - HALL_L / 2
+	local far = x1 - HALL_L
+	block(parent, "StationFloor", Vector3.new(HALL_L + 4, 1, HALL_W + 4), site(hallX, -0.5, 0), concrete, Enum.Material.Concrete, true)
+	block(parent, "StationRoof", Vector3.new(HALL_L + 4, 1.5, HALL_W + 4), site(hallX, HALL_H + 0.75, 0), concrete, Enum.Material.Concrete, true)
+	for _, side in ipairs({ -1, 1 }) do
+		block(parent, "StationWall", Vector3.new(HALL_L + 4, HALL_H, 2), site(hallX, HALL_H / 2, side * (HALL_W / 2 + 1)), concrete,
+			Enum.Material.Concrete, true)
+	end
+	block(parent, "StationWall", Vector3.new(2, HALL_H, HALL_W + 4), site(far - 1, HALL_H / 2, 0), concrete, Enum.Material.Concrete, true)
+	local sideW = (HALL_W - OUT_HALF * 2) / 2
+	for _, side in ipairs({ -1, 1 }) do
+		block(parent, "StationWall", Vector3.new(2, HALL_H, sideW + 2), site(x1 + 1, HALL_H / 2, side * (OUT_HALF + (sideW + 2) / 2)),
+			concrete, Enum.Material.Concrete, true)
+	end
+	block(parent, "StationWall", Vector3.new(2, HALL_H - OUT_H, OUT_HALF * 2), site(x1 + 1, OUT_H + (HALL_H - OUT_H) / 2, 0), concrete,
+		Enum.Material.Concrete, true)
+	local stationSign = block(parent, "StationSign", Vector3.new(0.2, 2, 12), site(x1 - 0.1, OUT_H + 2.6, 0), Color3.fromRGB(214, 190, 60),
+		Enum.Material.SmoothPlastic, false)
+	label(stationSign, Enum.NormalId.Left, "HARBOUR PUMPING STATION. OUTFALL 3", Color3.fromRGB(30, 30, 30))
+	-- Where the stream goes: through a grate into the sump, churning.
+	for bar = -4, 4 do
+		block(parent, "SumpGrate", Vector3.new(4, 0.2, 0.35), site(x1 - 2.5, 0.1, bar * 0.9), iron, Enum.Material.Metal, false)
+	end
+	local sump = block(parent, "SumpChurn", Vector3.new(4, 0.4, 7), site(x1 - 2.5, 0.3, 0), FOAM, Enum.Material.SmoothPlastic, false)
+	sump.Transparency = 1
+	local churn = Instance.new("ParticleEmitter")
+	churn.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	churn.Color = ColorSequence.new(Color3.fromRGB(214, 232, 228))
+	churn.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.8), NumberSequenceKeypoint.new(1, 2) })
+	churn.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 1) })
+	churn.Lifetime = NumberRange.new(0.5, 1)
+	churn.Speed = NumberRange.new(1, 3)
+	churn.SpreadAngle = Vector2.new(40, 40)
+	churn.EmissionDirection = Enum.NormalId.Top
+	churn.Rate = 14
+	churn.Parent = sump
+	ambience(sump, "SumpSound", 0.5, 0.35, 10, 60)
+	-- The pumps, dead, their gauges at nothing.
+	for index, dz in ipairs({ -11, 0, 11 }) do
+		local base = site(far + 6, 0, dz)
+		block(parent, "PumpPlinth", Vector3.new(8, 1, 8), base * CFrame.new(0, 0.5, 0), concrete, Enum.Material.Concrete, true)
+		local casing = block(parent, "PumpCasing", Vector3.new(9, 6, 6), base * CFrame.new(0, 5.5, 0) * CFrame.Angles(0, 0, math.pi / 2),
+			iron, Enum.Material.Metal, true)
+		casing.Shape = Enum.PartType.Cylinder
+		for _, y in ipairs({ 1.6, 5.5, 9.4 }) do
+			local flange = block(parent, "PumpFlange", Vector3.new(0.5, 7, 7), base * CFrame.new(0, y, 0) * CFrame.Angles(0, 0, math.pi / 2),
+				rust, Enum.Material.CorrodedMetal, false)
+			flange.Shape = Enum.PartType.Cylinder
+		end
+		local riser = block(parent, "PumpRiser", Vector3.new(HALL_H - 10, 2.2, 2.2),
+			base * CFrame.new(0, 10 + (HALL_H - 10) / 2, 0) * CFrame.Angles(0, 0, math.pi / 2), rust, Enum.Material.CorrodedMetal, false)
+		riser.Shape = Enum.PartType.Cylinder
+		local gauge = block(parent, "PumpGauge", Vector3.new(0.3, 1.4, 1.4), base * CFrame.new(3.1, 6.5, 0), Color3.fromRGB(226, 222, 204),
+			Enum.Material.SmoothPlastic, false)
+		gauge.Shape = Enum.PartType.Cylinder
+		label(gauge, Enum.NormalId.Right, "0", Color3.fromRGB(40, 40, 40))
+		local plate = block(parent, "PumpPlate", Vector3.new(0.1, 0.7, 2.4), base * CFrame.new(4.05, 0.5, 0), BRASS, Enum.Material.Metal, false)
+		label(plate, Enum.NormalId.Right, "PUMP " .. index, Color3.fromRGB(30, 30, 30))
+	end
+	-- The desk: the gate lever down, and the note.
+	local desk = site(x1 - 14, 0, 10)
+	block(parent, "ControlDesk", Vector3.new(6, 3, 2.4), desk * CFrame.new(0, 1.5, 0), iron, Enum.Material.Metal, true)
+	block(parent, "GateLeverBase", Vector3.new(1, 0.6, 1), desk * CFrame.new(1.6, 3.3, 0), iron, Enum.Material.Metal, false)
+	block(parent, "GateLever", Vector3.new(0.3, 2.4, 0.3), desk * CFrame.new(1.6, 3.3, 0) * CFrame.Angles(0, 0, math.rad(-55))
+		* CFrame.new(0, 1.2, 0), rust, Enum.Material.CorrodedMetal, false)
+	local gatePlate = block(parent, "GatePlate", Vector3.new(3, 0.8, 0.1), desk * CFrame.new(0, 2, -1.25), Color3.fromRGB(214, 190, 60),
+		Enum.Material.SmoothPlastic, false)
+	label(gatePlate, Enum.NormalId.Front, "GATES: CLOSED", Color3.fromRGB(30, 30, 30))
+	local note = block(parent, "GateNote", Vector3.new(1.4, 0.05, 1.9), desk * CFrame.new(-1.4, 3.03, 0) * CFrame.Angles(0, math.rad(8), 0),
+		Color3.fromRGB(236, 230, 210), Enum.Material.SmoothPlastic, false)
+	label(note, Enum.NormalId.Top, "IF THE WATER COMES, OPEN THE GATES. THE KEY IS WITH THE KEY HOLDER.", Color3.fromRGB(50, 44, 40))
+	-- The key board, one hook empty.
+	local wallZ = HALL_W / 2 - 0.1
+	block(parent, "KeyBoard", Vector3.new(4.2, 3, 0.2), site(x1 - 20, 5, wallZ), Color3.fromRGB(120, 96, 70), Enum.Material.Wood, false)
+	for hook = 0, 5 do
+		local hx = x1 - 21.75 + hook * 0.7
+		block(parent, "KeyHook", Vector3.new(0.15, 0.15, 0.4), site(hx, 5.9, wallZ - 0.3), iron, Enum.Material.Metal, false)
+		if hook ~= 3 then
+			block(parent, "Key", Vector3.new(0.18, 0.8, 0.06), site(hx, 5.35, wallZ - 0.45), BRASS, Enum.Material.Metal, false)
+		else
+			local tag = block(parent, "KeyTag", Vector3.new(0.6, 0.35, 0.05), site(hx, 4.3, wallZ - 0.2), Color3.fromRGB(236, 230, 210),
+				Enum.Material.SmoothPlastic, false)
+			label(tag, Enum.NormalId.Front, "OUTFALL 3", Color3.fromRGB(150, 30, 30))
+		end
+	end
+	-- The time clock, stopped, and the cards; the one sticking out is the rider's.
+	local clockBox = block(parent, "TimeClock", Vector3.new(1.6, 2, 1), site(x1 - 5, 5, HALL_W / 2 - 0.5), Color3.fromRGB(150, 150, 140),
+		Enum.Material.Metal, false)
+	label(clockBox, Enum.NormalId.Front, "11:52", Color3.fromRGB(30, 30, 30))
+	block(parent, "CardRack", Vector3.new(3, 3.6, 0.3), site(x1 - 8, 4.6, HALL_W / 2 - 0.15), iron, Enum.Material.Metal, false)
+	for row = 0, 3 do
+		for column = 0, 2 do
+			if not (row == 1 and column == 1) then
+				block(parent, "Card", Vector3.new(0.7, 0.7, 0.05), site(x1 - 8.9 + column * 0.9, 3.5 + row * 0.8, HALL_W / 2 - 0.33),
+					Color3.fromRGB(230, 224, 206), Enum.Material.SmoothPlastic, false)
+			end
+		end
+	end
+	local card = block(parent, "TimeCard", Vector3.new(0.9, 1.3, 0.05), site(x1 - 8, 4.9, HALL_W / 2 - 0.5), Color3.fromRGB(242, 236, 216),
+		Enum.Material.SmoothPlastic, false)
+	local cardGui = Instance.new("SurfaceGui")
+	cardGui.Face = Enum.NormalId.Front
+	cardGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	cardGui.PixelsPerStud = 120
+	cardGui.LightInfluence = 1
+	cardGui.Parent = card
+	local cardWords = Instance.new("TextLabel")
+	cardWords.Name = "Words"
+	cardWords.Size = UDim2.fromScale(1, 1)
+	cardWords.BackgroundTransparency = 1
+	cardWords.TextScaled = true
+	cardWords.Font = Enum.Font.Code
+	cardWords.TextColor3 = Color3.fromRGB(40, 36, 34)
+	cardWords.Text = "KEY HOLDER\n\n14 AUG\nNOT CLOCKED IN"
+	cardWords.Parent = cardGui
+	-- The lamp over the desk, hung on its cable; a green one over the far door.
+	block(parent, "LampCable", Vector3.new(0.15, 2.4, 0.15), site(x1 - 14, HALL_H - 1.2, 4), iron, Enum.Material.Metal, false)
+	local hanging = block(parent, "SluiceLamp", Vector3.new(1.2, 0.8, 1.2), site(x1 - 14, HALL_H - 2.8, 4), Color3.fromRGB(226, 236, 240),
+		Enum.Material.SmoothPlastic, false)
+	hanging.Transparency = 0.2
+	local cold = Instance.new("PointLight")
+	cold.Brightness = 1.8
+	cold.Range = 36
+	cold.Color = Color3.fromRGB(214, 230, 240)
+	cold.Shadows = true
+	cold.Parent = hanging
+	CollectionService:AddTag(hanging, "SunkenSluiceLamp")
+	local farDoor = block(parent, "LowerGalleryDoor", Vector3.new(0.5, 8, 5), site(far + 0.3, 4, 0), iron, Enum.Material.Metal, true)
+	label(farDoor, Enum.NormalId.Right, "LOWER GALLERY. NO ENTRY.", Color3.fromRGB(216, 222, 214))
+	local exitLamp = block(parent, "EmergencyLamp", Vector3.new(0.4, 0.6, 1.4), site(far + 0.2, 9, 0), Color3.fromRGB(120, 210, 150),
+		Enum.Material.SmoothPlastic, false)
+	local green = Instance.new("PointLight")
+	green.Brightness = 0.6
+	green.Range = 12
+	green.Color = Color3.fromRGB(110, 220, 140)
+	green.Parent = exitLamp
+	for _, puddle in ipairs({ { x1 - 12, -6, 5 }, { x1 - 22, 8, 7 }, { far + 12, -14, 4 } }) do
+		local wet = block(parent, "Puddle", Vector3.new(puddle[3], 0.05, puddle[3] * 0.7), site(puddle[1], 0.03, puddle[2]),
+			Color3.fromRGB(30, 40, 42), Enum.Material.SmoothPlastic, false)
+		wet.Reflectance = 0.35
+		wet.Transparency = 0.2
+	end
+	-- WHERE THE RIDE GOES, for SunkenPath.outfallFrame on the server and every client; and what the
+	-- reveal looks at.
+	parent:SetAttribute("OutfallFrom", Vector3.new(vortex.X, bottom + 3, vortex.Z))
+	parent:SetAttribute("OutfallMouth", Vector3.new(x0 - 1, bottom + 3, oz))
+	parent:SetAttribute("OutfallTo", Vector3.new(x1 - 9, bottom + 3, oz))
+	parent:SetAttribute("OutfallWater", waterY)
+	parent:SetAttribute("RevealEye", site(far + 3, HALL_H - 2.5, -HALL_W / 2 + 3).Position)
+	parent:SetAttribute("RevealCard", card.Position)
+	parent:SetAttribute("RevealCardEye", card.Position + Vector3.new(0, 0.1, -2.4))
 	return vortex
 end
 
@@ -3918,7 +4701,14 @@ function SunkenCityService.build(level: any, parent: Instance): Model?
 
 	-- ===== The city, round everything that has already claimed its space =====
 	local ferrisAt: Vector3? = nil
+	local ferrisWhy = ""
+	local standing: { { at: Vector3, reach: number } } = {}
 	local function blocked(point: Vector3, reach: number): boolean
+		for _, other in ipairs(standing) do
+			if Vector3.new(point.X - other.at.X, 0, point.Z - other.at.Z).Magnitude < reach + other.reach + 12 then
+				return true
+			end
+		end
 		if ferrisAt and Vector3.new(point.X - ferrisAt.X, 0, point.Z - ferrisAt.Z).Magnitude < reach + FERRIS.clear then
 			return true
 		end
@@ -3941,16 +4731,71 @@ function SunkenCityService.build(level: any, parent: Instance): Model?
 	-- The Ferris wheel's square, before the city is laid round it: the first place along the street,
 	-- on the side away from the plaza and the horizon, that is clear of the aquarium and the flat,
 	-- out of the harbour, and far enough off the route for something that breaks the surface.
-	for _, share in ipairs(FERRIS.shares) do
-		local s = route.total * share
-		local at, dir = alongRoute(route, s)
-		local spot = at - Vector3.yAxis:Cross(dir) * FERRIS.out
-		local near, away = nearRoute(route, spot)
-		if s < route.total - harbourAlong(route) - FERRIS.clear and near - FERRIS.reach >= EMERGE_CLEAR + ROUTE_REACH
-			and not blocked(spot, FERRIS.clear) then
-			ferrisWheel(cityFolder, spot, away, h.floor, rng)
-			ferrisAt = spot
-			break
+	-- The side away from the plaza first, at FERRIS.out, then further out, then the other side: five
+	-- places on one side left it nowhere in play, and the report says why when nothing fits at all.
+	local refused: { [string]: number } = {}
+	for _, side in ipairs({ 1, -1 }) do
+		for _, out in ipairs({ FERRIS.out, FERRIS.out + 40, FERRIS.out + 80 }) do
+			for _, share in ipairs(FERRIS.shares) do
+				if ferrisAt then
+					break
+				end
+				local s = route.total * share
+				local at, dir = alongRoute(route, s)
+				local spot = at - Vector3.yAxis:Cross(dir) * (out * side)
+				local near, away = nearRoute(route, spot)
+				-- And out of what the gallery's window looks at: its legs stood just past the tank, in the
+				-- view that belongs to what comes up out of the dark.
+				local outOfWindow = not aq or Vector3.new(spot.X - aq.far.X, 0, spot.Z - aq.far.Z).Magnitude > FERRIS.window
+				if s < route.total - harbourAlong(route) - FERRIS.clear and near - FERRIS.reach >= EMERGE_CLEAR + ROUTE_REACH
+					and near + FERRIS.reach <= HORROR_OUT * 0.8 - 250
+					and outOfWindow and not blocked(spot, FERRIS.clear) then
+					ferrisWheel(cityFolder, spot, away, h.floor, rng)
+					ferrisAt = spot
+				else
+					local why = "on the aquarium, the flat or the plaza"
+					if s >= route.total - harbourAlong(route) - FERRIS.clear then
+						why = "in the harbour"
+					elseif near - FERRIS.reach < EMERGE_CLEAR + ROUTE_REACH then
+						why = "too near the route"
+					elseif near + FERRIS.reach > HORROR_OUT * 0.8 - 250 then
+						why = "out where the things swim"
+					elseif not outOfWindow then
+						why = "in the window's view"
+					end
+					refused[why] = (refused[why] or 0) + 1
+				end
+			end
+		end
+	end
+	local refusals = {}
+	for why, count in pairs(refused) do
+		table.insert(refusals, ("%d %s"):format(count, why))
+	end
+	table.sort(refusals)
+	ferrisWhy = table.concat(refusals, ", ")
+	-- The landmarks, before the city too: the first place near where each would like to be that is
+	-- clear, off the route, short of the things at the back and out of the harbour.
+	local landmarkBase: { [string]: CFrame } = {}
+	for _, spec in ipairs(LANDMARKS) do
+		for step = 0, 8 do
+			if landmarkBase[spec.name] then
+				break
+			end
+			for _, turn in ipairs({ 1, -1 }) do
+				local share = spec.share + turn * step * 0.03
+				local s = route.total * share
+				if not landmarkBase[spec.name] and share > 0.04 and s < route.total - harbourAlong(route) - spec.reach then
+					local at, dir = alongRoute(route, s)
+					local spot = at + Vector3.yAxis:Cross(dir) * (spec.side * spec.out)
+					local near, away = nearRoute(route, spot)
+					if near - spec.reach >= EMERGE_CLEAR + ROUTE_REACH and near + spec.reach <= HORROR_OUT * 0.8 - 250
+						and not blocked(spot, spec.reach + 12) then
+						landmarkBase[spec.name] = landmark(cityFolder, spec, spot, -away, h.floor)
+						table.insert(standing, { at = spot, reach = spec.reach })
+					end
+				end
+			end
 		end
 	end
 	local lots = city(cityFolder, route, h.floor, blocked, rng)
@@ -3967,6 +4812,8 @@ function SunkenCityService.build(level: any, parent: Instance): Model?
 		end
 	end
 	boulevard(cityFolder, route, h.floor, rng, blocked, alongs)
+	local streetThings = streetKit.sideStreets(cityFolder, route, h.floor, rng, blocked)
+		+ streetKit.metro(cityFolder, route, h.floor, rng, blocked, alongs)
 	shafts(sea, route, h.floor, rng)
 	shoals(sea, route, h.floor, rng, blocked)
 
@@ -4034,6 +4881,61 @@ function SunkenCityService.build(level: any, parent: Instance): Model?
 		sea.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
 	end)
 	model.Parent = parent
+	-- THE PEOPLE STILL HERE (Townsfolk): the attendant by the notice in the gallery, a fisherman on
+	-- the pier, and whoever that is on the Deco tower's ledge. Spawned, because building a character
+	-- waits on the avatar service, and the level should not.
+	if Townsfolk then
+		local deco = landmarkBase.Deco
+		task.spawn(function()
+			local skin = Color3.fromRGB(226, 192, 158)
+			if aq then
+				local keeper = Townsfolk.spawn(model, "Attendant", aq.keeper, "stand",
+					{ skin, Color3.fromRGB(40, 56, 92), Color3.fromRGB(46, 48, 54) })
+				if keeper then
+					Townsfolk.wear(keeper, "Cap", Vector3.new(0.5, 1.35, 1.35), Color3.fromRGB(34, 46, 80), "Head",
+						CFrame.new(0, 0.62, 0) * CFrame.Angles(0, 0, math.pi / 2), Enum.PartType.Cylinder)
+					Townsfolk.wear(keeper, "Visor", Vector3.new(1.1, 0.1, 0.55), Color3.fromRGB(24, 26, 30), "Head",
+						CFrame.new(0, 0.42, -0.72))
+					Townsfolk.wear(keeper, "Badge", Vector3.new(0.5, 0.3, 0.06), Color3.fromRGB(214, 190, 110), "UpperTorso",
+						CFrame.new(0.45, 0.35, -0.52))
+					if Townsfolk.route then
+						Townsfolk.route("Attendant", aq.escape)
+					end
+				end
+			end
+			-- On a crate by the rail, a little way before the drain, rod out over the water.
+			local seat = finish * CFrame.new(-PIER_W / 2 + 2.6, 0, 7)
+			local crate = block(model, "Crate", Vector3.new(1.8, 1.7, 1.8), seat * CFrame.new(0.5, 0.85, 0),
+				Color3.fromRGB(128, 100, 70), Enum.Material.WoodPlanks, false)
+			crate.CanCollide = false
+			local facing = CFrame.lookAt((seat * CFrame.new(0, 1.7, 0)).Position, (seat * CFrame.new(-1, 1.7, 0)).Position)
+			local fisher = Townsfolk.spawn(model, "Fisherman", facing, "sit",
+				{ skin, Color3.fromRGB(226, 186, 44), Color3.fromRGB(52, 58, 66) })
+			if fisher then
+				Townsfolk.wear(fisher, "HatBrim", Vector3.new(0.12, 2.2, 2.2), Color3.fromRGB(226, 186, 44), "Head",
+					CFrame.new(0, 0.5, 0) * CFrame.Angles(0, 0, math.pi / 2), Enum.PartType.Cylinder)
+				Townsfolk.wear(fisher, "HatCrown", Vector3.new(0.7, 1.3, 1.3), Color3.fromRGB(226, 186, 44), "Head",
+					CFrame.new(0, 0.85, 0) * CFrame.Angles(0, 0, math.pi / 2), Enum.PartType.Cylinder)
+				-- The rod and its line, placed in the world first and welded where they are.
+				local root = fisher.model:FindFirstChild("HumanoidRootPart")
+				if root and root:IsA("BasePart") then
+					local hand = (facing * CFrame.new(0.6, 0.3, -1.2)).Position
+					local tip = hand + facing.LookVector * 7 + Vector3.new(0, 3.2, 0)
+					local lineEnd = Vector3.new(tip.X, h.water - 0.5, tip.Z)
+					Townsfolk.wear(fisher, "Rod", Vector3.new(0.14, 0.14, (tip - hand).Magnitude), Color3.fromRGB(70, 56, 40),
+						"HumanoidRootPart", root.CFrame:ToObjectSpace(CFrame.lookAt((hand + tip) / 2, tip)))
+					Townsfolk.wear(fisher, "Line", Vector3.new(0.05, 0.05, (tip - lineEnd).Magnitude), Color3.fromRGB(220, 220, 214),
+						"HumanoidRootPart", root.CFrame:ToObjectSpace(CFrame.lookAt((tip + lineEnd) / 2, lineEnd)))
+				end
+			end
+			-- Nobody. On the Deco tower's first ledge, facing the street.
+			if deco then
+				-- Faceless, and its head follows you from three hundred studs off.
+				Townsfolk.spawn(model, "Watcher", deco * CFrame.new(0, 160, -20), "stand",
+					{ Color3.fromRGB(34, 36, 40), Color3.fromRGB(34, 36, 40), Color3.fromRGB(30, 32, 36) }, true, 320)
+			end
+		end)
+	end
 	-- And what lives in it, counted off the tags the client draws them from: if these are not zero and
 	-- SunkenCityClient's own report says it drew none, the fault is on the client.
 	local living = { SunkenSwimmer = 0, SunkenFishShoal = 0, SunkenKelp = 0, SunkenGull = 0 }
@@ -4049,7 +4951,8 @@ function SunkenCityService.build(level: any, parent: Instance): Model?
 		.. "%d parts; %d swimmers, %d shoals, %d strands of kelp, %d gulls%s."):format(math.floor(h.water), math.floor(route.total), lots,
 		if aq then "the aquarium off a checkpoint" else "NO aquarium (no checkpoint to put it on)",
 		(if flat then "the dry flat off another, with the flooded floor under it" else "no dry flat")
-			.. (if ferrisAt then ", the Ferris wheel" else ", NO Ferris wheel (nowhere clear)"), #everything,
+			.. (if ferrisAt then ", the Ferris wheel" else ", NO Ferris wheel (nowhere clear: " .. ferrisWhy .. ")")
+			.. (", %d of %d landmarks, %d things in the side streets"):format(#standing, #LANDMARKS, streetThings), #everything,
 		living.SunkenSwimmer, living.SunkenFishShoal, living.SunkenKelp, living.SunkenGull,
 		-- Which of the wheel's meshes it stood with, and why any were refused (SeaRig).
 		if SeaRig then "; the wheel's " .. SeaRig.summary() else ""))
@@ -4067,13 +4970,15 @@ local riding: { [Player]: boolean } = {}
 local arrivedAt: { [Player]: number } = {}
 
 -- THE DRAIN OWNS ITS RIDER'S FALL, from the moment the whirlpool takes them until the lobby does:
--- it ends far below the kill plane. Fifteen seconds is well past the four the return waits.
+-- it ends far below the kill plane. A minute: the lobby now waits for the ending to be watched (its
+-- captions read) and then six seconds more, and a rider caught by the plane in between is put back on
+-- the route in the middle of the last scene.
 function SunkenCityService.ownsFall(player: Player): boolean
 	if riding[player] then
 		return true
 	end
 	local landed = arrivedAt[player]
-	return landed ~= nil and os.clock() - landed < 15
+	return landed ~= nil and os.clock() - landed < 60
 end
 
 local function splash(at: Vector3)
@@ -4108,6 +5013,9 @@ end
 -- The event the rider's client answers on to say it is drawing the ride, as Sky Pools' does.
 local drainEvent: RemoteEvent? = nil
 local drawing: { [Player]: boolean } = {}
+-- IN STUDIO, WHETHER EACH CLIENT IS RUNNING SunkenCityClient: `heard` is filled by the hello each
+-- one sends as it starts (see IS THE CLIENT RUNNING, below).
+local studio = { heard = {} :: { [Player]: string }, loads = false }
 local function drainRemote(): RemoteEvent?
 	if drainEvent then
 		return drainEvent
@@ -4116,7 +5024,13 @@ local function drainRemote(): RemoteEvent?
 	local event = folder and (folder:FindFirstChild("SunkenRide") or folder:WaitForChild("SunkenRide", 5))
 	if event and event:IsA("RemoteEvent") then
 		drainEvent = event
-		event.OnServerEvent:Connect(function(player: Player)
+		event.OnServerEvent:Connect(function(player: Player, what: any, version: any)
+			-- HELLO, from a client's SunkenCityClient as it starts: it is running, and which version.
+			if what == "hello" then
+				studio.heard[player] = tostring(version)
+				print(("SunkenCityService: SunkenCityClient is running for %s (%s)"):format(player.Name, tostring(version)))
+				return
+			end
 			-- Only from someone the drain actually has, and it decides nothing: the server keeps
 			-- the clock and puts them at the bottom itself.
 			if riding[player] then
@@ -4126,9 +5040,11 @@ local function drainRemote(): RemoteEvent?
 	end
 	return drainEvent
 end
+-- Listening from the start, so the hello a client sends as it joins is heard.
+task.spawn(drainRemote)
 
 local function ride(player: Player, root: BasePart, humanoid: Humanoid, vortex: Vector3, shaftBottom: number,
-	onArrive: ((Player) -> ())?)
+	onArrive: ((Player) -> ())?, outfall: any?)
 	riding[player] = true
 	arrivedAt[player] = nil
 	drawing[player] = nil
@@ -4143,31 +5059,270 @@ local function ride(player: Player, root: BasePart, humanoid: Humanoid, vortex: 
 		funnelY = vortex.Y - FUNNEL_DEPTH,
 		bottomY = shaftBottom + 3,
 	}
+	-- AND ON DOWN THE OUTFALL, where the level has one (SunkenPath.outfallFrame), then the reveal.
+	local outSeconds = if outfall and SunkenPath and SunkenPath.OUTFALL_SECONDS then SunkenPath.OUTFALL_SECONDS else 0
+	local total = seconds + outSeconds
 	local began = workspace:GetServerTimeNow()
 	local remote = drainRemote()
 	if remote then
-		remote:FireClient(player, spec.vortex, spec.from, spec.funnelY, spec.bottomY, began, seconds)
+		remote:FireClient(player, spec.vortex, spec.from, spec.funnelY, spec.bottomY, began, seconds,
+			if outfall then outfall.path else nil, if outfall then outfall.reveal else nil)
+		-- AND EVERY CLIENT flails them: arms thrown up and waving, legs kicking, head back -- weaker
+		-- once the current has them. Played on each client from the same clock, because joints turned
+		-- on one client are seen on that client only (SunkenCityClient).
+		remote:FireAllClients("flail", player, began, total, seconds)
+	end
+	-- THEIR NAME ON THE CARD at the station, before the camera gets there.
+	local card = if outfall then outfall.card else nil
+	local cardWords = card and card:FindFirstChild("Words", true)
+	if cardWords and cardWords:IsA("TextLabel") then
+		cardWords.Text = ("KEY HOLDER\n%s\n14 AUG\nNOT CLOCKED IN"):format(string.upper(player.DisplayName))
+	end
+	-- IF THEIR OWN CLIENT NEVER TAKES THE RIDE, say why it looks the way it does: that is
+	-- SunkenCityClient not running for them (and in Studio the check below says what is wrong). The
+	-- server draws the ride then, flailing and all, but without the camera.
+	task.delay(2, function()
+		if riding[player] and not drawing[player] then
+			warn(("SunkenCityService: %s's client did not take the ride down the drain, so SunkenCityClient is "
+				.. "not running for them; the server is drawing the ride instead, without its camera"):format(player.Name))
+		end
+	end)
+	-- THEY CRY OUT, over their head, for everyone to see: help, and the rest of it.
+	--
+	-- LETTERED LIKE A VOICE, NOT A WARNING SIGN. It was heavy capitals in a hard red outline, changing
+	-- every 0.85 seconds, too fast to read and loud in the wrong way. Now the screams are scrawled
+	-- (Permanent Marker), warm white on a soft shadow, and each one lands with a small jolt and stays long
+	-- enough to read; once the current has them down the culvert the words go quiet and handwritten
+	-- (Kalam), lower case and paler, each one hanging there a while, the way you talk to yourself in the
+	-- dark.
+	local head = player.Character and player.Character:FindFirstChild("Head")
+	local cry: BillboardGui? = nil
+	if head and head:IsA("BasePart") then
+		local gui = Instance.new("BillboardGui")
+		gui.Name = "DrainCry"
+		gui.Size = UDim2.fromOffset(280, 76)
+		gui.StudsOffset = Vector3.new(0, 3.6, 0)
+		gui.AlwaysOnTop = true
+		gui.LightInfluence = 0
+		gui.MaxDistance = 140
+		local holder = Instance.new("Frame")
+		holder.Size = UDim2.fromScale(1, 1)
+		holder.BackgroundTransparency = 1
+		holder.Parent = gui
+		local pop = Instance.new("UIScale")
+		pop.Parent = holder
+		local function label(name: string, offset: number): TextLabel
+			local text = Instance.new("TextLabel")
+			text.Name = name
+			text.AnchorPoint = Vector2.new(0.5, 0.5)
+			text.Position = UDim2.new(0.5, offset, 0.5, offset)
+			text.Size = UDim2.fromScale(1, 1)
+			text.BackgroundTransparency = 1
+			text.TextScaled = true
+			text.Text = ""
+			text.Parent = holder
+			return text
+		end
+		-- The shadow, a little down and right of the words: softer than an outline, and it reads on water,
+		-- brick and sky alike.
+		local shadow = label("Shadow", 3)
+		shadow.TextColor3 = Color3.fromRGB(8, 14, 18)
+		local words = label("Words", 0)
+		words.TextStrokeColor3 = Color3.fromRGB(24, 18, 22)
+		gui.Adornee = head
+		gui.Parent = head
+		cry = gui
+		local function speak(text: string, quiet: boolean)
+			for _, piece in ipairs({ shadow, words }) do
+				piece.Font = if quiet then Enum.Font.Kalam else Enum.Font.PermanentMarker
+				piece.Text = text
+				piece.TextTransparency = 1
+			end
+			words.TextColor3 = if quiet then Color3.fromRGB(206, 222, 218) else Color3.fromRGB(252, 244, 230)
+			words.TextStrokeTransparency = 1
+			holder.Size = if quiet then UDim2.fromScale(0.72, 0.62) else UDim2.fromScale(1, 1)
+			holder.Position = if quiet then UDim2.fromScale(0.14, 0.19) else UDim2.fromScale(0, 0)
+			holder.Rotation = if quiet then math.random(-2, 2) else math.random(-6, 6)
+			pop.Scale = if quiet then 1 else 1.2
+			-- (Looked up here: this file is near Luau's limit of top-level locals.)
+			local TweenService = game:GetService("TweenService")
+			local land = TweenInfo.new(if quiet then 0.6 else 0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+			TweenService:Create(pop, land, { Scale = 1 }):Play()
+			TweenService:Create(words, land, { TextTransparency = 0, TextStrokeTransparency = if quiet then 1 else 0.6 }):Play()
+			TweenService:Create(shadow, land, { TextTransparency = if quiet then 0.65 else 0.45 }):Play()
+		end
+		speak("HELP!", false)
+		task.spawn(function()
+			local cries = { "HELP!", "AAAAH!", "HELP ME!", "NOOOO!", "SOMEBODY!", "AAAAAAH!" }
+			-- And quieter, once the current has them down the culvert.
+			local carried = { "...help...", "where is this", "the gates...", "somebody...", "what keys?" }
+			local index = 1
+			while gui.Parent do
+				local quiet = workspace:GetServerTimeNow() - began > seconds
+				-- Long enough to read, and the quiet ones longer still.
+				task.wait(if quiet then 2.8 else 1.7)
+				if not gui.Parent then
+					break
+				end
+				quiet = workspace:GetServerTimeNow() - began > seconds
+				local list = if quiet then carried else cries
+				index = index % #list + 1
+				speak(list[index], quiet)
+			end
+		end)
+	end
+	-- THE RIDE IS SEEN, by everyone: bubbles and spray streaming off the rider all the way down.
+	local trail = Instance.new("Attachment")
+	trail.Name = "DrainTrail"
+	trail.Parent = root
+	for _, spec2 in ipairs({
+		{ "rbxasset://textures/particles/sparkles_main.dds", Color3.fromRGB(224, 244, 240), 0.25, 0.6, 50, 6 },
+		{ "rbxasset://textures/particles/smoke_main.dds", Color3.fromRGB(232, 244, 242), 1, 2.6, 22, -4 },
+	}) do
+		local e = Instance.new("ParticleEmitter")
+		e.Texture = spec2[1]
+		e.Color = ColorSequence.new(spec2[2])
+		e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, spec2[3]), NumberSequenceKeypoint.new(1, spec2[4]) })
+		e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) })
+		e.Lifetime = NumberRange.new(0.6, 1.4)
+		e.Speed = NumberRange.new(2, 6)
+		e.SpreadAngle = Vector2.new(180, 180)
+		e.Acceleration = Vector3.new(0, spec2[6], 0)
+		e.Rate = spec2[5]
+		e.Parent = trail
+	end
+	-- THE SERVER'S OWN RIDE IS NOT THE STIFF ONE: the rider is grabbed, spun round the funnel and sent
+	-- head over heels down the shaft (SunkenPath.tumble) and, after a moment with no answer from their
+	-- client, flails, the server turning their joints by the same numbers the client would
+	-- (SunkenPath.flail) -- a Motor6D's C0 or, for the newer avatar joints, the parent-side attachment
+	-- (SunkenPath.joints / SunkenPath.turn), which every client is sent. A player's character here has
+	-- AnimationConstraints and no Motor6D, so turning only Motor6Ds turned nothing. The joints are given
+	-- back the moment their client takes the ride, and at the bottom.
+	--
+	-- AND THE SERVER HOLDS THEM while it draws them: it takes their physics (their own client would
+	-- otherwise keep adding gravity to their speed under every position it is handed, and at the bottom
+	-- all of that speed at once put them straight through the sluice's floor), and clears their speed
+	-- every step.
+	local turned: { [string]: any } = {}
+	local held = false
+	local splashed = false
+	-- THE LANDING: a burst of spray and a thud -- in the sluice, and where they are set down.
+	local function thud(at: Vector3, count: number)
+		local burst = Instance.new("Part")
+		burst.Name = "SluiceLanding"
+		burst.Size = Vector3.new(4, 0.4, 4)
+		burst.CFrame = CFrame.new(at)
+		burst.Anchored = true
+		burst.CanCollide = false
+		burst.CanQuery = false
+		burst.CanTouch = false
+		burst.Transparency = 1
+		burst.Parent = workspace
+		local splashes = Instance.new("ParticleEmitter")
+		splashes.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		splashes.Color = ColorSequence.new(Color3.fromRGB(226, 240, 238))
+		splashes.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 3.6) })
+		splashes.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 1) })
+		splashes.Lifetime = NumberRange.new(0.5, 1)
+		splashes.Speed = NumberRange.new(8, 16)
+		splashes.SpreadAngle = Vector2.new(60, 60)
+		splashes.EmissionDirection = Enum.NormalId.Top
+		splashes.Acceleration = Vector3.new(0, -30, 0)
+		splashes.Rate = 0
+		splashes.Parent = burst
+		splashes:Emit(count)
+		sound(burst, "Landing", THUD_SOUND, 0.6, 1.2, 60, false):Play()
+		Debris:AddItem(burst, 3)
+	end
+	local r6 = player.Character ~= nil and player.Character:FindFirstChild("UpperTorso") == nil
+	local function giveBack()
+		for _, joint in pairs(turned) do
+			if Poses then
+				pcall(Poses.turn, joint, CFrame.identity)
+			end
+		end
+		table.clear(turned)
 	end
 	while root.Parent do
-		local u = (workspace:GetServerTimeNow() - began) / seconds
-		if u >= 1 then
+		local t = workspace:GetServerTimeNow() - began
+		local u = t / seconds
+		if t >= total then
 			break
 		end
+		if not splashed and t >= seconds - 0.1 then
+			splashed = true
+			thud(Vector3.new(vortex.X, spec.bottomY - 2.6, vortex.Z), 45)
+		end
 		-- THE SERVER MOVES NOBODY once the rider's own client has the ride. Until it answers -- or
-		-- if it never does -- this is the ride, exactly as it was.
+		-- if it never does -- this is the ride.
 		if not drawing[player] and SunkenPath then
-			root.CFrame = SunkenPath.drainFrame(spec, u)
+			if not held and t > 0.3 then
+				held = pcall(function()
+					root:SetNetworkOwner(nil)
+				end)
+			end
+			local frame: CFrame
+			if t < seconds then
+				frame = SunkenPath.drainFrame(spec, u)
+				if SunkenPath.tumble then
+					frame *= SunkenPath.tumble(u, os.clock())
+				end
+			else
+				frame = SunkenPath.outfallFrame(outfall.path, (t - seconds) / outSeconds, os.clock())
+			end
+			root.CFrame = frame
+			root.AssemblyLinearVelocity = Vector3.zero
+			root.AssemblyAngularVelocity = Vector3.zero
+			local character = player.Character
+			if t > 0.6 and Poses and character then
+				if next(turned) == nil then
+					turned = Poses.joints(character)
+				end
+				local w = Poses.weight(t, total) * (if t > seconds then 0.4 else 1)
+				for name, joint in pairs(turned) do
+					local turn = Poses.flail(name, t, w, r6)
+					if turn then
+						Poses.turn(joint, turn)
+					end
+				end
+			end
+		elseif next(turned) ~= nil then
+			giveBack()
 		end
 		task.wait()
 	end
+	giveBack()
+	trail:Destroy()
 	if root.Parent then
-		root.CFrame = CFrame.new(vortex.X, spec.bottomY, vortex.Z)
+		-- Set down: on the station's landing on their feet, or (with no outfall) in the sluice.
+		root.CFrame = if outfall and SunkenPath then SunkenPath.outfallFrame(outfall.path, 1, os.clock())
+			else CFrame.new(vortex.X, spec.bottomY, vortex.Z)
+		root.AssemblyLinearVelocity = Vector3.zero
+		root.AssemblyAngularVelocity = Vector3.zero
+		if outfall then
+			thud(outfall.path.to - Vector3.new(0, 2.6, 0), 20)
+		elseif not splashed then
+			thud(Vector3.new(vortex.X, spec.bottomY - 2.6, vortex.Z), 45)
+		end
+	end
+	if held then
+		pcall(function()
+			root:SetNetworkOwner(player)
+		end)
 	end
 	rush:Destroy()
+	if cry then
+		cry:Destroy()
+	end
 	humanoid.PlatformStand = false
 	riding[player] = nil
 	drawing[player] = nil
 	arrivedAt[player] = os.clock()
+	-- THE REVEAL: the station held on screen (SunkenCityClient plays it), and then the level is over --
+	-- the card, and a few seconds to look round before the lobby.
+	if outfall and SunkenPath and SunkenPath.REVEAL_SECONDS then
+		task.wait(SunkenPath.REVEAL_SECONDS)
+	end
 	if onArrive then
 		onArrive(player)
 	end
@@ -4211,8 +5366,9 @@ end
 
 -- ===== THE GLASS =====
 --
--- Every pane of the aquarium can be tapped now -- the gallery's window and the tunnel's sides -- and
--- it answers. A tap thuds and the fish bolt (SunkenCityClient reads `Tapped` off the model). Keep
+-- THE GALLERY'S WINDOW can be tapped -- the one with the notice beside it asking you not to -- and
+-- nothing else: the tunnel's panes answered too once, and a tunnel you could crack with a nudge made
+-- the notice pointless. It answers. A tap thuds and the fish bolt (SunkenCityClient reads `Tapped` off the model). Keep
 -- tapping one pane and it takes the strain: at TAP.crack a crack stars out from where you hit it,
 -- at TAP.crack2 it spreads and starts to weep, and at TAP.breaks it goes. The sea comes in. Every
 -- client sees the pane burst and the water rise (`Flood`), and everyone still inside once it has
@@ -4225,6 +5381,7 @@ end
 
 local function glass(model: Model, onTaken: ((Player) -> ())?): { RBXScriptConnection }
 	local CRACK_SOUND = "rbxassetid://135061782882830"
+	local FLOOD_SETTLE = 4 -- seconds after the water is gone before the attendant says anything
 	local CRACK_MENDS = 25
 	local function crackLines(pane: BasePart, stage: number, rng: Random, inside: Vector3)
 		local size = pane.Size
@@ -4271,10 +5428,14 @@ local function glass(model: Model, onTaken: ((Player) -> ())?): { RBXScriptConne
 
 	local connections: { RBXScriptConnection } = {}
 	local panes: { BasePart } = {}
+	-- The notice asking you not to tap, which the flood tears off its wall (THE SEA COMING IN).
+	local notices: { BasePart } = {}
 	for _, item in ipairs(model:GetDescendants()) do
-		-- The window, and the tunnel's SIDE panes (the roof panes lie flat, 0.4 tall).
-		if item:IsA("BasePart") and (item.Name == "ViewingWindow" or (item.Name == "TunnelGlass" and item.Size.Y > 1)) then
+		-- The window with the notice by it, and only that.
+		if item:IsA("BasePart") and item.Name == "ViewingWindow" then
 			table.insert(panes, item)
+		elseif item:IsA("BasePart") and item.Name == "Notice" then
+			table.insert(notices, item)
 		end
 	end
 	if #panes == 0 then
@@ -4306,31 +5467,454 @@ local function glass(model: Model, onTaken: ((Player) -> ())?): { RBXScriptConne
 	end
 
 	local rng = Random.new(1847)
+
+	-- ===== THE SEA COMING IN =====
+	--
+	-- AS REAL WATER YOU CAN SWIM IN, drawn here for every player. The pane bursts into shards that are
+	-- thrown in and land on the floor, and jagged teeth of it stay in the frame. The sea comes through
+	-- the hole in a torrent, falling water and spray with foam churning where it lands, and ONE LEVEL of
+	-- TERRAIN WATER rises through the gallery, the tunnel and the tower at one rate: the gallery is full
+	-- after TAP.rise and the tower goes on filling to the sea outside. It is the same water as the
+	-- flooded floor under the flat, so you swim in it; bubbles come up through it, the aquarium's
+	-- leaflets float up on it, and once the hole is under, the sea still comes through it in a rush of
+	-- bubbles. Under it the view goes murky and the sound dull (SunkenCityClient). It stays until
+	-- TAP.hold, goes down over TAP.drain, and the glass is whole. Nobody is washed out.
+	--
+	-- It replaces boxes of see-through parts that filled up, which looked like exactly that.
+	local terrain = workspace.Terrain
+	local SEA_IN = Color3.fromRGB(56, 116, 118)
+	local FLOOD_STEP = 0.1 -- seconds between one level of the water and the next
+	local INSET = 1 -- studs the water keeps in from a space's sides, so none of it shows through a wall
+	local SPRAY = "rbxasset://textures/particles/sparkles_main.dds"
+	local SMOKE = "rbxasset://textures/particles/smoke_main.dds"
+	local volumes = tagged(model, "SunkenFloodVolume")
+	local flood = {
+		bits = {} :: { Instance }, -- the teeth, gone when the glass is whole
+		registered = false, -- its spaces are on the list of swimmable water cleared with the level
+		level = -math.huge, -- where the water is now (the attendant swims by it)
+	}
+
+	-- Which of a part's own axes is nearest world up, and which way it points: a volume can be a box
+	-- standing up or a cylinder lying on its side stood on end.
+	local function upAxis(part: BasePart): (number, number)
+		local best, sign, most = 2, 1, -1
+		for axis, v in ipairs({ part.CFrame.RightVector, part.CFrame.UpVector, -part.CFrame.LookVector }) do
+			local d = v:Dot(Vector3.yAxis)
+			if math.abs(d) > most then
+				best, sign, most = axis, if d >= 0 then 1 else -1, math.abs(d)
+			end
+		end
+		return best, sign
+	end
+	local function heightOf(volume: BasePart, axis: number): number
+		local size = volume.Size
+		return if axis == 1 then size.X elseif axis == 2 then size.Y else size.Z
+	end
+	-- Each space that floods: how high it goes, and whether it is the tower's cylinder.
+	local spaces: { { volume: BasePart, axis: number, bottom: number, top: number, cylinder: boolean } } = {}
+	for _, volume in ipairs(volumes) do
+		local axis = upAxis(volume)
+		local full = heightOf(volume, axis)
+		table.insert(spaces, { volume = volume, axis = axis, bottom = volume.Position.Y - full / 2,
+			top = volume.Position.Y + full / 2,
+			cylinder = volume:IsA("Part") and volume.Shape == Enum.PartType.Cylinder })
+	end
+
+	-- THE WATER IN A SPACE, as terrain: `material` from `y0`, `h` high, across the whole space.
+	local function slab(space: { volume: BasePart, axis: number, bottom: number, top: number, cylinder: boolean },
+		y0: number, h: number, material: Enum.Material)
+		local v = space.volume
+		local p = v.Position
+		if space.cylinder then
+			terrain:FillCylinder(CFrame.new(p.X, y0 + h / 2, p.Z), h, math.min(v.Size.Y, v.Size.Z) / 2 - INSET, material)
+			return
+		end
+		local axes = { v.CFrame.RightVector, v.CFrame.UpVector, -v.CFrame.LookVector }
+		local sizes = { v.Size.X, v.Size.Y, v.Size.Z }
+		local i, k = space.axis % 3 + 1, (space.axis + 1) % 3 + 1
+		local across = Vector3.new(axes[i].X, 0, axes[i].Z).Unit
+		terrain:FillBlock(CFrame.fromMatrix(Vector3.new(p.X, y0 + h / 2, p.Z), across, Vector3.yAxis),
+			Vector3.new(sizes[i] - 2 * INSET, h, sizes[k] - 2 * INSET), material)
+	end
+	-- Every space's water up to `level` and none over it: all the clearing first, then all the filling,
+	-- so where two spaces meet, the water wins.
+	local function waterTo(level: number)
+		for _, space in ipairs(spaces) do
+			local depth = math.clamp(level - space.bottom, 0, space.top - space.bottom)
+			local over = space.top - space.bottom - depth
+			if over > 0.01 then
+				slab(space, space.top - over, over + 1, Enum.Material.Air)
+			end
+		end
+		for _, space in ipairs(spaces) do
+			local depth = math.clamp(level - space.bottom, 0, space.top - space.bottom)
+			if depth > 0.01 then
+				slab(space, space.bottom, depth, Enum.Material.Water)
+			end
+		end
+	end
+
+	-- A part of the flood that is not in the world yet (so everything on it arrives with it).
+	local function loose(name: string, size: Vector3, cf: CFrame, colour: Color3, transparency: number): Part
+		local part = Instance.new("Part")
+		part.Name = name
+		part.Size = size
+		part.CFrame = cf
+		part.Color = colour
+		part.Material = Enum.Material.SmoothPlastic
+		part.Transparency = transparency
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanTouch = false
+		part.CanQuery = false
+		part.CastShadow = false
+		part.TopSurface = Enum.SurfaceType.Smooth
+		part.BottomSurface = Enum.SurfaceType.Smooth
+		return part
+	end
+	local function emitter(parent: Instance, texture: string, colour: Color3, size: { number }, speed: { number },
+		life: { number }, direction: Enum.NormalId, spread: number, fall: number): ParticleEmitter
+		local e = Instance.new("ParticleEmitter")
+		e.Texture = texture
+		e.Color = ColorSequence.new(colour)
+		e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, size[1]), NumberSequenceKeypoint.new(1, size[2]) })
+		e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(0.7, 0.55),
+			NumberSequenceKeypoint.new(1, 1) })
+		e.Speed = NumberRange.new(speed[1], speed[2])
+		e.Lifetime = NumberRange.new(life[1], life[2])
+		e.EmissionDirection = direction
+		e.SpreadAngle = Vector2.new(spread, spread)
+		e.Acceleration = Vector3.new(0, fall, 0)
+		e.Rate = 0
+		e.Parent = parent
+		return e
+	end
+	-- A pane's own axes, and how big it is along each: which is thin (its face), which of the other
+	-- two is nearer up, and the one across.
+	local function paneAxes(pane: BasePart): ({ Vector3 }, { number }, number, number, number)
+		local size = pane.Size
+		local axes = { pane.CFrame.RightVector, pane.CFrame.UpVector, -pane.CFrame.LookVector }
+		local extents = { size.X, size.Y, size.Z }
+		local thin = if size.X <= size.Y and size.X <= size.Z then 1 elseif size.Y <= size.Z then 2 else 3
+		local up, most = 0, -1
+		for index = 1, 3 do
+			if index ~= thin and math.abs(axes[index].Y) > most then
+				up, most = index, math.abs(axes[index].Y)
+			end
+		end
+		return axes, extents, thin, up, 6 - thin - up
+	end
+
+	-- THE PANE BURSTS: shards thrown in with the sea, falling, tumbling and lying on the floor a while;
+	-- and jagged teeth of it left all round the frame until it mends.
+	local function shatter(pane: BasePart, inward: Vector3, was: number)
+		local axes, extents, thin, up, across = paneAxes(pane)
+		for _ = 1, 22 do
+			local at = pane.Position + inward * (extents[thin] / 2 + 0.5)
+				+ axes[up] * rng:NextNumber(-0.42, 0.42) * extents[up] + axes[across] * rng:NextNumber(-0.42, 0.42) * extents[across]
+			local shard = loose("Shard", Vector3.new(0.14, rng:NextNumber(0.4, 1.5), rng:NextNumber(0.3, 1.1)),
+				CFrame.new(at) * CFrame.Angles(rng:NextNumber(0, 6.3), rng:NextNumber(0, 6.3), rng:NextNumber(0, 6.3)),
+				pane.Color:Lerp(Color3.new(1, 1, 1), 0.4), 0.3)
+			shard.Reflectance = 0.15
+			shard.Anchored = false
+			shard.CanCollide = true
+			shard.Parent = model
+			shard.AssemblyLinearVelocity = inward * rng:NextNumber(10, 22) + axes[across] * rng:NextNumber(-5, 5)
+				+ Vector3.new(0, rng:NextNumber(-2, 5), 0)
+			shard.AssemblyAngularVelocity = Vector3.new(rng:NextNumber(-9, 9), rng:NextNumber(-9, 9), rng:NextNumber(-9, 9))
+			Debris:AddItem(shard, 12)
+		end
+		for _, edge in ipairs({ { up, across }, { across, up } }) do
+			local out, along = edge[1], edge[2]
+			for _, side in ipairs({ -1, 1 }) do
+				for _ = 1, 3 do
+					-- A wedge's long flat face against the frame, its point toward the middle of the hole.
+					local h = rng:NextNumber(0.6, 2.2)
+					local at = pane.Position + axes[out] * side * (extents[out] / 2 - h / 2)
+						+ axes[along] * rng:NextNumber(-0.42, 0.42) * extents[along]
+					local tooth = Instance.new("WedgePart")
+					tooth.Name = "GlassTooth"
+					tooth.Size = Vector3.new(extents[thin] * 0.9, h, rng:NextNumber(0.7, 1.9))
+					tooth.CFrame = CFrame.fromMatrix(at, axes[thin] * (if rng:NextNumber() < 0.5 then 1 else -1), -axes[out] * side)
+					tooth.Color = pane.Color
+					tooth.Material = pane.Material
+					tooth.Transparency = math.clamp(was - 0.1, 0.15, 0.7)
+					tooth.Anchored = true
+					tooth.CanCollide = false
+					tooth.CanTouch = false
+					tooth.CanQuery = false
+					tooth.CastShadow = false
+					tooth.Parent = model
+					table.insert(flood.bits, tooth)
+				end
+			end
+		end
+		-- The sea bursting through, the first seconds, across the whole hole.
+		local burst = loose("SeaBursting", Vector3.new(extents[across] * 0.8, extents[up] * 0.7, 0.2),
+			CFrame.lookAt(pane.Position + inward * (extents[thin] / 2 + 0.3), pane.Position + inward * 2), SEA_IN, 1)
+		local spray = emitter(burst, SMOKE, Color3.fromRGB(206, 234, 232), { 1.2, 4.5 }, { 24, 36 }, { 0.5, 0.9 },
+			Enum.NormalId.Front, 14, -24)
+		spray.Rate = 160
+		burst.Parent = model
+		task.delay(2.5, function()
+			spray.Rate = 0
+		end)
+		Debris:AddItem(burst, 4)
+	end
+
+	-- THE FLOOD, from the moment the pane goes to the moment the water is gone again.
+	local function runFlood(pane: BasePart, inward: Vector3)
+		-- The room with the hole in it, whose floor the water rises from at the rate that fills it in
+		-- TAP.rise; and the highest any of it goes.
+		local room = nil
+		local gap = math.huge
+		for _, space in ipairs(spaces) do
+			local d = (space.volume.Position - pane.Position).Magnitude
+			if space.volume.Parent and d < gap then
+				room, gap = space, d
+			end
+		end
+		if not room then
+			return
+		end
+		local floor = room.bottom
+		local rate = (room.top - room.bottom) / TAP.rise
+		local top = floor
+		for _, space in ipairs(spaces) do
+			top = math.max(top, space.top)
+		end
+		swimWater.look()
+		if not flood.registered then
+			-- On the list the level clears when it goes, in case it goes with the water still up.
+			flood.registered = true
+			for _, space in ipairs(spaces) do
+				table.insert(swimWater.fills, { cf = space.volume.CFrame, size = space.volume.Size })
+			end
+		end
+
+		-- The hole: how wide, where its top and bottom are.
+		local axes, extents, thin, up, across = paneAxes(pane)
+		local holeTop = pane.Position.Y + math.abs(axes[up].Y) * extents[up] / 2
+		local holeBottom = pane.Position.Y - math.abs(axes[up].Y) * extents[up] / 2
+		local width = extents[across] * 0.85
+		local mouth = pane.Position + inward * (extents[thin] / 2 + 0.6)
+		local made: { Instance } = {}
+
+		-- The torrent: falling water and spray through the hole, and, once the hole is under, a rush of
+		-- bubbles instead.
+		local torrent = loose("SeaPouringIn", Vector3.new(width, extents[up] * 0.8, 0.3), CFrame.lookAt(mouth, mouth + inward),
+			SEA_IN, 1)
+		local falls = emitter(torrent, SMOKE, Color3.fromRGB(196, 232, 232), { 1.6, 3.4 }, { 8, 14 }, { 0.6, 0.9 },
+			Enum.NormalId.Front, 8, -45)
+		falls.Orientation = Enum.ParticleOrientation.VelocityParallel
+		falls.Squash = NumberSequence.new(1.2)
+		local mist = emitter(torrent, SPRAY, Color3.fromRGB(226, 244, 242), { 0.6, 0.15 }, { 18, 28 }, { 0.4, 0.8 },
+			Enum.NormalId.Front, 25, -20)
+		local inrush = emitter(torrent, SPRAY, Color3.fromRGB(214, 240, 236), { 0.3, 0.6 }, { 10, 16 }, { 1.2, 2 },
+			Enum.NormalId.Front, 18, 8)
+		local roar = sound(torrent, "Roar", WATER_SOUND, 0.55, 1.1, 140, true)
+		torrent.Parent = model
+		roar:Play()
+		table.insert(made, torrent)
+
+		-- Foam churning where it lands, on the water wherever the water has got to.
+		local landing = loose("SeaLanding", Vector3.new(width, 0.4, 4), CFrame.new(mouth), SEA_IN, 1)
+		local foam = emitter(landing, SMOKE, Color3.fromRGB(236, 246, 244), { 1.6, 4 }, { 4, 9 }, { 0.6, 1.1 },
+			Enum.NormalId.Top, 70, -12)
+		local churn = emitter(landing, SPRAY, Color3.fromRGB(230, 246, 242), { 0.4, 0.1 }, { 2, 6 }, { 0.5, 1 },
+			Enum.NormalId.Top, 60, -18)
+		landing.Parent = model
+		table.insert(made, landing)
+
+		-- JETS THROUGH THE CRACKS round the frame, where the teeth of glass still hold: hard and high while
+		-- they are above the water, streams of bubbles once they are under it. They fan out toward the
+		-- sides, so the attendant, who stands beside the window, is in the spray.
+		local jets: { { at: Vector3, water: ParticleEmitter, bubbles: ParticleEmitter } } = {}
+		for _, spot in ipairs({ { -0.46, 0.42 }, { 0.46, 0.42 }, { -0.47, 0 }, { 0.47, 0 }, { -0.44, -0.38 }, { 0.44, -0.38 },
+			{ 0, 0.47 } }) do
+			local at = mouth + axes[across] * spot[1] * extents[across] + axes[up] * spot[2] * extents[up]
+			local aim = (inward + axes[across] * spot[1] * 1.1 + Vector3.new(0, -0.12, 0)).Unit
+			local host = loose("CrackJet", Vector3.new(0.2, 0.2, 0.2), CFrame.lookAt(at, at + aim), SEA_IN, 1)
+			local water = emitter(host, SMOKE, Color3.fromRGB(206, 236, 236), { 0.5, 1.6 }, { 26, 34 }, { 0.35, 0.6 },
+				Enum.NormalId.Front, 5, -40)
+			water.Orientation = Enum.ParticleOrientation.VelocityParallel
+			water.Squash = NumberSequence.new(1.5)
+			local stream = emitter(host, SPRAY, Color3.fromRGB(226, 244, 240), { 0.2, 0.45 }, { 8, 12 }, { 0.8, 1.4 },
+				Enum.NormalId.Front, 10, 6)
+			host.Parent = model
+			table.insert(made, host)
+			table.insert(jets, { at = at, water = water, bubbles = stream })
+		end
+		-- THE SEA OVER THE SILL, sheeting down the wall under the window to the floor.
+		local sill = Vector3.new(mouth.X, holeBottom + 0.1, mouth.Z) + inward * 0.3
+		local curtainHost = loose("SillCurtain", Vector3.new(width, 0.2, 0.3), CFrame.lookAt(sill, sill + inward), SEA_IN, 1)
+		local curtain = emitter(curtainHost, SMOKE, Color3.fromRGB(200, 232, 232), { 0.8, 1.8 }, { 3, 7 }, { 0.4, 0.8 },
+			Enum.NormalId.Bottom, 6, -30)
+		curtain.Orientation = Enum.ParticleOrientation.VelocityParallel
+		curtain.Squash = NumberSequence.new(1.4)
+		curtainHost.Parent = model
+		table.insert(made, curtainHost)
+		-- THE SURGE: a foaming front racing across the floor from the window to the far wall.
+		local surgeFrom = Vector3.new(mouth.X, floor + 0.3, mouth.Z) + inward * 1.5
+		local surgeTo = surgeFrom + inward * math.max(4, (room.volume.Position - pane.Position):Dot(inward) * 2 - 4)
+		local surge = loose("Surge", Vector3.new(width + 8, 0.4, 1.5), CFrame.lookAt(surgeFrom, surgeFrom + inward), SEA_IN, 1)
+		local surf = emitter(surge, SMOKE, Color3.fromRGB(238, 248, 246), { 1.4, 3.6 }, { 3, 7 }, { 0.5, 0.9 },
+			Enum.NormalId.Top, 50, -14)
+		surf.Rate = 160
+		surge.Parent = model
+		table.insert(made, surge)
+		-- THE NOTICE asking you not to tap the glass, torn off its wall and floated away.
+		local torn: { part: BasePart, rest: CFrame }? = nil
+		for _, notice in ipairs(notices) do
+			if notice.Parent and (notice.Position - pane.Position).Magnitude < 12 then
+				torn = { part = notice, rest = notice.CFrame }
+				notice.Anchored = false
+				notice.CanCollide = true
+				notice.AssemblyLinearVelocity = inward * 7 + Vector3.new(0, 5, 0)
+				notice.AssemblyAngularVelocity = Vector3.new(rng:NextNumber(-3, 3), rng:NextNumber(-3, 3), rng:NextNumber(-3, 3))
+				break
+			end
+		end
+		-- AND THE ATTENDANT RUNS (Townsfolk.panic), swimming by where the water is.
+		flood.level = floor
+		if Townsfolk and Townsfolk.panic then
+			Townsfolk.panic(function(): number
+				return flood.level
+			end, TAP.hold + TAP.drain)
+		end
+
+		-- Bubbles coming up through the water in each space that is not the tower.
+		local bubbling: { { host: Part, space: { volume: BasePart, axis: number, bottom: number, top: number, cylinder: boolean },
+			bubbles: ParticleEmitter } } = {}
+		for _, space in ipairs(spaces) do
+			if not space.cylinder then
+				local host = loose("Bubbling", Vector3.new(1, 1, 1), space.volume.CFrame, SEA_IN, 1)
+				local bubbles = emitter(host, SPRAY, Color3.fromRGB(220, 244, 240), { 0.18, 0.4 }, { 2, 4 }, { 1, 3 },
+					Enum.NormalId.Top, 12, 1)
+				host.Parent = model
+				table.insert(made, host)
+				table.insert(bubbling, { host = host, space = space, bubbles = bubbles })
+			end
+		end
+		local gurgle = sound(bubbling[1] and bubbling[1].host or torrent, "Gurgle", WATER_SOUND, 0.3, 0.5, 60, true)
+		gurgle:Play()
+
+		-- The aquarium's leaflets, lifted off the floor and floating up on the water, drifting.
+		local roomAxes = { room.volume.CFrame.RightVector, room.volume.CFrame.UpVector, -room.volume.CFrame.LookVector }
+		local roomSizes = { room.volume.Size.X, room.volume.Size.Y, room.volume.Size.Z }
+		local ri, rk = room.axis % 3 + 1, (room.axis + 1) % 3 + 1
+		local leaflets: { { part: Part, at: Vector3, drift: Vector3, spin: number, phase: number } } = {}
+		for index = 1, 7 do
+			local at = room.volume.Position + roomAxes[ri] * rng:NextNumber(-0.4, 0.4) * roomSizes[ri]
+				+ roomAxes[rk] * rng:NextNumber(-0.4, 0.4) * roomSizes[rk]
+			local tone = ({ Color3.fromRGB(238, 232, 214), Color3.fromRGB(150, 196, 214), Color3.fromRGB(232, 168, 146) })[index % 3 + 1]
+			local leaflet = loose("Leaflet", Vector3.new(1.1, 0.05, 1.5), CFrame.new(at.X, floor + 0.1, at.Z), tone, 0)
+			leaflet.Parent = model
+			table.insert(made, leaflet)
+			table.insert(leaflets, { part = leaflet, at = Vector3.new(at.X, 0, at.Z),
+				drift = Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1)) * 0.25, spin = rng:NextNumber(-0.4, 0.4),
+				phase = rng:NextNumber(0, 6) })
+		end
+
+		local began = os.clock()
+		local full = math.min(top, floor + rate * TAP.hold)
+		local written = -math.huge
+		while model.Parent do
+			local now = os.clock() - began
+			local rising = now < TAP.hold
+			local level = if rising then math.min(top, floor + rate * now)
+				else full - (full - floor) * math.min(1, (now - TAP.hold) / TAP.drain)
+			-- Terrain rewritten only while the level moves: once it is up, it is left alone.
+			if math.abs(level - written) > 0.02 then
+				waterTo(level)
+				written = level
+			end
+
+			-- How much of the hole the sea still falls through, and how far it falls.
+			local above = if rising then math.clamp((holeTop - level) / math.max(0.5, holeTop - holeBottom), 0, 1) else 0
+			local drop = math.max(0.5, (holeTop + holeBottom) / 2 - level)
+			local fallTime = math.sqrt(2 * drop / 45)
+			falls.Rate = 220 * above
+			falls.Lifetime = NumberRange.new(math.max(0.15, fallTime * 0.9), math.max(0.2, fallTime * 1.1))
+			mist.Rate = 90 * above
+			inrush.Rate = if rising and level > holeBottom then 70 * (1 - above) else 0
+			roar.Volume = 1.1 * above
+			local reach = math.clamp(11 * fallTime, 1.5, 8)
+			landing.CFrame = CFrame.lookAt(Vector3.new(mouth.X, level + 0.2, mouth.Z) + inward * reach,
+				Vector3.new(mouth.X, level + 0.2, mouth.Z) + inward * (reach + 1))
+			foam.Rate = 90 * above
+			churn.Rate = 40 * above + (if rising then 6 else 0)
+			flood.level = level
+			for _, jet in ipairs(jets) do
+				local under = level > jet.at.Y
+				jet.water.Rate = if rising and not under then 45 else 0
+				jet.bubbles.Rate = if rising and under then 20 else 0
+			end
+			curtain.Rate = if rising and level < holeBottom then 120 else 0
+			if surge.Parent then
+				local share = math.min(1, now / 1.8)
+				local front = surgeFrom:Lerp(surgeTo, share * (2 - share))
+				surge.CFrame = CFrame.lookAt(Vector3.new(front.X, level + 0.3, front.Z), Vector3.new(front.X, level + 0.3, front.Z) + inward)
+				surf.Rate = if share < 1 then 160 else 0
+				if now > 2.8 then
+					surge:Destroy()
+				end
+			end
+
+			for _, b in ipairs(bubbling) do
+				local depth = math.clamp(level - b.space.bottom, 0, b.space.top - b.space.bottom)
+				local v = b.space.volume
+				if depth > 0.5 then
+					local sizes = { v.Size.X, v.Size.Y, v.Size.Z }
+					local i, k = b.space.axis % 3 + 1, (b.space.axis + 1) % 3 + 1
+					b.host.Size = Vector3.new(sizes[i] - 2, depth, sizes[k] - 2)
+					b.host.CFrame = CFrame.fromMatrix(Vector3.new(v.Position.X, b.space.bottom + depth / 2, v.Position.Z),
+						Vector3.new(({ v.CFrame.RightVector, v.CFrame.UpVector, -v.CFrame.LookVector })[i].X, 0,
+							({ v.CFrame.RightVector, v.CFrame.UpVector, -v.CFrame.LookVector })[i].Z).Unit, Vector3.yAxis)
+					b.bubbles.Lifetime = NumberRange.new(math.min(1, depth / 4), math.max(0.5, depth / 3))
+					b.bubbles.Rate = if rising then 0.05 * (sizes[i] * sizes[k]) else 0.01 * (sizes[i] * sizes[k])
+				else
+					b.bubbles.Rate = 0
+				end
+			end
+			gurgle.Volume = if level > floor + 1 then 0.5 else 0
+
+			local surface = math.min(level, room.top - 0.3)
+			for _, leaf in ipairs(leaflets) do
+				local afloat = surface > floor + 0.15
+				local y = if afloat then surface - 0.03 + math.sin(now * 1.3 + leaf.phase) * 0.06 else floor + 0.1
+				local at = leaf.at + (if afloat then leaf.drift * math.min(now, TAP.hold) else Vector3.zero)
+				leaf.part.CFrame = CFrame.new(at.X, y, at.Z) * CFrame.Angles(math.sin(now + leaf.phase) * 0.08,
+					leaf.phase + leaf.spin * now, math.cos(now * 0.8 + leaf.phase) * 0.08)
+			end
+
+			if now >= TAP.hold + TAP.drain then
+				break
+			end
+			task.wait(FLOOD_STEP)
+		end
+		-- All of it gone: the water, to the last voxel, and everything that went with it.
+		for _, space in ipairs(spaces) do
+			terrain:FillBlock(space.volume.CFrame, space.volume.Size + Vector3.new(4, 4, 4), Enum.Material.Air)
+		end
+		for _, thing in ipairs(made) do
+			thing:Destroy()
+		end
+		flood.level = -math.huge
+		-- The notice back on its wall.
+		if torn and torn.part.Parent then
+			torn.part.Anchored = true
+			torn.part.CanCollide = false
+			torn.part.CFrame = torn.rest
+		end
+	end
+
 	local strain: { [BasePart]: { value: number, at: number } } = {}
 	local cracked: { [BasePart]: number } = {}
 	local taps: { [Player]: { number } } = {}
 	local answered: { [Player]: boolean } = {}
 	local prompts: { ProximityPrompt } = {}
 	local flooding = false
-	local risenAt = math.huge
-
-	local function wash(player: Player)
-		local root = rootOf(player)
-		if not root then
-			return
-		end
-		if isHardcore(player) then
-			if onTaken then
-				onTaken(player)
-			end
-		else
-			local state = PlayerStateService.getState(player)
-			if state then
-				root.AssemblyLinearVelocity = Vector3.zero
-				root.CFrame = CFrame.new(state.checkpointPosition + Vector3.new(0, 4, 0))
-			end
-		end
-	end
 
 	-- NOTHING STAYS BROKEN: a pane's cracks go when it mends.
 	local function mend(pane: BasePart)
@@ -4349,6 +5933,12 @@ local function glass(model: Model, onTaken: ((Player) -> ())?): { RBXScriptConne
 			prompt.Enabled = false
 		end
 		local was = pane.Transparency
+		-- IT GIVES FIRST: the crack runs right across it and it groans, and then it goes.
+		crackLines(pane, 2, rng, insideOf(pane))
+		local groan = sound(pane, "Groan", CRACK_SOUND, 0.55, 1.3, 60, false)
+		groan:Play()
+		Debris:AddItem(groan, 4)
+		task.wait(0.45)
 		mend(pane)
 		-- The pane goes. It still stops anyone walking out through the hole into a hundred studs of
 		-- water, which the flood is about to settle anyway.
@@ -4358,19 +5948,44 @@ local function glass(model: Model, onTaken: ((Player) -> ())?): { RBXScriptConne
 			s:Play()
 			Debris:AddItem(s, 6)
 		end
+		-- Inward: the pane's face, turned toward the inside, level.
+		local axes, _, thin = paneAxes(pane)
+		local face = axes[thin]
+		if face:Dot(insideOf(pane) - pane.Position) < 0 then
+			face = -face
+		end
+		local inward = Vector3.new(face.X, 0, face.Z)
+		inward = if inward.Magnitude > 0.01 then inward.Unit else Vector3.xAxis
+		shatter(pane, inward, was)
 		model:SetAttribute("FloodAt", pane.Position)
 		model:SetAttribute("Flood", workspace:GetServerTimeNow())
-		risenAt = os.clock() + TAP.rise
-		task.delay(TAP.hold, function()
+		task.spawn(function()
+			local ok, err = pcall(runFlood, pane, inward)
+			if not ok then
+				warn("SunkenCityService: the flood failed part-way, and the glass is mended anyway: " .. tostring(err))
+				for _, space in ipairs(spaces) do
+					pcall(function()
+						terrain:FillBlock(space.volume.CFrame, space.volume.Size + Vector3.new(4, 4, 4), Enum.Material.Air)
+					end)
+				end
+			end
+			model:SetAttribute("Flood", 0)
 			if pane.Parent then
 				pane.Transparency = was
 			end
+			for _, bit in ipairs(flood.bits) do
+				bit:Destroy()
+			end
+			flood.bits = {}
 			for _, each in ipairs(panes) do
 				mend(each)
 			end
-			model:SetAttribute("Flood", 0)
-			risenAt = math.huge
 			flooding = false
+			if Townsfolk then
+				task.delay(FLOOD_SETTLE, function()
+					Townsfolk.react("mended")
+				end)
+			end
 			for _, prompt in ipairs(prompts) do
 				prompt.Enabled = true
 			end
@@ -4384,6 +5999,8 @@ local function glass(model: Model, onTaken: ((Player) -> ())?): { RBXScriptConne
 		local knock = sound(pane, "Tap", THUD_SOUND, 1.4, 0.5, 30, false)
 		knock:Play()
 		Debris:AddItem(knock, 2)
+		-- The attendant has something to say about it (Townsfolk).
+		local heard = "tap"
 		-- WHAT EVERY TAP DOES, in both modes: the fish bolt. The client watches this.
 		model:SetAttribute("Tapped", workspace:GetServerTimeNow())
 
@@ -4395,20 +6012,29 @@ local function glass(model: Model, onTaken: ((Player) -> ())?): { RBXScriptConne
 		strain[pane] = { value = value, at = now }
 		local stage = cracked[pane] or 0
 		if value >= TAP.breaks then
+			if Townsfolk then
+				Townsfolk.react("burst")
+			end
 			breakPane(pane)
 			return
 		elseif value >= TAP.crack2 and stage < 2 then
+			heard = "crack2"
 			cracked[pane] = 2
 			crackLines(pane, 2, rng, insideOf(pane))
 			local creak = sound(pane, "Creak", CRACK_SOUND, 0.7, 1, 50, false)
 			creak:Play()
 			Debris:AddItem(creak, 4)
 		elseif value >= TAP.crack and stage < 1 then
+			heard = "crack"
 			cracked[pane] = 1
 			crackLines(pane, 1, rng, insideOf(pane))
 			local creak = sound(pane, "Creak", CRACK_SOUND, 1.1, 0.8, 40, false)
 			creak:Play()
 			Debris:AddItem(creak, 3)
+		end
+
+		if Townsfolk then
+			Townsfolk.react(heard)
 		end
 
 		-- THE OLD ANSWER, Hardcore only, once a run.
@@ -4445,7 +6071,7 @@ local function glass(model: Model, onTaken: ((Player) -> ())?): { RBXScriptConne
 		end
 	end
 
-	-- A PROMPT on every pane, pressed not held: tapping glass is not a decision. And a click, for
+	-- A PROMPT on the window, pressed not held: tapping glass is not a decision. And a click, for
 	-- anyone who just clicks it.
 	for _, pane in ipairs(panes) do
 		local prompt = Instance.new("ProximityPrompt")
@@ -4467,15 +6093,14 @@ local function glass(model: Model, onTaken: ((Player) -> ())?): { RBXScriptConne
 		end))
 	end
 
-	-- WASHED OUT: once the water is up, anyone inside -- including anyone who walks back in before it
-	-- drains -- goes.
-	local nextWash = 0
+	-- THE CRACKS MEND, a while after anyone stopped tapping.
+	local nextMend = 0
 	table.insert(connections, RunService.Heartbeat:Connect(function()
 		local now = os.clock()
-		if now < nextWash then
+		if now < nextMend then
 			return
 		end
-		nextWash = now + 0.3
+		nextMend = now + 0.3
 		-- A crack nobody has touched for CRACK_MENDS seconds after its strain drained away mends.
 		if not flooding then
 			for pane, held in pairs(strain) do
@@ -4484,17 +6109,121 @@ local function glass(model: Model, onTaken: ((Player) -> ())?): { RBXScriptConne
 				end
 			end
 		end
-		if now < risenAt then
-			return
-		end
-		for _, player in ipairs(Players:GetPlayers()) do
-			local root = rootOf(player)
-			if root and not riding[player] and not arrivedAt[player] and inAny(zones, root.Position) then
-				wash(player)
-			end
-		end
 	end))
 	return connections
+end
+
+-- ===== IS THE CLIENT RUNNING? (in Studio only) =====
+--
+-- Everything that moves in this level is drawn by SunkenCityClient, and for several passes it did not
+-- run on the tester's client with nothing on screen to say so: no animals, no flood, a stiff ride. So
+-- in Studio the server checks once, and says in Output exactly what is wrong: the module missing or in
+-- the wrong place, a LocalScript where a ModuleScript should be, a module that never finishes loading,
+-- or one that fails to load -- required here the way Bootstrap requires it, so its own error is
+-- printed. And anyone whose client never says hello gets a notice on their screen.
+function studio.check()
+	local starter = game:GetService("StarterPlayer")
+	local scripts = starter:FindFirstChild("StarterPlayerScripts")
+	local services = scripts and scripts:FindFirstChild("Services")
+	local found = services and services:FindFirstChild("SunkenCityClient")
+	if not found then
+		local elsewhere: Instance? = nil
+		pcall(function()
+			elsewhere = starter:FindFirstChild("SunkenCityClient", true) or ReplicatedStorage:FindFirstChild("SunkenCityClient", true)
+				or game:GetService("ServerScriptService"):FindFirstChild("SunkenCityClient", true)
+		end)
+		warn(("SunkenCityService: there is no StarterPlayer.StarterPlayerScripts.Services.SunkenCityClient%s, so "
+			.. "nothing of this level moves on anyone's screen. Paste src/Client/Services/SunkenCityClient.lua in "
+			.. "there as a ModuleScript named exactly SunkenCityClient."):format(
+			if elsewhere then " (there is one at " .. (elsewhere :: Instance):GetFullName() .. ")" else ""))
+		return
+	end
+	if not found:IsA("ModuleScript") then
+		warn(("SunkenCityService: StarterPlayerScripts.Services.SunkenCityClient is a %s. It must be a ModuleScript, "
+			.. "or Bootstrap cannot start it."):format(found.ClassName))
+		return
+	end
+	local done: boolean, ok: boolean, result: any = false, false, nil
+	task.spawn(function()
+		ok, result = pcall(require, found)
+		done = true
+	end)
+	local waited = 0
+	while not done and waited < 25 do
+		task.wait(0.5)
+		waited += 0.5
+	end
+	if not done then
+		warn("SunkenCityService: SunkenCityClient did not finish loading in 25 seconds, so it waits forever for "
+			.. "something; Output has an 'Infinite yield possible' line naming what.")
+	elseif not ok then
+		warn("SunkenCityService: SunkenCityClient FAILS TO LOAD, so it never runs on any client: " .. tostring(result))
+	elseif type(result) ~= "table" or type(result.start) ~= "function" then
+		warn("SunkenCityService: SunkenCityClient loads but has no start(), so it is not this project's file.")
+	else
+		studio.loads = true
+		print(("SunkenCityService: SunkenCityClient loads (%s); each client says so in Output as it starts."):format(
+			tostring(result.VERSION)))
+	end
+	local anyLocal = false
+	for _, item in ipairs(if scripts then scripts:GetChildren() else {}) do
+		if item:IsA("LocalScript") then
+			anyLocal = true
+		end
+	end
+	if not anyLocal then
+		warn("SunkenCityService: StarterPlayerScripts has no LocalScript, so nothing starts SunkenCityClient. "
+			.. "Paste src/Client/Bootstrap.client.lua in as a LocalScript named Bootstrap.")
+	end
+end
+
+-- The notice: on the screen of someone whose client never said hello, for half a minute.
+function studio.notice(player: Player)
+	local gui = player:FindFirstChildOfClass("PlayerGui")
+	if not gui or gui:FindFirstChild("SunkenClientNotice") then
+		return
+	end
+	local card = Instance.new("ScreenGui")
+	card.Name = "SunkenClientNotice"
+	card.ResetOnSpawn = false
+	card.DisplayOrder = 70
+	local label = Instance.new("TextLabel")
+	label.AnchorPoint = Vector2.new(0.5, 0)
+	label.Position = UDim2.new(0.5, 0, 0, 70)
+	-- Most of the screen's width and never more than 640: it was cut off at both sides of a narrow one.
+	label.Size = UDim2.new(0.9, 0, 0, 0)
+	local widest = Instance.new("UISizeConstraint")
+	widest.MaxSize = Vector2.new(640, math.huge)
+	widest.Parent = label
+	label.AutomaticSize = Enum.AutomaticSize.Y
+	label.BackgroundColor3 = Color3.fromRGB(70, 22, 26)
+	label.BackgroundTransparency = 0.1
+	label.BorderSizePixel = 0
+	label.TextColor3 = Color3.fromRGB(255, 236, 230)
+	label.Font = Enum.Font.GothamMedium
+	label.TextSize = 16
+	label.TextWrapped = true
+	-- The module loads, so what never ran is the thing that starts it: an older client Bootstrap, which
+	-- is what this was in play (its "Bootstrap ready" came from line 255, and the lines that start
+	-- SunkenCityClient are the seventeen it was missing).
+	label.Text = "STUDIO ONLY: SunkenCityClient is not running for you, so this level's animals, the ride's camera and "
+		.. "the underwater sound are missing. Open Output and search for SunkenCity: the server has written what is wrong."
+	if studio.loads then
+		label.Text = "STUDIO ONLY: SunkenCityClient loads but nothing starts it: your client Bootstrap (the LocalScript in "
+			.. "StarterPlayerScripts) is an older copy. Paste src/Client/Bootstrap.client.lua over it. Until then this "
+			.. "level has no animals, no ride camera and no underwater sound."
+	end
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 12), UDim.new(0, 12)
+	pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 8), UDim.new(0, 8)
+	pad.Parent = label
+	label.Parent = card
+	card.Parent = gui
+	Debris:AddItem(card, 30)
+end
+
+if RunService:IsStudio() then
+	task.defer(studio.check)
 end
 
 -- ONCE A SERVER, EVER: the face in the mirror is rare by design (ROADMAP section 6), and a scare
@@ -4514,6 +6243,20 @@ function SunkenCityService.attach(model: Model, onArrive: PlayerCallback?, onTak
 		return function() end
 	end
 	local vortex: Vector3 = vortexValue
+	-- THE OUTFALL, where the level was built with one (finale): the path, what the reveal looks at, and
+	-- the time card that gets the rider's name.
+	local outfall: any = nil
+	local oFrom, oMouth, oTo, oWater = model:GetAttribute("OutfallFrom"), model:GetAttribute("OutfallMouth"),
+		model:GetAttribute("OutfallTo"), model:GetAttribute("OutfallWater")
+	local rEye, rCard, rCardEye = model:GetAttribute("RevealEye"), model:GetAttribute("RevealCard"), model:GetAttribute("RevealCardEye")
+	if typeof(oFrom) == "Vector3" and typeof(oMouth) == "Vector3" and typeof(oTo) == "Vector3" and typeof(oWater) == "number"
+		and typeof(rEye) == "Vector3" and typeof(rCard) == "Vector3" and typeof(rCardEye) == "Vector3" then
+		outfall = {
+			path = { from = oFrom, mouth = oMouth, to = oTo, waterY = oWater },
+			reveal = { eye = rEye, card = rCard, cardEye = rCardEye },
+			card = model:FindFirstChild("TimeCard", true),
+		}
+	end
 	local sea = model:FindFirstChild("Sea")
 	local path = if sea and SunkenPath then SunkenPath.read(sea) else nil
 	local shelters = tagged(model, "SunkenShelter")
@@ -4533,7 +6276,7 @@ function SunkenCityService.attach(model: Model, onArrive: PlayerCallback?, onTak
 					local p = root.Position
 					local flat = Vector3.new(p.X - vortex.X, 0, p.Z - vortex.Z).Magnitude
 					if flat < CAPTURE_R and p.Y < (pierTop :: number) - 2 and p.Y > vortex.Y - 30 then
-						task.spawn(ride, player, root, humanoid, vortex, shaftBottom :: number, onArrive)
+						task.spawn(ride, player, root, humanoid, vortex, shaftBottom :: number, onArrive, outfall)
 					end
 				end
 			end
@@ -4586,6 +6329,23 @@ function SunkenCityService.attach(model: Model, onArrive: PlayerCallback?, onTak
 	for _, connection in ipairs(glass(model, onTaken)) do
 		table.insert(connections, connection)
 	end
+	-- In Studio, a notice for anyone here whose SunkenCityClient has not said it is running.
+	if RunService:IsStudio() then
+		task.delay(25, function()
+			if model.Parent then
+				for _, player in ipairs(Players:GetPlayers()) do
+					if not studio.heard[player] then
+						studio.notice(player)
+						if studio.loads then
+							warn(("SunkenCityService: SunkenCityClient loads, but %s's client never started it: the client "
+								.. "Bootstrap in StarterPlayerScripts is an older copy without the lines that start it. Paste "
+								.. "src/Client/Bootstrap.client.lua over it."):format(player.Name))
+						end
+					end
+				end
+			end
+		end)
+	end
 	return function()
 		for _, connection in ipairs(connections) do
 			connection:Disconnect()
@@ -4596,6 +6356,7 @@ function SunkenCityService.attach(model: Model, onArrive: PlayerCallback?, onTak
 end
 
 Players.PlayerRemoving:Connect(function(player: Player)
+	studio.heard[player] = nil
 	riding[player] = nil
 	arrivedAt[player] = nil
 end)

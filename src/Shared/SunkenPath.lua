@@ -253,7 +253,8 @@ end
 -- for the reason Sky Pools' slide is drawn there -- a character moved from the server sixty times a
 -- second stutters, and the one client that owns that character can move it for nothing. The server
 -- still keeps the clock and still says where you land.
-SunkenPath.DRAIN_SECONDS = 6.5
+-- Twice what it first was, so the ride can be watched and its captions read.
+SunkenPath.DRAIN_SECONDS = 13
 
 export type Drain = {
 	vortex: Vector3,
@@ -285,6 +286,72 @@ function SunkenPath.drainFrame(d: Drain, u: number): CFrame
 		facing = Vector3.new(math.cos(a), 0, math.sin(a))
 	end
 	return CFrame.lookAt(here, here + facing)
+end
+
+-- THE RIDER IS NOT STOOD STIFF AND TURNING. On top of drainFrame, `u` of the way down, `t` any clock
+-- in seconds, a sequence:
+--   THE GRAB (the first twentieth): thrown right back as it takes them, fighting it.
+--   ROUND THE FUNNEL: still leaning back against the pull, rocked, and spun round on the spot faster
+--   and faster, three whole turns by the time the funnel runs out.
+--   DOWN THE SHAFT: head over heels, twice, still turning, and righted by the last tenth so they land
+--   on their feet.
+function SunkenPath.tumble(u: number, t: number): CFrame
+	local rock = math.sin(t * 2.3)
+	if u < 0.5 then
+		local grab = 1 - math.clamp(u / 0.05, 0, 1)
+		local settle = 1 - math.clamp((u - 0.42) / 0.08, 0, 1)
+		local lean = (-0.55 - 0.45 * grab + math.sin(t * 3.1) * 0.12) * settle
+		local spin = (u / 0.5) ^ 2 * 6 * math.pi
+		return CFrame.Angles(0, spin, 0) * CFrame.Angles(lean, 0, rock * 0.35 * settle)
+	end
+	local s = (u - 0.5) / 0.5
+	local e = math.min(1, s / 0.9)
+	local flip = 4 * math.pi * e * e * (3 - 2 * e)
+	return CFrame.Angles(0, 6 * math.pi + s * 3 * math.pi, 0) * CFrame.Angles(-flip, 0, rock * 0.2 * (1 - e))
+end
+
+-- (The flail and the joints it turns are Poses' now: ReplicatedStorage.Shared.Poses, shared with the
+-- other levels' rides and the people.)
+
+-- ===== AND ON, DOWN THE OUTFALL =====
+--
+-- The shaft is not the end of it. The water at the bottom goes somewhere -- out through the sluice's
+-- burst door and down OUTFALL 3, a long brick culvert with a lamp every twenty studs, to the pumping
+-- station at its end -- and it takes the rider with it: lifted off the grating, laid on their back in
+-- the current, feet first, turning a little as it carries them, and set down on the landing in the
+-- pump hall on their feet. Then the station is held on screen for REVEAL_SECONDS before the level is
+-- over. `v` is how far through the outfall, `t` any clock in seconds.
+SunkenPath.OUTFALL_SECONDS = 16
+SunkenPath.REVEAL_SECONDS = 7
+
+export type Outfall = { from: Vector3, mouth: Vector3, to: Vector3, waterY: number }
+
+-- Where along the culvert `v` of the way through is, and which way it runs there: out of the sluice
+-- to the culvert's mouth, then down it to the landing. Quick off the grating, slowing to the landing.
+function SunkenPath.outfallAt(o: Outfall, v: number): (Vector3, Vector3)
+	local e = 1 - (1 - math.clamp(v, 0, 1)) ^ 1.6
+	local first, second = (o.mouth - o.from).Magnitude, (o.to - o.mouth).Magnitude
+	local along = e * (first + second)
+	local at, run
+	if along <= first then
+		at, run = o.from:Lerp(o.mouth, along / math.max(0.01, first)), o.mouth - o.from
+	else
+		at, run = o.mouth:Lerp(o.to, (along - first) / math.max(0.01, second)), o.to - o.mouth
+	end
+	local flat = Vector3.new(run.X, 0, run.Z)
+	return at, if flat.Magnitude > 0.01 then flat.Unit else Vector3.xAxis
+end
+
+function SunkenPath.outfallFrame(o: Outfall, v: number, t: number): CFrame
+	local at, run = SunkenPath.outfallAt(o, v)
+	-- Lifted into the current over the first moments, set down on their feet over the last.
+	local lift = math.clamp(v / 0.08, 0, 1) * (1 - math.clamp((v - 0.88) / 0.12, 0, 1))
+	local floating = o.waterY + 0.9 + math.sin(t * 2.1) * 0.25
+	local y = at.Y + (floating - at.Y) * lift
+	local here = Vector3.new(at.X, y, at.Z)
+	-- On their back, feet first (facing downstream and tipped back, so the head trails), turning in it.
+	return CFrame.lookAt(here, here + run) * CFrame.Angles(0, math.sin(t * 0.7) * 0.5 * lift, 0)
+		* CFrame.Angles(math.rad(78) * lift, 0, math.sin(t * 1.4) * 0.3 * lift)
 end
 
 return SunkenPath

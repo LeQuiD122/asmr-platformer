@@ -35,6 +35,15 @@ local DeformationRenderer = {}
 local restCFrame: { [BasePart]: CFrame } = {}
 local restSize: { [BasePart]: Vector3 } = {}
 local lastState: { [BasePart]: string } = {}
+-- Your own bubble wrap pops, heard here before the server says (see BUBBLE WRAP POPS UNDER YOUR FOOT).
+-- `ahead`: how long a pop heard here stands in for the server's word about it. One table, not four
+-- locals: this file is close to Luau's limit of 200 (check_lua).
+local pops = {
+	ahead = 0.9,
+	heard = setmetatable({}, { __mode = "k" }) :: any,
+	watched = setmetatable({}, { __mode = "k" }) :: any,
+}
+-- Your own bubble wrap pops, heard here before the server says (see BUBBLE WRAP POPS UNDER YOUR FOOT).
 local activeTweens: { [BasePart]: { Tween } } = {}
 local marks: { [BasePart]: { BasePart } } = {} -- smears, footprints, cracks
 -- Bubble wrap keeps no per-tile state here any more. Its pockets are bones in the
@@ -3400,6 +3409,40 @@ SLIME.RESIDUAL_FRACTION = 0.14
 SLIME.NECK = 0.72   -- XZ scale under load, per-tile fallback only
 SLIME.STRETCH = 2.6 -- Y scale under load, per-tile fallback only
 
+-- THE JELLYFISH'S OWN, where it shares this effect: not slime's green. Its rings are the violet of
+-- a bioluminescent bell, its strands are tendrils of its own colour, and where you land it LIGHTS --
+-- a real light, for a moment, as a jellyfish does when it is touched -- and motes of that light
+-- drift up off it.
+SLIME.JELLY_RING = Color3.fromRGB(176, 118, 255)
+SLIME.JELLY_TENDRIL = Color3.fromRGB(214, 172, 255)
+function SLIME.glow(tile: BasePart)
+	local light = Instance.new("PointLight")
+	light.Name = "JellyGlow"
+	light.Color = SLIME.JELLY_RING
+	light.Range = 12
+	light.Brightness = 2.2
+	light.Shadows = false
+	light.Parent = tile
+	TweenService:Create(light, TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Brightness = 0 }):Play()
+	Debris:AddItem(light, 1)
+	local motes = Instance.new("ParticleEmitter")
+	motes.Name = "JellyMotes"
+	motes.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	motes.Color = ColorSequence.new(SLIME.JELLY_RING, Color3.fromRGB(255, 176, 232))
+	motes.LightEmission = 1
+	motes.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 0) })
+	motes.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) })
+	motes.Lifetime = NumberRange.new(1.2, 2)
+	motes.Speed = NumberRange.new(1, 3)
+	motes.SpreadAngle = Vector2.new(60, 60)
+	motes.EmissionDirection = Enum.NormalId.Top
+	motes.Acceleration = Vector3.new(0, 2.5, 0)
+	motes.Rate = 0
+	motes.Parent = tile
+	motes:Emit(16)
+	Debris:AddItem(motes, 3)
+end
+
 Effects.Slime = function(ctx: Ctx)
 	local tile = ctx.tile
 	local size = restSize[tile]
@@ -3418,6 +3461,9 @@ Effects.Slime = function(ctx: Ctx)
 		-- function is ALSO Effects.JelloSoda, and a jello platform spraying green would be
 		-- the one bug a shared effect exists to cause.
 		puff(tile, MaterialAppearance.Appearances[ctx.material].color, 0.16, 6, -26, 5)
+		if ctx.material == "Jellyfish" then
+			SLIME.glow(tile)
+		end
 		-- Sags far, necks inward in XZ and stretches tall in Y: mass being drawn
 		-- downward rather than a box being scaled. This is the opposite of every
 		-- other material here, which all compress.
@@ -3475,7 +3521,8 @@ Effects.Slime = function(ctx: Ctx)
 			-- Derived from the material's own colour, darkened rather than saturated:
 			-- a disturbance in slime differs from the slime around it by depth, not
 			-- by hue.
-			local ringColour = MaterialAppearance.Appearances.Slime.color:Lerp(Color3.new(0, 0, 0), 0.26)
+			local ringColour = if ctx.material == "Jellyfish" then SLIME.JELLY_RING
+				else MaterialAppearance.Appearances.Slime.color:Lerp(Color3.new(0, 0, 0), 0.26)
 			local feet = localFootWorldPoints(tile)
 			spawnRipple(onSlab, tile, feet[1] and feet[1].position or tile.Position, ringColour, SLIME.RIPPLE)
 
@@ -3502,14 +3549,20 @@ Effects.Slime = function(ctx: Ctx)
 				-- Cylinders extend along their X axis, so roll 90 degrees about Z
 				-- to make that axis vertical.
 				strand.CFrame = top * CFrame.new(ox, -1.2, oz) * CFrame.Angles(0, 0, math.rad(90))
-				MaterialAppearance.apply(strand, "Slime")
+				-- A jellyfish's are tendrils of its own colour, thinner, and they hang further.
+				local jelly = ctx.material == "Jellyfish"
+				MaterialAppearance.apply(strand, if jelly then "Jellyfish" else "Slime")
 				strand.Transparency = 0.25
+				if jelly then
+					strand.Name = "JellyTendril"
+					strand.Color = SLIME.JELLY_TENDRIL
+				end
 				addMark(tile, strand, 1.2)
 
 				TweenService:Create(
 					strand,
 					TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-					{ Size = Vector3.new(2.2, 0.12, 0.12) }
+					{ Size = if jelly then Vector3.new(3.2, 0.07, 0.07) else Vector3.new(2.2, 0.12, 0.12) }
 				):Play()
 			end
 		end
@@ -3816,8 +3869,6 @@ local function startCrumbling(tile: BasePart)
 			end
 			dropGranule(tile, nextGranule(tile, left))
 			settleCrumbling(tile, #left - 1)
-			-- The cracks run on ahead of the crumbling.
-			Fissure.extend(tile, SOAP.CRACK_CREEP, SOAP.CRACK_SPEED)
 			task.wait(interval)
 		end
 		crumbling[tile] = nil
@@ -3892,26 +3943,8 @@ Effects.Soap = function(ctx: Ctx)
 		-- stays where it was.
 		sinkGranules(tile, press, -SOAP.PRESS)
 
-		-- THE CRACKS RUN FROM YOUR FOOT (see Fissure). The first step on a cell starts them where the foot
-		-- came down; a step on a cell already cracked runs those on and starts a short new set under the new
-		-- foot, instead of drawing nine more on top -- which is what turned a busy cell into a scribble. They
-		-- keep running as the bar crumbles, and every cube that falls out takes the cracks over it.
-		--
-		-- The colour is DERIVED from the soap's and taken most of the way to black. A fixed blue-grey looked
-		-- right on near-white soap and wrong the moment it went pink, and a crack is a gap: it carries the
-		-- warning that a cell is about to drop out, whatever colour the bar is.
-		local crack = MaterialAppearance.Appearances.Soap.color:Lerp(Color3.new(0, 0, 0), 0.72)
-		local from = Fissure.footOf(tile, ctx.who)
-		if Fissure.has(tile) then
-			Fissure.extend(tile, SOAP.CRACK_STEP, SOAP.CRACK_SPEED)
-			Fissure.grow(tile, { from = from, arms = 2, reach = SOAP.CRACK_STEP, thick = 3,
-				speed = SOAP.CRACK_SPEED, color = crack, splits = 0 })
-		else
-			Fissure.grow(tile, { from = from, arms = SOAP.CRACK_ARMS, reach = SOAP.CRACK_REACH, thick = 3,
-				speed = SOAP.CRACK_SPEED, color = crack, splits = 1 })
-		end
-		-- AFTER the cracks, not before: the first cube goes the moment crumbling starts, and it has to find
-		-- the cracks over it already drawn to take them with it.
+		-- NO CRACKS ON SOAP. The black lines drawn out from the foot were reported as not belonging on it: the
+		-- bar crumbling away a cube at a time is the whole of what soap does, and says enough.
 		startCrumbling(tile)
 	else
 		crumbling[tile] = nil
@@ -5409,6 +5442,198 @@ local packed = (setmetatable({}, { __mode = "k" }) :: any) :: { [BasePart]: numb
 -- Effects.Salt lives with Effects.Clay further down. Both move material between cells and share the
 -- code that draws it: see CLAY AND SALT.
 
+-- ===== LAVA, ALIVE BETWEEN STEPS =====
+--
+-- The lava crust used to do nothing until you stood on it: a flat orange slab. It is a skin of cooling
+-- rock on something that wants out, and it now looks it all the time, on this client, for every lava
+-- platform near the camera:
+--   A REAL LIGHT from under the crust, orange, breathing brighter and dimmer, so the heat is on you.
+--   EMBERS drifting up off it, and a thin dark heat smoke.
+--   BUBBLES of melt swelling out of the surface every second or so, and popping, with a spit of
+--   droplets and a wisp of smoke.
+-- And the effect below adds to it: droplets spurting from the cracks under your foot, and when the
+-- crust fails an ERUPTION, a fountain of molten gobs, a flash of heat light and a column of smoke.
+-- One table, not a dozen locals: this file is near Luau's limit of 200 (check_lua).
+local lavaLife = {
+	platforms = setmetatable({}, { __mode = "k" }) :: any,
+	started = false,
+	NEAR = 170, -- studs from the camera within which a platform is alive
+}
+
+-- The top of a lava platform, as a thin invisible part the emitters and the light hang from.
+function lavaLife.add(platform: BasePart)
+	if lavaLife.platforms[platform] then
+		return
+	end
+	local skin = Instance.new("Part")
+	skin.Name = "LavaLife"
+	skin.Anchored = true
+	skin.CanCollide = false
+	skin.CanTouch = false
+	skin.CanQuery = false
+	skin.CastShadow = false
+	skin.Transparency = 1
+	skin.Size = Vector3.new(math.max(1, platform.Size.X - 1), 0.3, math.max(1, platform.Size.Z - 1))
+	skin.CFrame = platform.CFrame * CFrame.new(0, platform.Size.Y / 2 + 0.2, 0)
+	skin.Parent = platform
+	local glow = Instance.new("PointLight")
+	glow.Color = Color3.fromRGB(255, 118, 42)
+	glow.Brightness = 1
+	glow.Range = math.clamp(math.max(platform.Size.X, platform.Size.Z) * 0.9, 12, 22)
+	glow.Shadows = false
+	glow.Parent = skin
+	local embers = Instance.new("ParticleEmitter")
+	embers.Name = "Embers"
+	embers.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	embers.Color = ColorSequence.new(Color3.fromRGB(255, 190, 90), Color3.fromRGB(255, 90, 30))
+	embers.LightEmission = 1
+	embers.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.18), NumberSequenceKeypoint.new(1, 0) })
+	embers.Lifetime = NumberRange.new(1.4, 2.6)
+	embers.Speed = NumberRange.new(1, 3)
+	embers.SpreadAngle = Vector2.new(25, 25)
+	embers.Acceleration = Vector3.new(0.6, 3.5, 0)
+	embers.Shape = Enum.ParticleEmitterShape.Box
+	embers.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	embers.EmissionDirection = Enum.NormalId.Top
+	embers.Rate = 6
+	embers.Parent = skin
+	local smoke = Instance.new("ParticleEmitter")
+	smoke.Name = "HeatSmoke"
+	smoke.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	smoke.Color = ColorSequence.new(Color3.fromRGB(70, 58, 56))
+	smoke.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.5), NumberSequenceKeypoint.new(1, 5) })
+	smoke.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.9), NumberSequenceKeypoint.new(0.4, 0.82),
+		NumberSequenceKeypoint.new(1, 1) })
+	smoke.Lifetime = NumberRange.new(2.5, 4)
+	smoke.Speed = NumberRange.new(1.5, 3)
+	smoke.SpreadAngle = Vector2.new(15, 15)
+	smoke.RotSpeed = NumberRange.new(-20, 20)
+	smoke.Shape = Enum.ParticleEmitterShape.Box
+	smoke.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	smoke.EmissionDirection = Enum.NormalId.Top
+	smoke.Rate = 1.5
+	smoke.Parent = skin
+	lavaLife.platforms[platform] = { skin = skin, glow = glow, embers = embers, smoke = smoke, nextBubble = os.clock() + math.random(),
+		phase = math.random() * 6, flare = 0 }
+end
+
+-- A bubble of melt swelling out of the surface at `at` and popping.
+function lavaLife.bubble(platform: BasePart, at: Vector3)
+	local surfaceColour = MaterialAppearance.Appearances.Lava.color
+	local ball = Instance.new("Part")
+	ball.Name = "LavaBubble"
+	ball.Shape = Enum.PartType.Ball
+	ball.Material = MaterialAppearance.Appearances.Lava.material
+	ball.Color = surfaceColour
+	ball.Anchored = true
+	ball.CanCollide = false
+	ball.CanTouch = false
+	ball.CanQuery = false
+	ball.CastShadow = false
+	ball.Size = Vector3.new(0.3, 0.3, 0.3)
+	ball.CFrame = CFrame.new(at)
+	ball.Parent = platform
+	local grow = math.random() * 0.7 + 0.9
+	local swell = TweenService:Create(ball, TweenInfo.new(0.55 + math.random() * 0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+		{ Size = Vector3.new(grow, grow, grow), CFrame = CFrame.new(at + Vector3.new(0, grow * 0.3, 0)) })
+	swell.Completed:Once(function()
+		if not ball.Parent then
+			return
+		end
+		local pop = Instance.new("Attachment")
+		pop.WorldPosition = ball.Position
+		pop.Parent = platform
+		local spit = Instance.new("ParticleEmitter")
+		spit.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		spit.Color = ColorSequence.new(Color3.fromRGB(255, 200, 100), Color3.fromRGB(255, 80, 20))
+		spit.LightEmission = 1
+		spit.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.28), NumberSequenceKeypoint.new(1, 0.05) })
+		spit.Lifetime = NumberRange.new(0.4, 0.8)
+		spit.Speed = NumberRange.new(5, 11)
+		spit.SpreadAngle = Vector2.new(40, 40)
+		spit.Acceleration = Vector3.new(0, -40, 0)
+		spit.EmissionDirection = Enum.NormalId.Top
+		spit.Rate = 0
+		spit.Parent = pop
+		spit:Emit(8)
+		Debris:AddItem(pop, 1.2)
+		ball:Destroy()
+	end)
+	swell:Play()
+	Debris:AddItem(ball, 3)
+end
+
+-- Every frame: the light breathing (and flaring when something happened), and the bubbles.
+function lavaLife.step()
+	local camera = workspace.CurrentCamera
+	if not camera then
+		return
+	end
+	local eye = camera.CFrame.Position
+	local now = os.clock()
+	for platform, life in pairs(lavaLife.platforms) do
+		if not platform.Parent or not life.skin.Parent then
+			lavaLife.platforms[platform] = nil
+			continue
+		end
+		local near = (platform.Position - eye).Magnitude < lavaLife.NEAR
+		life.embers.Enabled = near
+		life.smoke.Enabled = near
+		life.flare = math.max(0, life.flare - 0.05)
+		life.glow.Brightness = if near then 0.85 + 0.3 * math.sin(now * 1.7 + life.phase) + 0.18 * math.sin(now * 5.3 + life.phase)
+			+ 2.5 * life.flare else 0
+		if near and now >= life.nextBubble then
+			life.nextBubble = now + 0.5 + math.random() * 1.1
+			local size = life.skin.Size
+			local at = life.skin.CFrame * Vector3.new((math.random() - 0.5) * size.X * 0.9, 0, (math.random() - 0.5) * size.Z * 0.9)
+			lavaLife.bubble(platform, at)
+		end
+	end
+end
+
+-- Something happened on it (a step, the crust failing): the glow flares.
+function lavaLife.flare(tile: BasePart, amount: number)
+	local platform = tile.Parent
+	local life = platform and lavaLife.platforms[platform]
+	if life then
+		life.flare = math.max(life.flare, amount)
+	end
+end
+
+function lavaLife.start()
+	if lavaLife.started then
+		return
+	end
+	lavaLife.started = true
+	local function consider(item: Instance)
+		if not (item:IsA("BasePart") and item:GetAttribute("Material") == "Lava") then
+			return
+		end
+		-- The platform itself, the part its cells hang off, not something else carrying the name.
+		for _, child in ipairs(item:GetChildren()) do
+			if string.match(child.Name, "^SubRegion_") then
+				lavaLife.add(item)
+				return
+			end
+		end
+	end
+	for _, item in ipairs(workspace:GetDescendants()) do
+		consider(item)
+	end
+	workspace.DescendantAdded:Connect(function(item: Instance)
+		-- The platform's subregions arrive after it: looked at again once they have.
+		if item:IsA("BasePart") and string.match(item.Name, "^SubRegion_") and item.Parent and item.Parent:IsA("BasePart") then
+			task.defer(consider, item.Parent)
+		end
+	end)
+	game:GetService("RunService").Heartbeat:Connect(function()
+		local ok, err = pcall(lavaLife.step)
+		if not ok then
+			warn("DeformationRenderer: the lava's life failed: " .. tostring(err))
+		end
+	end)
+end
+
 Effects.Lava = function(ctx: Ctx)
 	local tile = ctx.tile
 	local slab = tile.Parent
@@ -5457,6 +5682,35 @@ Effects.Lava = function(ctx: Ctx)
 		-- what makes it lava is the two temperatures being visibly separate things.
 		flingDebris(tile, "Obsidian", NEW_MATS.Lava.burst)
 		flingDebris(tile, "Melt", math.max(2, math.floor(NEW_MATS.Lava.burst / 2)))
+		-- THE ERUPTION: what was under the crust comes up, a fountain of molten gobs arcing out and
+		-- falling back, a column of smoke after it, and the heat light flaring over everything.
+		local fountain = Instance.new("ParticleEmitter")
+		fountain.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		fountain.Color = ColorSequence.new(Color3.fromRGB(255, 214, 120), Color3.fromRGB(255, 70, 20))
+		fountain.LightEmission = 1
+		fountain.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 0.1) })
+		fountain.Lifetime = NumberRange.new(0.8, 1.5)
+		fountain.Speed = NumberRange.new(16, 30)
+		fountain.SpreadAngle = Vector2.new(22, 22)
+		fountain.Acceleration = Vector3.new(0, -55, 0)
+		fountain.Drag = 0.6
+		fountain.EmissionDirection = Enum.NormalId.Top
+		fountain.Rate = 0
+		fountain.Parent = origin
+		fountain:Emit(36)
+		local column = Instance.new("ParticleEmitter")
+		column.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		column.Color = ColorSequence.new(Color3.fromRGB(90, 70, 64))
+		column.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 9) })
+		column.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1) })
+		column.Lifetime = NumberRange.new(1.6, 2.6)
+		column.Speed = NumberRange.new(6, 11)
+		column.SpreadAngle = Vector2.new(12, 12)
+		column.EmissionDirection = Enum.NormalId.Top
+		column.Rate = 0
+		column.Parent = origin
+		column:Emit(10)
+		lavaLife.flare(tile, 1)
 		return
 	end
 
@@ -5492,6 +5746,27 @@ Effects.Lava = function(ctx: Ctx)
 	-- crust from reading as ordinary rock breaking.
 	flingDebris(tile, "Obsidian", NEW_MATS.Lava.shards)
 	flingDebris(tile, "Melt", 1)
+	-- AND UNDER YOUR FOOT, the melt spurting up through the cracks the step opened, and the glow flaring.
+	for _, hit in ipairs(localFootWorldPoints(tile)) do
+		local spurt = Instance.new("Attachment")
+		spurt.WorldPosition = hit.position
+		spurt.Parent = tile
+		local drops = Instance.new("ParticleEmitter")
+		drops.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		drops.Color = ColorSequence.new(Color3.fromRGB(255, 200, 100), Color3.fromRGB(255, 80, 20))
+		drops.LightEmission = 1
+		drops.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 0.05) })
+		drops.Lifetime = NumberRange.new(0.35, 0.7)
+		drops.Speed = NumberRange.new(6, 12)
+		drops.SpreadAngle = Vector2.new(35, 35)
+		drops.Acceleration = Vector3.new(0, -45, 0)
+		drops.EmissionDirection = Enum.NormalId.Top
+		drops.Rate = 0
+		drops.Parent = spurt
+		drops:Emit(7)
+		Debris:AddItem(spurt, 1)
+	end
+	lavaLife.flare(tile, 0.35)
 end
 
 -- Splash thrown up when something goes through the oobleck.
@@ -7212,8 +7487,12 @@ function DeformationRenderer.onDeformationUpdate(payload)
 		end
 	end
 	local footfall = cause == nil or cause == "step" or cause == "creep"
+	-- (Your own pop on bubble wrap was already heard the moment your foot touched: BUBBLE WRAP POPS.)
+	local heard = material == "BubbleWrap" and mine and state == "deformed" and os.clock() - (pops.heard[tile] or 0) < pops.ahead
 	if material and ((state == "deformed" and footfall) or state == "exhausted") then
-		AudioService.playSfx(material, tile, mine, { pitch = note, event = event, force = loud })
+		if not heard then
+			AudioService.playSfx(material, tile, mine, { pitch = note, event = event, force = loud })
+		end
 		-- The screen, alongside the sound and for the same reasons: it sits ABOVE the
 		-- repeat guard so re-crossing your own footprints still registers, and it is gated
 		-- on `mine` so nobody else's steps tint your view.
@@ -7286,8 +7565,46 @@ function DeformationRenderer.onDeformationUpdate(payload)
 
 end
 
+-- ===== BUBBLE WRAP POPS UNDER YOUR FOOT, NOT A ROUND TRIP LATER =====
+--
+-- The pop used to be played when the server said a cell had been entered: your foot reaches the
+-- server, the server's touch fires, and word comes back. That round trip is a fifth of a second or
+-- more, and on bubble wrap, where the sound IS the material, it was reported as the audio lagging.
+-- So your own feet are heard here, the moment this client sees them touch a cell, and the server's
+-- word about that same step (a moment later) plays only the picture, not the sound again.
+function pops.watch(part: Instance)
+	if not (part:IsA("BasePart") and string.match(part.Name, "^SubRegion_")) or pops.watched[part] then
+		return
+	end
+	local platform = part.Parent
+	if not (platform and platform:GetAttribute("Material") == "BubbleWrap") then
+		return
+	end
+	pops.watched[part] = true
+	part.Touched:Connect(function(hit: BasePart)
+		local character = Players.LocalPlayer.Character
+		if not (character and hit:IsDescendantOf(character)) or lastState[part] == "exhausted" then
+			return
+		end
+		local now = os.clock()
+		if now - (pops.heard[part] or 0) < pops.ahead then
+			return
+		end
+		pops.heard[part] = now
+		AudioService.playSfx("BubbleWrap", part, true)
+	end)
+end
+for _, item in ipairs(workspace:GetDescendants()) do
+	pops.watch(item)
+end
+workspace.DescendantAdded:Connect(function(item: Instance)
+	-- The platform's attribute may land a frame after its parts: looked at again then.
+	task.defer(pops.watch, item)
+end)
+
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local DeformationUpdate = RemoteEvents:WaitForChild("DeformationUpdate")
 DeformationUpdate.OnClientEvent:Connect(DeformationRenderer.onDeformationUpdate)
+lavaLife.start()
 
 return DeformationRenderer

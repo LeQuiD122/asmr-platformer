@@ -483,6 +483,67 @@ if land_in < curtain + 10:
     fail("the slide ends %.0f from the middle, too near the tower's curtain at %.0f" % (land_in, curtain))
 if S["SLIDE_TURNS"] >= 1:
     fail("the slide goes a full turn or more, so it passes under itself")
+# THE SKIM (eighteenth pass): the sled carries on across the pool from where the trough runs out, along
+# the way it was going. Tangent to the ring at worst, so it ends no further out than this, and it must
+# still be in the water, clear of the rim.
+skim = P.get("SKIM_SECONDS")
+if skim is None:
+    fail("SkyPath has no SKIM_SECONDS: the slide stops dead at the water instead of skimming across it")
+else:
+    reach = P["SPEED"] * skim / 2
+    furthest = (S["SLIDE_END_RADIUS"] ** 2 + reach ** 2) ** 0.5 + P["WIDE"] / 2
+    if furthest > S["FINAL_RADIUS"] - 8:
+        fail("the skim runs %.0f studs on from the slide's end, out to %.0f from the middle: over the final "
+             "pool's rim at %.0f" % (reach, furthest, S["FINAL_RADIUS"]))
+for needle, why in (
+    ("function SkyPath.skimFrame", "SkyPath cannot say where the sled is on the skim"),
+    ("function SkyPath.skimEnd", "SkyPath cannot say where the skim stops"),
+):
+    if needle not in SKYPATH:
+        fail(why)
+if "local landing = SkyPath.skimEnd(spec)" not in SKY:
+    fail("the server stands the rider where the slide ended, not where the skim did")
+if "SkyPath.skimFrame(current.spec, s)" not in CLIENT:
+    fail("the rider's client never draws the skim")
+# THE CAMERA IS NEVER IN A CLOUD (the picture went white twice) and never on top of the rider.
+for needle, why in (
+    ('model:SetAttribute("CloudTop"', "the slide's camera is never told where the clouds are"),
+):
+    if needle not in SKY:
+        fail(why)
+# NOTHING ON THE SLIDE PASSES THROUGH THE RIDER (twentieth pass). The rods that hang it off the tower
+# used to leave from the trough's centre line two studs up, which is where the rider sits; they leave
+# from the wall's lip on the tower's side now. And the hoops' crowns clear a seated head.
+if "local inner = frame * Vector3.new(side * (wide / 2 + 0.4), 2.2, 0)" not in SKY \
+        or "local inner = frame * Vector3.new(0, 2.2, 0)" in SKY:
+    fail("the slide's rods leave from the middle of the trough again, through anyone riding it")
+hoop = re.search(r"math\.sin\(a2\) \* \(wide / 2 \+ ([\d.]+)\) \+ ([\d.]+), 0\)", SKY)
+if not hoop or P["WIDE"] / 2 + float(hoop.group(1)) + float(hoop.group(2)) - 0.3 < P.get("SIT_HEIGHT", 1.6) + 5.5:
+    fail("the slide's hoops come down on a seated rider's head")
+# THE LIGHT IS NOT MILK (twentieth pass): no haze in the air, and the white cloud under everything does not
+# fill every shadow.
+sky_palette = LIGHT[LIGHT.find("skyPools = {"):]
+sky_palette = sky_palette[:sky_palette.find("\n\t},")]
+haze = re.search(r"\bhaze = ([\d.]+)", sky_palette)
+diffuse = re.search(r"\bdiffuse = ([\d.]+)", sky_palette)
+if not haze or float(haze.group(1)) > 0.1:
+    fail("the skyPools palette has haze in the air again, a white film over the whole level")
+if not diffuse or float(diffuse.group(1)) > 0.5:
+    fail("the skyPools palette lights every surface from the white cloud again, and nothing has a shaded side")
+# RUDY'S RECORD GOES ROUND.
+if 'CollectionService:AddTag(spinning, "SkyTurntable")' not in SKY         or 'CollectionService:GetTagged("SkyTurntable")' not in CLIENT         or 'GetInstanceAddedSignal("SkyTurntable")' not in CLIENT:
+    fail("Rudy's record does not go round")
+# THE CLOUD SEA MOVES (nineteenth pass): mist banks rolling one way over the tops, wisps lifting.
+for needle, why in (
+    ('block(folder, "MistBank"', "the cloud sea is still again: no mist rolls over it"),
+    ("mist.Acceleration = wind", "the mist does not drift with the wind"),
+    ('wisp.Name = "Wisp"', "no wisps lift off the cloud tops"),
+):
+    if needle not in SKY:
+        fail(why)
+face = re.search(r"here \+ run \* ([\d.]+) \+ Vector3\.new\(0, ([\d.]+), 0\)", CLIENT)
+if not face or float(face.group(1)) < 12:
+    fail("the slide's face shot is back too close to the rider to see them")
 if S["TOWER_ASIDE"] <= S["FINAL_RADIUS"] + S["WALK_W"]:
     fail("the tower stands %.0f to the side of the mouth, near enough that its final pool reaches the walkway"
          % S["TOWER_ASIDE"])
@@ -516,7 +577,9 @@ if P.get("SIT_HEIGHT", 0) <= 0:
     fail("the sled sits at or under the trough's floor")
 if P["SPEED"] > 95:
     fail("the ride is set to %.0f studs a second, which is not a calm slide" % P["SPEED"])
-if P["MIN_SECONDS"] < 5 or P["MAX_SECONDS"] > 25 or P["MIN_SECONDS"] > P["MAX_SECONDS"]:
+# Up to half a minute since the slide became a scene to watch (the fifteenth pass slowed every ending
+# to half speed); longer than that is a sit-down.
+if P["MIN_SECONDS"] < 5 or P["MAX_SECONDS"] > 32 or P["MIN_SECONDS"] > P["MAX_SECONDS"]:
     fail("the ride is clamped to %.0f-%.0f seconds, which is either a drop or a sit-down"
          % (P["MIN_SECONDS"], P["MAX_SECONDS"]))
 
@@ -611,13 +674,32 @@ else:
                             fail("%s seed %d: a slide rod reaches the gulls at radius %.0f" % (label, seed, flock_r))
                             break
 
+# A tag is read if ANY other file looks for it: the pools' client, or since the seventeenth pass the
+# camera (Ambience, faded out by Cinema) and the story (StorySpot, built on by StoryService).
+OTHERS = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "src").rglob("*.lua")
+                   if path.name != "SkyPoolsService.lua")
 for tag in set(re.findall(r'AddTag\([^,]+,\s*"(\w+)"\)', SKY)):
     if tag == "SkySled":
         continue  # the sled is found by the remote that hands it over, not by its tag
-    if '"%s"' % tag not in CLIENT:
-        fail("SkyPoolsService tags %s and SkyPoolsClient never looks for it" % tag)
+    if '"%s"' % tag not in OTHERS:
+        fail("SkyPoolsService tags %s and nothing ever looks for it" % tag)
 if '"SkyPoolsClient"' not in CLIENT_BOOT:
     fail("the client Bootstrap never starts SkyPoolsClient, so the pools never splash")
+
+# NO SEE-THROUGH GLASS. A transparent Glass part leaves out everything transparent behind it, so the
+# pools and the falls hid the clouds and the jelly and soda chunks behind them ("the soda chunk
+# disappears from a certain angle"). The pool lights (opaque) and the invisible markers may stay Glass.
+SKY_SOURCE = (SRC / "Server" / "Services" / "SkyPoolsService.lua").read_text(encoding="utf-8").split("\n")
+for index_, line_ in enumerate(SKY_SOURCE):
+    if "Enum.Material.Glass" in line_:
+        context_ = "\n".join(SKY_SOURCE[max(0, index_ - 3):index_ + 1])
+        if not any(name_ in context_ for name_ in ("PoolLight", "FallMist", "FallBoil")):
+            fail("SkyPoolsService line %d makes see-through water of Glass, which hides the chunks behind it" % (index_ + 1))
+# AND THE SODA IS NOT GLASS, or it mirrors the open sky at a low angle and washes out to nothing.
+APPEAR = (SRC / "Shared" / "MaterialAppearance.lua").read_text(encoding="utf-8")
+soda_ = re.search(r"\tJelloSoda = \{(.*?)\n\t\}", APPEAR, re.S)
+if not soda_ or "Enum.Material.Glass" in soda_.group(1):
+    fail("JelloSoda is Glass again, so against Sky Pools' sky it vanishes from a low angle")
 
 # ===================================================================== report
 
