@@ -66,6 +66,26 @@ SeaRig.SIZE = {
 	Ferris_Wheel = Vector3.new(14, 74, 74),
 	Ferris_Frame = Vector3.new(24, 254, 68),
 	Ferris_Gondola = Vector3.new(4.4, 6.6, 4.4),
+	-- The landmarks (gen_landmarks.py) and the boats (gen_boats.py).
+	Boat_LaunchHull = Vector3.new(6.4, 10, 18),
+	Boat_LaunchTop = Vector3.new(6.4, 10, 18),
+	Boat_Row = Vector3.new(4, 3.2, 9.2),
+	Landmark_DecoCrown = Vector3.new(52, 282, 52),
+	Landmark_DecoGlass = Vector3.new(52, 282, 52),
+	Landmark_DecoStone = Vector3.new(52, 282, 52),
+	Landmark_LeanFrame = Vector3.new(40, 209, 32),
+	Landmark_LeanGlass = Vector3.new(40, 209, 32),
+	Landmark_NeedleGlass = Vector3.new(39, 300, 39),
+	Landmark_NeedlePod = Vector3.new(39, 300, 39),
+	Landmark_NeedleShaft = Vector3.new(39, 300, 39),
+	Landmark_TwinBody = Vector3.new(68, 300, 24),
+	Landmark_TwinGlass = Vector3.new(68, 300, 24),
+	-- The sunken chest (gen_treasure.py): five meshes of one chest, all one box, its middle on the rock.
+	Treasure_Wood = Vector3.new(9, 12, 9),
+	Treasure_Iron = Vector3.new(9, 12, 9),
+	Treasure_Gold = Vector3.new(9, 12, 9),
+	Treasure_Gems = Vector3.new(9, 12, 9),
+	Treasure_Pearls = Vector3.new(9, 12, 9),
 } :: { [string]: Vector3 }
 
 -- The bones each rigged one has to arrive with.

@@ -68,6 +68,8 @@ local T3_ExtendedSoapPressure = {
 LevelDefinitions.Level4 = {
 	levelId = 4,
 	name = "Flooded Halls",
+	-- When on 14 August it happens (the story: Townsfolk). The levels are numbered in this order.
+	storyTime = "11:56 PM",
 	description = "A walkway through a drowned tiled bathhouse. Arches, columns, still green "
 		.. "water far below, and a flume down into the dark at the end of it.",
 	backdrop = "floodedHalls",
@@ -173,6 +175,8 @@ LevelDefinitions.Level4 = {
 LevelDefinitions.Level1 = {
 	levelId = 1,
 	name = "City Shore",
+	-- When on 14 August it happens (the story: Townsfolk). The levels are numbered in this order.
+	storyTime = "9:14 AM",
 	description = "The spiral over the city, beach and waterpark horizon. The only backdrop that exists so far.",
 	-- WHAT THE HUB PAD IS MADE OF. Not derived from allowedMaterials, because that list
 	-- starts with Honey for this level and for Level2 both, and two identical pads would
@@ -243,6 +247,8 @@ LevelDefinitions.Level1 = {
 LevelDefinitions.Level2 = {
 	levelId = 2,
 	name = "Sky Pools",
+	-- When on 14 August it happens (the story: Townsfolk). The levels are numbered in this order.
+	storyTime = "3:00 PM",
 	description = "Pool decks going down through the sky round a fountain tower, and a slide into the clouds.",
 	-- ===== SKY POOLS =====
 	--
@@ -327,6 +333,8 @@ LevelDefinitions.Level2 = {
 LevelDefinitions.Level3 = {
 	levelId = 3,
 	name = "The Sunken City",
+	-- When on 14 August it happens (the story: Townsfolk). The levels are numbered in this order.
+	storyTime = "11:52 PM",
 	description = "A causeway just above the sea, through a drowned city, with something enormous under it.",
 	-- ===== THE SUNKEN CITY =====
 	--
@@ -414,6 +422,8 @@ LevelDefinitions.Level3 = {
 LevelDefinitions.Sandbox = {
 	levelId = 99,
 	name = "Sandbox (all materials)",
+	-- Outside the story: no time of day, and no number.
+	storyTime = "",
 	-- EXPLICITLY NONE. This was simply absent, which reads the same to Bootstrap -- nil is
 	-- not "cityShore" either -- but it left the sandbox as the one level whose horizon was
 	-- undecided rather than decided to be empty. check_hub now compares every level's fields
@@ -648,6 +658,19 @@ LevelDefinitions.Sandbox = {
 		"C4_BubbleWrapToStable",
 	},
 }
+
+-- WHAT A LEVEL IS CALLED WHERE A PLAYER READS IT: "Level 1: City Shore". They are numbered in the order
+-- they happen on 14 August, which is the order they are meant to be played in; the sandbox has no
+-- number.
+function LevelDefinitions.titleOf(level: any): string
+	if not level then
+		return "?"
+	end
+	if typeof(level.levelId) == "number" and level.levelId < 99 then
+		return ("Level %d: %s"):format(level.levelId, tostring(level.name))
+	end
+	return tostring(level.name)
+end
 
 LevelDefinitions.All = {
 	LevelDefinitions.Level1,

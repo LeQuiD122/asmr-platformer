@@ -132,6 +132,31 @@ ensureRemoteEvent(remoteEventsFolder, "SkyRide")
 -- THE SUNKEN CITY'S DRAIN, for the same reason: the rider's own client draws the ride down the
 -- whirlpool and answers on this to say it has it.
 ensureRemoteEvent(remoteEventsFolder, "SunkenRide")
+-- CITY SHORE'S DIVE, played as a scene on the diver's screen and posed on everyone's (DiveFinaleService
+-- tells, CityShoreClient draws).
+ensureRemoteEvent(remoteEventsFolder, "DiveCinema")
+-- THE FLOODED HALLS' FLUME AND THE GATES UNDER IT, played as a scene (FloodedHallsService tells,
+-- FloodedHallsClient draws).
+ensureRemoteEvent(remoteEventsFolder, "HallsCinema")
+-- THE STORY'S SMALL MOMENTS: a secret found, a line whispered (Interactables tells, StoryClient shows),
+-- and what you pick up going into your journal (JournalService).
+ensureRemoteEvent(remoteEventsFolder, "StoryMoment")
+-- AN ENDING'S WORD, from the player's own screen (Cinema): "began" as the scene starts, "done" once it
+-- has been watched, its captions read. The return to the lobby waits for "done" (see completeRun), so a
+-- scene is never cut off in the middle of a sentence.
+local SceneState = ensureRemoteEvent(remoteEventsFolder, "SceneState")
+local sceneState: { [Player]: string } = {}
+SceneState.OnServerEvent:Connect(function(player: Player, state: any)
+	if state == "began" or state == "done" then
+		sceneState[player] = state
+	end
+end)
+game:GetService("Players").PlayerRemoving:Connect(function(player: Player)
+	sceneState[player] = nil
+end)
+-- The longest an ending is waited for, whatever its screen says: a client that never answers must not
+-- keep anyone out of the lobby.
+local SCENE_WAIT = 50
 
 -- ===== Services =====
 -- Safe to require now that the remotes above exist.
@@ -178,6 +203,10 @@ local sunkenModule = Services:WaitForChild("SunkenCityService", 5)
 local SunkenCityService = if sunkenModule then require(sunkenModule :: ModuleScript) :: any else nil
 -- Disconnects the drain's watch and the aquarium glass. The city itself goes with Workspace.Levels.
 local sunkenTeardown: (() -> ())? = nil
+-- THE STORY (Harrow Bay, 14 August): each level's opening words, and City Shore's people. Optional: a
+-- place without it plays the same levels with nobody in them and nothing said.
+local storyModule = Services:WaitForChild("StoryService", 5)
+local StoryService = if storyModule then require(storyModule :: ModuleScript) :: any else nil
 -- Undoes the halls' GLOBAL changes -- lighting, reverb, the caustic loop -- when a run
 -- ends. Left set, every other level would inherit a bathhouse.
 local hallsTeardown: (() -> ())? = nil
@@ -622,6 +651,23 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 	-- the workspace for the duration of the run, in the same coordinate space as the level.
 	HubService.setVisible(false)
 	HubService.markInRun(players)
+	-- WHICH LEVEL EACH PLAYER IS IN, on the player, for their own client: its ambience
+	-- (AmbienceService) and anything else that has to know. HubService.returnToHub clears it.
+	for _, player in ipairs(players) do
+		player:SetAttribute("InLevel", level.backdrop)
+	end
+
+	-- THE STORY'S PART, once the level and its people exist: the opening words on everyone's screen,
+	-- and on City Shore, Sal's cart and Pip's sandcastle on the chunks.
+	if StoryService then
+		local built = levelInstance
+		task.spawn(function()
+			local ok, err = pcall(StoryService.stage, level, built, players)
+			if not ok then
+				warn("Bootstrap: StoryService.stage failed: " .. tostring(err))
+			end
+		end)
+	end
 
 	-- The chunks exist now, so their checkpoint triggers can be connected. Deferred by one
 	-- frame so the models have finished parenting before anything looks for their parts.
@@ -1054,9 +1100,24 @@ function wireCheckpointing(players: { Player })
 		--
 		-- The delay is the panel's own read time. Teleporting on the same frame would replace
 		-- the result with a lobby before anyone had seen what they scored, which is the one
-		-- moment the whole run was for.
-		task.delay(4, function()
-			HubService.returnToHub(player)
+		-- moment the whole run was for. Six seconds: long enough to stand in the last room with
+		-- LEVEL COMPLETE up and look round it before the lobby comes back.
+		--
+		-- AND NOT BEFORE THE ENDING HAS BEEN WATCHED. Every level ends in a scene, and the six seconds
+		-- used to start the moment the run counted as finished, which on City Shore is the splash:
+		-- the lobby took you away in the middle of the last caption. The six now start when the
+		-- scene says it is done (SceneState), or after SCENE_WAIT whatever it says.
+		task.spawn(function()
+			local waited = 0
+			while sceneState[player] == "began" and waited < SCENE_WAIT and player.Parent do
+				task.wait(0.25)
+				waited += 0.25
+			end
+			sceneState[player] = nil
+			task.wait(6)
+			if player.Parent then
+				HubService.returnToHub(player)
+			end
 			-- AND THE ROOM GETS ITS AIR BACK, once nobody is left out on the level. Lighting is
 			-- one setting for the whole server, so this waits for the LAST runner: re-lighting on
 			-- the first would drop the lobby's sky over everyone still climbing.

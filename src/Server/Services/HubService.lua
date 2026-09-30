@@ -636,8 +636,10 @@ local function makeLevelPad(level, index: number, parent: Folder): BasePart
 	frame.Parent = pad
 
 	local par = level.parTime or 0
-	makeSign(pad, level.name,
-		("par %d:%02d  |  %s"):format(math.floor(par / 60), par % 60, look.label), 14)
+	-- NUMBERED, in the order they happen on 14 August, with the time each one is set at.
+	makeSign(pad, LevelDefinitions.titleOf(level),
+		("%spar %d:%02d  |  %s"):format(if level.storyTime and level.storyTime ~= "" then level.storyTime .. "  |  " else "", math.floor(par / 60),
+			par % 60, look.label), 14)
 
 	-- SELECTION IS A TOUCH, not a prompt. Touched fires many times per second while a player
 	-- stands still, so the guard is on the VALUE rather than on a debounce timer: setting the
@@ -1343,7 +1345,7 @@ function HubService.callVote()
 			playAt(hubFolder, START_SOUND, 0.7, 1.0)
 		end
 		tell("result", {
-			levelName = if level then level.name else "?",
+			levelName = if level then LevelDefinitions.titleOf(level) else "?",
 			mode = decision.mode,
 			length = decision.length,
 			voters = HubService.voterCount(),
@@ -2572,6 +2574,8 @@ end
 -- mid-run and never be zero again.
 function HubService.returnToHub(player: Player)
 	inRun[player] = nil
+	-- Out of the level, as far as their own client is concerned (AmbienceService).
+	player:SetAttribute("InLevel", nil)
 
 	-- BEFORE the teleport, not after. spawnPosition is a constant so it does not need the
 	-- room to exist, but the player is about to be put down on a floor -- and if the floor is
@@ -2717,7 +2721,7 @@ local function refreshBoardFor(player: Player)
 		return
 	end
 
-	title.Text = (level and level.name or "?"):upper()
+	title.Text = LevelDefinitions.titleOf(level):upper()
 	local chipText = chip:FindFirstChild("Label") :: TextLabel?
 	if chipText then
 		chipText.Text = if hardcore then "HARDCORE" else "CHILL"
@@ -3116,14 +3120,9 @@ function HubService.toggleBoardMode(player: Player)
 	HubService.setBoardMode(player, otherMode(boardModes[player] or "chill"))
 end
 
--- YOUR OWN RESULT, on a stand beside the pads.
---
--- Cosmetic too, so the DataStore reads are pcall'ed one at a time rather than as a batch: a
--- single level failing to load should cost that line, not the whole statue.
---
--- The layout deliberately stops at best times. Advancements go here when they get their own
--- spec, and guessing at them now would pick a progression model by accident.
-function HubService.buildStatue(player: Player, bestTimeFor: (Player, number, string) -> number?)
+-- YOU, on a stand beside the pads: your own figure, and nothing written over it (the leaderboard is
+-- where the times are). `bestTimeFor` is still taken, so Bootstrap's call is unchanged.
+function HubService.buildStatue(player: Player, _bestTimeFor: (Player, number, string) -> number?)
 	local folder = hubFolder
 	if not folder then
 		return
@@ -3144,39 +3143,10 @@ function HubService.buildStatue(player: Player, bestTimeFor: (Player, number, st
 	stand.Position = HUB_ORIGIN + Vector3.new(-34, 3.5, 4)
 	stand.Parent = folder
 
-	-- SIZED IN STUDS, like every other sign in the room. The first version used offset
-	-- pixels with TextScaled, so "no runs yet" stayed 300 pixels wide from across the lobby
-	-- and covered the pads behind it.
-	local gui = Instance.new("BillboardGui")
-	gui.Name = "Record"
-	gui.Size = UDim2.new(8, 0, 4, 0)
-	gui.StudsOffsetWorldSpace = Vector3.new(0, 7.5, 0)
-	gui.MaxDistance = 70
-	gui.Parent = stand
-
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(1, 0, 1, 0)
-	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.GothamMedium
-	label.TextSize = 16
-	label.TextColor3 = Color3.fromRGB(238, 240, 248)
-	label.TextStrokeTransparency = 0.5
-	label.Parent = gui
-
+	-- NO SCORES OVER IT. It used to carry your best time for every level on a sign above the figure:
+	-- four long lines crowding a stand six studs wide, reading 0:00.00 for any level with no record,
+	-- and saying less than the leaderboard across the room already says. The figure is the statue.
 	attachFigure(player, stand)
-
-	local lines = { player.DisplayName }
-	for _, level in ipairs(HubService.padLevels()) do
-		local ok, best = pcall(bestTimeFor, player, level.levelId, "chill")
-		if ok and best then
-			table.insert(lines,
-				("%s  %d:%05.2f"):format(level.name, math.floor(best / 60), best % 60))
-		end
-	end
-	if #lines == 1 then
-		table.insert(lines, "no runs yet")
-	end
-	label.Text = table.concat(lines, "\n")
 end
 
 -- ===== building the room =====
@@ -4402,6 +4372,72 @@ local function buildSurroundings(folder: Folder)
 		Vector3.new(-46, 0, -10), Vector3.new(46, 0, -10),
 	}) do
 		buildPlanter(HUB_ORIGIN + offset + Vector3.new(0, 1, 0), 2026 + offset.X + offset.Z, folder)
+	end
+
+	-- THE SEASIDE VIEWER: the one way into first person, and entirely optional.
+	--
+	-- The game is played in third person, because it is about seeing your feet land on things. First
+	-- person was asked for as a choice, and then asked to be kept OUT of the interface, since a switch
+	-- on the screen clutters it for everyone who never wants it. So it is a thing in the room instead: a
+	-- coin-op promenade telescope like the ones on Harrow Bay's front, on the terrace by the leaderboard.
+	-- Look through it (E) and your view is first person, here and for your runs; look again and it is
+	-- third person. ViewModeService does the rest, on your own screen: this only stands it up.
+	--
+	-- Clear of the lever (4.8 studs), the board's end, the bench by the start pad and the planter in the
+	-- corner, and facing out over the parapet to the sea.
+	do
+		local base = HUB_ORIGIN + Vector3.new(26, 1, 20)
+		local brass = Color3.fromRGB(176, 146, 86)
+		local teal = Color3.fromRGB(62, 118, 120)
+		local scope = Instance.new("Model")
+		scope.Name = "ViewScope"
+		scope.Parent = folder
+		local function piece(name: string, size: Vector3, cf: CFrame, colour: Color3, round: boolean?): BasePart
+			local part = decorPart(name, size, cf.Position, scope :: any)
+			part.CFrame = cf
+			part.Color = colour
+			part.Material = Enum.Material.Metal
+			if round then
+				part.Shape = Enum.PartType.Cylinder
+			end
+			return part
+		end
+		local up = CFrame.Angles(0, 0, math.rad(90))
+		piece("ViewerFoot", Vector3.new(0.4, 2.4, 2.4), CFrame.new(base + Vector3.new(0, 0.2, 0)) * up, teal, true)
+		local post = piece("ViewerPost", Vector3.new(3.6, 0.6, 0.6), CFrame.new(base + Vector3.new(0, 2.2, 0)) * up, teal, true)
+		post.CanCollide = true
+		piece("ViewerYoke", Vector3.new(0.5, 0.5, 1.8), CFrame.new(base + Vector3.new(0, 4.15, 0)), teal)
+		-- The head, looking out (+X) and a little up, its eyepieces at the back where you stand.
+		local head = CFrame.new(base + Vector3.new(0, 4.9, 0)) * CFrame.Angles(0, 0, math.rad(8))
+		piece("ViewerBody", Vector3.new(2.2, 1.1, 1.5), head, brass)
+		for _, z in ipairs({ -0.36, 0.36 }) do
+			piece("ViewerLens", Vector3.new(0.5, 0.62, 0.62), head * CFrame.new(1.25, 0.05, z), Color3.fromRGB(40, 52, 58), true)
+			piece("ViewerEyepiece", Vector3.new(0.45, 0.4, 0.4), head * CFrame.new(-1.3, 0.1, z), Color3.fromRGB(34, 32, 30), true)
+		end
+		piece("ViewerHood", Vector3.new(0.9, 0.12, 1.7), head * CFrame.new(-0.9, 0.62, 0), brass)
+		local box = piece("ViewerCoinBox", Vector3.new(0.7, 0.9, 0.6), CFrame.new(base + Vector3.new(-0.55, 3.1, 0)), brass)
+		local plaque = Instance.new("SurfaceGui")
+		plaque.Face = Enum.NormalId.Left
+		plaque.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		plaque.PixelsPerStud = 80
+		plaque.LightInfluence = 1
+		plaque.Parent = box
+		local words = Instance.new("TextLabel")
+		words.Size = UDim2.fromScale(1, 1)
+		words.BackgroundTransparency = 1
+		words.TextScaled = true
+		words.Font = Enum.Font.GothamBold
+		words.TextColor3 = Color3.fromRGB(44, 38, 30)
+		words.Text = "1d A LOOK"
+		words.Parent = plaque
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.Name = "ViewScopePrompt"
+		prompt.ActionText = "Look through"
+		prompt.ObjectText = "First person"
+		prompt.HoldDuration = 0.3
+		prompt.MaxActivationDistance = 8
+		prompt.RequiresLineOfSight = false
+		prompt.Parent = box
 	end
 end
 

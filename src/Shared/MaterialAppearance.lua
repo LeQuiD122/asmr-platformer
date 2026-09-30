@@ -267,11 +267,15 @@ local Appearances: { [string]: Appearance } = {
 		baseColor = Color3.fromRGB(108, 124, 92),
 		baseMaterial = Enum.Material.Fabric,
 	},
+	-- NOT GLASS, for the reason soap is not: under this lighting a Glass part refracts and mirrors the
+	-- sky, and against Sky Pools' open sky, at a low angle, the soda washed out to the colour of the
+	-- sky behind it and the chunk vanished. SmoothPlastic with a transparency is still see-through
+	-- jelly and keeps its orange from every side.
 	JelloSoda = {
 		color = Color3.fromRGB(244, 158, 96),
-		material = Enum.Material.Glass,
-		transparency = 0.22,
-		reflectance = 0.14,
+		material = Enum.Material.SmoothPlastic,
+		transparency = 0.2,
+		reflectance = 0.08,
 		baseColor = Color3.fromRGB(198, 108, 58),
 		baseMaterial = Enum.Material.SmoothPlastic,
 	},

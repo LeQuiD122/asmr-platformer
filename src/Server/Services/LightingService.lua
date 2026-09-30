@@ -139,33 +139,48 @@ LightingService.palettes = {
 	-- view is the cloud sea and a haze thick enough to read would turn it grey. Offset keeps the
 	-- tower and the far pools solid against the sky rather than melting into it.
 	--
-	-- CLOSE TO THE DEFAULT on purpose. Brightness, exposure and bloom are within a step of what
-	-- every level already has; the pale clouds and white decks carry the brightness themselves, and
-	-- pushing the light as well would take them to white.
+	-- CLOSE TO THE DEFAULT was the idea, and it was still too much: a recording showed the whole level
+	-- washed to white, decks, clouds and tower one pale field with the chunks lost in it, and the slide's
+	-- end nothing but glare. The pale clouds and white decks carry the brightness themselves. So, a
+	-- step each and no more: the light and the exposure down, the bloom higher up the scale and softer,
+	-- a little more contrast and colour, the sky a shade deeper, less glare, and the sun where the story
+	-- puts it -- three o'clock, lower and from the side, so the decks have a lit face and a shaded one.
+	--
+	-- AND IT WAS STILL WASHED OUT after that step (a screenshot from the route: every deck, column and
+	-- chunk under one milky veil). The light was not the whole of it. Three things did it together, and
+	-- each is dealt with here or in SkyPoolsService:
+	--   THE HAZE. Atmosphere haze is light added to the air, and over a level whose whole view is cloud it
+	--   laid a white film over everything past a few studs. None now; distance goes blue (the horizon a
+	--   deeper blue than before), not white, and the offset keeps near things solid.
+	--   THE AMBIENT. EnvironmentDiffuseScale lights every surface from the sky round it, and here most of
+	--   that "sky" is white cloud underneath: it filled every shadow with white and took the shape out of
+	--   everything. Well down, so the decks and columns have a lit side and a shaded one again.
+	--   THE WHITES. Decks, columns and clouds were all within a few points of pure white
+	--   (SkyPoolsService's colours): taken a step off it, so the light has something to fall on.
 	skyPools = {
-		sky = Color3.fromRGB(150, 194, 240),
-		horizon = Color3.fromRGB(214, 230, 248),
+		sky = Color3.fromRGB(128, 176, 232),
+		horizon = Color3.fromRGB(176, 204, 238),
 		-- See the note by EnvironmentSpecularScale: this is the level whose whole lower
 		-- hemisphere is white cloud, so a glossy top face mirrors white on white. A step
 		-- down, not a switch off -- the materials still need their highlight.
 		specular = 0.5,
-		diffuse = 0.7,
-		density = 0.18,
-		haze = 0.35,
-		offset = 0.22,
-		clock = 10.8,
-		brightness = 2.1,
-		exposure = -0.03,
-		ambient = Color3.fromRGB(36, 40, 50),
-		outdoor = Color3.fromRGB(124, 132, 146),
-		glare = 0.35,
+		diffuse = 0.4,
+		density = 0.14,
+		haze = 0,
+		offset = 0.3,
+		clock = 15,
+		brightness = 1.65,
+		exposure = -0.22,
+		ambient = Color3.fromRGB(34, 38, 48),
+		outdoor = Color3.fromRGB(100, 108, 124),
+		glare = 0,
 		sunSize = 14,
-		bloom = 0.45,
-		bloomThreshold = 1.05,
-		rays = 0.06,
-		tint = Color3.fromRGB(248, 252, 255),
-		saturation = 0.08,
-		contrast = 0.06,
+		bloom = 0.2,
+		bloomThreshold = 1.45,
+		rays = 0.04,
+		tint = Color3.fromRGB(250, 252, 255),
+		saturation = 0.15,
+		contrast = 0.16,
 	},
 	-- ===== THE SUNKEN CITY: a grey afternoon over still water =====
 	--

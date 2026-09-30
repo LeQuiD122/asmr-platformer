@@ -46,8 +46,21 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- MAREN the lifeguard, on the deck (Townsfolk), and THE SCENE the dive is played as on the diver's
+-- screen and the pose it is dived in on everyone's (CityShoreClient, told through `DiveCinema`).
+-- Both optional: without them the dive is the dive it always was.
+local townsModule = script.Parent:FindFirstChild("Townsfolk") or script.Parent:WaitForChild("Townsfolk", 5)
+local Townsfolk: any = if townsModule and townsModule:IsA("ModuleScript") then require(townsModule) else nil
 
 local DiveFinaleService = {}
+
+local function cinemaRemote(): RemoteEvent?
+	local folder = ReplicatedStorage:FindFirstChild("RemoteEvents")
+	local event = folder and folder:FindFirstChild("DiveCinema")
+	return if event and event:IsA("RemoteEvent") then event else nil
+end
 
 -- ===== THE PLATFORM =====
 --
@@ -88,8 +101,10 @@ local CIRCLE_RADIUS = 300
 -- seeing the diver a little late, and the diver's own screen hearing about the anchor a little
 -- later still. check_hub keeps it at least a hundred clear.
 local COMMIT_ABOVE = 400
--- The slowest the carry goes, for a diver who stepped off a low deck rather than jumping.
-local CARRY_SPEED = 350
+-- The slowest the carry goes, for a diver who stepped off a low deck rather than jumping. Slowed with
+-- the rest of the dive (CityShoreClient holds the diver's own fall to about this), so the last four
+-- hundred studs can be watched rather than cut to.
+local CARRY_SPEED = 120
 -- Where the diver ends up: through the surface, then sinking under it while the screen goes black.
 local SPLASH_SINK = 1.5
 local SINK_DEPTH = 7
@@ -101,7 +116,9 @@ local FALLBACK_WATER = -700
 -- delete line and gone. If nothing has come for them after RELEASE_AFTER, nothing is coming, and
 -- they are put back on the deck rather than left in the water.
 local RELEASE_AWAY = 300
-local RELEASE_AFTER = 12
+-- A MINUTE, not twelve seconds: the lobby now waits for the dive's scene to be watched, its last
+-- caption read under the water, before its own six seconds start (SceneState, in Bootstrap).
+local RELEASE_AFTER = 60
 -- A built-in water impact, present in every place with no upload. Slowed, because this is a body
 -- hitting the sea from a great height rather than a drip.
 local SPLASH_SOUND = "rbxasset://sounds/impact_water.mp3"
@@ -333,19 +350,19 @@ end
 local function commit(finale: Finale, player: Player, root: BasePart)
 	local at = root.Position
 	local water = finale.waterAt(at.X, at.Z)
-	local look = root.CFrame.LookVector
-	local flat = Vector3.new(look.X, 0, look.Z)
-	local facing = if flat.Magnitude > 0.1 then flat.Unit else Vector3.new(0, 0, -1)
 	local speed = math.max(-root.AssemblyLinearVelocity.Y, CARRY_SPEED)
 	local surface = Vector3.new(at.X, water - SPLASH_SINK, at.Z)
 	local rest = surface - Vector3.new(0, SINK_DEPTH, 0)
 	local carry = math.max(0.05, (at.Y - surface.Y) / speed)
+	-- KEPT AT THE ANGLE THEY WERE DIVING AT: head first, if their own client turned them over for the
+	-- dive (CityShoreClient). Stood back up here, they would go into the water feet first.
+	local turn = root.CFrame - root.CFrame.Position
 
 	root.AssemblyLinearVelocity = Vector3.zero
 	root.Anchored = true
 	held[player] = { root = root, rest = rest, settled = os.clock() + carry + SINK_TIME }
 	TweenService:Create(root, TweenInfo.new(carry, Enum.EasingStyle.Linear), {
-		CFrame = CFrame.lookAt(surface, surface + facing),
+		CFrame = CFrame.new(surface) * turn,
 	}):Play()
 
 	task.delay(carry, function()
@@ -355,9 +372,13 @@ local function commit(finale: Finale, player: Player, root: BasePart)
 			return
 		end
 		TweenService:Create(root, TweenInfo.new(SINK_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
-			CFrame = CFrame.lookAt(rest, rest + facing),
+			CFrame = CFrame.new(rest) * turn,
 		}):Play()
 		splashEffects(finale, Vector3.new(at.X, water, at.Z))
+		local remote = cinemaRemote()
+		if remote then
+			remote:FireAllClients("splash", player, Vector3.new(at.X, water, at.Z))
+		end
 		finale.onSplash(player)
 	end)
 end
@@ -378,6 +399,20 @@ function DiveFinaleService.start(finishFrame: CFrame, parent: Instance,
 
 	local model = buildPlatform(finishFrame, circle)
 	model.Parent = parent
+	-- MAREN, on the deck by the board's clamp, facing the way people arrive (Townsfolk: she knows who
+	-- you are, and she shouts after you when you go).
+	if Townsfolk then
+		task.spawn(function()
+			local feet = CFrame.lookAt((finishFrame * CFrame.new(8, 0, 9)).Position, (finishFrame * CFrame.new(0, 0, 3)).Position)
+			local maren = Townsfolk.spawn(model, "Maren", feet, "stand",
+				{ Color3.fromRGB(198, 150, 112), Color3.fromRGB(214, 52, 48), Color3.fromRGB(214, 52, 48) })
+			if maren then
+				Townsfolk.wear(maren, "Whistle", Vector3.new(0.4, 0.2, 0.2), Color3.fromRGB(240, 200, 60), "UpperTorso",
+					CFrame.new(0, 0.3, -0.6))
+				Townsfolk.wear(maren, "Visor", Vector3.new(1.2, 0.1, 0.6), Color3.fromRGB(250, 250, 246), "Head", CFrame.new(0, 0.45, -0.7))
+			end
+		end)
+	end
 	local finale: Finale = {
 		frame = finishFrame,
 		model = model,
@@ -466,6 +501,15 @@ function DiveFinaleService.start(finishFrame: CFrame, parent: Instance,
 			elseif not diving[player] then
 				if underBoard(finale.frame, at) then
 					diving[player] = true
+					-- OFF THE BOARD: the scene on their screen, the pose on everyone's, and Maren's shout.
+					local remote = cinemaRemote()
+					if remote then
+						local tip = finale.frame * Vector3.new(BOARD_TO, BOARD_TOP, DECK_DEEP / 2)
+						remote:FireAllClients("dive", player, workspace:GetServerTimeNow(), finale.circle.Y, tip)
+					end
+					if Townsfolk and Townsfolk.shout then
+						Townsfolk.shout("Maren")
+					end
 				end
 			elseif at.Y <= finale.circle.Y + COMMIT_ABOVE then
 				diving[player] = nil

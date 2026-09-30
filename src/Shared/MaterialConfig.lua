@@ -61,8 +61,10 @@ export type MaterialDef = {
 	streakWindow: number?,
 	comboSpeed: number?,
 	comboLinger: number?,
-	-- The event to play while this material's own `sfxEvent` has no takes uploaded.
+	-- The event to play while this material's own `sfxEvent` has no takes uploaded, and the pitch to
+	-- play it at then (so a borrowed sound is never mistaken for the material it is borrowed from).
 	sfxFallback: string?,
+	sfxFallbackPitch: number?,
 	-- THE NEEDOH SQUEEZE. Seconds of standing still before the dough starts to give, seconds
 	-- from there to fully squeezed, and your jump HEIGHT at full squeeze as a multiple of normal.
 	chargeAfter: number?,
@@ -743,10 +745,14 @@ local Materials: { [string]: MaterialDef } = {
 		chargeTime = 1.1,
 		chargeJump = 2.2,
 		decayDuration = 5,
-		-- Borrowed from clay, and the right borrow: both are a dense soft mass taking a
-		-- print. Jello's wobble would be wrong here -- there is nothing in a Needoh that
-		-- rings, which is exactly what separates it from the platform it used to sit on.
-		sfxEvent = "claySquish",
+		-- ITS OWN SOUND NOW. It borrowed clay's, and was reported as sounding exactly like the clay
+		-- chunk, which it did, being the same files. `needohSquish` (audio/gen_ending_sfx.py writes
+		-- four takes) is all give and no slap: gel shifting slowly inside a rubber skin, a creak as the
+		-- skin stretches, a wet suck as it swells back. Until those are imported it falls back to clay's
+		-- pitched well down (sfxFallbackPitch), so the two are never the same sound.
+		sfxEvent = "needohSquish",
+		sfxFallback = "claySquish",
+		sfxFallbackPitch = 0.68,
 		sfxMinGap = 0.2,
 		deformationAnim = "compress",
 	},
