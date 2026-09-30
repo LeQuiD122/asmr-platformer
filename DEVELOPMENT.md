@@ -4,12 +4,14 @@ A Roblox 3D platformer built from a locked GDD, where every platform is a tactil
 ASMR material: honey, butter-wax, kinetic sand, slime, soap, bubble wrap, creamy
 keyboard, cracking ice, soda jello, lamb's ear, memory foam, light switches, lego,
 charcoal, chocolate, clay, cloud, rock salt, lava and obsidian, non-Newtonian fluid,
-arcade buttons and melting snow.
+arcade buttons, melting snow, Needoh squeeze toys and jellyfish (27 in all).
 Template-based procedural level generation, per-sub-region deformation shared between
-server and client, chill/hardcore modes, a timer and an OrderedDataStore leaderboard.
+server and client, chill/hardcore modes, a timer and an OrderedDataStore leaderboard; a lobby
+to choose a run in, four levels with a story across them (Harrow Bay, 14 August), and an ending
+for each shot as a scored scene.
 
 Nothing here syncs to Studio. Luau is pasted in by hand and meshes are imported by hand.
-The 18 chunk Models are not assets at all: they are built procedurally at runtime by
+The 67 chunk Models are not assets at all: they are built procedurally at runtime by
 `Server/ChunkBuilder.server.lua`, because Studio geometry cannot be authored as text.
 
 **`HANDOFF.md` is the document to read before changing anything.** This file covers
@@ -96,13 +98,17 @@ themselves, which costs nothing since a quad was always going to be two triangle
 
 | This repo path | Studio destination |
 |---|---|
-| `src/Shared/*.lua` | `ReplicatedStorage/Shared/` (6 ModuleScripts) |
+| `src/Shared/*.lua` | `ReplicatedStorage/Shared/` (13 ModuleScripts) |
 | `src/Server/ChunkBuilder.server.lua` | `ServerScriptService/ChunkBuilder` (Script) |
+| `src/Server/ChunkProps.server.lua` | `ServerScriptService/ChunkProps` (Script) |
 | `src/Server/Bootstrap.server.lua` | `ServerScriptService/Bootstrap` (Script) |
 | `src/Server/Services/*.lua` | `ServerScriptService/Services/` (ModuleScripts) |
 | `src/Client/Bootstrap.client.lua` | `StarterPlayerScripts/Bootstrap` (LocalScript) |
 | `src/Client/Services/*.lua` | `StarterPlayerScripts/Services/` (ModuleScripts) |
-| `meshes/*.fbx`, `meshes/*.obj` | `ReplicatedStorage/Assets/TileMeshes/` |
+| `meshes/*.fbx`, `meshes/*.obj` | `ReplicatedStorage/Assets/TileMeshes/` (and `Assets/Backdrop/`; `HANDOFF.md` has which) |
+| `audio/materials/*.wav`, `audio/buttons/*.wav` | `SoundService/MaterialSounds/` (Folder) |
+| `audio/story/*.wav`, `audio/endings/*.wav` | `SoundService/StorySounds/` (Folder) |
+| `audio/ambience/*.wav` | `SoundService/AmbienceSounds/` (Folder) |
 
 **Line 2 of every source file states its intended destination.** Check it after pasting.
 A file landing in the wrong object fails silently: a Script containing a module body
@@ -143,17 +149,17 @@ and `ShadowSoftness` do nothing.
 again.** `ChunkBuilder` skips chunks that already exist, so without this you see the old
 geometry and conclude the change did nothing.
 
-`Bootstrap.server.lua` loads `LevelDefinitions.Sandbox` by default, a dev level running
-every material in a fixed order. Set `CURRENT_LEVEL` to `LevelDefinitions.Level1` for
-the real one.
+Players spawn into the lobby (`HubService`) and a run is built from what they choose there:
+one of the four levels, or the Sandbox (every material in a fixed order) from its own pad.
 
 ## Before you paste
 
 ```bash
-python blender/check_chunk_forms.py
+python blender/check_all.py
 ```
 
-Plain Python, no Blender needed. It asserts the chunk layout contract: entry and exit
+Runs all nine checkers (plain Python, no Blender needed); `python blender/mutations/run_all.py`
+proves the checkers catch what they claim to. The oldest of them, `check_chunk_forms.py`, asserts the chunk layout contract: entry and exit
 faces wide enough to land on, no hole in a route bigger than a jump clears, slabs that
 meet sharing enough width to walk across, no interpenetration, geometry inside each
 chunk's published length, the ramp meeting flat chunks flush, and that every slab of a
@@ -200,14 +206,14 @@ tells you whether a lump is a turtle.
   level rather than at a fixed height, so a descending elevation profile cannot sink
   past it.
 
-## The one real gap
+## Sound
 
-**The repo ships no sound ids.** Every id in `AudioService.SOUND_ID_BY_EVENT` is an
-empty string, so a fresh paste triggers all six materials silently. The wiring itself is
-finished — per-material events, per-part throttling, volume control — and it needs
-uploaded asset ids and nothing else. If you have filled these in inside Studio, that
-edit lives only there; paste them back into this file or the next paste of
-`AudioService.lua` will silence the game again.
+**Sounds go in by folder, with no ids to copy.** Bulk import the WAVs from `audio/` in the
+Asset Manager and drop them into the SoundService folders above: `AudioService` gives each
+Sound in `MaterialSounds` to the event its name starts with (`iceCrack_3` is `iceCrack`), and
+the scenes and levels find theirs in `StorySounds` and `AmbienceSounds` by name. Ids pasted
+into `AudioService.SOUND_IDS_BY_EVENT` still work; if you fill them in inside Studio, paste
+them back into this file too, or the next paste of `AudioService.lua` loses them.
 
 Do not use `rbxassetid://0` as a placeholder. It is a real request for an asset that
 does not exist, so Roblox retries it and logs a failure on every single trigger. An

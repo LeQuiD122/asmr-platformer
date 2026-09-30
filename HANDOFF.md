@@ -4,12 +4,12 @@ Roblox game from a locked GDD: a 3D platformer where every platform is a tactile
 ASMR-inspired material (honey, butter-wax, kinetic sand, slime, soap, bubble wrap), with
 template-based procedural level generation, chill/hardcore modes and a leaderboard.
 
-It has grown well past those six. `MaterialConfig` now carries 26 material entries across 65
+It has grown well past those six. `MaterialConfig` now carries 27 material entries across 67
 chunks, there are four levels plus a Sandbox, and players choose a run in a lobby rather than
 being dropped into a hardcoded level. See **Levels and the lobby** and **The Flooded Halls**
 below for the parts this file did not cover before.
 
-Last updated: 2026-09-18. What is planned next (the City Shore finale, story mode, the levels
+Last updated: 2026-09-30 (twenty-first pass: see **The story**). What is planned next (the City Shore finale, story mode, the levels
 still to come) is in `ROADMAP.md`.
 
 ## Where things are
@@ -34,22 +34,47 @@ ServerScriptService
   Bootstrap               (Script)
   Services                (Folder)
     BackdropService, BestTimeService, ChunkService, DeformationService,
-    DiveFinaleService, FloodedHallsService, HubService, LeaderboardService,
-    LevelService, LightingService, PlayerStateService, SkyPoolsService,
-    SunkenCityService, TimerService                                   (ModuleScripts)
+    DiveFinaleService, FloodedHallsService, HubService, Interactables,
+    LeaderboardService, LevelService, LightingService, PlayerStateService,
+    SkyPoolsService, StoryService, SunkenCityService, TimerService,
+    Townsfolk                                                         (ModuleScripts)
 ReplicatedStorage
-  Shared                  (Folder) -> 9 ModuleScripts: ChunkDefinitions, HallRoute,
-                                      LevelDefinitions, MaterialAppearance, MaterialConfig,
-                                      PlanShapes, SubRegionGrid, SunkenPath, Types
+  Shared                  (Folder) -> 13 ModuleScripts: ChunkDefinitions, HallRoute,
+                                      Keepsakes, LevelDefinitions, MaterialAppearance,
+                                      MaterialConfig, PlanShapes, Poses, SeaRig, SkyPath,
+                                      SubRegionGrid, SunkenPath, Types
   Assets/TileMeshes       (Folder) -> imported MeshParts, exact names below
   Assets/Backdrop         (Folder) -> horizon props, OPTIONAL (see below)
 StarterPlayerScripts
   Bootstrap               (LocalScript)
-  Services                (Folder) -> AudioService, CloudService, DeathService,
-                                      DeformationRenderer, HubLeverService, HubVoteService,
-                                      InputService, PauseMenuService, ScreenEffects,
-                                      SeaService, SkyPoolsClient, SunkenCityClient, UIService
+  Services                (Folder) -> AmbienceService, AudioService, Cinema, CityShoreClient,
+                                      CloudService, DeathService, DeformationRenderer,
+                                      FloodedHallsClient, HubLeverService, HubVoteService,
+                                      InputService, JournalService, Maw, PauseMenuService,
+                                      ScreenEffects, SeaService, SkyPoolsClient, StoryClient,
+                                      SunkenCityClient, UIService, ViewModeService
+ServerStorage
+  Townsfolk               (Folder) -> OPTIONAL: your own character models for the people, named
+                                      as they are (Sal, Pip, Maren, Dev, Okafor, Rudy, Attendant,
+                                      Fisherman, Venn, Tobi, Barlow). The old name SunkenNPCs
+                                      still works.
+SoundService
+  MaterialSounds          (Folder) -> OPTIONAL: the generated material takes (audio/materials/,
+                                      and the keypad's audio/buttons/), imported and dropped in.
+                                      Each Sound is played for the event its name starts with.
+  StorySounds             (Folder) -> OPTIONAL: GateGroan, WaterRush, Siren, MawRumble, JawsShut,
+                                      Heartbeat, SecretSting (audio/story/), for the scenes, and
+                                      the endings' own 17 (audio/endings/: DiveBoard, DiveWind,
+                                      DiveSplash, UnderwaterHum, ShoreChord, SlideRush,
+                                      CloudWhoosh, SkimSlap, PoolPlunge, PoolsChord, WhirlRoar,
+                                      DrainFall, CulvertWash, SunkenChord, FlumeRush, PlungeWind,
+                                      HallsChord). Built-in sounds stand in where one will do.
+  AmbienceSounds          (Folder) -> OPTIONAL: ShoreSea, RoofWind, PartyFar, HarbourNight,
+                                      BathsHum, HoldDrone (audio/ambience/), the levels' beds.
 ```
+
+`SunkenNPCs` (a ModuleScript in ServerScriptService.Services until the fourteenth pass) is now
+`Townsfolk`: delete the old one after pasting the new one.
 
 Line 2 of each file is the authority if this list and a file ever disagree.
 
@@ -450,6 +475,8 @@ The three button chunks (P12 Button Pad, P14 Dense Keypad, P15 Domed Keypad) are
 
 ### The Needoh squeeze
 
+It has its own sound since the twenty-first pass (`needohSquish`; it used to borrow clay's files).
+
 The mini jumps are gone (`microBounceHeight` and `bounceCooldown` removed). Walking on a Needoh bed
 is just soft. **Standing still squeezes it**: after `chargeAfter` (0.25 s) the hollow deepens over
 `chargeTime` (1.1 s) while the bed swells around it, and at full squeeze it shivers and glows teal.
@@ -648,13 +675,375 @@ still has an old name. `check_hub.py` fails if a level's backdrop has no look.
 
 | Level | Name | Shape | Chunks (Medium) | Setting |
 |---|---|---|---|---|
-| 1 | City Shore | spiral | 40 | the city, beach and waterpark horizon; ends on the high dive; the whole 65-chunk kit, all three rhythms, no repeat within six picks |
+| 1 | City Shore | spiral | 40 | the city, beach and waterpark horizon; ends on the high dive; the whole kit, all three rhythms, no repeat within six picks |
 | 2 | Sky Pools | meander, going down | 44 | pool terraces on alternating sides of a route that sweeps down through a cloud sea; ends on a slide round a fountain tower into the final pool; the calm half of the kit |
 | 3 | The Sunken City | ring, flat with a swell | 50 | a drowned city round the route, a thing under it, an aquarium off a checkpoint; ends down the harbour drain |
 | 4 | Flooded Halls | path | 44 | inside a flooded tiled bathhouse, ending on a flume |
 | Sandbox | all materials | spiral | 82 | development route, its own pad |
 
+## The story: Harrow Bay, 14 August
+
+**`LORE.md` is the canon now** (sixteenth pass): the Hold, the keepsakes, the timeline from 1911, the
+key holders before you, the cast, the places, what is never explained, hooks for later and the rules
+for writing more. This section is how the story is built into the game.
+
+### Twenty-first pass (2026-09-30): the endings scored, the Needoh's own sound, lava about to go, the high dive
+
+From your notes **(you)**: sounds made for each ending, playing while its scene plays, for a cinematic
+feel; a better, more Needoh-like Needoh sound, and which files to replace; the Needoh and clay had the
+same sound, which should not happen; the lava chunk should look about to burst, a hot surface; and a
+better final sequence for City Shore. How each is done is mine **(suggested)**.
+
+- **EVERY ENDING IS SCORED** (`Cinema.sound`, `Cinema.fade`). A scene plays sounds of its own, found by
+  name in `SoundService.StorySounds`, a few with a built-in stand-in until imported. Looped beds fade in,
+  and whatever the scene is still playing fades out over 2.5 s when it gives the camera back; a one-shot
+  asked for with `keep` (the chords) is left to ring out. `audio/gen_ending_sfx.py` synthesises all 17
+  into `audio/endings/`:
+  - **City Shore**: `DiveBoard` as the board lets you go, `DiveWind` rising all the way down and cut at
+    the water, `DiveSplash`, `UnderwaterHum` looped under the harbour, `ShoreChord` 2.6 s after the splash.
+  - **Sky Pools**: `SlideRush` looped under the sled (gone at the first skip), `CloudWhoosh` into the
+    cloud, `SkimSlap` at every skip (each softer and a little higher), `PoolPlunge` as you tip out,
+    `PoolsChord` over the pool.
+  - **The Sunken City**: `WhirlRoar` looped from the grab, `DrainFall` once as you go down the shaft,
+    `CulvertWash` looped down Outfall 3 with the roar fading behind it, `SunkenChord` at the station.
+  - **Flooded Halls**: `FlumeRush` looped down the tube, `PlungeWind` as you shoot out of it (the rush
+    fades), `HallsChord` on the last line, the only chord of the four that resolves. The mouth's
+    `MawRumble`, `JawsShut` and `Heartbeat` are as they were.
+- **THE NEEDOH HAS ITS OWN SOUND.** It used `claySquish`, the same files as clay, which is why the two
+  sounded identical. Now `sfxEvent = "needohSquish"`, with four takes (`audio/materials/needohSquish_1` to
+  `_4`): gel shifting slowly inside a rubber skin, a creak as the skin stretches, a wet suck as it swells
+  back, and no slap. Until they are imported it borrows clay's pitched down to 0.68 (`sfxFallback`,
+  `sfxFallbackPitch`, read by `AudioService.playSfx`), so the two are never the same sound again.
+- **LAVA ABOUT TO GO** (`lavaLife` in `DeformationRenderer`). Every lava platform gets an orange light that
+  breathes, embers and heat haze rising off it, and bubbles that swell out of the crust and pop, spitting
+  (one every 0.5 to 1.6 s, on platforms within 170 studs). A step spurts drops at your feet and flares the
+  glow; a cell bursting throws a fountain of molten gobs and a smoke column and flares it fully. The four
+  `lavaCrust` takes are new (bubbling glop, the crack with a hiss, a molten spit) and replace the old ones.
+- **THE HIGH DIVE, SHOT PROPERLY** (`CityShoreClient`):
+  - the sun flares as you leave the board (SunRays up for 1.8 s, then back, and put back at the end);
+  - a cut back up to the deck, over Maren's shoulder, looking down past her at you dropping away (1.6 to
+    2.7 s), before the turn, the drop and the water;
+  - eleven gulls circling halfway down, out from the board, which burst outward and up as you drop
+    through them;
+  - wisps of air streaming up past you the whole way down;
+  - under the water, seven shafts of light slanting down from the surface and swaying, and five fish
+    crossing at the edge of the light, over the drowned street and its one lamp.
+- **Checks**: `check_story` holds all of it (the Needoh's event and pitch, the takes, the lava's life,
+  every ending's sounds and their files, the dive's shots); `blender/mutations/pass21.py` plants 17 bugs
+  and every one is caught.
+
+**To import this pass**: every `audio/endings/*.wav` (17) into `SoundService.StorySounds`, named as the
+files; `audio/materials/needohSquish_1` to `_4` into `SoundService.MaterialSounds`; and
+`audio/materials/lavaCrust_1` to `_4` in place of the old `lavaCrust` sounds there (delete the old four
+first, or the old and new would be picked from at random).
+
+### Twentieth pass (2026-09-30): default prompts, a proper third person, readable voices, the Sky Pools again
+
+From your notes **(you)**: with Ctrl locked you do not turn to walk back or sideways (asked whether that
+was meant); the mouse got stuck when the cursor was over an NPC; the lines your character says in the
+endings should look better; Roblox's own prompt style was good enough; stepping back from the viewer left
+the camera inside your head until you scrolled; NPC text should be one size whatever the line, with the
+bubble changing size instead; the Sky Pools' light was still washed out; small improvements to the level
+and its people; the slide's metal rods seemed to pass through you. How each is done is mine **(suggested)**.
+
+- **Ctrl locked is standard mouse lock**: you face where the camera looks, so S walks back and A/D strafe.
+  Left as it is (answered, not changed).
+- **THE PROMPTS ARE ROBLOX'S OWN AGAIN.** `PromptStyleService` is deleted (delete it in Studio). Its card was
+  an Active gui over the prompt: with the cursor over it, releasing the right mouse button was swallowed,
+  so the camera went on dragging and the cursor stayed pinned. That was the "stuck near NPCs".
+- **BACK FROM FIRST PERSON** (`ViewModeService.settleThird`): the zoom is held at 14 for a moment and the
+  camera put behind and above you, then the lobby's range (6 to 36, so a scroll never slips you into first
+  person) is given back.
+- **YOUR VOICE IN THE DRAIN** (`SunkenCityService`, DrainCry): screams scrawled in Permanent Marker on a soft
+  shadow, landing with a small jolt, 1.7 s each; once the culvert has you, quiet handwritten lines (Kalam),
+  2.8 s each.
+- **SPEECH BUBBLES** (`Townsfolk.say`): one text size for everyone (19; the longest line, 116 characters,
+  wraps to five lines at it), the bubble up to 300 wide and as tall as its lines, growing upward from over
+  the head. Shouts are 34.
+- **THE SKY POOLS' LIGHT**: no haze in the air (it was a white film over everything), environment diffuse
+  0.4 (the white cloud under the level was filling every shadow), a deeper horizon, less brightness and
+  bloom, more contrast; decks, coping, stone, rail and clouds a step off white.
+- **THE SLIDE**: its rods leave from the lip of the wall on the tower's side, not the trough's middle
+  (they went straight through the rider); the hoops are a stud higher.
+- **THE SKY POOLS' PEOPLE** (`Townsfolk` HABITS): Dev checks his watch every few seconds (it is always three
+  o'clock), Okafor fans herself, Rudy nods to the beat with a hand on the deck. Not while they talk. Props:
+  Dev's towel trolley and watch, Okafor's side table with a drink, a paper umbrella and a magazine, and
+  Rudy's record with its label and tonearm, going round (`SkyTurntable`, SkyPoolsClient).
+- **Checks**: `check_story`, `check_skypools` and `check_sunkencity` hold all of it; `pass19.py` now covers
+  the prompts, the return to third person and the drain's voice, and `pass20.py` the rest (10 bugs).
+
+### Nineteenth pass (2026-09-30): third person, the seaside viewer, Ctrl, the prompts, the moving clouds
+
+From your notes **(you)**: the first/third person switch did nothing in the lobby; on reflection third
+person suits the ASMR better, and if first person stays it must be entirely optional and not in the
+interface but an option in the lobby; Ctrl should toggle the cursor between locked and free, as in
+Squid Game; and more small details of that kind and big ones like the whirlpool. How each is done is mine
+**(suggested)**.
+
+- **THIRD PERSON IS THE GAME'S VIEW** (`ViewModeService`, rewritten): held at 14 studs in a run, free in
+  the lobby. The on-screen switch and the V key are gone.
+- **FIRST PERSON THROUGH THE SEASIDE VIEWER**: a coin-op promenade telescope on the lobby's terrace by the
+  leaderboard (`HubService`, "ViewScope", at (26, 20) from the room's origin). "Look through" and it is
+  first person at once, in the lobby too, and in every run after; "Step back" and it is third person.
+  The prompt is heard on the client (ProximityPromptService.PromptTriggered), so the server does nothing.
+- **CTRL**: in third person, the cursor locked in the middle, the camera turning with the mouse, you
+  facing where you look, the camera over your right shoulder (a custom mouse lock, set each frame after
+  the camera); free is the ordinary cursor. In first person Ctrl frees the cursor (an invisible Modal
+  button) and locks it again. Never while a scene has the camera, never turning you while you ride or
+  sit, and the cursor is always free over an open journal or pause menu. A word at the bottom of the
+  screen says which, and goes.
+- **THE PROMPTS** (`PromptStyleService`, new): every ProximityPrompt in the game is drawn as the journal and
+  the pause menu are, a dark card with the key in a cap, a line filling under it for a hold, the card
+  itself the button on a phone. Switched to Custom on the client, so no server code changed.
+- **THE SLIME'S KICK**: the picture widens as a slime launches you and settles as you rise (the ordinary
+  camera only, from one resting width however many launches come in a row).
+- **WHAT YOU PICK UP FADES** off your screen instead of blinking out (`JournalService`).
+- **THE SKY POOLS' CLOUD SEA MOVES** (`SkyPoolsService.cloudSea`): mist banks roll slowly across the tops
+  on one wind, and wisps lift off them near the middle. About 250 particles live at once.
+- **Checks**: `check_story` and `check_skypools` hold all of it; `blender/mutations/pass19.py` plants 15
+  bugs and every one is caught.
+
+### Eighteenth pass (2026-09-29): the journal, the nooks, endings you can read, and every ending redone
+
+From four recordings in one session **(you)**: keepsakes showed no toy, only a card when you stepped on a
+material; keepsakes and notes came up too often and should be picked up and read later from a menu, the
+way Poppy Playtime keeps notes; notes and signs should be off the main passage, in optional places, and
+the way to the secrets should sometimes lead you there on its own; a lobby choice of first or third
+person, locked for the run; the aquarium's fish spun when the glass was tapped; bubble wrap's sound came
+late; the Sunken City's whirlpool should look like real swirling water, like the aquarium's flood, and
+its shaft better; the endings' text was too fast to read; a City Shore note could not be put down with R
+after a secret's scene; you could fall off the Siren Tower's bridge; the dive should be more cinematic;
+the Sky Pools' fountain tower should look better, its ending have more action, its light was washed out
+and one shot was too close; the Flooded Halls' maw was covered by a circle and the slide lagged; soap
+should crumble without black cracks. How each is done is mine **(suggested)**.
+
+- **THE JOURNAL** (`JournalService`, new; J, the book beside the pause tab, or Y). Nothing goes on the
+  screen over the level any more. `Interactables.take` sends what you took over `StoryMoment` ("journal");
+  a small line comes up in the corner (never during a scene) and the book keeps Notes, Keepsakes and
+  Secrets, unread ones dotted and counted on the tab. The thing you picked up is hidden on your screen
+  only ("hide"), so the next player can still find it. `Interactables.read` and its paper overlay are
+  gone, which is also the end of the note that R would not put down. Session only, not saved.
+- **KEEPSAKES ARE THINGS** (`Interactables.keepsake`): a few parts in the material's colour on a stool,
+  with a glint and a small real light. `KeepsakeService` is deleted (delete it in Studio too) and
+  `ScreenEffects` no longer calls it.
+- **THE NOOKS** (`StoryService.nookOff`): small balconies built out from the side of a chunk (outward on a
+  ring), a gangway across, solid rails, joists back into the chunk and a strut under each (its foot found
+  by a ray), and a lamp on a post. Only where the engine says the space is clear (GetPartBoundsInBox), and
+  clear of the Siren Tower's shaft and bridge. The pry bar is in the first, each note in its own, and up
+  to four keepsakes of the level's materials in them; a note only goes on a chunk if no nook fits. On
+  six runs in ten a string of bunting runs out to a nook from the route. Loose bricks, the loose board
+  and the locker with something in it glint.
+- **THE SIREN TOWER'S BRIDGE** has solid posts, top and mid rails, and an invisible guard nine studs high
+  (as the Sunken City's pier has), and two lanterns at its head.
+- **CAPTIONS ARE READ** (`Cinema`): up for as long as their words take to read twice, a new one waits for
+  the last to be read once, a scene holds its last shot while one is up, bigger type on a dark band.
+  `Cinema.done()` / the `SceneState` remote: an ending says when it has been watched, the server waits
+  for that (at most 50 s) before its six seconds to the lobby, and the banner waits too. `finish()` puts
+  the camera over your shoulder before handing it back (it was left looking straight down in the lobby).
+  The fall-ownership windows are a minute now for the same reason.
+- **THE VIEW** (`ViewModeService`, new): third or first person, chosen in the lobby (or V), locked for the
+  run (third held at 14 studs, first `LockFirstPerson`), free again in the lobby.
+- **CITY SHORE'S DIVE**: the leap (the fall held back for its first second), a close orbit as you turn
+  over, falling with you from underneath, the water shot only in the last 120 studs, a splash with a
+  crown of spray and a flash, then the drowned street. The server's carry is drawn smoothly on the
+  diver's screen. `DiveFinaleService.RELEASE_AFTER` is a minute.
+- **THE SKY POOLS**: the fountain tower rebuilt (fluting, banded tiers with lit windows, two bowls above
+  the basin spilling into each other, a jet, six arcing jets, eight separate streams with mist, and a
+  faint rainbow). The slide ends in a **skim** across the pool (`SkyPath.skimFrame`, three hops, 2.8 s;
+  the server stands you where it stops). The camera knows where the clouds are (`CloudTop`,
+  `CloudBottom`) and shoots the cloud crossing from underneath; the face shot is 14 studs off. The light
+  is a step down each (brightness, exposure, bloom) and the sun at three o'clock, as the story has it.
+- **THE SUNKEN CITY**: the whirlpool's rings are see-through, and over them a swirl of spray carriers the
+  client turns with the rings, each throwing spray in toward the middle, so the surface is spiral arms of
+  foam; the hole pours down. The drain shaft is lined: wet brick, flanges, a ladder, caged lamps that
+  flicker, and water streaming down its walls; the ride has a shot falling with you down it. The fish
+  add up their turn instead of working it out from the clock, which was the spinning.
+- **THE FLOODED HALLS**: the server writes the flume's path down once (`FlumePath`, 221 steps) and the
+  rider's own client draws the ride from it; the server only moves a rider whose client never says so.
+  New shots (a chase, from the shaft's wall, from ahead), never across the mast. The maw has no throat
+  part (its end was the black disc), has a tongue, a glow inside and a spotlight from above, and is 90
+  studs down; its scene and the gate chamber are slower (`GATES.MAW` 8.5, `SECONDS` 42, `KEY_AT` 14).
+- **BUBBLE WRAP** is heard the moment your own foot touches a cell (`DeformationRenderer`, `pops`), and the
+  server's word about the same step a moment later plays only the picture. **SOAP** has no cracks.
+- **Checks**: `check_story`, `check_skypools`, `check_halls` and `check_sunkencity` hold all of it;
+  `blender/mutations/pass18.py` plants 33 bugs and every one is caught.
+
+### Seventeenth pass (2026-09-29): silence at the endings, secrets, and the mouth
+
+From your notes **(you)**: the ambience should stop when an ending's scene plays, every level should
+have ambience, the story should be written like a film, lore should come through letters, lockers,
+doors and things broken open with a tool, every level should have a secret, City Shore a tall building
+reached from a chunk, the Sky Pools something under a pool, the Flooded Halls something by the slide,
+and the flume should end in a giant creature's mouth, only its teeth showing out of the dark, with a
+really good scene. How each is done is mine **(suggested)**.
+
+- **An ending silences the level.** `Cinema.begin` fades out every sound tagged Ambience (the Sky Pools'
+  water, the Sunken City's water, the baths' drips) and marks the player Hushed, which the Sunken City's
+  mood and `AmbienceService` both honour, so nothing brings it back until the next level. A secret's
+  short scene does not (`{ hush = false }`).
+- **Every level has ambience** (`AmbienceService`, new): the sea far below at City Shore, wind and the
+  party's one song through a wall at the Sky Pools, the harbour at night with a buoy bell in the Sunken
+  City, the baths' strip-light hum, and under all of them the Hold's drone. Generated as seamless loops
+  (`audio/gen_material_sfx.py`, `audio/ambience/`); put them in `SoundService.AmbienceSounds`, or slowed
+  built-in sounds stand in where one will do. The server marks each player InLevel so their own client
+  knows which, and HubService clears it on the way home.
+- **The screenplay**, `story/HARROW_BAY.fountain`: the game as a film, in Fountain, every scene and shot,
+  with notes naming the code that plays it. LORE.md now says how the story is told, in layers.
+- **Secrets** (`Interactables`, new; `StoryClient`, new): letters lying on the ground (one a level), MR
+  BARLOW'S PRY BAR on an early chunk of every level (it goes on your back), lockers and a tin box that
+  open, loose bricks and a loose board that only the bar opens. Five secrets, each played as a short
+  scene when found (the camera drifting in along a curve, depth of field on what you found, a sting,
+  its name and a line), then "Secret 2 of 5" and a note to read:
+  - **City Shore: the Siren Tower**, out of the sea in the middle of the spiral, red brick with stone
+    pilasters and string courses, lit slit windows, a clock stage at 9:14, a balcony, a copper dome,
+    the mechanical siren and a red lamp. A footbridge on stays reaches its Siren Room from a chunk
+    halfway up (chosen so it passes clear of every other chunk). Inside: the siren log on the desk,
+    the control panel, a lamp, a ladder to a shut hatch, and loose bricks with R. Pell's letter behind.
+  - **Sky Pools**: a tin box on the first pool's deep floor, bubbles coming off it: a photograph.
+  - **Sunken City**: a staff locker in the aquarium gallery: E. Marsh's letter.
+  - **Flooded Halls**: four staff lockers on the gangway (yours is 3: "I'll go in tomorrow."), and a
+    loose board by the far rail: underneath, straight down into the shaft, something breathes.
+  The level services only mark where (parts tagged StorySpot); StoryService builds everything.
+- **The mouth** (`Maw`, new, client; `blender/gen_maw.py`, four new meshes): at the end of the fall the
+  picture no longer just dips to black. Six seconds (`GATES.MAW`) on the rider's screen: from inside its
+  throat looking up, its jaws opening under you, needle teeth in rows, a glow far down; falling with you
+  from above, a dolly zoom as it rushes up; from the side, level with the teeth, as it shuts, with a
+  jolt; black; a heartbeat; "The Hold. It keeps what it is given." Then the Gate Chamber, as if you had
+  been spat out into its sump. Only its mouth, ever. Without the meshes a rougher mouth of parts stands
+  in. The server holds the move into the chamber for those six seconds.
+- **Cinema** has a camera operator's kit now: `spline` (Catmull-Rom paths), `shake`, `focus` (depth of
+  field) and `black`.
+- Checked: `check_story`, `check_halls`, `check_skypools` and `check_sunkencity` hold all of it; the
+  pass 17 suite plants 25 bugs and all are caught.
+
+### Sixteenth pass (2026-09-29): the Hold and the keepsakes
+
+From your ask to make the lore unique to this game **(you)**; the idea is mine **(suggested)**: every
+material is something somebody in Harrow Bay was holding when the water came, kept by the Hold and
+grown into the stepping stones. That is why every surface wants to be pressed, why it remembers your
+weight and then forgets it (the day comes round again), and why every level ends by going down.
+
+- **Keepsakes** (`Shared/Keepsakes.lua`, new; `KeepsakeService`, new, on the client): one for each of
+  the 27 materials, with what it was, where it came from and one line about who was holding it (Sal's
+  honey, Pip's sand, Dev's parcel of bubble wrap, Mrs Venn's soap, the waterworks teleprinter...). The
+  first time in a session you stand on a material, a card slides down at the top of the screen:
+  "Keepsake 5 of 27". Cards queue, wait for any scene to finish, and stay up nine seconds.
+  `ScreenEffects.onStep` hands it your own steps.
+- **The Hold** is named by the old-timers (Mr Wick, Mrs Venn, Mr Barlow). **The Watcher** is E. Marsh,
+  the key holder before you, who waited too long. **The fisherman** is Mr Wick, who held the key in
+  1946. New lines for Sal, Pip, Dev, Mr Wick, Mrs Venn and Mr Barlow carry it.
+- **A fourth thing to read on every level**: the Novelty Works' summer list, the Promenade Hotel's note
+  about the stairs, the list of key holders since 1911 (your name last), and the baths' lost property
+  (a front door key on a green ribbon, marked HILL HOUSE: a hook for a Level 5, in LORE.md).
+- `check_story.py` now holds every material to a keepsake with a thing, a place and a line, every
+  caption and keepsake to having no dash, and every source file to naming its Studio place in its
+  first lines (seven had not).
+
+Added in the fourteenth pass (2026-09-26), from your idea that the people on the levels are living
+their ordinary lives and do not know they are in what the player calls the backrooms **(you)**. The
+shape of it is mine **(suggested)**.
+
+**The premise.** Harrow Bay is a seaside town on the day the sea came in and never went out. The
+tide came in on the 11th and has not gone out since. The Harrow Bay Corporation Waterworks (1911)
+could let it out, but the outfall gates only open with a key, and the key holder took it home and
+never came to work. Everyone on the levels is still living that day, a little later each time you
+meet them, and none of them thinks anything is wrong. Several of them think you might be the key
+holder. At the end of the Sunken City, you find the time card, and it has your name on it. At the
+end of the Corporation Baths you find the gates, and the key in your pocket, and you open them. The
+tide goes out. And the last line on the screen is 14 August, 9:14 in the morning: the day begins
+again.
+
+**What the player calls the backrooms.** The townsfolk call it Harrow Bay. The one who comes
+closest is Mrs Venn at the baths: the people who come down from up there always call it the
+backrooms, she says, and it is the back rooms of the baths, dear. Staff only.
+
+**The threads.** Tobi Okafor went down in the morning to find the key man, in his trunks with his
+red towel: at nine his daughter Pip is waiting for him on the front, at three his wife is keeping
+his seat at the pools, at midnight the fisherman says nobody who went down the drain came back, and
+in the baths Tobi is still looking ("They're longer every time"). The flood siren is tested at noon
+every day; at midnight it is not a test. Every clock in town stopped at 11:52; under the pumping
+station they have started again, and they reach midnight when the gates open. Mr Barlow, the night
+engineer, can start the engines but cannot open the gates.
+
+**The same day, later each time, and numbered in that order.** Each level opens with its number, a
+place and a time low on the screen (`StoryService.opening`, fading in over about two seconds, held
+twelve). The lobby's pads say "Level 1: City Shore" and so on, with the time each is set at:
+
+| Level | Opens on | The people there |
+|---|---|---|
+| 1 City Shore | 14 August, 9:14 in the morning | **Sal**, with her ice cream cart on the first stable chunk; **Pip**, eight, building a sandcastle on a stable chunk about halfway up while she waits for her dad, who went to find the key holder; **Maren** the lifeguard on the dive deck |
+| 2 Sky Pools | 14 August, three o'clock | **Dev**, handing out towels on the first terrace; **Mrs Okafor**, on the edge of a lounger keeping her husband Tobi's seat (he went down to find the man with the keys); **Rudy**, playing the same song on a record deck at the top of the slide |
+| 3 The Sunken City | 14 August, eight minutes to midnight | **the Attendant** in the aquarium (every clock stopped at 11:52); **the Fisherman** on the pier ("Lot of folk went down that drain looking for the key man"); the faceless **Watcher**, who says nothing |
+| 4 Flooded Halls (the Corporation Baths) | 14 August, four minutes to midnight, under the pumping station | **Mrs Venn**, the baths attendant, behind her ticket desk on the first stable chunk; **Tobi Okafor** on a bench about halfway, red towel round his neck; **Mr Barlow**, the night engineer, with a lit lantern on the gangway to the flume |
+
+**The reveal.** The drain ends in the harbour pumping station, at Outfall 3 (the Sunken City's
+fourteenth pass). The pumps read zero, the gate lever is down, hook 3 on the key board is empty, and
+the time card in the rack says `KEY HOLDER / <your display name> / 14 AUG / NOT CLOCKED IN`.
+
+**How it is told.** You talk to anyone with a line by walking up and pressing F (a prompt; E is the
+aquarium glass's). They greet you on their own the first time you come near, turn their heads to
+follow you while you are close, and talk with their hands. What they say stays up for twice as long
+as it first did (`Townsfolk.READ`). Maren shouts after you when you dive, and Rudy when you take the
+slide. What they say is all in `Townsfolk.LINES` and `SHOUTS`: to change the story, change it there.
+
+**Things to read.** Four notice boards on posts on every level, on stable chunks beside the route:
+press R and the words come up like a sheet of paper; R again, or walking on, puts them down. City
+Shore has the Harrow Bay Gazette, the council's siren notice, Pip's drawing and the Novelty Works'
+summer list; the Sky Pools the party invitation, the guest list, Tobi's note on a lounger and the
+Promenade Hotel's note about the stairs; the Sunken City the tide table (high water at 11:52 every
+night), the waterworks notice with the key holder's name scratched out, a MISSING poster and the list
+of key holders since 1911; the baths the rules of the baths, Tobi's postcard to Pip, the waterworks
+rota with your own name on it and the lost property. Every word is in `StoryService.NOTES`.
+
+**How they look.** Each person is dressed limb by limb from `Townsfolk.LOOKS`: sleeves that stop
+where a short sleeve stops, trousers or shorts or a skirt, shoes or bare feet, hair (short, bun,
+ponytail, bob, afro, receding) made of shaped parts round the head, a beard, a moustache or glasses
+where they have them, and their own proportions (Pip is eight; Mr Barlow is broad). They stand easy
+rather than as shop dummies, and sit with their hands in their laps.
+
+`check_story.py` holds it together: everyone stood up has at least three lines and a look, at least
+two people on each level mention the key holder, the openings are all on 14 August and numbered,
+there are three things to read on every level, and no line anyone reads has a dash.
+
+**Where it lives.**
+- `ServerScriptService.Services.Townsfolk` (new; it replaces `SunkenNPCs`): who everyone is, what they
+  say, how they stand, greet, look at you, shout, and (the attendant) panic. `spawn` stands anyone up;
+  a sitter's `feet` is the top of what they sit on.
+- `ServerScriptService.Services.StoryService`: the openings, the notes, and the people of the two
+  levels whose services do not stand their own (City Shore's Sal and Pip, and the baths' Mrs Venn,
+  Tobi and Mr Barlow). Bootstrap calls `StoryService.stage` once the level is built.
+- `ReplicatedStorage.Shared.Poses`: joints of either kind (Motor6D or the newer AnimationConstraint)
+  and the poses the endings use: `flail` (the drain), `dive` (City Shore), `sled` (the slide),
+  `flume`, `climb`, `key` and `wheel` (the Flooded Halls).
+- `StarterPlayerScripts.Services.Cinema`: the camera when an ending takes it. Black bars in, controls
+  off, captions held seven seconds, a smooth pan within a shot and a clean cut between shots, a dip to
+  black to go somewhere else, your own character always drawn (even if you were zoomed into first
+  person), and everything given back at the end.
+- To give someone your own look, build them in Studio and put the model in `ServerStorage.Townsfolk`
+  under their name.
+
 ## City Shore's finale (Level 1)
+
+### Fifteenth pass (2026-09-29): slower, and you are always in shot
+
+- **Half speed.** The fall is held to 110 studs a second and 10 across on the diver's own screen,
+  and the server's carry over the last 400 studs is 120 studs a second (was 350): the dive takes
+  about three times as long and can be watched. The swan is held longer before it closes. A caption
+  opens it ("The High Dive") and the one under the water is up for nine seconds.
+- **Always in shot**, whatever your camera zoom (`Cinema`).
+
+### Fourteenth pass (2026-09-26): the dive as a scene, and people on the shore
+
+- **The dive is a scene** (`CityShoreClient`, new, on the client). Off the board from low at its tip;
+  falling alongside, circling; from the water looking up as you come down; then the water closes
+  over you and the camera follows you down to a street far below with one lamp still on ("Somewhere
+  under the water, a street lamp is still on."). Held until the lobby takes you.
+- **Head first.** Your own client turns you over as you fall (PlatformStand, so the humanoid does not
+  right you), and `DiveFinaleService.commit` now keeps that angle for the last of the fall and the
+  sink, where it used to stand you back up. Everyone sees a swan dive closing to arms over the head
+  (`Poses.dive`).
+- **Maren** on the deck, **Sal** at the start, **Pip** halfway up (see the story, above).
+- Wired through a new remote, `DiveCinema`, made by the server Bootstrap. Not yet seen in Studio.
 
 **State on 2026-09-16:** the board works in Studio. Diving was reported sending the player back
 to the route in a Short Chill run; the cause and the fix are below and **not yet seen in Studio**.
@@ -902,6 +1291,28 @@ the deck you were on, and the slide stuttered and rode standing up. All of that 
   route that wanders has no equivalent of, so each one is now tried at a few angles until it finds
   one at least 300 studs from every chunk.
 
+### Fifteenth pass (2026-09-29): half speed
+
+- `SkyPath.SPEED` is 36 (was 70), clamped to 16 to 30 seconds, so the slide takes about eighteen
+  seconds; the pool is held for 3.2 seconds after the splash, and the caption for seven.
+- Mrs Okafor, Dev and Rudy are dressed (see the story), and there are three things to read.
+
+### Fourteenth pass (2026-09-26): the slide as a scene, and people at the pools
+
+- **The slide is a scene** on the rider's screen (`SkyPoolsClient` with `Cinema`), captioned "The Long
+  Way Down / Everyone takes it in the end.": over your shoulder down the slide as you push off; from
+  far out in the sky, going round the tower with you; from just ahead of the sled looking back at you;
+  from the pool as you come down into it; and the pool with the tower rising out of it held for 1.6
+  seconds after the splash, then the camera is yours. The bands and the drop counter give way to the
+  scene's bars (they still show, and the splash still flashes, in a place without `Cinema`). If the
+  sled goes mid-ride, the camera is given back at once.
+- **Arms up the whole way down**, seen by everyone (`Poses.sled`): the server tells every client
+  (`SkyRide`, `"pose"`), since joints turned on one client are seen on that client only.
+- **Dev** at the first terrace's walk in with towels, **Mrs Okafor** sitting on the edge of a lounger
+  in her sunhat, **Rudy** at a record deck between two speakers beside the queue for the slide, clear
+  of its painted lane (see the story, above). Rudy shouts after you when you go.
+- Not yet seen in Studio.
+
 ### Sixth pass (2026-09-23): what play found
 
 - **The flanking shelves are gone from the chunk kit** (`ChunkBuilder`, `S1_Straight`,
@@ -1094,6 +1505,258 @@ asks for it with `backdrop = "sunkenCity"` and `finale = "drain"`. The picture i
   a second over a low drone, then puts the light out for 0.8 s, and the face is gone. Chill players
   never roll.
 - **The pier's lantern** hangs from its own post and arm at the far end: a warm PointLight.
+
+### Fifteenth pass (2026-09-29): half speed, and F7
+
+- The drain takes 13 seconds (was 6.5), the outfall 16 (was 9) and the reveal 7 (was 3.4); the
+  station's caption stays up for seven.
+- **F7 did not hide the Studio panel**, because the listener skipped any key Roblox had marked as
+  handled. It now starts hidden, F7 shows and hides it whatever Roblox thinks of the key (except
+  while you are typing), and it has an x to click.
+- The attendant and the fisherman are dressed, and there are three things to read along the route.
+
+### Fourteenth pass (2026-09-26): on through Outfall 3 to the pumping station, and more fish
+
+From a recording: "much better", with the fish and the scenes finally showing. Asked for **(you)**: an
+ending that is properly cinematic and goes on to the end of the tunnel, five seconds to stand there
+after LEVEL COMPLETE, more to the fish, and then the story and scenes for the other two levels (see
+the story section, City Shore and Sky Pools).
+
+**The ride goes on.** At the bottom of the sluice, the door marked OUTFALL 3 has burst open, and the
+water carries you out through it: on your back, feet first, lifted off the floor and swaying, 140
+studs down a culvert of ribs and caged lamps (`SunkenPath.outfallAt` and `outfallFrame`, nine
+seconds). The walls are written on: OUTFALL 3, WHERE IS THE KEY MAN, a long tally, and KEY HOLDER
+ONLY BEYOND THIS POINT. The camera goes ahead of you looking back, alongside, over your shoulder, and
+then into the hall as the water sets you down on your feet in it.
+
+**The Harbour Pumping Station.** A hall 32 by 36, 16 high: three pumps with their gauges on zero; the
+control desk with its lever down, GATES: CLOSED, and a note ("If the water comes, open the gates.
+The key is with the key holder."); a key board with hook 3 empty; the clock on 11:52; a rack of time
+cards; a sump grate churning; one hanging lamp; a green emergency lamp over a shut door marked LOWER
+GALLERY. NO ENTRY. (the Flooded Halls). As you land, "Harbour Pumping Station / Outfall 3. The gates
+are still closed." comes up and the camera closes in on the one card that is out of the rack. It
+says `KEY HOLDER / <your display name> / 14 AUG / NOT CLOCKED IN`. After 3.4 seconds the camera is
+yours, LEVEL COMPLETE comes up, and you have **six seconds** in the station before the lobby
+(Bootstrap's return delay went from four to six for every level).
+
+**Nothing kills you on the way.** The kill plane leaves riders alone, and arrivals for 30 seconds
+(`SunkenCityService.ownsFall`); the rider's speed is cleared every step on both sides, as before.
+
+**More fish.** A shoal every 45 studs of the route, of 14 to 22 fish, and they dart out of your way
+when you swim within 13 studs of them, drifting back into the shoal as you go.
+
+**`SunkenNPCs` is now `Townsfolk`**, the people of every level (see the story). Delete
+`ServerScriptService.Services.SunkenNPCs` after pasting `Townsfolk`.
+
+Checked: `check_story.py` is new, `check_sunkencity.py` now holds the outfall's and the reveal's
+lengths, the fish scattering and the shoal spacing, and 32 new mutations are caught against a clean
+baseline. The earlier suites (passes 8 to 13) were pointed at the renamed modules and all catch.
+
+### Thirteenth pass (2026-09-26): the client found, joints of either kind, the attendant runs, the drain as a sequence
+
+From two recordings and their Output. The flood worked (terrain water, swimming, spray, leaflets).
+
+**Why SunkenCityClient never ran: an old client Bootstrap.** The server's Studio check reported
+`SunkenCityClient loads (twelfth pass)`, so the module was fine; the client printed `[client] Bootstrap
+ready` from line 255 where the current file prints it from line 272 -- and the seventeen lines missing
+are exactly the loop that starts SkyPoolsClient and SunkenCityClient. The place's Bootstrap is a copy
+from before those levels existed, so neither level's client has ever started. Paste
+`src/Client/Bootstrap.client.lua` over it. It now also says `[client] started SunkenCityClient` (or why
+it failed); and the Studio notice, which was cut off at a narrow screen's edges, now fits and says
+exactly this when the module loads but no client says hello.
+
+**Joints of either kind.** The same Output showed a player's character with fifteen
+AnimationConstraints and no Motor6D (Roblox's newer avatar joints). Everything that turned joints --
+the ride's flail on the server and on the client, the people's poses -- turned Motor6Ds only, so the
+rider's arms never moved and the fisherman stood beside his crate instead of sitting on it.
+`SunkenPath.joints` finds either kind; `SunkenPath.turn` offsets one on the server (a Motor6D's C0, or
+the AnimationConstraint's parent-side attachment); `SunkenPath.drive` sets one the client's way
+(its Transform).
+
+**The drain, as a sequence.** Grabbed (thrown right back), spun round the funnel three times, sent
+head over heels twice down the shaft and righted to land on their feet (`SunkenPath.tumble`), with a
+trail of bubbles and spray streaming off the rider for everyone and a splash and a thud where they
+land. The camera cuts between four shots: close on the face at the grab, circling in the funnel, from
+over the shaft looking down, and from low in the sluice looking up -- held while they land. And they
+no longer fall THROUGH the sluice's floor: the server's ride took no speed away, so the rider's own
+client kept adding gravity under every position it was handed and landed at hundreds of studs a
+second. Now both rides clear the rider's speed every step, the server takes the rider's physics while
+it draws the ride, and the floor is six studs thick. The whirlpool's throat breathes a column of
+bubbles, whatever the client is doing.
+
+**The attendant runs.** When the glass goes they jump with their arms thrown up and their cap flying
+off, and run screaming (`AAAAAH!`, `THE GLASS!`, `RUN! GET OUT!`...) past the bench, through the tunnel's
+doorway and down the tunnel; once the water is deep enough they swim (under it in the tunnel,
+blowing bubbles: `GLUB!`), tread water at the surface in the tower complaining about their job, and
+when it has drained walk back with their head down, put their cap back on and say something about a
+mop (`SunkenNPCs.panic`, on `aq.escape`).
+
+**More water where they stand.** Jets through the cracks round the frame, fanned to the sides (bubble
+streams once under), the sea sheeting down the wall under the window, a foaming surge racing across
+the floor, and the notice asking you not to tap the glass torn off its wall and floating.
+
+**Found on the way, and a new check.** The flood's setup read `flood` in a loop above its own `local
+flood`, which Luau takes as a nil global -- the glass would have thrown on every run. Neither checker
+could see it, so `check_luau_syntax.py` now RESOLVES every name: each must be a local in scope at that
+line, a parameter, a loop variable or a Roblox global. And the Ferris wheel (still "NO Ferris wheel"
+in play, though the layout model finds a place on 6000 sampled layouts, so the model and the game
+disagree somewhere) now tries both sides of the street at three distances, and the report says why
+each place was refused when none fits.
+
+Checked: 27 new mutations caught against a clean baseline, and the earlier suites again.
+
+### Twelfth pass (2026-09-26): a flood to swim in, a ride that moves without the client, and why the client does not run
+
+From two recordings and the Output of the same session: `SunkenCityService: ...'s client did not take
+the ride down the drain`, no Studio panel, no `SunkenCityClient: running` line. So SunkenCityClient is
+not running at all on that client, and every recording since the sea life went in has shown exactly
+that: no animals, no flood, and the server's stiff ride.
+
+**Finding out why, for certain.** It is not a syntax error: `blender/check_luau_syntax.py` (new) is a
+real parser for Luau's grammar, types and all, with the compiler's own extra refusals (a statement
+after `return`/`break`/`continue`, `break`/`continue` outside a loop, assigning to a call, and a call
+whose `(` starts a new line), and every file in `src` parses. Proven on 22 kinds of broken Luau it
+rejects and 16 tricky valid ones it accepts. So the cause is in the place, and the server now finds
+it: in Studio, SunkenCityService looks for `StarterPlayerScripts.Services.SunkenCityClient`, says
+where it is if it is somewhere else, says if it is a LocalScript or Script instead of a ModuleScript,
+and REQUIRES it the way Bootstrap does, printing its own load error or saying it never finished
+loading (an infinite yield); and it warns if StarterPlayerScripts has no LocalScript to start it.
+Each client says hello as it starts (`SunkenCityService: SunkenCityClient is running for ...`), and in
+Studio anyone whose client never does gets a notice on screen after 25 seconds. Pasted as a
+LocalScript by mistake, the client now starts itself.
+
+**The ride moves without the client.** The flail and the lean are `SunkenPath.flail` and
+`SunkenPath.tumble` now, shared: the rider's client turns the joints through their Transform, and
+when it is not running the server turns them through C0 (which every client is sent) and leans and
+rocks the rider itself. The camera scene still needs the client.
+
+**The flood is water you swim in.** Terrain water, like the flooded floor under the flat: one level
+rising through the gallery, the tunnel and the tower (the gallery full in `TAP.rise`, 8 s, the tower
+on up to the sea), rewritten only while it moves. A torrent pours through the hole (falling water
+streaked by its speed, spray), foam churns where it lands and follows the water up, bubbles rise
+through every room, the aquarium's leaflets float up and drift, and once the hole is under, the sea
+comes through it as a rush of bubbles. Under it the view goes murky (Roblox) and every sound goes dull
+(the client's UnderWater reverb, from one terrain voxel at the camera). It stays until `TAP.hold` (40
+s), drains over `TAP.drain` (6 s) and the glass is whole. Nobody is washed out any more, and the boxes
+of see-through parts that "filled up" are gone. Registered with the level's swimmable water, so a
+level torn down mid-flood leaves none behind.
+
+**And:** the chest turned to face the window; the Ferris wheel has sixteen places to try instead of
+five (the window rule left it nowhere on 12 of the modelled layouts, and "NO Ferris wheel" in play;
+the checker's model of its placement now includes that rule); the hub statue has no score sign over
+it (four overlapping lines, 0:00.00 for any level without a record, and the leaderboard already says
+it); and in Sky Pools the water is no longer Glass, which hid every see-through chunk behind a pool
+or a waterfall, nor is the soda jelly, which mirrored the open sky at a low angle and washed out.
+
+Checked: 31 new mutations caught against a baseline that must pass first, and the 70 before them.
+
+### Eleventh pass (2026-09-26): the ride as a scene, the sea coming in, and why nothing moved
+
+From four screenshots of play: the attendant's words cut off by the window frame, a jellyfish ringed
+in slime green, a stiff figure going down the drain, and a plain chest.
+
+**Why the animals, the flood and the ride all failed together.** SunkenCityClient's second line was
+`require(ReplicatedStorage.Shared:WaitForChild("SeaRig"))`, with no timeout. In a place without
+SeaRig pasted in (or with an older copy that failed as it loaded) that line waits forever: the whole
+client stops there, with nothing in Output but an "Infinite yield possible" line. Every animal, the
+flood, the Ferris wheel turning, the serpent and the ride's own drawing are the client's, so all of
+them were missing at once, and the server's plain ride (upright, turning, stiff) was all anyone saw.
+Now SeaRig is looked for with a timeout and checked for everything the client calls; without the
+whole of it the animals are built from parts and Output says why. The client says which version is
+running as it starts; in Studio a panel at the top left (F7 hides it) shows what it is drawing:
+SeaRig's state, the animals and the nearest one, shoals, kelp, gulls, the Ferris wheel, the thing,
+the flood, the ride and anything that failed. Each animal now moves on its own, so one that throws
+stops only itself. And the server warns when a rider's client never takes the ride.
+
+**The sea coming in is the server's.** Drawn only on the clients, it was never seen by a client
+that was not running. Now SunkenCityService draws it for everyone: the pane cracks right across and
+groans, then bursts into shards that are thrown in and land on the floor; jagged teeth of glass stay
+in the frame; the sea pours in through the hole as a sheet of falling water with drops streaming
+down it, foam where it lands and the roar of it; and one level of water rises through the gallery,
+the tunnel and the tower at one rate, the gallery full after `TAP.rise` (8 seconds now, slow enough
+to stand in and watch; it was 3.5). The pour's foot rises with the water. `TAP.wash` (1.5) later
+anyone inside is washed out: the sea closes over the screen ("The sea carried you out"), you are
+carried to the checkpoint, and it clears. At `TAP.hold` (24) the water goes down over `TAP.drain`
+(4) and the glass is whole. The client only scrolls the water's textures smoothly and turns the view
+green and soft under it.
+
+**The drain is a little scene.** Your camera leaves you: it circles in close while the whirlpool drags
+you round, then looks straight down the shaft from over its top as you drop away, with black bars
+across the top and bottom of the screen and your controls off until you land. You go round leaning
+back against the pull, rocked about, instead of stood upright. Every client flails you (arms thrown
+up and waving, elbows working, legs kicking, head thrown back; R15 and R6), because joints turned on
+one client are seen on that client only; and over your head, for everyone, you shout HELP!, AAAAH!,
+HELP ME!, NOOOO!... A reset part-way down ends the scene.
+
+**The jellyfish is its own**: violet rings instead of slime's green, violet tendrils that hang
+further, a real light that flashes where you land and fades, and motes of it drifting up.
+
+**The chest** (`blender/gen_treasure.py`, five meshes): a planked sea chest with its barrel lid thrown
+open, iron bands, brackets and a torn hasp, a heap of coins with a crown and a goblet on it, rubies,
+a string of pearls over the edge and coins spilled on the rock, with a faint warm light on the gold.
+
+**Smaller things.** The people's speech is drawn over the room (it was hidden by the window frame),
+bigger, bolder and boxed; the attendant's Talk key is F (the glass's is E). The Ferris wheel keeps
+190 studs from what the gallery's window looks at.
+
+Checked: the client starts without SeaRig and says which code is running; the panel exists only in
+Studio; each animal is guarded; the server draws the water, the pour, the shards and the teeth, and
+washes nobody out before the gallery is full; the scene finishes the moment the ride does, gives the
+camera and controls back and puts the joints back to rest; the jellyfish's colours are violet; the
+chest's meshes are sizes SeaRig knows. 30 new mutations caught, and the 45 before them again.
+
+### Tenth pass (2026-09-25): the glass, the animals, landmarks, the side streets and people
+
+From a recorded play-through (the gallery, the tap, and a run down the street).
+
+**What the tap did, from the video.** The pane cracked at the third tap, cracked further and wept at
+the fifth, and went at the seventh; three and a half seconds later the server washed the player out
+to the checkpoint, exactly on schedule. But no water was drawn at all -- no rising water, no shards,
+no jet -- because the client only ever learned of the flood through one attribute signal, and that
+signal was missed. It now ASKS: `stepFlood` reads the level's `Flood` every frame, starts the flood
+when it changes and drains it when it goes to 0, and says once in Output that it is filling N spaces
+(or warns that none have arrived). And the sea now visibly comes in: a sheet of water pouring from
+the hole to wherever the water has reached, with spray where it lands and the rush of it, and the
+rising surface rippling like the sea's.
+
+**Only the window with the notice can be tapped.** The prompt was on the tunnel's panes as well;
+now it is on the gallery's window alone.
+
+**The animals were there and could not be seen.** They wandered up to SWIM_REACH either side of the
+centre line, so half the time they were under the chunks; they were dark greys and greens; and the
+big ones were up to twenty studs down. Now each swims in a lane BESIDE the route (`SWIM_LANE`, 15 to
+19 out, never nearer than the route's edge), the shoals likewise, a little nearer the top, in the
+palest colours their kinds come in, with more of the ones you see best (dolphins, turtles). If they
+still do not show, the client's report line says whether their meshes were drawn, refused (and
+why) or never imported.
+
+**Landmarks** (`blender/gen_landmarks.py`, ten meshes): the Deco tower (stone piers over dark glass,
+a brass crown of sunburst arches, a needle), the Needle (an observation tower: tapering shaft on
+three fins, saucer pod with a band of glass, mast), the Twin towers and their skybridge, and a glass
+block that has started to go over, its top floors broken at one corner. Each stands on the sea floor
+in its own square, 300 to 330 off the route, short of where the things at the back swim; the spires
+carry real aviation lights. Tiers of parts stand in when the meshes are not imported.
+
+**The side streets** have things in them now: utility poles down every other one, wires sagging
+between them; boats in the others (`blender/gen_boats.py`: rowboats and motor launches, some turned
+over), bobbing like the buoys; a street sign at every corner on the boulevard, the street's name on
+one blade and SEA BOULEVARD on the other; METRO totems on the boulevard's pavement; and now and then
+a lettered sign on a roof (HOTEL, BANK, CINEMA...). All of it stands past EMERGE_CLEAR of the route.
+
+**People** (`ServerScriptService.Services.SunkenNPCs`, new; `Townsfolk` since the fourteenth pass): the aquarium's attendant beside the
+notice (talk to them; tap the glass and they object, then shout, then tell you to run), a fisherman
+on a crate on the pier with his rod over the rail, and someone on the Deco tower's first ledge,
+facing the street, with no face. Built on the server as real R15 characters from a
+HumanoidDescription and posed by turning their joints, so no animation or asset has to be uploaded;
+a plain figure of parts stands in if a character cannot be built. To dress one yourself, make the
+character in Studio (Avatar > Rig Builder), dress it, and put it in `ServerStorage.SunkenNPCs` named
+`Attendant`, `Fisherman` or `Watcher`.
+
+Checked: the window alone is tappable; the client asks for the flood and pours it; swimmers and
+shoals keep to their lanes; every landmark's height is its mesh's, it fits its square (the lean
+counted), the leaning one's front edge stays on the floor, and each has somewhere to stand on every
+run; everything in the side streets and the metro keeps off the route; the people are wired in and
+the attendant hears the glass. 15 new mutations caught, and the 32 before them again.
 
 ### Ninth pass (2026-09-25): the thing as a serpent, and the client made cheaper
 
@@ -1485,6 +2148,37 @@ from that.
 - Nothing is seen in Studio yet: the look of the water and the depth tinting, the parts count, the
   thing's size and speed, the surfacing and whether it is fair, the stair, the tunnel, the flat,
   the face in the mirror, the whirlpool ride and the light.
+- **Fourteenth pass, untested:** Output should show `SunkenCityClient: running, fourteenth pass`
+  (and `CityShoreClient: running, fourteenth pass`). Ride the drain to the end: out through the
+  OUTFALL 3 door, down the culvert on your back, set down in the pumping station with the camera on
+  your time card, then LEVEL COMPLETE and six seconds before the lobby. Swim at a shoal and watch it
+  scatter. Talk to the attendant and the fisherman (F) and check the new lines read well in the
+  bubbles. Then the other two levels: dive at City Shore (head first, the scene, the street lamp),
+  slide at Sky Pools (the scene, arms up), and talk to Sal, Pip, Maren, Dev, Mrs Okafor and Rudy.
+  Whether Mrs Okafor sits on her cushion rather than in it or over it is worth a look.
+- **Thirteenth pass, untested:** FIRST paste `src/Client/Bootstrap.client.lua` over the Bootstrap
+  LocalScript in StarterPlayerScripts (the place's copy predates the Sky Pools and Sunken City clients).
+  Output should then show `[client] started SunkenCityClient` and `SunkenCityClient: running,
+  thirteenth pass`. Then: animals; the drain's four shots; the fisherman sitting; break the glass and
+  watch the attendant; and if the report still says NO Ferris wheel, it now says why.
+- **Twelfth pass, untested:** press Play and read Output first. The server now says, in Studio,
+  exactly why SunkenCityClient is or is not running (search Output for `SunkenCity`); each client
+  that runs prints `SunkenCityService: SunkenCityClient is running for ...`. Then: break the glass and
+  swim in the flood; ride the drain (the rider should flail even without the client); in Sky Pools,
+  look at the soda chunk through a pool or a fall.
+- **Eleventh pass, untested:** play in Studio and read the panel at the top left first: it says
+  whether SeaRig was found (and if not, why), how many animals there are and how many are meshes,
+  and what has failed. Output starts with `SunkenCityClient: running, eleventh pass`; if that line
+  is missing, the client is not running at all. Then: tap the window seven times and stand in the
+  gallery (it should fill over 8 seconds, then fade out and in at the checkpoint); ride the drain
+  (camera, bars, flailing, shouting). Import the five `Treasure_*` meshes.
+- **Tenth pass, untested:** first, the two report lines (the server's `SunkenCityService: water
+  at...` and, ten seconds in, the client's `SunkenCityClient: drawing the thing...`): together they
+  say how many animals were placed, how many are drawn and from what, and which meshes were refused
+  and why. Then: whether the flood now pours and rises; the landmarks' heights and colours from the
+  route; the people (Output warns if one could not be built as a character). Import the new meshes
+  (`Landmark_*`, `Boat_*`) and paste `SunkenNPCs` (now `Townsfolk`) as a ModuleScript next to SunkenCityService.
+  SunkenCityService has 187 locals live at its top level: new tuning goes into its tables.
 - **Ninth pass, untested:** the serpent, above all whether it reads from the route through the
   water and whether it turns round cleanly at each end of its patrol; import `Sea_Serpent` WITH its
   bones. The client's report says `drawing the thing (the serpent mesh)` when it is. If anything
@@ -1607,8 +2301,52 @@ entrance and dome detail before it **have not been seen in Studio yet**. Everyth
   `LightingService.apply` sweeps away any post-processing effect that is not one of its own three
   before it applies a region. A level may add to the look; no level's look outlives it.
 
+### Fifteenth pass (2026-09-29): the gates at the bottom of it all
+
+From your note that the end of the level was "just a void" and that it should have an animation of
+its own, people and a part in the story **(you)**. The gate chamber and the ending are mine
+**(suggested)**.
+
+- **The flume is a scene** (`FloodedHallsClient`, new, on the client), twice as slow as it was
+  (`SLIDE_SECONDS` 9.2): over your shoulder into the tube, round the helix from across the shaft, from
+  below as you shoot out of the end, from above as you fall into the dark. Everyone sees you lying
+  back with your arms crossed (`Poses.flume`).
+- **The void is still there, and it is not the end.** The shaft keeps its unseen bottom, but at the
+  end of the fall the picture dips to black and you come up in the **Gate Chamber**: the lowest room
+  of the Harrow Bay Waterworks, built far off the end of the building and 150 studs under it, where
+  nothing of it can be seen from the halls (`buildGates`). A concrete room with a sump, a ladder, pipes
+  on brackets, beams under the roof, caged lamps (off), one green emergency lamp (on), a clock at one
+  minute to midnight, the rota with your name on it, and in the far wall three outfalls: 1 and 2
+  already open, and OUTFALL 3 shut behind a steel gate, its handwheel on a pedestal in front of it
+  with a brass lock under the wheel.
+- **The last scene** (34 seconds, `GATES.SECONDS`): you climb out of the sump; the room, one minute to
+  midnight; you walk to the wheel; the key comes out of your pocket ("It was in your pocket the whole
+  time"; the server puts a brass key in your hand, which everyone sees); you turn the wheel, the gate
+  grinds up, the bay starts going out under it, daylight comes up at the end of the outfall, the
+  lamps come on one by one and the sump drains; the clock reaches midnight; and the last line is
+  "Harrow Bay. 14 August. 9:14 in the morning." Then LEVEL COMPLETE, and the room is yours for six
+  seconds. The gate, the lamps, the clock and the water change on the rider's own screen only: every
+  rider opens their own gates.
+- **The run is finished by the scene**, not by the fall: the finish part is put under the chamber's
+  floor where nothing can touch it, and the kill plane leaves anyone in the chamber alone
+  (`ownsFall`, `insideGates`). The sump's water is terrain, and is taken out with the level.
+- **People**: Mrs Venn, Tobi Okafor and Mr Barlow (see the story). The halls' clock now says four
+  minutes to midnight rather than thirteen minutes to five.
+- **Sounds**: the gate's groan, the rush of water and the siren are generated
+  (`audio/gen_material_sfx.py` writes them to `audio/story/`); put them in `SoundService.StorySounds`
+  and the scene uses them. Until then it uses Roblox's built-in bass and water sounds, and there is
+  no siren.
+- **The Hall_Column warning.** Output said the `Hall_Column` in Assets is 8.3 wide where the
+  generator builds it 10.3. `meshes/Hall_Column.fbx` on disk IS the current one (measured: 10.3 by
+  22), so nothing needs regenerating: re-import that one file into the Flooded Halls kit in Studio,
+  replacing the old one.
+- **"placed 23/22 chunks"** was the corner junction LevelService lays itself, counted with the
+  level's own list. The line now says "22 of its 22 chunks, plus 1 corner piece".
+
 ### Open for this level
 
+- The fifteenth pass is untested in Studio: the flume as a scene, the dip, the gate chamber and the
+  whole last scene, the three people, and the frame rate in the chamber.
 - The latest round is untested in Studio (see State above).
 - Part count has grown a lot: the flume is about 900 parts and the interior pass adds a few
   hundred more. Watch frame rate in the last chamber and on Long runs; `FLUME_SEGMENTS` is the
@@ -1672,6 +2410,9 @@ Blender 5.2 at `C:\Program Files\Blender Foundation\Blender 5.2\blender.exe`. Ru
 | `gen_flooded_halls.py` | The `Hall_*` kit for Level 4. Writes `kit_sizes.txt` and prints the `EXPECTED_SIZE` table the service needs. |
 | `gen_sealife.py` | The Sunken City's animals and kelp, rigged: `Sea_*` (14 files). Writes `sealife_extents.json` for the checker. `-- render` draws each at rest and posed. |
 | `gen_ferris.py` | `Ferris_Wheel`, `Ferris_Frame`, `Ferris_Gondola`. Run AFTER `gen_sealife.py`: it adds itself to `sealife_extents.json`. |
+| `gen_landmarks.py` | The four landmarks as ten `Landmark_*` meshes. After `gen_sealife.py` (adds itself to `sealife_extents.json`). `-- render` draws each. |
+| `gen_treasure.py` | The sunken chest as five `Treasure_*` meshes (wood, iron, gold, gems, pearls), one box, base at the middle. After `gen_sealife.py`. |
+| `gen_boats.py` | `Boat_Row`, `Boat_LaunchHull`, `Boat_LaunchTop`, pivoted on the waterline. After `gen_sealife.py`. |
 | `gen_serpent.py` | `Sea_Serpent`, the thing under the route. Also after `gen_sealife.py` (it adds itself to `sealife_extents.json`, with its `side_reach`). `-- render` draws it whole, posed and its head. |
 | `gen_jellyfish.py` | The two jellyfish bells on slime's 16 x 12 rig. Prints their `SKINNED_PLATFORMS` entries. `-- render` draws them. |
 | `gen_chunk_meshes.py` | Superseded platform-sized meshes; kept for reference |
@@ -1708,6 +2449,7 @@ Same idea applied to geometry instead of meshes, because the Studio loop for a
 |---|---|
 | `chunk_layout.py` | Parses `ChunkBuilder.server.lua` and reproduces the slab layout. Shared by the other two. |
 | `check_chunk_forms.py` | `python check_chunk_forms.py` — asserts the layout contract. No Blender needed. |
+| `check_luau_syntax.py` | `python check_luau_syntax.py` — parses every file in `src/` as Luau (statements, if-expressions, casts, compound assignment, `continue`, interpolated strings, generics and the whole type language) and refuses what the compiler refuses beyond the grammar: a statement after `return`/`break`/`continue`, those outside a loop, assigning to a call, a call whose `(` starts a new line. Names the file and line of the first thing Studio would reject. |
 | `check_lua.py` | `python check_lua.py` — twelve checks across `src/`, every one of them a bug that already shipped once: use-before-declaration, block balance, annotated fields, undeclared constants, undeclared calls, cross-module calls, a `local` declared twice in one scope, a field read off a constants table that has no such field, stage counts, staged effects that never read `ctx.stepCount`, materials with no screen look, and locals live at once past Luau's 200 in any function (a NOTE from 178). No Blender, no Luau needed. |
 | `check_hub.py` | `python check_hub.py` -- the lobby: every level has its own distinct headline material for its pad, every level in `All` gets a pad, pads are far enough apart to stand on, and a run request stays plain data that can survive a teleport. |
 | `check_halls.py` | `python check_halls.py` -- the Flooded Halls. See that section for what it covers. |
@@ -2156,6 +2898,18 @@ the thing should be a real threat, is in its section.
 - **A `Shared/Remotes.lua` module.** Several modules do blocking `WaitForChild` at require
   time, so correctness depends on script execution order that Roblox does not guarantee.
   This already caused one deadlock. Worth doing before adding more services.
+
+## Tools for a round
+
+- `python blender/check_all.py` runs every checker, one line each, one exit code. Run it before
+  pasting anything.
+- `python blender/mutations/run_all.py` (or `run_all.py 15 16` for some) runs the mutation suites:
+  each plants small deliberate bugs one at a time, runs the checker that should notice and puts the
+  file back byte for byte. A MISSED line is a checker with a hole in it. They used to live in a
+  session's scratch folder and were lost between sessions; they are in the repo now.
+- `python tools/paste_list.py` lists what to paste since you last pasted, with where each file goes
+  (line 2) and whether it is new; `--zip paste.zip` bundles them; `--mark` once you have pasted
+  everything makes that the baseline for next time. With no baseline it falls back to git.
 
 ## Picking this up cold
 

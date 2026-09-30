@@ -4,17 +4,17 @@ What we are going to build, roughly in order. `HANDOFF.md` describes what exists
 what does not exist yet. Every idea is tagged with where it came from: **(you)** for your ideas
 and decisions, **(suggested)** for mine.
 
-Last updated: 2026-09-18. The short version, with what is built and waiting for a test, is the
+Last updated: 2026-09-30 (twenty-first pass). The short version, with what is built and waiting for a test, is the
 Status section of `README.md`.
 
 ## Where the levels stand
 
 | Level | Name | Background today | Plan |
 |---|---|---|---|
-| 1 | City Shore | a pastel beach city round a bay, open sea toward the sun (second version, untested) | ending built and tested: the dive works (section 1) |
-| 2 | Sky Pools | pool terraces down a meander over a cloud sea (built, fourth pass untested) | ends on the slide into the final pool; needs a Studio test (section 3) |
-| 3 | The Sunken City | a drowned city either side of a boulevard, with something patrolling under it (built, ninth pass untested) | ends on the harbour drain; needs a Studio test (section 4) |
-| 4 | Flooded Halls | built, ends on the flume into the shaft | the slide ending is tested and works |
+| 1 | City Shore | a pastel beach city round a bay, open sea toward the sun, with the Siren Tower in the spiral | ending built and tested: the dive works (section 1); the dive as a scene (Maren, the gulls, the light under the water) and its own sounds, twenty-first pass untested |
+| 2 | Sky Pools | pool terraces down a meander over a drifting cloud sea, round a fountain tower (built, twentieth pass untested) | ends on the slide and the skim across the final pool, a scored scene; needs a Studio test (section 3) |
+| 3 | The Sunken City | a drowned city either side of a boulevard, with something patrolling under it (built, twentieth pass untested) | ends down the swirling drain and Outfall 3 in the pumping station, a scored scene; needs a Studio test (section 4) |
+| 4 | Flooded Halls | built; the flume ends in the mouth and then the Gate Chamber, where the story ends (twenty-first pass, untested) | the slide itself is tested and works; the scene, the mouth and the chamber need a Studio test |
 
 ---
 
@@ -43,6 +43,18 @@ or the board longer.
   in the Flooded Halls.
 - **Order after that** is not decided yet. The Flooded Halls ends by dropping into a shaft, which
   could lead naturally into whatever comes next **(suggested)**.
+- **The levels are numbered by the clock (you, fifteenth pass):** Level 1 City Shore at 9:14 in the
+  morning, Level 2 the Sky Pools at three, Level 3 the Sunken City at eight minutes to midnight, Level
+  4 the Flooded Halls (the Corporation Baths under the pumping station) at four minutes to midnight,
+  ending at the gates. That order replaces the first link above (City Shore straight into the halls).
+- **Level 5, Hill House, 8:00 in the morning (suggested, LORE.md):** before any of it. The key holder's
+  house on the hill with the big clock, the key on its green ribbon by the door, and why you did not
+  go in. The true ending would be clocking in. The lost property in the baths already points at it.
+- **The journal, saved (suggested):** the journal exists since the eighteenth pass (J), but only for the
+  session. Saving what was taken between sessions (a DataStore of ids, the words rebuilt from the tables
+  they come from) and showing the keepsakes on a shelf in the lobby would make the 27 worth collecting.
+- **Not decided:** whether a player has to finish a level before the next one opens, or only sees
+  them numbered. Numbered only, for now **(suggested)**.
 
 To work out when we design it:
 
@@ -222,6 +234,84 @@ place, because the server and the clients work it out from one shared schedule.
 
 **A lantern at the end of the pier** is the one warm light in the harbour. You see it from along
 the route before you see the pier.
+
+**Twenty-first pass (2026-09-30), from your notes (you):** sounds made for each ending, playing while
+its scene plays, for a cinematic feel; a more Needoh-like Needoh sound, and which files to replace; the
+Needoh and clay no longer sharing a sound; lava that looks about to burst, a hot surface; and a better
+final sequence for City Shore. Built as described in HANDOFF **(suggested: the seventeen synthesised
+ending sounds and where each one falls, the Needoh borrowing clay's pitched down until its own takes are
+in, the lava's breathing glow, embers, heat haze, bubbles and fountain, and the dive's cut to Maren, the
+gulls, the rushing air, the sun flare, and the light and fish under the water)**.
+
+**Twentieth pass (2026-09-30), from your notes (you):** whether Ctrl lock should turn you to walk back
+(answered: it is standard mouse lock, left as it is); the mouse stuck over NPCs; nicer lettering for your
+character's lines in the endings; Roblox's own prompts rather than a restyle; the lobby's viewer putting
+you straight back into a good third person; one text size in every speech bubble, with the bubble sized
+to the words; the Sky Pools' washed-out light; small improvements to the level and its people; and the
+slide's rods seeming to pass through you. Built as described in HANDOFF **(suggested: the prompt card as
+the cause of the stuck mouse, Permanent Marker and Kalam for the voice, the habits, the turntable, and
+each light setting)**.
+
+**Nineteenth pass (2026-09-30), from your notes (you):** third person as the game's view, first person
+only as an option in the lobby and never on the screen, Ctrl toggling the cursor lock as in Squid Game,
+and more details small and large, like the whirlpool. Built as described in HANDOFF **(suggested: the
+seaside viewer, the slime's camera kick, the moving cloud sea, the swirling whirlpool and lined shaft)**.
+
+**Eighteenth pass (2026-09-29), from recordings (you):** keepsakes as things you actually pick up; notes
+and keepsakes kept to read later from a menu rather than coming up over the level; captions held long
+enough to read; the lobby and banner waiting for an ending to finish; every ending redone; bubble wrap
+heard at once; soap without cracks; softer Sky Pools light. Built as described in HANDOFF **(suggested:
+the journal on J, the lit nooks off the route, and the route sometimes leading you to one)**.
+
+**Seventeenth pass (2026-09-29), from your notes (you):** ambience silenced at the endings and added
+where there was none; a movie-like script; lore through letters, lockers, doors and things broken open
+with a tool, a secret on every level (a tall building off a chunk at City Shore, something under a pool
+at the Sky Pools, something by the flume at the Flooded Halls); and a giant creature's mouth at the
+bottom of the flume with a scene to match. Built as described in HANDOFF **(suggested: the Hold's drone,
+the Fountain screenplay, the pry bar, the Siren Tower and R. Pell, the five secrets, E. Marsh's locker,
+"I'll go in tomorrow", the mouth as only ever a mouth, and the dolly zoom)**.
+
+**Fifteenth pass (2026-09-29), from play (you):** every ending about twice as slow so there is time to
+read; your character always visible in them whatever the camera; F7 not hiding the debug panel; what
+people say up twice as long; better endings everywhere; the void at the end of the Flooded Halls; the
+levels numbered in the order they happen; more lore; people in the Flooded Halls; people that look
+better; an ending in the Flooded Halls you do not control; and sounds for the materials that had none.
+Built as described in HANDOFF **(suggested: the Gate Chamber and the key, the loop back to 9:14, Mrs
+Venn's "back rooms of the baths", the notes, the LOOKS table, the generated stand-in sounds and the
+MaterialSounds folder)**. Asked, not built: whether to go first person (answered in the pass's reply:
+not for the platforming).
+
+**Fourteenth pass (2026-09-26), from play (you):** a more cinematic ending that goes on to the end of
+the tunnel, five seconds to stand in the last room after LEVEL COMPLETE, more to the fish, then scenes
+for City Shore's dive and the Sky Pools' slide, people on those levels, and a story connecting them in
+which the people live their ordinary lives on the day of a disaster while the player calls the place
+the backrooms. Built as described in HANDOFF **(suggested: Harrow Bay on 14 August, the key holder who
+never came and the time card in the player's name, the culvert and the pumping station, six seconds
+for every level, and the fish scattering)**.
+
+**Thirteenth pass (2026-09-26), from play (you):** more water flowing in where the attendant is, the
+attendant screaming and moving when the glass goes, the animals, the red notice, the drain's
+animation and its animated sequence. Built as described in HANDOFF **(suggested: the old Bootstrap as
+the cause, joints of either kind, the fall through the sluice's floor, name resolution in the parser,
+and the Ferris wheel's reasons)**.
+
+**Twelfth pass (2026-09-26), from play (you):** the chest the right way round, no animals (the client
+not running), water in the aquarium you can swim in with more to it and no boxy water, the rider
+animated at the end, the soda chunk vanishing in Sky Pools, and the hub's score sign improved or
+removed. Built as described in HANDOFF **(suggested: the server finding out why the client does not
+run, a real Luau parser as a checker, the server flailing the rider without the client, the
+underwater sound, and removing the sign rather than redesigning it)**.
+
+**Eleventh pass (2026-09-26), from play (you):** readable speech, water that visibly flows into the
+aquarium, a jellyfish effect of its own, the drain ride as an animated scene with the character
+flailing and screaming for help, a more detailed chest, small improvements, and the animals. Built
+as described in HANDOFF **(suggested: the server drawing the flood, the washed-out fade, the teeth of
+glass, the Studio panel, and the SeaRig timeout as the likely reason nothing moved)**.
+
+**Tenth pass (2026-09-25), from play (you):** tall landmark buildings as meshes, more city in the
+city, only the signed glass tappable, water flowing in when it breaks, the animals visible, and
+NPCs. Built as described in HANDOFF **(suggested: which four landmarks, the side streets' poles,
+boats and signs, the metro totems, and who the three people are)**.
 
 **Ninth pass (2026-09-25), from you:** the serpent mesh for the thing under the route, and the code
 made to run better with its bugs fixed. Built as described in HANDOFF.
