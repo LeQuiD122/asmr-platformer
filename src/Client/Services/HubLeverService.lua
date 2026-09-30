@@ -1,4 +1,5 @@
 --!strict
+-- StarterPlayerScripts/Services/HubLeverService.lua
 -- The lobby's mode lever, built on the client so it can move for one player only.
 --
 -- === Why this exists at all ===

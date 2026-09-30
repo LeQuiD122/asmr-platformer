@@ -378,7 +378,7 @@ local COMPLETION_LOOKS: { [number]: any } = {
 		accent = Color3.fromRGB(150, 226, 210), tint = Color3.fromRGB(8, 20, 24),
 		top = Color3.fromRGB(10, 26, 30), bottom = Color3.fromRGB(18, 48, 52),
 		vignette = Color3.fromRGB(2, 8, 10), motif = "caustics" },
-	[4] = { name = "Flooded Halls", line = "Down the flume",
+	[4] = { name = "Flooded Halls", line = "The tide is going out",
 		accent = Color3.fromRGB(142, 214, 200), tint = Color3.fromRGB(22, 41, 45),
 		top = Color3.fromRGB(30, 52, 54), bottom = Color3.fromRGB(58, 84, 82),
 		vignette = Color3.fromRGB(8, 18, 18), motif = "tiles" },

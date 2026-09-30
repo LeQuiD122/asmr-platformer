@@ -1,4 +1,5 @@
 --!strict
+-- StarterPlayerScripts/Services/DeathService.lua
 -- The hardcore death card: a pulse of "You died", then a choice.
 --
 -- === Why a pause before the buttons ===

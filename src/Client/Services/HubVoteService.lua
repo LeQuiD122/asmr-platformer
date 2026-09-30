@@ -1,4 +1,5 @@
 --!strict
+-- StarterPlayerScripts/Services/HubVoteService.lua
 -- The lobby's ballot banner: what the room is voting for, and how long is left.
 --
 -- === Why this is a screen GUI and not more signs in the room ===

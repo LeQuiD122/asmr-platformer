@@ -433,6 +433,8 @@ function ScreenEffects.onStep(materialName: string?, mine: boolean)
 	if not (mine and materialName) then
 		return
 	end
+	-- (The keepsakes are no longer cards that come up when you step on a material: they are things lying
+	-- off the route that you pick up, and they go into your journal. JournalService.)
 	local look = LOOKS[materialName]
 	if not look then
 		-- NO_MARK materials end here, which is the intended path for six of the eighteen.
