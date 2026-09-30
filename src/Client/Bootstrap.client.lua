@@ -1,5 +1,5 @@
 --!strict
-
+-- StarterPlayerScripts/Bootstrap.client.lua
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
@@ -41,16 +41,29 @@ task.spawn(SeaService.start)
 local CloudService = require(Services:WaitForChild("CloudService"))
 task.spawn(CloudService.start)
 
--- THE TWO LEVELS WITH MOVING PARTS OF THEIR OWN: Sky Pools' splashing pools and drifting toys, and
--- the Sunken City's thing, whirlpool, buoys, fish and clock. Each is looked for WITH A TIMEOUT inside
+-- THE LEVELS WITH MOVING PARTS OF THEIR OWN: Sky Pools' splashing pools and drifting toys, the
+-- Sunken City's thing, whirlpool, buoys, fish and clock, and City Shore's dive. Each is looked for WITH A TIMEOUT inside
 -- its own task, so a place that has not had one pasted in loses that level's moving water and
 -- nothing else -- a bare WaitForChild here would hold up every line below it forever.
-for _, name in ipairs({ "SkyPoolsClient", "SunkenCityClient" }) do
+-- Each says in Output that it started, or exactly why it did not: an older copy of this file had
+-- none of these lines, and the only sign was that nothing on those levels moved.
+-- AND THE JOURNAL (what you pick up, to read when you choose) and THE VIEW (third person, first through
+-- the lobby's viewer, and Ctrl for the cursor). The prompts are Roblox's own: a restyled one was tried
+-- and taken out, because it swallowed the camera's right-click release when the cursor was over it.
+for _, name in ipairs({ "SkyPoolsClient", "SunkenCityClient", "CityShoreClient", "FloodedHallsClient",
+	"AmbienceService", "StoryClient", "JournalService", "ViewModeService" }) do
 	task.spawn(function()
 		local module = Services:WaitForChild(name, 30)
 		if module and module:IsA("ModuleScript") then
-			local service: any = require(module)
-			service.start()
+			local ok, err = pcall(function()
+				local service: any = require(module)
+				service.start()
+			end)
+			if ok then
+				print(("[client] started %s"):format(name))
+			else
+				warn(("[client] %s failed to start, so that level's moving parts are missing: %s"):format(name, tostring(err)))
+			end
 		else
 			warn(("[client] no StarterPlayerScripts.Services.%s; that level's water will not move. Paste "
 				.. "src/Client/Services/%s.lua in as a ModuleScript."):format(name, name))
@@ -81,6 +94,9 @@ end
 -- Applied here, on the client, because this client owns the character assembly.
 -- The server decides when a launch happens; if it wrote the velocity itself the
 -- value would be discarded on the next physics replication.
+-- The camera's resting width while a launch has it widened, and which launch is the latest.
+local launchKick: { base: number?, token: number } = { base = nil, token = 0 }
+
 SlimeLaunch.OnClientEvent:Connect(function(launchVelocity: number)
 	local character = Players.LocalPlayer.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
@@ -93,6 +109,29 @@ SlimeLaunch.OnClientEvent:Connect(function(launchVelocity: number)
 	humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
 	local current = root.AssemblyLinearVelocity
 	root.AssemblyLinearVelocity = Vector3.new(current.X, launchVelocity, current.Z)
+	-- THE KICK: the picture widens as the slime flings you and settles as you rise, so the launch is
+	-- felt as speed rather than seen as a number. Only with the ordinary camera (not in a scene), and
+	-- from the same resting width however many launches come in a row.
+	local camera = workspace.CurrentCamera
+	if camera and camera.CameraType == Enum.CameraType.Custom then
+		launchKick.base = launchKick.base or camera.FieldOfView
+		launchKick.token += 1
+		local token = launchKick.token
+		local base = launchKick.base :: number
+		game:GetService("TweenService"):Create(camera, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ FieldOfView = base + 9 }):Play()
+		task.delay(0.35, function()
+			if launchKick.token == token then
+				local back = game:GetService("TweenService"):Create(camera, TweenInfo.new(0.9, Enum.EasingStyle.Sine), { FieldOfView = base })
+				back:Play()
+				back.Completed:Once(function()
+					if launchKick.token == token then
+						launchKick.base = nil
+					end
+				end)
+			end
+		end)
+	end
 end)
 
 -- THE MODE HITBOX USED TO BE BUILT HERE, and it is gone on purpose.
@@ -259,14 +298,29 @@ local function celebrateAt(root: BasePart)
 	Debris:AddItem(attachment, 7)
 end
 
-LevelCompleted.OnClientEvent:Connect(function(payload)
-	UIService.showCompletion(payload.levelId, payload.time)
+-- NOT OVER AN ENDING STILL BEING TOLD. Every level ends in a scene now, and the banner used to come up
+-- over its captions the moment the run counted as finished: "You made the dive" printed across "Somewhere
+-- under the water, a street lamp is still on." It waits for the scene to say its story is told
+-- (Cinema.told: its captions read), for at most as long as the server waits.
+local cinemaModule = Services:FindFirstChild("Cinema") or Services:WaitForChild("Cinema", 10)
+local Cinema: any = if cinemaModule and cinemaModule:IsA("ModuleScript") then require(cinemaModule) else nil
+local BANNER_WAIT = 45
 
-	local character = Players.LocalPlayer.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart")
-	if root and root:IsA("BasePart") then
-		celebrateAt(root)
-	end
+LevelCompleted.OnClientEvent:Connect(function(payload)
+	task.spawn(function()
+		local waited = 0
+		while Cinema and not Cinema.told() and waited < BANNER_WAIT do
+			task.wait(0.2)
+			waited += 0.2
+		end
+		UIService.showCompletion(payload.levelId, payload.time)
+
+		local character = Players.LocalPlayer.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if root and root:IsA("BasePart") and not (Cinema and Cinema.active()) then
+			celebrateAt(root)
+		end
+	end)
 end)
 
 print("[client] Bootstrap ready")
