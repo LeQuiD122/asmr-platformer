@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+
+# hand-off bundles (duplicates of files already in the repo)
+pass_*/
+passes_*/
+*.zip

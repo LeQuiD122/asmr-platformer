@@ -4,21 +4,24 @@ What we are going to build, roughly in order. `HANDOFF.md` describes what exists
 what does not exist yet. Every idea is tagged with where it came from: **(you)** for your ideas
 and decisions, **(suggested)** for mine.
 
-Last updated: 2026-09-30 (twenty-first pass). The short version, with what is built and waiting for a test, is the
-Status section of `README.md`.
+Last updated: 2026-10-20. Everything built up to and including the ninety-second pass has been played in Studio
+**(you)**; the ninety-third to the hundred-and-fourth wait for a test. Section 9 is your list of 2026-10-20 and where
+each item stands.
+The short version is the Status section of `README.md`. What comes next, in order, is section 8.
 
 ## Where the levels stand
 
 | Level | Name | Background today | Plan |
 |---|---|---|---|
-| 1 | City Shore | a pastel beach city round a bay, open sea toward the sun, with the Siren Tower in the spiral | ending built and tested: the dive works (section 1); the dive as a scene (Maren, the gulls, the light under the water) and its own sounds, twenty-first pass untested |
-| 2 | Sky Pools | pool terraces down a meander over a drifting cloud sea, round a fountain tower (built, twentieth pass untested) | ends on the slide and the skim across the final pool, a scored scene; needs a Studio test (section 3) |
-| 3 | The Sunken City | a drowned city either side of a boulevard, with something patrolling under it (built, twentieth pass untested) | ends down the swirling drain and Outfall 3 in the pumping station, a scored scene; needs a Studio test (section 4) |
-| 4 | Flooded Halls | built; the flume ends in the mouth and then the Gate Chamber, where the story ends (twenty-first pass, untested) | the slide itself is tested and works; the scene, the mouth and the chamber need a Studio test |
+| 1 | City Shore | a pastel beach city round a bay, open sea toward the sun, with the Siren Tower in the spiral | built and tested: the high dive as a scored scene (Maren, the gulls, your thoughts on the way down, the light under the water); its shots reworked in the ninety-third pass, waiting for a test |
+| 2 | Sky Pools | pool terraces down a meander over a drifting cloud sea, round a fountain tower | built and tested: the slide round the tower and the skim across the final pool, a scored scene; the landing shot reworked in the ninety-third pass |
+| 3 | The Sunken City | a drowned city either side of a boulevard, with something patrolling under it | built and tested: the swirling drain and Outfall 3 to the pumping station, a scored scene; two drain shots reworked in the ninety-third pass |
+| 4 | Flooded Halls | the Corporation Baths: the flume ends in the mouth in the dark and then the Gate Chamber, where the story ends | built and tested; the flume's end, the mouth's beats and the chamber's shots reworked in the ninety-third pass |
+| 5 | Hill House | the key holder's house on the hill at eight in the morning (`LORE.md`) | chosen as the next level **(you, 2026-10-17)**, next now the lobby is built (section 8) |
 
 ---
 
-## 1. City Shore finale -- BUILT 2026-09-15, TESTED 2026-09-17: works
+## 1. City Shore finale: BUILT 2026-09-15, TESTED 2026-09-17, works
 
 **Built as you asked (you):** no slide ride. At the top of the spiral the last chunk runs onto a
 platform with a diving board, you jump off into the sea about 830 studs below, and hitting the
@@ -34,7 +37,12 @@ HANDOFF.md carries the details.
 **Tested (you):** the diving board works. Still open to taste: whether the drop wants to be higher
 or the board longer.
 
-## 2. Story mode
+## 2. Story mode: BUILT 2026-10-13 (sixtieth pass), TESTED by 2026-10-17
+
+**Decided (you, 2026-10-13):** my suggestions for the four questions below: a Story pad in the lobby; one clock
+across the levels with a leaderboard of its own; a death restarts only the level you are on; progress saved between
+sessions, in Chill and in Hardcore. Built as described in HANDOFF (**Story mode**); the rest of this section is the
+history of the idea.
 
 **Idea (you):** a mode that plays the levels in order, one after another.
 
@@ -50,11 +58,14 @@ or the board longer.
 - **Level 5, Hill House, 8:00 in the morning (suggested, LORE.md):** before any of it. The key holder's
   house on the hill with the big clock, the key on its green ribbon by the door, and why you did not
   go in. The true ending would be clocking in. The lost property in the baths already points at it.
-- **The journal, saved (suggested):** the journal exists since the eighteenth pass (J), but only for the
-  session. Saving what was taken between sessions (a DataStore of ids, the words rebuilt from the tables
-  they come from) and showing the keepsakes on a shelf in the lobby would make the 27 worth collecting.
-- **Not decided:** whether a player has to finish a level before the next one opens, or only sees
-  them numbered. Numbered only, for now **(suggested)**.
+- **The journal, saved (suggested; built in the thirty-first pass):** what was taken is kept with the
+  player's profile between sessions. The words are saved as the story wrote them rather than rebuilt from the
+  tables, because those live with each level and a level is not built while you are in the lobby. The
+  keepsakes are on a shelf in the squish room since the thirty-second pass, each player's own collection.
+  Shown to other players since the forty-eighth pass, as a Keepsakes count in Roblox's player list.
+- **Decided (you, 2026-10-12):** levels open in order. Built in the fifty-first pass: a level is open when anyone
+  in the server has finished the one before it (or any later one, since the fifty-seventh pass); locked pads are
+  boarded up in the lobby.
 
 To work out when we design it:
 
@@ -64,7 +75,7 @@ To work out when we design it:
 - whether story progress is saved between sessions
 - whether Chill and Hardcore both apply
 
-## 3. Level 2, Sky Pools -- BUILT 2026-09-18, not tested yet **("peaceful pools in the sky" is yours)**
+## 3. Level 2, Sky Pools: BUILT 2026-09-18, TESTED by 2026-10-17 **("peaceful pools in the sky" is yours)**
 
 Calm, bright, silent apart from water: the one level with no scares at all. The picture is
 `blender/skypools_plan.png` (run `python blender/plan_skypools.py`). It is drawn by the same Python
@@ -73,7 +84,7 @@ that `blender/check_skypools.py` tests, so it shows the level as built, not a pr
 **The route: a meander, going down (yours).** The level's 44 chunks (its `T2_BubbleWrapWindow`
 template) follow a path that sweeps from side to side on a long sine and goes down the whole way:
 from 24 at the start to about -116 at the end on a medium run, taking steps 1.6 times the climb's
-size. It was a ring, and from inside it the level read as a lap -- most of the view was route you
+size. It was a ring, and from inside it the level read as a lap: most of the view was route you
 had already run, and on a short run the next terrace round stood a hundred studs away with its
 columns up past your deck. The meander never crosses itself and never comes back on itself, and it
 bends no harder than the ring did at any one chunk, so what is ahead of you is somewhere you have
@@ -90,15 +101,15 @@ inner end walk you in and back out, and there is a ladder at the deep end, a ban
 the waterline and two lights set into the walls under the surface. On the deck: loungers with slats
 and a back on its hinge, a ribbed parasol, a towel somebody left, and on different terraces a
 pergola, stone planters, a changing cabana, a lifeguard's chair or a diving board out over the water
-**(you)**. Each terrace stands on nine COLUMNS to the sea -- under the pool's four corners, under
-both sun decks and under the prow -- and each pool spills off the prow in a waterfall that also
+**(you)**. Each terrace stands on nine COLUMNS to the sea (under the pool's four corners, under
+both sun decks and under the prow), and each pool spills off the prow in a waterfall that also
 reaches the sea **(you)**. Nothing floats.
 
 This differs from the layout: the terraces sit BESIDE the route rather than being chunks in it.
 That needed no new chunk, so ChunkBuilder is unchanged and the chunk folders need no clearing.
 
 **The fountain tower (suggested)** stands beside the slide's mouth at the end of the route, a
-hundred and fifty studs off it -- beside, not ahead, because a slide round it is an arc and an arc
+hundred and fifty studs off it: beside, not ahead, because a slide round it is an arc and an arc
 leaves its mouth across its radius. It runs from the sea, through
 the final pool and the clouds, to a basin 90 studs above the start with a jet in it. The basin
 overflows all the way round, and that curtain of water is what fills the final pool.
@@ -161,7 +172,7 @@ runs to the sea and the log on the wall points at the Sunken City.
 - Is the light right, or is it too bright over the white clouds?
 - Does it run smoothly? The cloud sea is several hundred parts.
 
-## 4. Level 3, The Sunken City -- FIRST VERSION BUILT 2026-09-18, not tested yet **(suggested; the sunken city with sea monsters is yours)**
+## 4. Level 3, The Sunken City: BUILT 2026-09-18, TESTED by 2026-10-17 **(suggested; the sunken city with sea monsters is yours)**
 
 The picture is `blender/sunkencity_plan.png` (run `python blender/plan_sunkencity.py`), drawn by the
 same Python that `blender/check_sunkencity.py` tests.
@@ -234,6 +245,211 @@ place, because the server and the clients work it out from one shared schedule.
 
 **A lantern at the end of the pier** is the one warm light in the harbour. You see it from along
 the route before you see the pier.
+
+**Ninety-second pass (2026-10-17), from your third test (you):** the mouth seen again in the dark, the fall and the
+dive acted and shot toward where they go, and a paste check that catches code pasted into the wrong script, as in
+HANDOFF **(suggested how)**. Next: the Studio test of pass 92 (and the re-paste of BackdropService, BackRoomsService
+and SearchlightClient). Still open, yours to choose: Hill House, showing what you have earned in the shop, a group
+reward, a weekly leaderboard.
+
+**Eighty-sixth to ninety-first passes (2026-10-16), from your second test (you):** the lockers and their scenes, the
+fall into the mouth, eleven chunk sounds, the people's voices, the back rooms (sunk things, E. Marsh, the way out),
+the VIP tag, embers and countdown, the keepsakes' count and the story's typeface, as in HANDOFF **(suggested how)**.
+Next: the Studio test of passes 86 to 91. Still open, yours to choose: Hill House, showing what you have earned in
+the shop, a group reward, a weekly leaderboard.
+
+**Seventy-eighth to eighty-fifth passes (2026-10-16), from your first test (you):** the sounds, the shop and its
+things, the dive, the pry bar's scenes, the Sky Pools slide, the whirlpool, the flume and the mouth, and the people's
+gestures, as in HANDOFF **(suggested how)**. Next: the Studio test of passes 78 to 85. Still open, yours to choose:
+Hill House, showing what you have earned in the shop, a group reward, a weekly leaderboard.
+
+**Seventy-seventh pass (2026-10-15), codes (you chose them):** a post box in the lobby and one list of codes, as in
+HANDOFF **(suggested how)**. Next: the Studio test of passes 18 to 77. Still open, yours to choose: Hill House,
+showing what you have earned in the shop, a group reward, a weekly leaderboard, a Studio test checklist.
+
+**Seventy-sixth pass (2026-10-15), a review (you chose it):** passes 18 to 49 read; three fixes, as in HANDOFF.
+
+**Seventy-fifth pass (2026-10-15), a review (you chose it):** passes 50 to 74 read end to end; two fixes, as in
+HANDOFF.
+
+**Seventy-fourth pass (2026-10-15), the materials as a collection (you chose it):** found on the levels, in the
+journal and on a lobby board, as described in HANDOFF **(suggested how)**.
+
+**Seventy-third pass (2026-10-14), a starter pack (you chose it):** a 99 Robux pass with 500 tokens and the sea glass
+trail, as described in HANDOFF **(suggested how)**.
+
+**Seventy-second pass (2026-10-14), daily challenges (you chose them):** three a day on a lobby board, as described
+in HANDOFF **(suggested how)**.
+
+**Seventy-first pass (2026-10-14), a friends bonus (you chose it):** a fifth more for a run with a Roblox friend in
+it, as described in HANDOFF **(suggested how)**.
+
+**Seventieth pass (2026-10-14), hidden token caches (you chose them):** one a level, as described in HANDOFF
+**(suggested how)**.
+
+**Sixty-ninth pass (2026-10-14), the daily reward (you chose it):** a chest in the lobby, as described in HANDOFF
+**(suggested how)**. Next: the Studio test of passes 18 to 69. Still open, yours to choose: Hill House, hidden token
+caches.
+
+**Sixty-eighth pass (2026-10-14), the story reward (you chose it):** a bonus and the green ribbon for finishing
+the story, as described in HANDOFF **(suggested how)**. Next: the Studio test of passes 18 to 68. Still open, yours to
+choose: Hill House, a daily reward.
+
+**Sixty-seventh pass (2026-10-14), a bit more (you):** the back rooms kept out of the lobby's vote, as described
+in HANDOFF **(suggested)**. Next: the Studio test of passes 18 to 67. Open, and yours to choose when you want more:
+Hill House (the fifth level, LORE.md), a reward for finishing the story, a daily reward.
+
+**Sixty-sixth pass (2026-10-14), a bit more (you):** the back rooms are the sixth secret, as described in
+HANDOFF **(suggested)**. Next: the Studio test of passes 18 to 66.
+
+**Sixty-fifth pass (2026-10-14), a bit more (you):** the lobby's back corridor leads to the back rooms once
+found, as described in HANDOFF **(suggested)**. Next: the Studio test of passes 18 to 65.
+
+**Sixty-fourth pass (2026-10-14), a bit more (you):** the back rooms, your secret level from section 5, as
+described in HANDOFF **(suggested how)**. Next: the Studio test of passes 18 to 64.
+
+**Sixty-third pass (2026-10-14), a bit more (you):** Roblox badges, switched off until made, as described in
+HANDOFF **(suggested)**. Next: the Studio test of passes 18 to 63; making the badges is yours when you want them.
+
+**Sixty-first and sixty-second passes (2026-10-14), a bit more (you):** the move between a story's levels, and the
+Self-test sees the story, as described in HANDOFF **(suggested)**. Next: the Studio test of passes 18 to 62.
+
+**Fifty-eighth to sixtieth passes (2026-10-13), story mode and an admin's /levels (you):** as described in
+HANDOFF; how is mine **(suggested)**. Plus one run at a time in the lobby, a bug found on the way. Next: the Studio
+test of passes 18 to 60.
+
+**Fifty-seventh pass (2026-10-12), a bit more (you):** getting further keeps a level open, and new players are
+told that finishing a level opens the next, as described in HANDOFF **(suggested)**. Next: the Studio test of
+passes 18 to 57.
+
+**Fifty-sixth pass (2026-10-12), a bit more (you):** the climb through the levels on the dashboard, and the
+Self-test opening and locking a level, as described in HANDOFF **(suggested)**. Next: the Studio test of passes 18
+to 56.
+
+**Fifty-fourth and fifty-fifth passes (2026-10-12), a bit more (you):** a level opened is told as you come back,
+and Near the end on the test panel, as described in HANDOFF **(suggested)**. Next: the Studio test of passes 18 to 55.
+
+**Fiftieth to fifty-third passes (2026-10-12), the four you chose (you):** a VIP tag over heads, levels that open
+in order (for the whole server, from anyone's save), a storm by the Sky Pools slide, and the Flooded Halls' lamps
+failing behind you, as described in HANDOFF; how each works is mine **(suggested)**. Next: the Studio test of
+passes 18 to 53.
+
+**Forty-ninth pass (2026-10-12), a bit more (you):** the Self-test compares what is shown with the save, as
+described in HANDOFF **(suggested)**. Next: the Studio test of passes 18 to 49.
+
+**Forty-eighth pass (2026-10-12), a bit more (you):** the collection in the player list, from the roadmap, as
+described in HANDOFF **(suggested: Roblox's own player list rather than anything of the game's)**. Next: the
+Studio test of passes 18 to 48.
+
+**Forty-seventh pass (2026-10-12), a bit more (you):** the Self-test sees what was built and the server
+answering, as described in HANDOFF **(suggested)**. Next: the Studio test of passes 18 to 47.
+
+**Forty-sixth pass (2026-10-12), a bit more (you):** the client's Self-test, completed, as described in
+HANDOFF **(suggested)**. Next: the Studio test of passes 18 to 46.
+
+**Forty-fifth pass (2026-10-11), a bit more (you):** the Self-test's client half, as described in HANDOFF
+**(suggested)**. Next: the Studio test of passes 18 to 45.
+
+**Forty-fourth pass (2026-10-11), a bit more (you):** the Self-test, wider, as described in HANDOFF
+**(suggested)**. Next: the Studio test of passes 18 to 44.
+
+**Forty-third pass (2026-10-11), a bit more (you):** the test panel's Self-test, as described in HANDOFF
+**(suggested)**. Next: the Studio test of passes 18 to 43.
+
+**Forty-second pass (2026-10-11), a bit more (you):** fingerprints, so the paste check names old copies, as
+described in HANDOFF **(suggested)**. Next, and worth more now than anything built blind: the Studio test of
+passes 18 to 42.
+
+**Forty-first pass (2026-10-10), a bit more (you):** the paste check's two new lines, as described in HANDOFF
+**(suggested)**. Next: the Studio test of passes 18 to 41.
+
+**Fortieth pass (2026-10-10), a bit more (you):** paid passes kept when Roblox is slow to answer, and the
+Robux prompts on the dashboard, as described in HANDOFF **(suggested)**. Next: the Studio test of passes 18
+to 40.
+
+**Thirty-ninth pass (2026-10-10), a bit more (you):** level progression and kiosk visits on the Creator
+Dashboard, as described in HANDOFF **(suggested)**. Next: the Studio test of passes 18 to 39.
+
+**Thirty-eighth pass (2026-10-10), a bit more (you):** a readable Output for the test, as described in
+HANDOFF **(suggested)**. Next: the Studio test of passes 18 to 38; after it, the Flooded Halls' lights failing
+behind you (left for after the test, as it changes a level whose lighting you have shaped).
+
+**Thirty-seventh pass (2026-10-10), a bit more before testing (you):** the test panel's keepsake and journal
+buttons, as described in HANDOFF **(suggested)**. Next: the Studio test of passes 18 to 37.
+
+**Thirty-sixth pass (2026-10-09), a bit more (you):** the paste check, as described in HANDOFF
+**(suggested)**. Next: the Studio test of passes 18 to 36, starting from what the paste check says.
+
+**Thirty-fifth pass (2026-10-09), a bit more (you):** the death card under a locked cursor, leaving a run
+you are not in, and a safer mutation runner, as described in HANDOFF **(suggested)**. Next: the Studio test
+of passes 18 to 35.
+
+**Thirty-fourth pass (2026-10-09), a bit more (you):** the store's read limits in a busy lobby, fixed as
+described in HANDOFF **(suggested)**. Next: the Studio test of passes 18 to 34.
+
+**Thirty-third pass (2026-10-09), a bit more (you):** a review of what only shows with more than one
+player, which found four bugs (statues piling up, the lobby keeping a level's sky, a reset in the lobby
+putting you on the level, late joiners not counted into the run), fixed as described in HANDOFF
+**(suggested: all of it)**. Next: the Studio test of passes 18 to 33, with two players for this one.
+
+**Thirty-second pass (2026-10-08), a bit more (you):** the keepsake shelf, from the roadmap, built as
+described in HANDOFF **(suggested: in the squish room rather than the lobby, each player's own collection on
+it, the prompt opening the journal)**. Next: the Studio test of passes 18 to 32.
+
+**Thirty-first pass (2026-10-08), a bit more (you):** the journal kept between sessions, from the roadmap,
+and tokens only for a route walked, built as described in HANDOFF **(suggested: saving what the story wrote
+from the server only, reading it back quietly, showing what you have as taken)**. Next: the Studio test of
+passes 18 to 31; then the other level improvements, and the roadmap below.
+
+**Thirtieth pass (2026-10-07), a bit more (you):** a review of everything a client can ask the server for,
+which found a leaderboard exploit and a chill best saved as 0, and two ways for the game to grow: an invite
+from the pause menu and the favourite asked once, built as described in HANDOFF **(suggested: all of it)**.
+Next: the Studio test of passes 18 to 30; then the other level improvements (City Shore's tide, the Sky
+Pools' storm and party, the Flooded Halls flooding behind you), and the roadmap below.
+
+**Twenty-ninth pass (2026-10-07), a bit more, try hard (you):** a review of passes 22 to 28 with five fixes,
+and the Sunken City's searchlights as a rescue launch in the harbour, built as described in HANDOFF
+**(suggested: one launch rather than several, placed in the open basin past the end of the street, which the
+city's blocks never reach; the beam ending at the water with a pool of light; the rain and the thing on the
+horizon steering it)**. Next: the Studio test of passes 18 to 29; then the other level improvements (City
+Shore's tide, the Sky Pools' storm and party, the Flooded Halls flooding behind you), and the roadmap below.
+
+**Twenty-eighth pass (2026-10-06), a bit more (you):** the Studio test panel and the one chord, built as
+described in HANDOFF **(suggested: both)**.
+
+**Twenty-seventh pass (2026-10-05), the squish room (you):** behind a door, built as described in HANDOFF
+**(suggested: a lift as the door, real slabs set into the floor over pits, the hall far beyond every
+horizon, keeping its players out of the lobby's vote)**. Next: the Studio test of passes 18 to 28; then the
+level improvements (City Shore's tide, the Sky Pools' storm and party, the Sunken City's searchlights, the
+Flooded Halls flooding behind you), and the roadmap below.
+
+**Twenty-sixth pass (2026-10-05), emotes and the second chance (you):** built as described in HANDOFF
+**(suggested: the poses, the toy, the picker and its keys, the second chance never counting for the
+leaderboard or a best, buying it from the death card)**. The shop's catalogue is now complete.
+
+**Twenty-fifth pass (2026-10-05), footprints and step sounds (you):** the footprints and step sounds
+next. Built as described in HANDOFF **(suggested: the four print shapes and how each fades, swapping
+Roblox's footstep rather than layering over it, the packs made of the material takes, Retro as built-in
+blips with no upload, the try-on)**. Still to come from the shop: the emotes and the second chance.
+
+**Twenty-fourth pass (2026-10-04), every device (you):** the controller fix and every older screen on
+every device. Built as described in HANDOFF **(suggested: D-pad down and up for the menu and the journal,
+the Y clash with Talk, the phone layout off the thumbstick and jump, the 44-pixel rule and its exemptions)**.
+
+**Twenty-third pass (2026-10-04), the first five minutes (you):** a player should understand what to do
+in their first five minutes, with a welcome. Built as described in HANDOFF **(suggested: three pages with
+the controls for your device, the lobby guide to City Shore, Chill, Short and Start, one hint per
+material, the way to the shop, and the seven-step funnel)**. Still to come from the shop's plan: the
+footprints, step sounds, emotes and second chance; and the every-device rules over the older screens.
+
+**Twenty-second pass (2026-10-04), the shop (you):** the game is to make money; a shop in the style of
+the reference reel; tokens earned by finishing levels, with Robux packs; ProfileStore; footprints, trails,
+sound packs, passes, auras and emotes; every button on every device; nothing dupable; a clear first five
+minutes. Built so far: the saved economy and the shop (design in
+`docs/superpowers/specs/2026-10-04-shop-and-economy-design.md`) **(suggested: the tactile look, the kiosk,
+the prices and rewards, the try-on, the Studio gift, the analytics)**. Next, in order: the first five
+minutes (a welcome, a guided first run, one-time hints, ending at the shop); the footprints, step sounds,
+emotes and second chance; and the same every-device rules over the older screens.
 
 **Twenty-first pass (2026-09-30), from your notes (you):** sounds made for each ending, playing while
 its scene plays, for a cinematic feel; a more Needoh-like Needoh sound, and which files to replace; the
@@ -355,7 +571,10 @@ back like a range of hills that comes up on the horizon every few minutes and go
 - Is the whirlpool ride right?
 - Does it run smoothly? The city is a couple of thousand parts.
 
-## 5. The Backrooms secret level **(you)**
+## 5. The Backrooms secret level **(you)**: BUILT 2026-10-14 (sixty-fourth pass), TESTED by 2026-10-17
+
+Built as the back rooms of the baths (HANDOFF, **The back rooms**): the seventh fall in a run, once a run, with a way
+out; and since the sixty-fifth pass the lobby's yellow back corridor leads there for anyone who has found them once.
 
 - **Fall enough times in one run (you),** say 7 **(suggested)**, and instead of respawning you clip
   through the floor into the Backrooms: yellow rooms, humming lights, damp carpet.
@@ -391,9 +610,9 @@ back like a range of hills that comes up on the horizon every few minutes and go
 | Strange | mazes, tiny world of bugs, medieval villages, rollercoasters, industrial facilities |
 | Hidden | the Backrooms |
 
-**Suggested priority after sections 1 to 5:**
+**Suggested priority after sections 1 to 5 and 8:**
 
-1. **Kids' playground.** Foam, lego and buttons suit it perfectly; a strong level 5.
+1. **Kids' playground.** Foam, lego and buttons suit it perfectly; a strong level after Hill House.
 2. **Office floors, parking lot, museum, aquarium.** Classic liminal spaces, good as side areas or
    secret routes.
 3. **Tiny world of bugs.** The game's materials seen as giant terrain.
@@ -401,3 +620,70 @@ back like a range of hills that comes up on the horizon every few minutes and go
 
 Space, other planets and rollercoasters break the grounded liminal tone. They fit late, or a
 rollercoaster could be a finale ride rather than a whole level.
+
+## 8. Next, in this order **(you, 2026-10-17)**
+
+Asked for after your third test, in your words: the camera angles of levels 1 to 4 "verified extensively" and made
+better; the text, fonts, textures and style the same everywhere, "since that would appeal less to an average player";
+the lobby expanded, since it "gets way too cluttered", and better modelled; then a new level. Since then: better
+quality things in the shop "using blender meshes and animations", every cosmetic looking better, more variety in the
+lobby's ambience and its water splashing ("too repetitive"), the butter sticks' deformation fixed, and the remaining
+generated sounds made "way better". How each is done is mine **(suggested)** unless marked.
+
+1. **The camera, shot by shot: BUILT (ninety-third pass), waiting for a test.** Every scripted shot in levels 1 to 4
+   is played through the game's own camera by `blender/check_shots.py` and checked for being seen, its size, its
+   length and the camera never inside you. HANDOFF, **The camera, checked shot by shot**.
+2. **The butter sticks: BUILT (ninety-fourth pass), waiting for a test.** One shallow dent where you step, no wave
+   after it, and the wax wrapper going down and back up with the butter.
+3. **The lobby's own sound: BUILT (ninety-sixth pass), waiting for a test.** Two long sea beds drifting against each other, single waves breaking far below, the
+   fountain falling into its basin with splashes and plinks, gusts and now and then a bell on a buoy, each at random
+   gaps, pitches and loudness and never the same take twice running. Then the remaining generated sounds remade: the
+   story's and the levels' ambience, the endings, the keypads and the last four material sounds.
+4. **One style everywhere: BUILT (ninety-ninth pass), waiting for a test.** One display face, one body face and one
+   for numbers on every screen, one set of corner radii, strokes and button looks, all from `Style.lua`; the words
+   printed in the world (signs, letters, notices) kept as they are on purpose. `check_style.py` holds every screen to
+   it. HANDOFF, **One style (ninety-ninth pass)**.
+5. **The shop's cosmetics as modelled meshes: BUILT (ninety-seventh pass), waiting for a test.** Trails, auras and footprints built from small Blender-modelled pieces
+   (puffy stars and hearts, snowflakes, honey drops, clouds, sea glass, sprinkles, fireflies, embers, slime, paw
+   prints), animated: trails leave them, auras carry them round you, steps press them into the ground.
+6. **The lobby as a promenade by the sea (you chose it): BUILT (hundredth pass), waiting for a test.** Five decks
+   on piers over the sea joined by boardwalks: the plaza (the spawn, the fountain, benches, the canopy on its
+   columns), the level gates (the pads in an arc round the Start, the Story pad, the mode and length keys on the way
+   in), the arcade (the kiosk, the daily chest, the boards, the post box, and the back corridor in a small house of
+   its own), the hall of fame (the leaderboard and the statue) and the garden (a lawn, seats facing the sea, the
+   seaside viewer and the lift to the squish room). Every place from `LobbyLayout.lua`; `check_hub.py` measures it.
+   HANDOFF, **The lobby as a promenade (hundredth pass)**.
+7. **Hill House (you chose it): after section 9.** Level 5 in the story's order of play, first in its clock: the key holder's house on
+   the hill at eight in the morning, the big clock, the key on its green ribbon by the door, and why you did not go in.
+
+## 9. From your notes of 2026-10-20 **(you)**
+
+Asked for in one message after the lobby, in your words, with what I suggested and you chose marked. In the order they
+are being built:
+
+1. **Sounds where they are: BUILT (hundred-and-first pass).** "The fountain ... location based ... fade away the farther
+   I go"; wind and the sea stay everywhere. A sound for the lever, "hardcore with a deeper, more dramatic lever crank and
+   chill ... more chill"; sounds for "selecting the level, poses on the pedestal, level difficulty". Sky Pools' "light
+   bug" (I took it to be the long falls' sheets, white lines to the clouds; tell me if it is still there). "I do not see
+   the bubbles popping". "My soap crumble was better": your own recording is played alone now.
+2. **One font, every device: BUILT (hundred-and-second pass).** "They should all be ONE style!!!" (Nunito, you chose
+   it); "verify that every device can see everything and that everything scales properly".
+3. **The back rooms: BUILT (hundred-and-third pass).** "Go back through the door I came, just like in the movie" (from
+   the lobby only); "make the backrooms guy way scarier and the screamer way more dramatic"; "improve the looks of
+   backrooms greatly".
+4. **What you say, and a deeper story: BUILT (hundred-and-fourth pass).** "I want to say the lines to them myself ...
+   walking away ... the options ... disappear by themselves"; "I also want the plot to be deeper": you are Marsh's
+   child (you chose it).
+5. **The shop made over.** "Stylistically connect the shop UI and its vibe with the rest of the level"; colour; the
+   mouse cursor as a chunk, a cookie that crumbles; effects splashing and splattering, with sounds; a different sound
+   for each tab; the background cracking if it is ice, sparkling if lava, crumbling if soap; a random background of
+   defaults; backgrounds to buy, detailed, in rarities (token crates and Robux mythics, you chose); open and close with
+   their own animation and sound.
+6. **Trails and auras.** "Even cooler and even slicker and even more pronounced", the trail "less wide ... more
+   specific effects, not just a line that fades out".
+7. **Sky Pools' arches.** "Glowing or making these cool sparkling effects and kind of like shake my camera a little".
+8. **The lobby's look and feel.** "Greatly improve the vibe and aesthetics of the lobby."
+9. **Your sounds, sampled.** "Take a sample of my sounds and improve them": with your files in `audio/yours/`, each
+   sound's takes built from your recording (librosa and pedalboard, installed with your OK).
+10. **A cookie chunk.** "Add a cookie chunk yk."
+11. **Hill House** (section 8, item 7).

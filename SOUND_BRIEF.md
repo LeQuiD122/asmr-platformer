@@ -559,6 +559,41 @@ then, rather than stand in badly.
 | The Sunken City | `WhirlRoar` (loop), `DrainFall`, `CulvertWash` (loop), `SunkenChord` |
 | Flooded Halls | `FlumeRush` (loop), `PlungeWind`, `HallsChord` (the only chord that resolves) |
 
+## One chord for all four endings
+
+Four of the endings' sounds would not upload (the roar and the chords). The roar has a built-in stand-in.
+The chords now share one: `EndChord` (`audio/endings/EndChord.wav`, from `python audio/gen_ending_sfx.py
+EndChord`), an open chord with no third, so it is neither major nor minor and sits right at any pitch. An
+ending plays its own chord if it is in `SoundService.StorySounds`, and otherwise EndChord at its own pitch:
+City Shore a little lower, the Sky Pools higher and brighter, the Sunken City low and dark, the Flooded
+Halls as it is. One upload brings all four last notes back.
+
+## Remade from sound models (ninety-sixth pass)
+
+Every generated sound you had not said you liked was remade on `audio/sfx_kit.py`, which models how the real thing
+makes its sound instead of shaping noise: water as bubbles (each ringing at its size's pitch and rising as it nears the
+surface), struck things in their own modes, chords on a felt piano and soft strings, air as noise whose spectrum moves,
+and real reverbs for each space. Each remade file is at the loudness of the one it replaces, so nothing in the mix
+moves. Which file makes what:
+
+| Generator | Writes | For |
+|---|---|---|
+| `gen_story_sfx.py` | `audio/story/` (9 remade, `JournalAdd` new) | StorySounds |
+| `gen_ending_sfx.py` | `audio/endings/` (18) | StorySounds |
+| `gen_ambience_sfx.py` | `audio/ambience/` (6 beds) | AmbienceSounds |
+| `gen_keypad_sfx.py` | `audio/buttons/` (combo, circuit) and, through `gen_sheet_sfx.py`, `audio/sheets/button_*` | MaterialSounds |
+| `gen_lobby_sfx.py` | `audio/lobby/` (7: beds and sheets of takes) | LobbySounds |
+| `gen_water_sfx.py` | `audio/water/` (6: sheets of splashes, dips, drips; lapping, pouring, a stream) | WaterSounds |
+
+**Kept as you liked them**: the Needoh's and the lava crust's takes (`gen_needoh_lava_sfx.py`, the twenty-first pass's
+makers word for word), the lego and the oobleck (louder and creamier since the eighty-eighth pass), and your recorded
+keyboard thock. `gen_material_sfx.py` and `gen_button_sfx.py` write nothing now (their makers stay to read).
+
+**A sheet** (`Name_xN`) is N takes in one file, one per slot, played by slot (Sound.PlaybackRegion): one upload for
+many takes. `blender/check_audio.py` holds every file to the house rules (format, no clipping, clean ends, seamless
+loops, each family's loudness and softness, no bare tones outside music, takes that differ, every name the game asks
+for there).
+
 ## Where the ids go
 
 `src/Client/Services/AudioService.lua`, in `SOUND_IDS_BY_EVENT`:

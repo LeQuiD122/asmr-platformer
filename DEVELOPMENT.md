@@ -98,7 +98,8 @@ themselves, which costs nothing since a quad was always going to be two triangle
 
 | This repo path | Studio destination |
 |---|---|
-| `src/Shared/*.lua` | `ReplicatedStorage/Shared/` (13 ModuleScripts) |
+| `src/Shared/*.lua` | `ReplicatedStorage/Shared/` (14 ModuleScripts) |
+| ProfileStore (by loleris, not in this repo) | `ServerScriptService/ProfileStore` (ModuleScript): the saves |
 | `src/Server/ChunkBuilder.server.lua` | `ServerScriptService/ChunkBuilder` (Script) |
 | `src/Server/ChunkProps.server.lua` | `ServerScriptService/ChunkProps` (Script) |
 | `src/Server/Bootstrap.server.lua` | `ServerScriptService/Bootstrap` (Script) |
@@ -158,8 +159,10 @@ one of the four levels, or the Sandbox (every material in a fixed order) from it
 python blender/check_all.py
 ```
 
-Runs all nine checkers (plain Python, no Blender needed); `python blender/mutations/run_all.py`
-proves the checkers catch what they claim to. The oldest of them, `check_chunk_forms.py`, asserts the chunk layout contract: entry and exit
+Runs all thirteen checkers (plain Python, no Blender needed; after changing a module, run
+`python tools/stamp.py` first, or `check_stamps` fails on purpose); `python blender/mutations/run_all.py`
+proves the checkers catch what they claim to (and checks `src` after every suite, putting back anything a
+suite could not, so one failed write cannot leave a planted bug behind). The oldest of them, `check_chunk_forms.py`, asserts the chunk layout contract: entry and exit
 faces wide enough to land on, no hole in a route bigger than a jump clears, slabs that
 meet sharing enough width to walk across, no interpenetration, geometry inside each
 chunk's published length, the ramp meeting flat chunks flush, and that every slab of a

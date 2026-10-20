@@ -32,7 +32,7 @@ The idea that the people are living an ordinary day inside what the player calls
   engines' waste heat. Outfalls 1 and 2 can be opened by hand. Outfall 3, the big one, has a lock
   and one key, and the key goes home with whoever is on call: the key holder.
 - **The key holders.** J. Harrow, 1911. A. Wick, 1946 (the fisherman on the pier now; "gave it back
-  on time"). E. Marsh, 1979 ("did not come back up"). And you, 14 August.
+  on time"). Edwin Marsh, 1979 (got the gates open, and "did not come back up"). And you, his child, 14 August.
 - **11 August.** A surge comes in on the high tide. Mr Barlow, the night engineer, opens Outfalls 1
   and 2 by hand and puts every light in the station on so the key holder can find the way in. The key
   holder does not come. The tide does not go out. The Promenade Hotel opens its roof to everyone and
@@ -96,8 +96,22 @@ CLOCKED IN; so does the rota under the baths. Everyone half recognises you ("You
 The key was in your pocket all along. You took it home to Hill House on the 13th, and a front door
 key on a green ribbon, marked HILL HOUSE, is in the baths' lost property.
 
-**Why you did not come in is never said.** It is the question the story is built round, kept for a
-level of its own (below).
+**You are Edwin Marsh's child (you, 2026-10-20).** "You've got his face" is meant. Edwin Marsh was the key
+holder in 1979. On a night like this he went off the dive board at City Shore with the key on a green ribbon
+round his neck, waved at a little one on the sea wall, and went down; he got the gates open and the bay went
+out on time, and the Hold kept him for it. The little one was you, about Pip's age, who sat on that wall every
+night after, waiting, with Sal bringing a cone. Hill House was his, and its big clock in the hall stopped the
+night he went and has not been started since. The faceless Watcher on the Deco tower is him: a key holder the
+Hold keeps too long loses his face, and he has been watching for you to come down.
+
+**Why you did not come in** is that: you took the key home on the 13th, as he did, and could not make yourself
+go down, because of what it cost him. Nobody says so outright. It is learned in pieces, by what you choose to
+ask people (`Shared/Conversations.lua`): the Marsh look (Sal), the name (Mrs Okafor, Mr Wick), the ribbon
+(Maren, Mrs Venn), your father (Mr Wick), the one on the tower (Mr Wick), and what it cost him (Mr Barlow);
+each piece goes in your journal. **Pip is you**, thirty years on, waiting by the sea for a father who went
+down to find the key holder; Tobi is your father's story again. Open the gates or she waits as you waited.
+The true ending is still clocking in (Hill House, below); opening the gates gives the Watcher his face back,
+and lets him stop waiting **(suggested how)**.
 
 ## The levels
 
@@ -120,9 +134,9 @@ is ever told outright, and every layer rewards the player who went looking in th
 - **Things to read**: notice boards (R), and letters lying on the ground, a stone on each.
 - **Things to open**: lockers, a tin box, loose bricks, a loose board. Some open with a hand (E); some
   only to MR BARLOW'S PRY BAR, which lies somewhere early on every level and stays on your back.
-- **The secrets**: five, one or more a level, each told as a short scene when it is found, the camera
-  drifting in on it with the focus pulled to it, a low sting, its name and a line, then "Secret 2 of 5"
-  and what it says. Not needed to finish anything; the whole story is only in them.
+- **The secrets**: six, one or more a level and one under them all, each told as a short scene when it is
+  found, the camera drifting in on it with the focus pulled to it, a low sting, its name and a line, then
+  "Secret 2 of 6" and what it says. Not needed to finish anything; the whole story is only in them.
 - **The endings**: every level ends going down, played as a scene you do not control, and the level's
   own sound goes silent when it starts. Only the scene's sound is left.
 - **The sound**: every level has its own bed (the sea, the roof wind and the party through a wall, the
@@ -136,6 +150,7 @@ is ever told outright, and every layer rewards the player who went looking in th
 | Staff locker, aquarium | Sunken City: the aquarium gallery | the pry bar | E. Marsh's letter: "Nobody comes. You are the one who comes." |
 | Locker 3 | Flooded Halls: the staff lockers on the gangway | your hand | your coat, your card, and a note in your writing: "I'll go in tomorrow." |
 | Under the boards | Flooded Halls: a loose board by the gangway's far rail | the pry bar | the dark, and a long way down, something breathing |
+| The back rooms | under all of them: the seventh fall in one run goes through the floor | falling | Mrs Venn's notice: the back rooms of the baths, staff only, and the way out |
 
 ## The people
 
@@ -150,7 +165,9 @@ is ever told outright, and every layer rewards the player who went looking in th
 - **The Attendant** at the aquarium. Asks you not to tap the glass. Runs when it goes.
 - **Mr Wick**, the fisherman. Held the key himself in 1946. Knows the word for the Hold, and that
   nobody who goes down the drain comes back.
-- **The Watcher**, faceless, on the Deco tower. E. Marsh, key holder from 1979. Never speaks.
+- **The Watcher**, faceless, on the Deco tower. Edwin Marsh, key holder from 1979, your father. Never
+  speaks. In the back rooms something walks in his shape, stooped under the ceiling, and if it reaches
+  you its blank face opens into the Hold's mouth.
 - **Mrs Venn**, the baths attendant. Has sold a ticket to everyone who came down looking for you.
   Cuts the soap at nine; it comes back uncut at nine.
 - **Tobi Okafor**, Pip's dad, in his trunks with his red towel. Still looking. The halls are longer
@@ -188,7 +205,7 @@ Corporation Baths underneath, and the Gate Chamber at the very bottom.
 
 ## What is never explained
 
-- Why you did not come in.
+- Whether opening the gates will cost you what it cost him.
 - Whether opening the gates ends the day or only starts it again.
 - Who the Watcher was, beyond a name on a list.
 - What the lobby is. (It is the one place with no water and no time of day, which may be the answer.)
@@ -197,9 +214,10 @@ Corporation Baths underneath, and the Gate Chamber at the very bottom.
 
 ## Hooks for later (suggested)
 
-- **Level 5: Hill House, 8:00 in the morning.** Before any of it: your house on the hill, the big
-  clock, the key on its green ribbon on the hook by the door, and the reason you did not go. The
-  true ending would be clocking in.
+- **Level 5: Hill House, 8:00 in the morning.** Before any of it: your father's house on the hill,
+  his big clock stopped in the hall since 1979, his coat on the hook, the key on its green ribbon by
+  the door, the sea wall you waited on seen from the window, and you deciding. The true ending would
+  be clocking in.
 - **A keepsake journal**, saved between sessions and shown in the lobby: 27 cards to find.
 - **The radio on the roof**: Rudy's song broken into by the shipping forecast for Harrow Bay, the same
   forecast every time.
@@ -214,4 +232,7 @@ Corporation Baths underneath, and the Gate Chamber at the very bottom.
   the Hold; the old-timers name it and that is all.
 - Every new material needs a keepsake, every new person needs a look and at least three lines, and
   at least two people on every level carry the key holder's thread. `check_story.py` fails otherwise.
+- What you can say to people (`Shared/Conversations.lua`) is in your own voice: short, plain, a question
+  or a fact, never a speech. Every clue it gives is a piece of your father's story, and each has a note
+  for the journal; `check_story.py` holds that every clue can be learned from the start.
 - Every level's things to read include at least one that could only be from that place.

@@ -9,8 +9,17 @@ chunks, there are four levels plus a Sandbox, and players choose a run in a lobb
 being dropped into a hardcoded level. See **Levels and the lobby** and **The Flooded Halls**
 below for the parts this file did not cover before.
 
-Last updated: 2026-09-30 (twenty-first pass: see **The story**). What is planned next (the City Shore finale, story mode, the levels
-still to come) is in `ROADMAP.md`.
+Last updated: 2026-10-18. **Everything up to and including the ninety-second pass has been played in Studio (you).**
+Built since, waiting for a test: the hundred-and-first to hundred-and-fourth passes, from your notes of 2026-10-20:
+sounds where they are, one font and every device, the back rooms, and what you say to people with the story under it
+(**Your notes of 2026-10-20**, first below); the ninety-ninth and hundredth passes, one style on every screen and the
+lobby as a promenade by the sea (**One style, and the lobby as a promenade**); the ninety-sixth to ninety-eighth,
+every generated sound remade, the lobby's own sound, the shop's trails, auras and steps as modelled things and the
+levels' water (**The sounds remade, the shop's things modelled, the levels' water**); the ninety-fifth, from your fourth test (the mouth's dark you can see in, and the drain under
+the water: **What your fourth test found**); and the ninety-third and ninety-fourth, the camera checked shot by shot
+and the butter sticks (**The camera, checked shot by shot**). Each round before them follows, newest first: what your third, second and first tests found (passes 92, 86 to
+91 and 78 to 85), then the fiftieth to seventy-seventh passes (story mode the biggest of them) and the rest. What is
+planned next (Hill House, then more worlds) is in `ROADMAP.md`.
 
 ## Where things are
 
@@ -32,27 +41,30 @@ ServerScriptService
   ChunkBuilder            (Script)
   ChunkProps              (Script)
   Bootstrap               (Script)
+  ProfileStore            (ModuleScript, by loleris: the saves; see The shop and the economy)
   Services                (Folder)
-    BackdropService, BestTimeService, ChunkService, DeformationService,
-    DiveFinaleService, FloodedHallsService, HubService, Interactables,
+    BackdropService, BackRoomsService, BestTimeService, ChunkService, DeformationService,
+    DiveFinaleService, EconomyService, FloodedHallsService, HubService, Interactables, SquishRoomService,
     LeaderboardService, LevelService, LightingService, PlayerStateService,
     SkyPoolsService, StoryService, SunkenCityService, TimerService,
     Townsfolk                                                         (ModuleScripts)
 ReplicatedStorage
-  Shared                  (Folder) -> 13 ModuleScripts: ChunkDefinitions, HallRoute,
+  Shared                  (Folder) -> 14 ModuleScripts: ChunkDefinitions, HallRoute,
                                       Keepsakes, LevelDefinitions, MaterialAppearance,
-                                      MaterialConfig, PlanShapes, Poses, SeaRig, SkyPath,
-                                      SubRegionGrid, SunkenPath, Types
+                                      MaterialConfig, PlanShapes, Poses, SeaRig, ShopCatalog,
+                                      SkyPath, SubRegionGrid, SunkenPath, Types
   Assets/TileMeshes       (Folder) -> imported MeshParts, exact names below
   Assets/Backdrop         (Folder) -> horizon props, OPTIONAL (see below)
+  Assets/Cosmetics        (Folder) -> OPTIONAL: the shop's things (meshes/cosmetics/, Cos_*), for CosmeticsClient
+                                      and StepService; without them the particles and flat prints stand in
 StarterPlayerScripts
   Bootstrap               (LocalScript)
   Services                (Folder) -> AmbienceService, AudioService, Cinema, CityShoreClient,
                                       CloudService, DeathService, DeformationRenderer,
                                       FloodedHallsClient, HubLeverService, HubVoteService,
-                                      InputService, JournalService, Maw, PauseMenuService,
-                                      ScreenEffects, SeaService, SkyPoolsClient, StoryClient,
-                                      SunkenCityClient, UIService, ViewModeService
+                                      InputService, JournalService, Maw, OnboardingService, PauseMenuService, StepService, EmoteService, SquishRoomClient, DevPanelClient,
+                                      ScreenEffects, SearchlightClient, SeaService, ShopService, SkyPoolsClient,
+                                      StoryClient, SunkenCityClient, UIService, ViewModeService
 ServerStorage
   Townsfolk               (Folder) -> OPTIONAL: your own character models for the people, named
                                       as they are (Sal, Pip, Maren, Dev, Okafor, Rudy, Attendant,
@@ -60,8 +72,9 @@ ServerStorage
                                       still works.
 SoundService
   MaterialSounds          (Folder) -> OPTIONAL: the generated material takes (audio/materials/,
-                                      and the keypad's audio/buttons/), imported and dropped in.
-                                      Each Sound is played for the event its name starts with.
+                                      audio/sheets/, and the keypad's audio/buttons/), imported and
+                                      dropped in. Each Sound is played for the event its name starts
+                                      with; a sheet (name_xN) is N takes, played by slot.
   StorySounds             (Folder) -> OPTIONAL: GateGroan, WaterRush, Siren, MawRumble, JawsShut,
                                       Heartbeat, SecretSting (audio/story/), for the scenes, and
                                       the endings' own 17 (audio/endings/: DiveBoard, DiveWind,
@@ -71,6 +84,8 @@ SoundService
                                       HallsChord). Built-in sounds stand in where one will do.
   AmbienceSounds          (Folder) -> OPTIONAL: ShoreSea, RoofWind, PartyFar, HarbourNight,
                                       BathsHum, HoldDrone (audio/ambience/), the levels' beds.
+  LobbySounds             (Folder) -> OPTIONAL: the lobby's own seven (audio/lobby/), played on each
+                                      screen in the lobby; without them, the server's stand-ins.
 ```
 
 `SunkenNPCs` (a ModuleScript in ServerScriptService.Services until the fourteenth pass) is now
@@ -101,7 +116,11 @@ Sand_Surface_12x6_18   Sand_Surface_13_5x4   Sand_Surface_14x4     (FBX, Bone ch
 Sand_Surface_14x6_18   Sand_Surface_16x4   Sand_Surface_16x6_18    (FBX, Bone children)
 Honey_Tile_Interior   Honey_Tile_Edge   Honey_Tile_Corner
 Slime_Tile_Interior   Slime_Tile_Edge   Slime_Tile_Corner
+Whirl_Band1 ... Whirl_Band6   Whirl_Foam1 ... Whirl_Foam6   Whirl_Lip   (FBX, the Sunken City's whirlpool)
 ```
+
+The `Whirl_*` thirteen are optional: without them (or with an old import, which SunkenCityService's `WHIRL_SIZE`
+catches) the whirlpool is built of parts, as it used to be.
 
 Every `*_Platform_*` above is a rig and must be the **FBX**, not an OBJ: an OBJ carries no
 armature so the mesh imports rigid and silently never deforms. `ChunkBuilder` checks
@@ -654,6 +673,2106 @@ running under the room's haze (density 0.32, haze 1.6, lilac decay) all along.
 - **Slabs under any hole-opening material no longer collide** (`ChunkBuilder`: step counts,
   displacement, wading and embers join the dissolve clock), and a re-inflated bubble wrap cell
   now gets its floor back -- it used to look whole and let you fall straight through.
+
+## Your notes of 2026-10-20 (hundred-and-first to hundred-and-fourth passes)
+
+The first four things from your long list (`ROADMAP.md` section 9 has all of it, in order). How each is done is mine
+**(suggested)** unless marked. Not played yet. What to paste and import is **Before you test in Studio (passes 101 to
+104)**, below.
+
+### Sounds where they are (the hundred-and-first pass)
+
+- **The fountain is heard at the fountain**: full within 6 studs, fading as you walk away, gone by 55, so from the
+  gates or the garden it is not there at all. Its splashes the same (gone by 45). The sea and the wind stay everywhere,
+  as you asked; the buoy's bell is out at sea, far off, where it is.
+- **Every press has its own sound, heard from the pad** (`audio/gen_press_sfx.py`, SoundService.LobbySounds): a level
+  pad a soft stone thock with a note from its window, a mode or length key a round arcade key going down and coming
+  back up, a pose key two quick notes on a wooden toy xylophone, the Start a plunger going home with a warm chord
+  rising out of it, and a locked pad a dull knock on its boards. Anyone's step onto a pad is heard on every screen near
+  it, once as they arrive (AmbienceService watches who is standing on what). The old sound played from the lobby's
+  folder, everywhere at once, and only when a vote changed; it is gone.
+- **The leaderboard's lever**: thrown to Hardcore it is cranked down notch by notch with a ratchet, slower each notch,
+  then lands with a heavy iron clunk and a low boom, its light flaring; flicked back to Chill it is a light wooden
+  click-clack and two soft notes. Only when you pulled it, and from the lever.
+- **Sky Pools' "light bug"**: I am fairly sure it was the pools' long overflow falls. Each was one pale sheet from the
+  pool's lip to the clouds hundreds of studs below, and seen from the side that is a thin white line through everything.
+  A fall's sheet now goes down 36 studs at most, thinning to nothing as it goes, and below that the fall is its
+  streaks and mist. **Tell me if the lines are still there**, and where you were standing.
+- **The bubble wrap's pops are seen**: a puff you can see from behind you, the film's flecks thrown out and falling
+  back, a glint at the instant, and the pocket swelling more before it goes. (If they still do not show, look in
+  Output for "a BubbleWrap tile has no skinned sheet": that means the sheet was imported without its bones.)
+- **Your soap**: the crumble you uploaded is played alone now, at a slightly different pitch each step; my four takes
+  are not mixed in with it. To have more takes of it, see **Your sounds, sampled** below.
+
+### One font, every device (the hundred-and-second pass)
+
+- **Nunito for every word** (you chose it): menus, the shop, captions, the journal, signs in the world, letters,
+  shouts. What tells one kind of word from another is its weight (Black for the big words, ExtraBold for signs, Bold
+  for buttons and names, Medium for what is read) and its slant (italic for a page, a note, a hand, a murmur), never
+  another face. `check_style.py` fails on any other face.
+- **Fitted to every screen**: the panels drawn at a fixed size (the pause menu, LEVEL COMPLETE, the settings, the best
+  times, the conversation choices) scale to fit any screen (`Style.fit`), never larger than it, not tiny on a phone,
+  and a little larger on a big monitor or a television.
+- **Measured on every device**: the test panel's Self-test (F8) now measures every screen it opens (the shop, the
+  journal, the emotes, the pause menu, the death card, and the screen as it is) on the device it runs on, and says
+  pass or FAIL for anything hanging off an edge, words that do not fit their box, and on a touch screen a button
+  under a thumb. **Run it in Studio's Device Emulator** (Test, Device) on a phone, a tablet and a television.
+
+### The back rooms (the hundred-and-third pass)
+
+- **The way back** (you: "just like in the movie"): behind where you arrive there is a door frame now. If you came
+  down the lobby's corridor it is open, its yellow light spilling into the room, and walking back into it takes you
+  back up the corridor, to its turn, facing out. If you fell in, it is a frame round bare wall. Only on your screen.
+- **The rooms**: carpet that is carpet, plaster walls and ceiling, the ceiling's T-bar grid on every tile's edge, a
+  skirting board along the foot of every wall, damp rising up the walls and brown rings on the ceiling, a yellow haze
+  in the air and their own light on your screen while you are down there.
+- **Him, worse**: too tall for the rooms, so he goes stooped with his head bowed under the ceiling, legs like poles,
+  arms hanging past his knees into long fingers, a pale head a size too big with a seam down the middle where a face
+  would be. Seen only in jerks (he moves at his pace, but is shown a few times a second, never evenly), his head
+  snapping to another angle now and then, rushing down a straight. The lights nearest him nearly die and stutter.
+  When he comes, the staff door bangs open, the lights go out from it toward you and come back, and from then on your
+  heart is louder and faster and the picture drains of colour the nearer he is.
+- **The screamer**: every light near you goes out with a clunk; a beat of black; then he is there, an arm's length
+  from your eyes, the lights flaring back too bright; his face splits down its seam and swings open onto rows of long
+  teeth and a red throat, the stab and his roar at once, the picture punching in and shaking; he lunges into you;
+  black, and the lobby.
+
+### What you say, and the story under it (the hundred-and-fourth pass)
+
+- **Your idea, as you described it**: talk to someone (F, or Y on a controller) and up to three things you could say
+  come up low in the middle of the screen, numbered. Choose one (the mouse, a tap, its number key, or the controller)
+  and you say it, in a dark bubble of your own over your head for anyone near to see, and they answer it line by
+  line; then what else you could say comes up. Walk away and the choices fade by themselves; B or Escape puts them away
+  too. "How are you keeping?" is always there for their ordinary lines. What you have said is kept in your save.
+- **My suggestions on it, built in**: the choices change with what you know (some only appear once you have learned
+  something from someone else, on another level); what you learn goes into your journal as a note; nobody is asked the
+  same thing twice.
+- **The story under it (you chose it)**: you are Edwin Marsh's child. The key holder before you went down in 1979,
+  got the gates open, and the Hold kept him for it; you were the little one on the sea wall who waited for him, and
+  the faceless Watcher on the tower is him. That is why you never came in. It is learned in pieces: the Marsh look
+  (Sal), the name (Mrs Okafor, Mr Wick), the green ribbon (Maren, Mrs Venn), your father (Mr Wick), the one on the
+  tower (Mr Wick), and what it cost him (Mr Barlow); and Pip is you, thirty years on. `LORE.md` has it as canon,
+  `Shared/Conversations.lua` every line (37 things you can say to eleven people).
+
+**Checked**: `check_audio.py` (the presses and the lever on their sheets' slots and heard where they are, your soap
+alone), `check_skypools.py` (the falls break up), `check_story.py` (the pops seen; every conversation's line clean,
+every clue learnable from the start and written in the journal, the Talk remote, walking away), `check_style.py` (one
+family), `check_devices.py` (fitted panels, the Self-test measuring), `check_backrooms.py` (the way back from the lobby
+only, the dressing, him, the dread and the screamer; and the lights never quite dark: an eighth at the least).
+`pass101.py` 14 of 14, `pass102.py` 6 of 6, `pass103.py` 12 of 12, `pass104.py` 11 of 11; twelve older suites
+moved onto what changed.
+
+**The full run after them**: 97 suites, 1709 of 1711 planted bugs caught, and src put back byte for byte. The two missed were in `pass90.py`: two of `check_backrooms.py`'s rules looked for a line anywhere in a file, and the new code had put a second copy of each elsewhere (the way back calls him off too; the dressing's helper is not solid either), so taking one copy away went unseen. Each rule now looks in its own function; `pass90.py` and every suite on the back rooms were run again: 26 of 26, and 1711 of 1711 in all.
+
+## Before you test in Studio (passes 101 to 104)
+
+**Paste**
+1. **The Luau**: `python tools/paste_list.py` lists them. New: **Conversations** (a ModuleScript in
+   ReplicatedStorage/Shared) and **TalkClient** (a ModuleScript in StarterPlayerScripts/Services). Then
+   `python tools/paste_list.py --mark`.
+
+**Import (UPLOADS: 10 sounds)**
+2. **SoundService.LobbySounds**: the seven new sheets in `audio/lobby/` (PadPress_x4, KeyPress_x4, PosePress_x4,
+   StartPress_x2, LockedPress_x2, LeverHardcore_x2, LeverChill_x2).
+3. **SoundService.StorySounds**: DoorSlam, TubeDie and ScreamerStab from `audio/story/`.
+
+**Then play**
+4. **PASTE CHECK** names anything missing.
+5. **The lobby**: walk from the fountain to the gates and listen to it fade. Step on a level pad, a locked one, the
+   keys, the pose keys and the Start. Throw the lever both ways.
+6. **Sky Pools**: look for the white lines; watch the falls. **Bubble wrap**: watch your feet.
+7. **A new save or the test panel's "Clear journal"**: talk to Sal, choose, walk away mid-choice; then Mrs Okafor,
+   Mr Wick, Mr Barlow, and read your journal's notes.
+8. **The back rooms from the lobby** (the test panel's "Back rooms" counts them as found): walk the corridor, look
+   behind you as you arrive, go back through the door; go in again and wait for him.
+9. **The Self-test (F8)**, here and in the Device Emulator on a phone and a television.
+
+## Your sounds, sampled (waiting for your files)
+
+You asked whether there is a tool to make the sounds better from your own recordings, and you chose your files plus
+free tools. Installed: **librosa** (cutting a recording into its parts and reading its pitch, time and energy) and
+**pedalboard** (Spotify's studio effects: EQ, compression, reverb, pitch and time). What I will do with them, once
+your files are in **`audio/yours/`** (the soap crumble you uploaded first, and any others you like):
+- cut each recording into its separate events (each crumble, each squish);
+- make new takes from those pieces by reordering and layering grains, with small shifts of pitch and time and a little
+  EQ each, so every take keeps your recording's real texture and none is an exact repeat;
+- and match each take's loudness to what the game expects, checked by `check_audio.py` as every sound is.
+The paid route (an AI sound API such as ElevenLabs' sound effects, with a key of yours) stays open if you want it later.
+
+## One style, and the lobby as a promenade (ninety-ninth and hundredth passes, 2026-10-18)
+
+From your notes **(you)**: "verify that the style of text, and their fonts and the textures and the stylistic choices
+are similar throughout the game", and the lobby "expanded and better modelled", since it "gets way too cluttered"; you
+chose the promenade with zones. How each is done is mine **(suggested)**. Not played yet. What to paste is **Before you
+test in Studio (passes 99 and 100)**, below.
+
+### One style (the ninety-ninth pass)
+
+- **One module, `Shared/Style.lua` (new)**: the screen's faces (`FONT`: Nunito for headings and body, Fredoka One for
+  the big words, RobotoMono for numbers and clocks, the journal's paper in Garamond, a shout in Permanent Marker and a
+  murmur in Kalam), the palette (`COLOUR`: the panels, raised panels and their edge, the ink in three strengths, the
+  warm accent, Chill and Hardcore, good and danger, the paper and its ink), the sizes, the corners (`RADIUS`) and the
+  outlines (`STROKE`).
+- **Every screen takes them from it** (24 files): the run's panels, the pause menu, the death card, the vote banner,
+  the shop and its kit, the journal, the story's captions and cries, the squish room's words, the viewer's, the lever's.
+  The run's panels had a purple of their own and the menus their own corners; they are one now.
+- **The world's lettering stays its own**: the signs, letters and notices printed on parts (`Style.WORLD`, a
+  SurfaceGui's only) are not the screen's, on purpose, and never appear on a screen.
+- **`check_style.py`** (the seventeenth checker): no face named outside Style, the screen's family Nunito, the world's
+  faces only by a SurfaceGui, the palette written once, the kit's faces from Style. `check_story.py` keeps the story's
+  captions out of the paper's face. `pass99.py`: 12 of 12.
+
+### The lobby as a promenade (the hundredth pass)
+
+It was one deck, 110 by 96, with everything on it, each thing squeezed into the gap the last one left. Now
+(`blender/plan_lobby.png` draws it from above, north up):
+
+- **Five decks on piers over the sea, joined by boardwalks** (planks, railed both sides):
+  - **the plaza** in the middle (84 by 84): you arrive facing north up the walk to the gates; the pool and its
+    fountain, four benches round it, the canopy on twelve columns (one either side of each walk's way in), planters
+    in the corners;
+  - **the level gates** (north): the pads in an arc round the Start, each facing it with its window behind it; the
+    length keys and then the mode keys across the way in, so you walk over them on the way to the Start;
+  - **the hall of fame** (east): the leaderboard across from the way in, its lever at the corner, the statue and its
+    pose keys;
+  - **the arcade** (west): the kiosk facing the way in, the daily chest, the challenges and materials boards and the
+    post box facing its middle, and the back corridor in a small closed house in its corner;
+  - **the garden** (south): a lawn, four benches facing the sea, planters, the seaside viewer looking out east, and
+    the squish room's lift, its door toward the garden.
+- **Every place in one table, `Shared/LobbyLayout.lua` (new)**: HubService builds from it, SquishRoomService puts its
+  lift by it, `blender/plan_lobby.py` draws it and `check_hub.py` measures it. No place is written into HubService.
+- **Everything stands on something**: every deck and walk on concrete piers down into the sea, no more than 30 studs
+  apart; the rails 0.7 in from the edges so they stand on the deck, with stone copings resting on them; the level
+  pads' windows on their back edges.
+- **Real light, not Neon**: the rails' copings and the decks' bands are stone (they were Neon, a glow with no light in
+  it); the level pads' windows are tinted glass with a light behind each (off behind the boards of a locked level,
+  brighter when it is chosen); fourteen lamp posts, each a lantern with a real light, on the four places and the walks;
+  the plaza keeps its columns' lamps and the canopy's lanterns.
+- **The way to the Start**: two runs of chevrons, across the plaza and up the walk, pointing north.
+- **The back corridor, fixed and housed**: two of its turn's walls ran straight across the first stretch, so the
+  corridor ended seven studs in at a yellow wall and its way into the back rooms could never be reached. They run
+  from the corner now, and the corridor stands in a plaster house with a slate roof in the arcade's corner (it hung
+  over the sea off the old deck). Its doorframe stands on the floor; it was sunk to its middle.
+- **Who is in the room** is who is over the promenade (a deck or a walk), not who is within 120 studs of its middle:
+  the gates are further off than that.
+- **Pushed out**: the far islands (to 400 to 540 studs, turned so none stands on a blade) and the clouds below (240 to
+  340), which would have stood among the piers; and the waves the lobby's soundscape breaks far below, beyond the
+  promenade's edges.
+- **The mode keys centred**: the pair sat at -12 and 0 on a row written for three; they are either side of the way in.
+
+**Checked**: `check_hub.py` measures the promenade from `blender/lobby_layout.py` (which reads LobbyLayout.lua, never
+copies it): HubService takes every place from the layout; every thing, at its footprint in HubService's own sizes,
+inside a deck's inlay (a lamp on a walk); no two within a stud of each other; every walk's way onto each of its decks
+clear, and the way from the spawn to the Start; the decks apart, each walk spanning the gap; everything standing on
+the deck; the structure not Neon; the piers into the sea; the lift letting you out on clear floor.
+`check_backrooms.py` walks the corridor from outside its door to its way in (it found the old walls across it).
+`check_squishroom.py`: the lift where the layout puts it, facing the garden. `pass100.py`: 25 of 25; passes 27, 69,
+72, 74 and 77 moved onto the layout (19, 24, 55, 61 and 45 of each caught); and `run_all.py` runs the three-digit
+passes too (it looked for two digits only).
+
+**The full run after them**: 93 suites, 1668 of 1668 planted bugs caught, and src put back byte for byte (compared with a copy taken before the run).
+
+## Before you test in Studio (passes 99 and 100)
+
+**Paste**
+1. **The Luau**: `python tools/paste_list.py` lists them, by where each goes. New: **Style** and **LobbyLayout**, two
+   ModuleScripts in ReplicatedStorage/Shared. Changed for the style: Cinema, DeathService, HubLeverService,
+   HubVoteService, JournalService, PauseMenuService, ShopService, SkyPoolsClient, SquishRoomClient, StoryClient,
+   SunkenCityClient, UIService, ViewModeService and the client Bootstrap (StarterPlayerScripts); ChunkBuilder,
+   BackRoomsService, EconomyService, FloodedHallsService, HubService, Interactables, SkyPoolsService,
+   SquishRoomService, StoryService, SunkenCityService, Townsfolk and the server Bootstrap (ServerScriptService).
+   Changed for the lobby: HubService, SquishRoomService, AmbienceService and the server Bootstrap. Then
+   `python tools/paste_list.py --mark`.
+
+**Import (UPLOADS: none)**: nothing new; the lamp posts are the lanterns already in `Assets/TileMeshes`.
+
+**Then play**
+2. **PASTE CHECK** names anything missing (Style and LobbyLayout are new).
+3. **The look**: the pause menu, the shop, the journal, the death card, the vote banner and the story's captions, all in
+   the same faces on the same dark panels with the same corners; the signs in the world keep their own lettering.
+4. **The lobby**: you arrive on the plaza facing up the walk to the gates. Walk each boardwalk: the gates (the arc of
+   pads and their windows, the keys on the way in, the Start in the middle), the hall of fame (the board, the lever,
+   the statue and its keys), the arcade (the kiosk, the chest, the boards, the post box, and the house with the yellow
+   door: walk in, round the corner to its end) and the garden (the lawn, the benches, the viewer, the lift). Look over
+   a rail: piers down to the sea. Tell me anything that looks crowded, empty or floating.
+5. **A vote from the gates**: a pad, Chill, Short, Start; the countdown; the run; back on the plaza after it.
+6. **The squish room**: the lift in the garden, and out again in front of it.
+7. **The guide** (on a save that has not had it): the marker over City Shore up the walk, then Chill, Short, Start.
+
+## The sounds remade, the shop's things modelled, the levels' water (ninety-sixth to ninety-eighth passes, 2026-10-18)
+
+From your notes **(you)**: "more variety to the lobby ambience and water splashing, it is too repetitive", "make the
+remaining generated sounds way better", "way better quality items in my shop ... using blender meshes and animations",
+"make all of the cosmetics in the shop look better". How each is done is mine **(suggested)**. Not played yet. What
+to import and paste is **Before you test in Studio (passes 96 to 98)**, below.
+
+### How the sounds are made now (`audio/sfx_kit.py`)
+
+The first generators built everything from band-passed noise, a sine that drops in pitch and a few echoes, and it
+showed: water that was hiss, chords that were sine waves, rooms that were four taps. Everything remade is made of
+parts modelled on how the real thing sounds:
+- **Water is bubbles**: each one rings at its own pitch for its size and rises as it nears the surface (van den Doel's
+  model), so a splash is the slap of the surface, a crown of spray fused into a fizz, the cavity closing with a
+  thump, a burst of bubbles under it and drops pattering back; a drip is one bubble; a stream, thousands.
+- **Struck things ring in their own modes** (wood, plastic, iron, a bell's hum, prime, tierce and nominal), hit as
+  hard or soft as asked.
+- **The chords are a felt piano and soft strings**: a piano string's stretched partials and two-stage decay, three
+  strings a fraction of a cent apart, the felt rounding the top off.
+- **Air is noise shaped by a spectrum that moves** (a gust brightens as it rises), and **rooms are real reverbs**: the
+  tiled baths, a brick shaft, a culvert, the harbour at night, under the water, a hall for the chords.
+- **Every remade sound is at the loudness of the one it replaces** (measured as BS.1770 measures it), so the mix the
+  game sets does not move.
+
+### What was remade, and what is new (the ninety-sixth pass)
+
+- **The story's nine** (`gen_story_sfx.py`): the gate is iron dragged over iron (friction catching and slipping,
+  ringing the gate's own plate), its screw clanking, water pouring off it; the bay going out is a river (it was a 5 kHz
+  hiss); the siren is a motor siren winding up across the town; the thing in the shaft breathes, growls with a throat
+  that catches and drags, and roars wet; the jaws are a vast soft thud and teeth; the heartbeat is lub, dub; the
+  sting a breath drawn in backwards into a low felt-piano note. **New**: `JournalAdd`, a few pencil strokes on paper
+  when something goes in your journal (it was a stock click).
+- **The endings' eighteen** (`gen_ending_sfx.py`): all of them, the chords as piano and strings in a hall, the
+  splashes and the plunges as water, the flume, the slide, the whirlpool and the culvert as running water in their own
+  rooms.
+- **The levels' six beds** (`gen_ambience_sfx.py`): the sea on the sands, each wave its own; wind on the terrace in
+  gusts, no whistle; the party through a wall (a song, its kick, people talking); the harbour (laps, a hollow
+  knocking under the quay, a mooring rope, a buoy's bell); the baths (a tube light's hum, air, drips in the dark
+  ringing off the tiles); the Hold (low strings beating, voices that never become words).
+- **The keypad** (`gen_keypad_sfx.py`): arcade buttons, not zaps: the microswitch's snap and the cap bottoming out with
+  a rush of air (cyan), a creamy thock and a low wooden note (violet), a bump and a rubbery bounce (pink), the lighter
+  click back up, three clicks into wooden bars (the combo), a domino run of buttons landing on a warm chord (the lane).
+- **Not the lava crust, the Needoh, the lego or the oobleck**: you liked those as they were. The Needoh's and the
+  lava's are the twenty-first pass's, their makers kept word for word in `gen_needoh_lava_sfx.py` (it rebuilds them
+  byte for byte); the lego and the oobleck were made louder and creamier in the eighty-eighth pass, and left.
+- **Sheets**: the keypad's four short sounds are sheets, several takes in one upload, as the chunk sounds have been
+  since the eighty-eighth pass. AudioService plays a sheet in place of any single files of the
+  same event, so the old ones in MaterialSounds are passed over (delete them if you like).
+- **The lobby's own sound** (`gen_lobby_sfx.py`, SoundService.LobbySounds, seven files): two long sea beds drifting
+  against each other, the fountain's water at the fountain, and over them, each at random gaps, pitches, loudness and
+  places and never one of the last two again: a wave breaking far below (eight), a plop, a plink, a spill or a gurgle
+  at the fountain (ten), a gust (five), a buoy's bell (two). Played on your screen, in the lobby only. While the
+  folder is not imported the server's old stand-ins play, as now.
+- **check_audio.py** (the sixteenth checker) holds every file to: mono 16-bit 44.1 kHz, no clipping or DC, clean ends,
+  seamless loops, each family's loudness and softness, no bare tones outside music, takes that differ, every name the
+  Luau asks a folder for there, and the lobby's sheets as AmbienceService plays them. Its own self-test shows each rule
+  a sound made to break it.
+
+### The levels' water (the ninety-eighth pass)
+
+- **All the water in the game was one sound**: every splash, drip, lap and pour in the levels was the engine's
+  impact_water at another pitch. Now it is water of its own kind (`audio/gen_water_sfx.py`, SoundService.WaterSounds,
+  six files): six splashes, eight dips (a foot into a pool, a kick, a hand through it), eight drips (into water, onto
+  wet stone), and beds of lapping, of water pouring into water and of a running stream.
+- **Through one module** (`Shared/WaterSounds.lua`): a one-shot is one of its takes, never the same one twice running
+  (a drip that drips again is another drip each time); without the folder, the old splash at its old pitch.
+- **Where**: the Sky Pools' pools (your splash into one, your steps through them), their falls, the cabana's shower,
+  the slide as others hear it and its splash; the Sunken City's harbour, its lapping, the drips in the stair and the
+  flat, the sluice, the sump, the drain's rush and the torrent; the baths' drips off the columns; the dive's splash as
+  the shore hears it. What the old splash was used for slowed right down (a wind, a hum, a deep rumble) is left as it
+  is: it was never meant as water.
+
+### The shop's things, modelled (the ninety-seventh pass)
+
+- **Seventeen meshes** (`blender/gen_cosmetics.py`, `meshes/cosmetics/`, ReplicatedStorage.Assets.Cosmetics): a puffy
+  star and heart, a snowflake, a honey drop, two clouds, a gem, two pieces of sea glass, a sprinkle, a firefly and its
+  wings, two embers, a slime splat, a paw print and a sole. Small, soft and rounded, under 900 triangles each.
+- **Every trail, aura and set of steps is made of them now**, over the particles (which stay as their haze and
+  glints), drawn and moved on every screen near (`CosmeticsClient`, new): sprinkles tossed out tumbling and bouncing;
+  honey drops falling and spreading where they land; soap bubbles floating up wobbling and popping; slime landing with
+  a wobbling splat; cloud puffs swelling and thinning; jelly beads bouncing twice; sea glass and the swatch's chips in
+  every material's colour; embers falling and cooling to ash; the green ribbon's glints fluttering down. Round you:
+  stars and gold circling and twinkling, snowflakes falling and turning, bubbles and embers rising, fireflies
+  wandering with their wings beating (two of them lit), mist drifting at your feet.
+- **The steps pressed in**: a heart, a star, a honey paw (closing up as it goes), a slime splat, a bubble sole
+  (swelling and fizzing away) and an ember sole (cooling to ash), each pressed into the ground as the foot comes down.
+- **The try-on in the shop is the real thing** (ShopCatalog.wear tags what is worn, and the try-on over it).
+- **Cheap**: on each screen only, players within 120 studs, at most 22 of a trail's and 8 of an aura's pieces each and
+  260 in all, kept and reused rather than made each time, touching nothing.
+
+**Checked**: `check_audio.py` (above); `check_hub.py` (the paste check's lists as audio/ has them: the sheets, the
+lobby's sounds optional, JournalAdd); `check_shop.py` (every trail, aura and step has pieces of meshes that are made,
+a motion it knows, sizes a person wears, never Neon, no flood; the client's limits, its pool, the try-on first; the
+steps pressed in with the flat print kept for a place without the meshes); `check_story.py` and `check_halls.py`
+(the sounds where they are made now); `check_audio.py` (the water's families as WaterSounds plays them, and every
+level's water through it). `pass96.py`: 17 of 17, `pass97.py`: 19 of 19, `pass98.py`: 15 of 15.
+
+**The full run after them**: 91 suites, 1630 of 1630 planted bugs caught (one gate in `check_shop.py` was found looking past the flat print into the new modelled one, and made to look at the flat print alone), and src put back byte for byte.
+
+## Before you test in Studio (passes 96 to 98)
+
+**Paste**
+1. **The Luau**: `python tools/paste_list.py` lists them (ServerScriptService/Bootstrap, Services/HubService;
+   Services/SkyPoolsService, SunkenCityService, FloodedHallsService, DiveFinaleService; ReplicatedStorage/Shared/
+   ShopCatalog and **WaterSounds, new** (a ModuleScript in Shared); StarterPlayerScripts/Bootstrap, Services/
+   AmbienceService, StepService, SkyPoolsClient, and **CosmeticsClient, new**: a ModuleScript in
+   StarterPlayerScripts/Services). Then `python tools/paste_list.py --mark`.
+
+**Import (UPLOADS: 55 sounds, 17 meshes)**
+2. **SoundService.LobbySounds** (a new Folder): the 7 files in `audio/lobby/`.
+3. **SoundService.StorySounds**: the 10 in `audio/story/` other than CountdownTock_x3 and TownsfolkVoice_x9 (each
+   replacing the old one; `JournalAdd` is new) and the 18 in `audio/endings/` (replace each).
+4. **SoundService.AmbienceSounds**: the 6 in `audio/ambience/` (replace each).
+5. **SoundService.MaterialSounds**: from `audio/sheets/`, the four new sheets (`button_clicky_x4`, `button_linear_x3`,
+   `button_tactile_x3`, `button_release_x3`), and from `audio/buttons/` the four remade (`button_combo_1`, `_2`,
+   `button_circuit_1`, `_2`, replacing the old). The old single files of the four sheeted keypad sounds can be deleted
+   from the folder (they are passed over now).
+6. **SoundService.WaterSounds** (a new Folder): the 6 files in `audio/water/`.
+7. **ReplicatedStorage.Assets.Cosmetics** (a new Folder): the 17 meshes in `meshes/cosmetics/`, each named as its
+   file (Cos_Star, Cos_Heart, ...).
+
+**Then play**
+8. **PASTE CHECK** names anything missing (the lobby's and the water's sounds as optional).
+9. **The lobby**: stand still and listen for a minute: the sea, waves breaking far off at their own times, the fountain
+   with plops and plinks, a gust now and then, a bell far out. Nothing should repeat.
+10. **The levels' sounds**: the endings (the chords, the splashes), the gate chamber, the mouth, the beds; and the
+   water: walk through a Sky Pools pool and fall into one; listen to the drips in the baths and the Sunken City's stair.
+11. **The shop**: try on every trail and aura and walk; try the steps. Then look at another player wearing them.
+
+## What your fourth test found (ninety-fifth pass, 2026-10-18)
+
+From your notes **(you)**: the fall into the mouth "too dark, I can't see anything other than the glowing light", and
+"I need to be able to see the player but it should not be so bright that I can see the surroundings", "maybe you
+could make the monster have a slight glow as well"; and in the Sunken City, looking up as you fall down the drain,
+"there is just empty space around" the whirlpool, "a flying in the sky whirlpool": it should continue, or you should
+be "fully submerged underwater". How each is done is mine **(suggested)**. Not played yet. What to paste is **Before
+you test in Studio (pass 95)**, below.
+
+### The mouth's dark, which you can see in (Flooded Halls)
+
+- **Why it was all black**: pass 92 took the light from the air down to 5, 5, 7 (a sixth of the halls' own 32, 34, 32)
+  and turned the exposure down besides, so the only things on the screen were the mouth's own lamps. The light on you
+  was in your head, which lights your shoulders and not your face, and it was faint.
+- **Now**: the air keeps about two thirds of the halls' light, cold (24, 26, 34), and the exposure is left nearly as
+  it is. What hides the halls is the black air, no thicker than the level's own, which swallows anything a few tens of
+  studs off: you and the mouth are seen, the halls round the shaft are not.
+- **A lamp over you**, falling with you, seven studs above (as if from the tube's mouth): you are lit from above all
+  the way down. Its reach is short (18 studs), so it finds you and not the walls. The light in your head is twice as
+  strong as it was.
+- **The mouth's own glow**: three faint lamps of its own, cold and sickly green, over its upper jaw, under its lower
+  and out past its lips, with no shadows, so they reach its outside: the shape of it, wet, just there, as well as the
+  green inside it and the red down its throat. Never warm (warm light through the jaws once made it a glowing
+  pumpkin), and out with the rest of its light until the moment it comes for you, so it is still a surprise.
+
+### Under the water down the drain (the Sunken City)
+
+- **Why there was sky**: the harbour is a skin of glass plates over air, and from below glass is a window. The funnel
+  of the whirlpool was all there was between you and the sky.
+- **Now**: once you are through the bottom of the funnel, on your screen you are under the water. The air turns to
+  sea, green-dark and thick enough to swallow the sky and anything far off, and a sea tint comes over everything,
+  eased in. The whirlpool overhead fades up into water, not air. As the culvert carries you on, it eases back out,
+  and the air is put back exactly as it was (or taken away again, if there was none).
+
+**Checked**: `check_halls.py` (the dark not black, not lit, its exposure not turned right down; the light in your
+head strong enough; the lamp over you there, falling with you, short in reach and taken away after; the mouth's own
+glow faint, cold, on its outside and out until it comes); `check_sunkencity.py` (under the water from the funnel's
+bottom, out of it in the culvert and when your character changes; thick enough to hide the sky and thin enough to see
+the whirlpool; the sea's colour; the air, the tint and the thickening put back). `pass95.py`: 23 of 23, and the
+older suites on these three files again (passes 8 to 30, 53, 83, 84, 87, 92 and 93): 23 suites, 513 of 513 planted bugs caught, and src put back byte for byte.
+
+## Before you test in Studio (pass 95)
+
+**Paste**
+1. **3 files**, plus ServerScriptService/Bootstrap (its stamps): StarterPlayerScripts/Services/FloodedHallsClient, Maw
+   and SunkenCityClient. Then `python tools/paste_list.py --mark`. No sounds, no meshes.
+
+**Then play**
+2. **The Flooded Halls, the fall**: you, lit from above, falling in the dark; the mouth coming up at you, its green
+   inside and a faint cold sheen on its jaws and lips; the halls round the shaft still unseen. Say if it wants a
+   little more or less: `DARK` in FloodedHallsClient (the air's light) and the `faint` lamps' 0.7 in Maw.light.
+3. **The Sunken City, the drain**: through the funnel and down; looking up, the whirlpool over you in green water, no
+   sky; back to normal air in the culvert.
+
+## The camera, checked shot by shot (ninety-third and ninety-fourth passes, 2026-10-17)
+
+From your notes **(you)**: "further improve the camera angles for level 4 and 1, and 3 and 2. Verify them extensively
+and make them better", and the butter sticks' deformation. How each is done is mine **(suggested)**. Not played yet.
+What to paste is **Before you test in Studio (passes 93 and 94)**, below.
+
+### How the shots are checked now (`blender/check_shots.py`)
+
+Every scripted shot in levels 1 to 4 (the dive, the slide, the drain and the outfall, the flume, the mouth and the
+gate chamber: 44 shots) is restated line for line from its client (`blender/shots_shore.py`, `shots_skypools.py`,
+`shots_sunken.py`, `shots_halls.py`) and played through `blender/shots.py`, which is Cinema's camera as the game has
+it: put at the eye at once, the aim easing after its target unless the code cuts, a vertical field of view, and the
+letterbox bars over the top and bottom 11% of the picture (`BARS`, read from Cinema.lua). Frame by frame, 60 a second,
+it asks of every shot:
+- **Seen**: you are in the picture and not under a bar, all the way through, with the aim's lag (a fast fall and a
+  slow aim lose each other).
+- **Size**: you are the size the shot means to show you at (a speck, wide, medium, close; or coming at it, or going
+  away), so a close shot that is a speck, or a wide shot that is a nose, fails.
+- **Not in you**: the camera never comes within a stud and a half of you.
+- **Long enough**: no shot under 0.8 s, but for the beats meant to be quick (the bite).
+- **Up to date**: if a shot's line changes in a client and is not restated here, it fails rather than checking a shot
+  the game no longer has.
+`python blender/check_shots.py --boards` also draws a storyboard for each level (`blender/shots_*.png`): every shot at
+its start, middle and end, as the camera sees it, bars and all. The Sky Pools are checked on all three run lengths, on
+several laid runs each. It is one of `check_all.py`'s checkers now (fifteen).
+
+### What it found, and what changed
+
+**Level 4, the Flooded Halls**
+- **The flume, from ahead**: in its last moments the point it looked from was out past the end of the tube, and the
+  camera hung over the end while you went through it. It keeps to the tube now, and ends a moment before the exit.
+- **From below**: it waits under the end of the tube a moment before you reach it (where you are going), and you shoot
+  out of it toward the camera.
+- **The mouth, past you into it**: you were above the picture, under the top bar, the whole shot. Now you are in the
+  top third, small, over a mouth that fills the rest.
+- **The mouth's beats**: every shot in it was half a second or less, three and a half seconds of cuts. Time now all but
+  stops over the open mouth for longer (you fall at 2 studs a second, from 0.8 s to 2.6 s), every shot in it is at
+  least 0.8 s, and only the bite is a slam. It waits a little deeper (116 studs) so you still hang well over its teeth,
+  and you are still in it before it shuts (`check_halls.py` restates the fall).
+- **The key**: it panned in from the walk with you half out of the picture. It cuts to a low shot ahead of you and to
+  your right, looking up: your face over the lock as the key goes in, the wheel beside you.
+- **The wheel and the gate**: you were under the bottom bar while it looked up at the gate. From behind you and to your
+  left now, easing in: you at the wheel, from the waist up, the gate going up behind you. The walk, the key and the
+  wheel each cut in rather than swinging over from the shot before.
+
+**Level 1, City Shore (the high dive)**
+- **The leap**: close to the lens and falling, your feet went under the bottom bar for its first moment. A little lower
+  and wider now, aimed under you.
+- **The drop**: it looked a third of the way to the sea and you were under the top bar the whole time. It looks down
+  past you now: you in the top half, the sea filling the rest.
+- **The drop and your face**: the drop is only two seconds, and split three ways no part of it could be read. Two beats
+  now: the drop, then your face.
+- **The water**: aimed at you, the camera turned after you too slowly in the last moment and you fell out of the
+  picture. It aims ahead of your fall now, and you are in it to the splash.
+- **Under the water**: it was in front of you and turned to the lamp at once, so you were behind the camera within a
+  second. It is behind you and a little over you now (never above the surface), on you as you sink for two seconds,
+  then tilting down past you to the lamp on the drowned street.
+
+**Level 2, the Sky Pools**
+- **The landing**: held four and a half seconds looking up at the tower, with you under the bottom bar the whole time.
+  Lower over the water and further off now: you in the pool in the lower third, the tower going up behind you. The
+  rest of the slide passed on every run length.
+
+**Level 3, the Sunken City**
+- **The bottom of the drain**: the camera was in the shaft and you landed on the lens. It waits in the mouth of the
+  culvert now, low, looking up into the sluice as you come down into it (where the water takes you next).
+- **To the light**: you were under the bottom bar for the whole of it. From higher and further back over your shoulder
+  now, you in the lower half and the culvert running on ahead to the light.
+
+### The butter sticks (ninety-fourth pass)
+
+- **What was wrong** (your words: the dent spread "as though the step was done in multiple locations", and the wax
+  shell "sits too high up and is flat rather than the wavy model"): a step pressed 1.62 studs into a stick that stands
+  only 1.45 over its grooves, so it caved in below the sticks beside it; every step sent a slow wave of dips across the
+  whole chunk after it; and the wrapper over the sticks was never moved at all, so it stayed up as a flat lid over every
+  dent (the wrapper mesh itself is right: it dips into both grooves, a constant 0.3 over the butter).
+- **Now**: a dent of 0.9 (shallower than the stick is tall), no travelling wave, and the wrapper driven with the butter:
+  down with it, holding its dent, and back up with it, on the same falloff as the sticks' own bones.
+
+**Checked**: `check_shots.py` (above); `check_halls.py` (the hang no faster than 3 studs a second, the fall restated
+with it); `check_story.py` (the dive's drop looks at the sea; the butter sticks' dent, wave and wrapper).
+`pass93.py`: 13 of 13, `pass94.py`: 8 of 8.
+
+**The full run after them**: 87 suites, 1556 of 1556 planted bugs caught, and src put back byte for byte.
+
+## Before you test in Studio (passes 93 and 94)
+
+**Paste**
+1. **6 files**: StarterPlayerScripts/Services/CityShoreClient, SkyPoolsClient, SunkenCityClient, FloodedHallsClient and
+   DeformationRenderer; and ServerScriptService/Bootstrap only if `tools/paste_list.py` lists it. Then
+   `python tools/paste_list.py --mark`. No sounds, no meshes.
+
+**Then play**
+2. **City Shore's dive**: the leap, Maren, the turn, the drop looking down at the sea, your face, the water shot to the
+   splash, and under the water: on you as you sink, then the lamp.
+3. **The Sky Pools' slide**: the landing, you in the pool with the tower behind you.
+4. **The Sunken City's drain**: the bottom, from the culvert's mouth; the culvert to the light.
+5. **The Flooded Halls**: the flume's end from below; the mouth (longer, every shot readable); in the chamber, the key
+   and the wheel.
+6. **The butter sticks**: one dent where you step, the wrapper going down with it, no dips running off across the chunk.
+
+## What your third test found (ninety-second pass, 2026-10-17)
+
+From your Output after pasting passes 86 to 91, and your notes **(you)**: no terrain on City Shore, the mouth gone from
+the Flooded Halls, and "improve the animation for level 1 and 4". How each is done is mine **(suggested)**.
+Played in Studio on 2026-10-17 **(you)**. What was pasted is **Before you test in Studio (pass 92)**, below.
+
+### What the Output showed
+
+- **BackRoomsService's code was in BackdropService.** The line `BackRoomsService: built, 61 lights, 395 parts` came
+  from `BackdropService:802`, which is where the new BackRoomsService prints it, while the real BackRoomsService
+  printed the old count (244 parts, from line 312: the old copy, as the paste check said). BackdropService builds
+  City Shore's backdrop, the land, the beach city, the sea and the clouds, so City Shore had none of it; and the
+  dive's sea is part of it, so the dive went into nothing. **Fix**: paste `src/Server/Services/BackdropService.lua`
+  back into BackdropService, and `BackRoomsService.lua` into BackRoomsService.
+- **The paste check could not see it**: BackdropService has no stamp to compare. It now looks at every module, stamped
+  or not, on the server and on your screen, for a STAMP that belongs to another module, and says
+  `wrong code  ...BackdropService has BackRoomsService's code in it`.
+- **SearchlightClient is missing** from StarterPlayerScripts/Services (the rescue launch and its searchlight in the Sunken
+  City harbour are made by it): paste `src/Client/Services/SearchlightClient.lua` in as a ModuleScript.
+- **"missing StarterPlayerScripts/Bootstrap"**: yours is named `BootStrap`. Nothing was wrong; the check now matches a
+  name however it is written.
+- **Nothing was being saved.** `ProfileStore.New failed ... attempt to call a nil value` means the module named
+  ProfileStore in ServerScriptService is not loleris's ProfileStore (it has no `ProfileStore.New`; if it is his older
+  ProfileService, it has `GetProfileStore` instead). Put ProfileStore from github.com/MadStudioRoblox/ProfileStore in
+  its place, named exactly ProfileStore. EconomyService and the paste check both say this in plain words now.
+- **Fine as they are**: the shop items and badges with no ids (needed before publishing, not for testing), the meshes
+  wrapped in Models, ButterWax with no SurfaceAppearance, Roblox's own UIBlox and AnalyticsService lines, and the
+  hub's pose line.
+
+### The mouth, back in the dark (Flooded Halls)
+
+- **It was there, and the dark hid it.** Pass 87 made the shaft dark by thickening its air to 0.82; the thickest any
+  level uses is 0.34, and the halls' own notes say 0.42 already erased the water. Black air that thick hides
+  everything past a few tens of studs, lit or not, and the mouth is never closer than that until the end.
+- **Now the dark is not fog.** The air is made black at the level's own thickness or less; the sky's and the air's
+  light are turned off on your screen; the shaft's own lamps go down to a tenth; the faint light on you stays. The
+  mouth's own lights are then the only thing lit down there: the green inside it, the red down its throat, the cold
+  light on its teeth. All of it is put back as the chamber starts (anything still fading stopped first).
+- **The animation**: you were falling into it on your back (as you came out of the tube), so the shot from inside
+  it saw your back. Now, as it lights and lunges, you twist over in the air to face down into it. Then a new beat:
+  YOUR FACE, close, from under it, lit green from below, as you see what it is ("No. No no no no."); then the drop,
+  seen from inside it, your face coming at it; then the bite, wide. The beats: dark 0.45 s, it lights and lunges
+  0.75 s, the wide shot to 1.5 s, your face to 2.1 s, inside it to 2.95 s, shut at 3.35 s.
+
+### The high dive (City Shore)
+
+- **The drop looked up at the sky**, away from where you were going. It now looks down past you at the sea coming
+  up, from over you and a little behind, leaning with the wind.
+- **You act on the way down**: "Okay. Don't look down." as you leave the board, "I looked down." as you turn over and
+  see it, and "Arms together. Arms together!" with the water coming. And a close look at your face, head first, the
+  wind in it, partway down the drop, before the sea again and the shot from the water as you come in.
+- Maren still shouts and waves you off from the deck, and the cut back up to her is kept.
+
+**Checked**: `check_halls.py` (the dark no thicker than 0.4 and never set outright; the sky's light off; the lamps
+dimmed and put back; the tweens stopped; you turned over; your face held long enough to read and the wide shot long
+enough to see), `check_story.py` (the thoughts, no dashes, the drop looking at the sea, the face), `check_stamps.py`,
+`check_hub.py` and `check_shop.py` (the paste check and ProfileStore). `pass92.py`: 29 of 29.
+
+### Polished before you paste (2026-10-17)
+
+- **The client's paste check** required every module it found in StarterPlayerScripts/Services to read its stamp, so
+  a module taken out of the game and not yet deleted (KeepsakeService, PromptStyleService) would have been started up
+  by it. It looks only at the game's own now: the stamped ones and the four with no stamp (CloudService,
+  HubLeverService, InputService, SeaService), a list `check_stamps.py` keeps the same as src.
+- **The look at your face** (Flooded Halls) was from straight under your head, and lying flat as you are, your chest
+  or a flailing arm could have been in the way. It is from under your face and out past the crown of your head now.
+- **The failing fitting** in the halls (the roof light that stutters) has its brightness set by the server many times
+  a second, so dimming it on your screen would not hold; if it is near enough to the shaft, it is switched off for
+  the scene instead, and back on after.
+
+**The full run after it**: 85 suites, 1535 of 1535 planted bugs caught, and src put back byte for byte.
+
+## Before you test in Studio (pass 92): tested 2026-10-17
+
+**Paste**
+1. **Fix the mix-up first**: `src/Server/Services/BackdropService.lua` into ServerScriptService/Services/BackdropService,
+   and `src/Server/Services/BackRoomsService.lua` into ServerScriptService/Services/BackRoomsService.
+2. **Put back** `src/Client/Services/SearchlightClient.lua` as a ModuleScript in StarterPlayerScripts/Services.
+3. **The 5 changed this time**: ServerScriptService/Bootstrap, ServerScriptService/Services/EconomyService,
+   StarterPlayerScripts/Bootstrap (yours is `BootStrap`, that is fine), StarterPlayerScripts/Services/CityShoreClient
+   and StarterPlayerScripts/Services/FloodedHallsClient. Then `python tools/paste_list.py --mark`.
+4. **ProfileStore**, if you want saves while testing: loleris's, named ProfileStore, in ServerScriptService (above).
+   No new sounds.
+
+**Then play**
+5. **PASTE CHECK** should say `everything is in place`, or name exactly what is not.
+6. **City Shore**: the land, the beach city and the sea are back; the dive: the thoughts, the drop looking down at
+   the sea, your face, the splash.
+7. **The Flooded Halls**: the flume, then the fall: black, then the mouth lighting and lunging, you turning over, your
+   face lit green, the drop into it, the bite.
+
+## What your second test asked for (eighty-sixth to ninety-first passes, 2026-10-16)
+
+Everything here is from your notes and the recording after testing passes 78 to 85 **(you)**; how each is done is mine
+**(suggested)**. Played in Studio by 2026-10-17 **(you)**. The list of what to paste and import is **Before you test in Studio
+(passes 86 to 91)**, below.
+
+### The lockers, and the secrets' scenes (eighty-sixth pass)
+
+- **What was wrong**: a locker was a solid block, and its door swung back INTO it, so opened it showed a blank grey
+  face: it read as a locker turned the wrong way round. The scene looked over your shoulder, so your back filled it,
+  or your head when the wall behind you pulled the camera in.
+- **Now** a locker is hollow: back, sides, lid, floor, a shelf and a hook, and a small lamp under the lid (a real
+  light, no Neon) that comes on as the door swings OUT toward you. Locker 3 has your coat on a hanger, dripping, with
+  your key holder card inside the door ("HARROW BAY WATERWORKS, KEY HOLDER, OUTFALL 3"); Marsh's has his cap, his
+  torch and a letter; the empty ones a wire hanger.
+- **The scene** is shot from the side with room (it picks it once and keeps it), you and the thing both in the
+  picture; then a close look, in front of what you found. A secret you have already found (this session, or kept in
+  your journal from before) is a short look, about three seconds, with no sting and no card.
+- **Checked**: `check_story.py`, `pass86.py`: 23 of 23.
+
+### The fall into the mouth, in the dark (eighty-seventh pass)
+
+- **What was wrong** (from your recording): the mouth was lit before it had you, its lights cast no shadows so it
+  glowed through its own jaws like a pumpkin, and the shots lost you against its rim.
+- **Now** the shaft goes black on your screen as you are shot out of the tube (the light, the air and a colour grade,
+  all put back before the chamber and whenever the scene ends), with a faint glimmer on you so you are not lost. The
+  mouth waits far below, unseen, and as the light comes up in it, it LUNGES up at you, opening. The beats: falling
+  into black, seen from above (0.75 s); from above at an angle past you, a speck over a mouth that fills the shaft,
+  time all but stopped (to 2.1 s); from inside it, looking up at you coming down into it (to 2.95 s); from above,
+  wide, as it shuts on you (3.35 s); then black and one line.
+- Its lights cast shadows now, so the glow is inside it; the breath is darker, the saliva fainter. The water off the
+  end of the flume stops a short way down the shaft instead of making a lit column in the dark.
+- **Checked**: `check_halls.py` replays the fall (hanging over the open mouth for at least half a second, inside it
+  before it shuts) and where every shot is taken from. `pass87.py`: 18 of 18.
+
+### The chunk sounds, second round (eighty-eighth pass)
+
+- **Eleven sounds, eleven uploads**: each is ONE file holding four takes, one second each, played by slot
+  (`audio/gen_sheet_sfx.py`, written to `audio/sheets/<event>_x4.wav`). Chocolate bar and solid chocolate are dry
+  breaks with a woody knock and crumbs, never a ring (the old ones rang like glass tapped with a fingernail; solid
+  chocolate now has its own heavier crack). New takes for slime, soap, memory foam, the light switches, kinetic
+  sand, the jellyfish (its own event now), ice, jelly soda and bubble wrap.
+- **Bubble wrap** was behind your feet: its new pops start on the instant, and it pops once a footfall like every
+  other surface (it used to be twice as often). Its old uploads, and the sand's, are no longer picked from.
+- **Oobleck, lego and the keyboards**: the same sounds, louder (about 1.4 to 1.5 times) and creamier (more low end,
+  less top).
+- **Honestly**: I cannot hear any of it. Each take was measured (no ring after 80 ms for chocolate, nothing too low
+  for a phone, little hiss above 6 kHz, the bubble pop starting within a millisecond).
+- **Checked**: `check_shop.py`, `pass88.py`: 15 of 15.
+
+### The people's voices (eighty-ninth pass)
+
+- Nine mumbles, no words: one for each gesture (a hello, explaining, pointing, a shrug, worried, remembering, a
+  warning, leaning in, sad), all in one upload (`audio/story/TownsfolkVoice_x9.wav`, from `audio/gen_voice_sfx.py`).
+  Each person says them at their own pitch (Pip high, Mr Barlow and the watcher low) and they come from the person,
+  as each line starts.
+- **Checked**: `check_story.py`, `pass89.py`: 8 of 8.
+
+### The back rooms, from the second test (ninetieth pass)
+
+- **What the rooms have kept**: things from the game sunk into the walls, the carpet and the ceiling (a lifebuoy, a
+  deckchair, a ladder, a locker, a bench, a slab, a parasol, a buoy), tilted, their colour gone toward the walls'
+  yellow. Some are wrong: stretched tall and thin, flattened, too big, or the same thing three times in a row along a
+  wall, sunk exactly as deep. None is solid or in your way, and none reaches across a corridor.
+- **Something walks down here**: after 30 seconds lost (or, about one time in three, sooner), the staff door opens
+  and E. Marsh comes out. You hear him, you think "...is someone there?", and the lights near him stutter and dim. He finds his way to you through the rooms but walks slower than you, so the way out can be reached first. If
+  he catches you: a lunge, a roar, black, and you are in the lobby (in a run, the run is over).
+- **"Leave to the lobby"** did nothing in the back rooms when you were not in a run; it takes you up now.
+- **Only the hum**: the lobby's sea, wind and music are hushed while you are down there (through a sound group on
+  your own screen, so the wind the server keeps adjusting and a breaker made while you are there stay quiet too), and
+  brought back as you leave.
+- **Checked**: `check_backrooms.py` (he can reach every tile you can, from the staff door), `pass90.py`: 26 of 26.
+
+### The lobby, polished, and one text for the story (ninety-first pass)
+
+- **The VIP tag**: a pill with a gold to lilac to pink gradient and a white rim, the letters outlined, a little gold
+  crown of three points on top, and a shine that sweeps across it every few seconds.
+- **The embers**: embers cooling from white through gold and orange to red, sparks spitting up drawn out along their
+  flight, flame licking round your feet, a faint heat haze, ash, and a slightly stronger warm light on you.
+- **The countdown**: a soft wooden tock each second, a quick double tock for the last three, and two warm marimba
+  notes as it runs out (`audio/story/CountdownTock_x3.wav`, one upload). The same two notes greet a level you have
+  just opened. It was the engine's electronic ping; until the file is in, a soft click stands in.
+- **The keepsakes** said 27 of 28 with everything found: the journal counted its own version stamp as a keepsake.
+  It counts only keepsakes now.
+- **One text**: the thoughts over your head, the whispers and the secret's card were in Garamond and the captions in
+  Gotham, so the Sunken City (told in captions) and the Flooded Halls (told in thoughts) read differently. All of
+  the story on screen is Gotham now.
+- **Checked**: `check_shop.py`, `check_story.py`, `check_hub.py`, `pass91.py`: 20 of 20.
+
+### Polished before you paste (2026-10-17)
+
+A read through everything above, line by line, before it went into Studio. What it found and fixed:
+- **The back rooms' hush** turned each lobby sound's own volume down, and the server sets the wind's volume every half
+  second and makes a new breaker every 15 to 40 seconds, so both would have been heard down there again. It goes
+  through a sound group of your screen's own now (above).
+- **The VIP tag's shine** was a bar inside the badge, and a frame clips its children square whatever its corners, so it
+  would have shown past the badge's round ends. It is the badge's own rounded shape now with a band of light slid
+  across it. The crown's middle point sat a hair off its band; it is seated now.
+- **Being caught**: the cut to black came in a window of a twentieth of a second, which a slow frame could miss; it
+  comes once now, whatever the frame rate. The lowest voices (the watcher, Mr Wick) were cleared away only a tenth of
+  a second after their mumble ended, slowed as they are; each is kept for as long as it plays now, and a little more.
+- **The mouth's lunge** carried every part of the mouth to its place on every frame of the scene, long after it had
+  stopped rising; only while it rises now.
+- **A checker gone blind**: the check that leaving a run from the menu is logged also matched the new code for being
+  caught in the back rooms, so it could no longer tell if the menu's own line went missing. It looks at the menu's own
+  now.
+
+**The full run after them**: 84 suites, 1506 of 1506 planted bugs caught, and src put back byte for byte.
+
+## Before you test in Studio (passes 86 to 91): tested 2026-10-17
+
+**Paste and import**
+1. **Paste** the 18 Luau files that changed (`tools/paste_list.py` lists them; line 2 of each names its place),
+   then run `python tools/paste_list.py --mark`.
+2. **Sounds, 13 files** (13 uploads):
+   - into SoundService/MaterialSounds, the 11 in `audio/sheets/` (`chocolateSnap_x4`, `chocolateChunk_x4`,
+     `slimeBoing_x4`, `jellyBounce_x4`, `soapCrumble_x4`, `foamCompress_x4`, `switchClack_x4`,
+     `kineticSandImprint_x4`, `iceCrack_x4`, `jelloWobble_x4`, `bubblePop_x4`). Keep each name as it is: the `_x4`
+     is what tells the game it is four takes. The old single takes for those events can stay or go: a sheet is
+     picked instead of them.
+   - into SoundService/StorySounds, `audio/story/TownsfolkVoice_x9.wav` and `audio/story/CountdownTock_x3.wav`
+     (both have a stand-in until they are in).
+
+**Then play**
+3. **PASTE CHECK** should say `everything is in place` (the voices and the countdown are listed as optional).
+4. **The lobby**: wear VIP (the tag and its shine), buy or wear Embers, and wait out a countdown (tock, double tock,
+   chime).
+5. **Chunks**: stand on the chocolate bar, solid chocolate, slime, soap, memory foam, a light switch, sand, a
+   jellyfish, ice, jelly soda and bubble wrap (the pops under your feet, not behind); oobleck, lego and a keyboard.
+6. **Talk to everyone** (F): a mumble with each line, in their own voice.
+7. **The Flooded Halls**: Locker 3 (the door swings out, the lamp, your coat and card, the scene from the side), open
+   it a second time (a short look); then the flume and the fall: black, the lunge, the shots.
+8. **The journal**: the keepsakes' count.
+9. **The back rooms**: the things in the walls; stay lost for 30 seconds (he comes); try "Leave to the lobby"; only
+   the hum.
+
+## What your first test asked for (seventy-eighth to eighty-fifth passes, 2026-10-16)
+
+Everything here is from your notes after the first test of passes 18 to 77 **(you)**; how each is done is mine
+**(suggested)**. Played in Studio by 2026-10-17 **(you)**. The list of what to paste and import is **Before you test in Studio
+(passes 78 to 85)**, below.
+
+### The chunk sounds, remade (seventy-eighth pass)
+
+- **Salt and clay** ("a bit weird") are new, and so are the four weakest of the rest: **cloud, lamb's ear, snow and
+  charcoal**. Four takes each, 24 files, made by `audio/gen_chunk_sfx.py` the way needoh and lava were: real grains
+  and shaped noise, no tones, each take its own sound rather than the same one reseeded. Salt is a dry crunch, clay
+  a soft wet squash, cloud a hush, lamb's ear a brush of leaves, snow a packed creak, charcoal a brittle snap.
+  `gen_material_sfx.py` no longer writes those six, so running it does not put the old ones back.
+- **Step sounds from the shop** play only in the lobby and the squish room, never on a level (your chunks' own
+  sounds are the game there), and only every three to five steps, soft, at their natural pitch. **Poppy** was a
+  computer blip, pitched up, because it never found a real sound; it now plays the bubble wrap chunk's own three
+  pops, at their natural pitch. The packs: Crunchy (salt and
+  snow), Gloopy, Poppy, Thock (a keyboard's thock, in place of Retro) and Velvet (lamb's ear and cloud).
+- **Honestly**: I cannot hear any of it. Each was measured against needoh and lava (how bright, how much hiss above
+  6 kHz, how different the takes are) and kept low and soft. If one is still wrong, say which and how.
+
+### The shop's words and look (seventy-ninth pass)
+
+- Every tile: the icon on a soft stage, the name under it in the shop's chunky font (not italic), and the line about
+  it in the same font, sized to fit and never smaller than reads. An **"i"** in the corner of every tile: hover it or
+  press it and a card says what the thing is and how you get it; press anywhere to close it.
+
+### The trails and auras, and more to buy (eightieth pass)
+
+- **Embers** are now embers: sparks rising and drifting, glowing, with a faint warm light on you. **Honey drip**
+  drips and catches the light. Every trail and aura has its own look (`ShopCatalog.LOOKS`), not a plain stream.
+- **New**: Slime step (130) and Ember step (170) footprints; Jelly ribbon (220), Sprinkles (260) and Lava ribbon
+  (320) trails; Velvet (90) steps; Snowfall (280), Fireflies (350) and Starlight (450) auras.
+
+### City Shore's dive and the bar's scenes (eighty-first pass)
+
+- **The dive** is hit like an action game: impact frames (two frames in black and white, a soft flash, a punch in)
+  leaving the board, bursting through the gulls and hitting the water; speed lines down the drop; wind streaks past
+  you and air trails off your hands and feet; your body buffeted and rolled by the wind on the way down.
+- **The pry bar** is seen at work: the first time it opens something you turn to it, set the bar, three hard tugs
+  with dust coming out, and what you think over your head ("Rusted shut. Something rattles inside."); on the last
+  tug it gives, with an impact frame, and you jump back. A secret's scene has you in it: hand at your chin, head
+  tilting, working it out, what you make of it over your head. The loose board: you lean over the gap, and jolt.
+
+### The Sky Pools slide says where it is going (eighty-second pass)
+
+- **What was wrong**: the deck is only about twenty studs above the cloud tops, so the shot "from under the clouds,
+  looking up at where the slide comes out" started straight after the push off and held for nine seconds: the bottom
+  of a slide with nobody on it.
+- **Now**: alongside you looking ahead, so you see the slide run on down into the cloud sea; held over the cloud tops
+  as you plunge in (a whoosh); while you are in the cloud, a wide shot from under it of the slide coming down out of
+  it and round into the pool it lands in (where you are going), drifting in; then a cut a moment before you come
+  out, under the exit, and you burst through in a puff with an impact frame, the camera turning after you.
+- **Checked**: `check_skypools.py` replays the shots on laid runs: no shot shorter than 0.8 s, the camera waits on the
+  empty exit for 1.3 s at most, never sits inside a cloud, and the wide shot frames the exit, the cloud over it and
+  the pool. `pass82.py`: 15 of 15.
+
+### The Sunken City's whirlpool, smooth (eighty-third pass)
+
+- **Thirteen meshes** from `blender/gen_whirlpool.py` (see the renders `blender/whirlpool_pier.png`,
+  `whirlpool_top.png` and `whirlpool_inside.png`): the funnel's water in six smooth rings, each turning faster than
+  the one outside it; spiral ripples wound tight into the hole, so as they turn the water reads as pouring in; threads
+  and flecks of foam on each ring; a lumpy crest of foam round the rim. It was sixteen flat boards to a ring, stepping
+  down, and turned like a stack of plates.
+- **Import them** into ReplicatedStorage/Assets/TileMeshes (`meshes/Whirl_Band1.fbx` to `6`, `Whirl_Foam1` to `6`,
+  `Whirl_Lip`). Without them, or with an old import, the old rings of parts stand in.
+- **Checked**: `check_sunkencity.py` holds the meshes' sizes, speeds and colours to the generator, the spiral's
+  winding against the client's turn, and replays the drain's ride over the new (opaque) water: you stay over it.
+  `pass83.py`: 20 of 20.
+
+### The Flooded Halls' flume and the mouth (eighty-fourth pass)
+
+- **You were standing on the slide**: the ride's path is a standing rider's and only your arms were posed. Now you
+  lie back in the trough, feet first, and ride it like a person: balancing with your arms out along the walls, then
+  grabbing at them one hand after the other with your heels scrabbling and your head snapping round, then flailing
+  as you shoot out of the end. What you think comes up over your head: "Staff only... and here I am.", "It just keeps
+  going down.", "Too fast. Way too fast!", "Where is the bottom?!" and, after the growl, "...what was that?"
+- **The jitter**: the ride went in straight lines between the 220 points of its path (a jolt at each), and read the
+  server's clock afresh every frame (a hitch every time the clocks agreed again). It now follows a smooth curve
+  through the points, on your own client's clock.
+- **The slide**: water runs down the trough (a sheet of it across the bottom, which your legs go under) and pours off
+  the end into the shaft; spray is thrown up behind you; speed lines, and an impact frame as you leave the tube.
+  If the water seems to run uphill, change `FLUME_FLOW = 14` to `-14` in `FloodedHallsClient.lua`: which way a
+  texture slides could not be checked outside Studio.
+- **The mouth** stays dark until it has you. A low growl from far below as you fall (`MawGrowl`); then the light
+  comes up in it all at once (a sick green glow, red down its throat, never steady) and it SPRINGS open with a roar
+  (`MawRoar`) and an impact frame, and time all but stops: from over you, you are a speck over a mouth that fills the
+  shaft; from beyond its lower teeth, you hang over it; you think "No. No no no no."; then you drop, and from inside
+  it you are seen coming down into it; from its side, in profile, the jaws shut like a trap. Its breath comes up out
+  of it, and strands of saliva stretch between the jaws and snap as it opens.
+- **Checked**: `check_halls.py` restates the body lying in the trough (on the floor, not through it), the mouth's
+  fall (hanging well over the teeth while it is open, inside it before it shuts), where every shot is taken from (in
+  the pit, out of the jaws, short of the mast), and the rest. `pass84.py`: 36 of 36.
+
+### The people tell it with their bodies (eighty-fifth pass)
+
+- Every line anyone says now comes with a gesture, chosen line by line (`TOLD` in `Townsfolk.lua`): a wave hello;
+  both hands out explaining; pointing (Sal to the siren tower, Tobi at you: "Oh, it's you, isn't it."); a shrug;
+  hands wrung over the water; a hand at the chin remembering; a hand up warning; leaning in close; the head down when
+  it is sad. And small nods as they talk. Made with whichever hand is free (Sal's scoop, Pip's bucket, Dev's towels,
+  Mr Barlow's lantern stay where they are; Mr Wick keeps both hands on his rod and tells it with his head and
+  shoulders). Played on every client, smoothly (StoryClient), on top of the head that turns to you.
+- It used to be one hand out and back, and only for the people with nothing in their hands: most of them stood still.
+- **Checked**: `check_story.py` holds every person's gestures line for line with their lines, no gesture twice
+  running, none for more than a quarter of all lines. `pass85.py`: 25 of 25.
+
+**The full run after them**: 78 suites, 1396 of 1396 planted bugs caught, and src put back byte for byte.
+
+## Before you test in Studio (passes 78 to 85): tested 2026-10-17
+
+**Paste and import**
+1. **Paste** the 16 Luau files that changed (`tools/paste_list.py` lists them; line 2 of each names its place),
+   then run `python tools/paste_list.py --mark`.
+2. **Sounds, 26 files** (MaterialSounds and StorySounds): delete the old four of each of saltCrunch, claySquish,
+   cloudHush, leafBrush, snowPack and charcoalSnap from MaterialSounds first, then import `audio/materials/<name>_1`
+   to `_4` for those six (24 files); and `audio/story/MawGrowl.wav` and `MawRoar.wav` into StorySounds (2 files; both
+   have a stand-in until they are in).
+3. **Meshes, 13 files**: `meshes/Whirl_*.fbx` into ReplicatedStorage/Assets/TileMeshes.
+
+**Then play**
+4. **PASTE CHECK** should say `everything is in place` (MawGrowl and MawRoar are listed as optional until imported).
+5. **Steps**: in the lobby, wear a step sound from the shop and walk: a soft sound every few steps. On a level, only
+   the chunks' own sounds. Stand on salt, clay, cloud, lamb's ear, snow and charcoal and listen.
+6. **The shop**: hover or press the "i" on a few tiles; buy Embers and a new trail or aura and look at them.
+7. **City Shore's dive**: the impact frames, the speed lines, the wind past you.
+8. **A secret** with the pry bar (the first nook's): the tugs, what you think, the jump back.
+9. **Sky Pools' slide**: the slide ahead into the clouds, the plunge, the wide shot of the pool below, bursting out.
+10. **The Sunken City's whirlpool** from the pier, then the drain: the rings turning, the water pouring in.
+11. **The Flooded Halls' flume**: lying back, the thoughts over your head, the water (downhill?), no judder; the growl,
+    the mouth.
+12. **Talk to everyone** (F): a gesture with each line.
+
+## Codes, and the post box (seventy-seventh pass, 2026-10-15)
+
+From your notes **(you)**: redeem codes (you chose them). The post box and the wording are mine **(suggested)**.
+
+- **A red pillar box** on the deck beside the start pad (a plinth, the box, its cap, a slot and a small CODES plate),
+  with Roblox's own prompt, "Post a code". It opens a small card of your own: a box to type the code in, "Post it",
+  and a line saying what came of it ("That code has ended.", "You've posted that code already."...). A code that
+  pays: "+100 tokens (Code HARROWBAY)".
+- **Your codes live in one list**, `ShopCatalog.CODES` in `ShopCatalog.lua`: one line each,
+  `{ code = "HARROWBAY", tokens = 100, ends = "2026-12-31" }`. Capitals and digits, 3 to 20 of them; players can type
+  them in any case and with spaces. Each pays once a save, until the end of its `ends` day (UTC). To add a code, add
+  a line and paste ShopCatalog (live servers pick it up as they restart; Roblox's "Restart servers" on the Dashboard
+  does it at once). To end one early, set `ends` to an earlier day. HARROWBAY is there as an example: change it or
+  take it out before you publish.
+- **On the dashboard**: the custom event `CodeRedeemed` with the code in its first custom field, so you can see which
+  of your posts brought players back; the tokens as a gameplay source "Code".
+- **Safe**: the server checks every code against its own list (nothing a client says is a code unless it is in it),
+  and posting goes through the shop's own one-request-at-a-time limit, so codes cannot be guessed quickly. Codes are
+  the only way a shop request ever adds tokens, and the checks hold that to the one place.
+- **The test panel**: "Codes: post again" forgets the codes you have posted. The Self-test posts a code of its own
+  (once, twice, an unknown one and an ended one) and takes it out of the list again.
+- **On every device**: thumb-sized buttons, inside the safe area, a phone's width at most; a controller starts on the
+  box and B closes it; the cursor is free while it is up.
+- **Checks**: `check_shop.py` and `check_hub.py` (`check_post_box`, and the box in the lobby's layout check);
+  `blender/mutations/pass77.py` plants 45 bugs and every one is caught. The full run after it: 70 suites, 1224 of
+  1224 caught, and src put back byte for byte.
+
+## A review of passes 18 to 49 (seventy-sixth pass, 2026-10-15)
+
+From your notes **(you)**: the same review for the older half (you chose it). No new features. Passes 22 to 28 had a
+review of their own (the twenty-ninth pass), so this read the rest, server first: what a client can send, what is
+written to Roblox's stores, and what a run, a fall and a purchase do.
+
+- **Three things fixed**:
+  - **A best time could be lost.** The leaderboard and your personal best read the old time and then wrote the new
+    one if it was faster; when the read failed (a busy server, Roblox throttling), the write went ahead anyway, so a
+    slower time could replace a better one. Both now compare and write in one step (Roblox's UpdateAsync): a better
+    time is never overwritten, and two servers cannot cross. If the store does not answer at all, nothing is written.
+  - **A stored 0 blocked every best after it.** A personal best saved as 0 (chill's "best", before chill had no
+    clock) counted as unbeatable. It is now no time, so the first real run writes over it.
+  - **An emote's stop could be used to flood.** "Stop" was passed on to every player each time any client sent it,
+    with no limit. It is now passed on once, for someone who has an emote playing; a real stop (you move) is never
+    held back.
+- **Looked at and sound**: the second chance (spent before it is given, only within its window, only in Hardcore, never
+  after the finish; the seventh fall's way into the back rooms offers none); the times that count and the route
+  walked; the journal read back with the reader's name; the scene's word before the lobby; leaving, retrying and the
+  mode switch, each only for a runner or only in the lobby; the board's reads, kept and shared.
+- **Checks**: `check_hub.py` and `check_shop.py`; `blender/mutations/pass76.py` plants 11 bugs and every one is caught.
+  The full run after it: 69 suites, 1179 of 1179 caught, and src put back byte for byte.
+
+## A review of passes 50 to 74 (seventy-fifth pass, 2026-10-15)
+
+From your notes **(you)**: a review pass before the Studio test (you chose it). No new features.
+
+- **Read end to end**, for what the checks cannot see (two players at once, someone leaving partway, saves, timing):
+  the tokens' every way in (runs, the story's reward, the daily chest, the caches, the challenges, the materials, the
+  starter pack), loading and leaving, the passes, the story's moves between levels and its waits, the back rooms'
+  ways in and out, the friends in a run, the admin's /levels, the boards and the journal on your own screen.
+- **Two things fixed**, both on your own screen:
+  - **A challenge done earlier today was told again on joining.** A save's three challenges and what is done of them
+    can reach your screen one after the other, in either order; the card now says nothing until it has seen what is
+    done once for those three.
+  - **The journal's Materials tab kept pages your save no longer has** (after the Self-test, which finds every
+    material and then puts your save back, or the panel's "Materials: 26 / none" pressed for none) until you
+    rejoined. The tab now follows your save: a page for a material not in it is taken out, and the book's badge with
+    it.
+- **Looked at and sound**: each reward is paid once and only while the save is open, and every table kept per player
+  is cleared when they leave; a finish too fast to be real pays nothing and counts for no challenge; the story's
+  reward needs the last level reached on foot; the end of a story gives the lobby its light back (through the hub's
+  ender when the last runner is home); someone in the back rooms counts as still playing, so a story waits for them
+  and then goes on; nothing is found in the back rooms or the squish room; the server's own /levels command fires on
+  the server.
+- **Checks**: `check_hub.py` and `check_shop.py`; `blender/mutations/pass75.py` plants 7 bugs and every one is caught.
+  The full run after it: 68 suites, 1168 of 1168 caught, and src put back byte for byte.
+
+## The materials, as a collection (seventy-fourth pass, 2026-10-15)
+
+From your notes **(you)**: a material collection (you chose it). How it is found, told and paid is mine
+**(suggested)**.
+
+- **Found by standing on one in a level**, the first time in a save: 5 tokens each. The server itself looks under
+  every runner's feet twice a second (the platform's Material), so nothing a client says counts, and it counts only on
+  a level: never in the squish room, where all 27 stand side by side, and never in the back rooms. City Shore alone
+  has 26 of them; the jellyfish is in the Sunken City.
+- **All 27**: 100 tokens more, the **swatch** trail (earned only, like the green ribbon: its tile says "Find all 27")
+  and a badge (`ShopCatalog.BADGES.materials`, 0 until you make it).
+- **Told quietly**: a soft chime as each is found, nothing on the screen during the run; at the run's end the usual
+  pill counts them in (a medium run and two found: "+30 tokens (2 new materials)"), with "and the swatch trail" when it finishes the set.
+- **In the journal**: a fourth tab, Materials, a page for each found: "Material 5 of 27", what it does underfoot (the
+  hint's words) and what the Hold kept it from ("Kept by the Hold: A jar of Hale's honey, from the hives on the
+  Novelty Works roof."). The ones you had already come read; each new one is unread (the book's badge), with no line
+  in the corner. The four tabs share the row and their names shrink to fit on a phone.
+- **In the lobby**: a second notice board beside the challenges board (the same posts, frame and roof), "Materials
+  found 12 of 27" and three columns of names, each beside its colour, and a "?" for one still to find. Yours only.
+- **Kept in your save** (`Materials`). On the dashboard: custom events `MaterialFound` (how many so far) and
+  `AllMaterials`; the tokens as a gameplay source "Material".
+- **The test panel**: "Materials: 26 / none" marks every one found but soap (on City Shore, to finish the set on the
+  next run); pressed again, none found and the swatch trail taken back. The Self-test finds one (paid once, a made-up
+  one refused) and the last of them (the trail and the bonus), and puts your save back.
+- **Checks**: `check_shop.py` and `check_hub.py` (the board in the lobby's layout and drawn on your own screen);
+  `blender/mutations/pass74.py` plants 61 bugs and every one is caught. The full run after it: 67 suites, 1161 of
+  1161 caught, and src put back byte for byte.
+
+## The starter pack (seventy-third pass, 2026-10-14)
+
+From your notes **(you)**: a starter pack (you chose it). What is in it and its price are mine **(suggested)**; change
+them in `ShopCatalog.lua`.
+
+- **A game pass, 99 Robux**: 500 tokens and the **sea glass** trail (soft green glass), a trail you cannot get any
+  other way. A pass rather than a developer product because Roblox itself sells a pass only once, so nobody can buy
+  it twice by accident. For comparison, 300 tokens on their own are 129 Robux.
+- **Given once a save**, the moment the pass is found: on joining, on a late answer from Roblox, or the moment it is
+  bought ("+500 tokens (Starter pack) and the sea glass trail"). If the server stops before the save is written, it
+  is given again next time, and never twice once saved.
+- **In the shop**: first in Featured with a "Once only" badge, and off Featured once it is yours (still in Passes,
+  Owned). The sea glass tile says "Starter pack" where a price would be; pressing it says what is in the pack and
+  "See it" opens Passes. The new player's way to the shop (after their first run) opens on Featured, so it is the
+  first thing they see there. No pop-up anywhere.
+- **Fixed on the way**: a pass you own (VIP, 2x tokens) now shows Owned in the shop; before, it still showed its
+  price, and pressing it brought up Roblox's own "you already own this".
+- **To sell it**: Creator Dashboard, your game, Monetization, Passes: create "Starter pack" at 99 Robux (an icon of
+  sea glass would suit), then put its id in `passId` on the `StarterPack` line of `ShopCatalog.lua`. Until then the
+  paste check lists it under "not on sale yet" and the shop says so.
+- **On the dashboard**: its tokens as an in-app purchase source "StarterPack" in the economy view; its prompt
+  closing as the custom event `PassPrompt` like every pass.
+- **The test panel**: "Starter pack on/off" gives it as if bought (the pill, the trail in Trails, Owned in Passes, gone
+  from Featured), and takes it all back when pressed again. The Self-test gives it twice (paid once), sees the pass
+  Owned and tries to buy the trail on its own (refused); it puts your save back.
+- **Checks**: `check_shop.py`; `blender/mutations/pass73.py` plants 34 bugs and every one is caught. The full run after
+  it: 66 suites, 1100 of 1100 caught, and src put back byte for byte.
+
+## Daily challenges (seventy-second pass, 2026-10-14)
+
+From your notes **(you)**: daily challenges (you chose them). The list, the amounts and the board are mine
+**(suggested)**.
+
+- **Three a day for each player**, from nine (`ShopCatalog.CHALLENGES`): finish City Shore (30 tokens), the Sky Pools
+  (35), the Sunken City (40), the Flooded Halls (45); finish a run in Hardcore (40); set a new best in Hardcore (50);
+  finish a long run (40); finish a run with a friend (40); finish 3 runs (50). Shuffled by the day (UTC, the daily
+  chest's clock), so players at the same point get the same three; a level's challenge is only given once that level
+  is open in your own save. They are picked the first time your save sees the day and stay put until midnight UTC,
+  when everyone in the server gets new ones.
+- **Done by finishing runs**, each paid once that day, on the run's own pill (a medium run's 20 and a
+  challenge's 40: "+60 tokens (Challenge done)"). The card says which: "+40, Challenge done, Finish City Shore. 1 of 3
+  done today."
+- **A notice board in the lobby**, by the daily chest in the back-left corner: two posts on the deck, the panel held
+  between them in a frame, a little roof on the posts. What is written on it is your own (your three, each ticked
+  green with "Done" as you do it, "Finish 3 runs (1 of 3)" as you go, and "New ones in 5h 12m"); anyone else sees
+  theirs. No HUD element anywhere.
+- **Kept in your save** (`Challenges`). On the dashboard: the custom event `ChallengeDone` (its reward, the challenge
+  in the first custom field) and the tokens as a gameplay source "Challenge".
+- **The test panel**: "Challenges: new three" gives you a fresh three with nothing done. The Self-test checks three
+  are picked with none on a locked level, and that one pays once a day and the third run counts; it puts your save
+  back.
+- **Checks**: `check_shop.py`, and `check_hub.py` (`check_challenge_board`: the posts on the deck, the panel between
+  them, the frame against it, the roof on the posts; and the board in the lobby's layout check);
+  `blender/mutations/pass72.py` plants 55 bugs and every one is caught. The full run after it: 65 suites, 1066 of
+  1066 caught, and src put back byte for byte.
+
+## A friend in the run (seventy-first pass, 2026-10-14)
+
+From your notes **(you)**: the friends bonus (you chose it). How it is told, and the numbers, are mine **(suggested)**.
+
+- **A run finished with a Roblox friend in it pays a fifth more** (`ShopCatalog.REWARD.FRIEND = 1.2`: 20 tokens
+  become 24), worked out after Hardcore and a new best and before the 2x pass, which doubles it with the rest. A
+  friend counts when they have been in the same run (started it with you, or joined it late) and are still in the
+  server when you reach the end; you need not finish together. Nobody counts as their own friend, and a friend who
+  has left the server no longer counts. Roblox is asked once a pair (`Player:IsFriendsWith`); if it does not answer,
+  that counts as no and it is asked again next time.
+- **Told three ways, none of them new on screen**: the lobby's card, a few seconds into the run, "+20%, Running with a
+  friend" (once while you are in the server, not every level of a story); the usual pill at the end, "+24 tokens (With
+  a friend)"; and Roblox's own invite screen from the pause menu's Invite, which now says "Come and play Harrow Bay with
+  me: a friend in your run pays 20% more tokens." The first visit's "Earn tokens" page mentions it too.
+- **On the dashboard**: the custom event `RunWithFriend` (the level), to see whether bringing a friend catches on.
+- **The test panel**: "Friend in runs on/off" (Studio only; the players in a Studio test are nobody's friends): with it
+  on, the next run's card says a friend is with you and its pill says "With a friend". The Self-test checks a run
+  alone pays no share, the panel's friend counts, and the share is a fifth; it puts the real run's players back.
+- **Checks**: `check_shop.py`; `blender/mutations/pass71.py` plants 34 bugs and every one is caught. The full run after
+  it: 64 suites, 1011 of 1011 caught, and src put back byte for byte.
+
+## Hidden token caches (seventieth pass, 2026-10-14)
+
+From your notes **(you)**: hidden token caches (you chose them). What each one is, and where, is mine **(suggested)**.
+
+- **One on every level**, something somebody kept, with a few coins in it: on City Shore, Sal's float (a red biscuit
+  tin, "SAL'S FLOAT. DO NOT TOUCH."); on Sky Pools, a swim bag with the pool money and a ticket for the roof; in the
+  Sunken City, a jam jar of coins "FOR THE BUS HOME"; in the Flooded Halls, Mrs Venn's tea tin. Each stands in the far
+  corner of a nook of its own (the little platforms off the route, like the pry bar's and the letters'), about two
+  thirds of the way along, catching the eye with a small glint; where no nook fits, it is tucked beside the route on a
+  stable chunk past that point.
+- **Take it** (Roblox's own prompt): 25 tokens the first time in a save ("+25 tokens (Hidden cache)"), and a line in
+  your journal saying what it was. Once taken it is gone from your screen for good (it is marked like a letter), so
+  next time you know you have it; anyone else still sees theirs. Kept in your save (`Caches`), and on the dashboard
+  as the custom event `CacheFound` (the level) and a gameplay source "Cache".
+- **The Self-test** finds one (paid once, then nothing) and puts your save back.
+- **Checks**: `check_story.py` (one for each level, no dashes in their words, on their floor, glinting, marked, paid,
+  in the journal, in a nook or beside the route) and `check_shop.py` (once a save, the catalogue's 25);
+  `blender/mutations/pass70.py` plants 19 bugs and every one is caught. The full run after it: 63 suites, 977 of 977 caught,
+  and src put back byte for byte.
+
+## The daily chest (sixty-ninth pass, 2026-10-14)
+
+From your notes **(you)**: the daily reward (you chose it). The amounts and the chest are mine **(suggested)**.
+
+- **A wooden chest banded in brass** on the lobby's deck (left of the start pad, mirroring the back door), with
+  Roblox's own prompt. Open it once a day for tokens: 20, 30, 40, 50, 60, 80, then 120 on the seventh day and every
+  day after while the streak lasts (`ShopCatalog.REWARD.DAILY`). Opened the day after the last time, the streak goes
+  on; miss a day and it starts again from 20. Days are UTC days (Roblox's servers keep that clock), so the next chest
+  opens at midnight UTC.
+- **On your own screen**: the prompt says "Open" or "Opened today"; opening it lifts the lid (for you only), the usual
+  "+N tokens (Daily chest, day 3)", and the vote card says "Come back tomorrow for day 4". Opened again too soon, the
+  card says how long until the next one and which day you are on. No HUD element anywhere.
+- **Kept in your save** (`DailyDay`, `DailyStreak`). On the dashboard: the custom event `DailyChest` (the streak's
+  day), and the tokens as a gameplay source "Daily" in the economy view.
+- **The test panel**: "Daily: next day" makes your last opening yesterday, so the next one goes on the streak. The
+  Self-test opens it (once, too soon, the next day, and after a missed day) and puts your save back.
+- **Checks**: `check_shop.py` and `check_hub.py` (`check_daily_chest`, and the chest in the lobby's layout check);
+  `blender/mutations/pass69.py` plants 24 bugs and every one is caught. The full run after it: 62 suites, 958 of 958 caught,
+  and src put back byte for byte.
+
+## A reward for finishing the story (sixty-eighth pass, 2026-10-14)
+
+From your notes **(you)**: the story reward (you chose it from the four next builds I offered). The amount and the
+ribbon are mine **(suggested)**.
+
+- **Finishing the story pays a bonus**, on top of the last level's own run: 150 tokens, 225 in Hardcore, and doubled
+  by the 2x pass, the same rules a run follows (`ShopCatalog.REWARD.STORY`, `ShopCatalog.storyReward`). Its pill says
+  "Story complete" and stands above the last level's own "+N tokens".
+- **And the green ribbon**: a trail, the key's own green ribbon (the one by Hill House's door in the lore), the only
+  thing in the shop that cannot be bought. It is in the shop under Trails from the start, its tile grey and saying
+  "Finish the story" where a price would be; pressing it says what it takes. Finish the story and it is yours: "Put
+  on" like any trail. The bonus is paid every time a story is finished; the ribbon the first time.
+- **Only for a story really finished**: given at the end of its last level, for a route walked, and only to someone
+  whose own walking reached that level (their saved place in the story), so joining a story late at its last level
+  does not earn it. A story resumed from a save does, if you walked the levels before it.
+- **The Self-test** checks the bonus and the ribbon are given, and that the ribbon is never sold.
+- **Checks**: `check_shop.py` (an item earned and never sold is allowed, earned by the story only, and the story's
+  bonus is the one new way tokens go up); `blender/mutations/pass68.py` plants 17 bugs and every one is caught. The full
+  run after it: 61 suites, 934 of 934 caught, and src put back byte for byte.
+
+## In the back rooms, not in the lobby (sixty-seventh pass, 2026-10-14)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: a loose end of the corridor into the back
+rooms.
+
+- **Someone who went into the back rooms from the lobby** was still one of the lobby's players as far as the vote was
+  concerned, so a countdown started by others in the lobby came up on their screen in yellow rooms a long way off
+  (they were never pulled into the run). Now going in packs the vote card away, as a run's start does, and they are
+  left out of what the lobby says until they are back (`HubService.hubPlayers`).
+- **Checks**: `check_backrooms.py` (and `check_squishroom.py`'s squish room line, unchanged in what it holds);
+  `blender/mutations/pass67.py` plants 3 bugs and every one is caught. The full run after it: 60 suites, 917 of 917 caught,
+  and src put back byte for byte.
+
+## The back rooms are the sixth secret (sixty-sixth pass, 2026-10-14)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: finding the back rooms told the way every
+other secret is.
+
+- **The first time your save falls into the back rooms**, once the screen has come back, the secret's scene plays: the
+  camera drifts in on Mrs Venn's notice, the low sting, "The back rooms. Staff only. You came down once too often.",
+  and its card ("Secret 1 of 6", or however many you have). Her notice goes into your journal under Secrets. Never
+  again after that, and not from the lobby's corridor (you have found them by then).
+- **Six secrets now**: the five on the levels, and this one under all of them (`Interactables.SECRETS.backRooms`;
+  `LORE.md`'s table has the row).
+- **Checks**: `check_backrooms.py` and `check_story.py`; `blender/mutations/pass66.py` plants 10 bugs and every one is
+  caught. The full run after it: 59 suites, 914 of 914 caught, and src put back byte for byte.
+
+## The lobby's back corridor leads there (sixty-fifth pass, 2026-10-14)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: the teaser door finally wired, as its own
+comment always said it would be.
+
+- **Once you have found the back rooms by falling** (kept in your save, `FoundBackRooms`), the lobby's yellow back
+  corridor takes you there: walk to its end round the corner and you are in, with the same cut to black. The way out
+  brings you back to the lobby. For anyone who has not found them it is only the end of a corridor, which is what
+  keeps them a secret. From the lobby only (not from a run, not from the squish room).
+- **The corridor is walkable now.** Lobby scenery does not collide, and the corridor was scenery: stepping through the
+  frame dropped you through its carpet and the lobby's catch put you back at the spawn. Its floor and walls are solid.
+- **Falling in is a cut to black**, at once, so the move is never seen: it reads as going through the floor.
+- **The test panel**: "Back rooms" takes you there now (as a fall would, in a run) and counts them as found, so the
+  corridor can be tried straight after.
+- **The mutation runner** (`run_all.py`) runs a suite again, after putting src back, when it died on a Windows file
+  error (a file held for a moment by a virus scanner or an indexer): twice in a row on the Sunken City's files in the
+  last run, and clean on its own.
+- **Checks**: `check_backrooms.py`; `blender/mutations/pass65.py` plants 10 bugs and every one is caught. The full run
+  after it: 58 suites, 904 of 904 caught, and src put back byte for byte.
+
+## The back rooms (sixty-fourth pass, 2026-10-14)
+
+From your notes **(you)**: the Backrooms secret level, found by falling too many times in one run (ROADMAP section 5:
+yellow rooms, humming lights, damp carpet, never announced). How is mine **(suggested)**, and in the lore it is
+what Mrs Venn calls it: the back rooms of the baths. Staff only.
+
+- **The way in**: the seventh fall in one run (`BACKROOMS_FALLS` in Bootstrap), in either mode, goes through the
+  floor instead of back to the route: a blink of black and you are standing in the back rooms. Once a run, never
+  announced. A Hardcore fall is still a fall (the clock goes back to nothing).
+- **What is there** (`BackRoomsService`, new, built once at server start far from everything): a maze of yellow rooms
+  and corridors (34 by 22 tiles of 4 studs), damp beige carpet, a low ceiling resting on the walls, and a tube panel
+  set into it every third tile, each a real light shining down, warm, modest, and no floor further than three tiles
+  from one; one tube near the middle stutters now and then (down to a third, never off). A sealed staff room with a
+  locked door marked STAFF ONLY that nobody can get into. Mrs Venn's notice on the wall where you arrive. The hum is
+  the baths' own (BathsHum, through AmbienceService), with the Hold's drone under it. The lobby's yellow back door,
+  the teaser, is built in the same palette and stays a door.
+- **The way out**: a door marked WAY OUT (a green sign with its own small light) in the far wall, fifty tiles' walk
+  from where you arrive, with Roblox's default prompt, "Go back". It puts you where the fall that sent you would
+  have: the start in Hardcore (clock reset), your checkpoint in Chill; the lobby if your run has ended meanwhile.
+  Leaving from the pause menu works as anywhere. Reset there puts you back on the level.
+- **While you are there** your client counts you as in the back rooms (`InLevel` is "backRooms"): their hum plays,
+  the level's own weather (Sky Pools' storm, the Halls' lamps) waits, and the kill plane leaves you alone. In a
+  story, the others wait for you as for anyone still playing.
+- **Found**: a custom event `BackRoomsFound` on the dashboard, and a seventh badge, `ShopCatalog.BADGES.backRooms`,
+  off until you make it like the others. The Self-test checks the back rooms were built with their one way out.
+- **Checks**: `blender/check_backrooms.py`, new, the fourteenth checker (the map closed all round, every floor tile
+  reachable, the sealed room sealed, the way out far; the light; nothing floating; far from everything; the way in
+  and out); `blender/mutations/pass64.py` plants 26 bugs and every one is caught.
+
+## Roblox badges, ready to switch on (sixty-third pass, 2026-10-14)
+
+From your notes **(you)**: work a bit more (and the game is meant to earn). What is mine **(suggested)**: badges for
+what the game now has an ending for, built so that nothing happens until you make them.
+
+- **Six badges**: one for each level played to its end (City Shore, Sky Pools, the Sunken City, the Flooded Halls),
+  one for the story played to its end, and one for a whole story in Hardcore (the one that goes on the story
+  leaderboard). Awarded by the server only for what was really played: a level's for a run that pays its tokens (a
+  walked route, not impossibly fast), the story's for a last level walked.
+- **Switched off until you make them**: every id in `ShopCatalog.BADGES` is 0, and with 0 nothing is asked of
+  Roblox. To switch one on, make the badge on the Creator Dashboard (your game, Engagement, Badges; a few a day are
+  free, with an image you upload), copy its id into `ShopCatalog.BADGES` (the four levels by level number, then
+  `story` and `storyHardcore`), and paste ShopCatalog again. The paste check lists the badges still without an id.
+- **Each badge is asked for once per player a session** (Roblox limits badge calls); one already owned is Roblox's to
+  ignore, so someone who finished a level before its badge existed gets it the next time they finish that level.
+- **Checks**: `check_shop.py`; `blender/mutations/pass63.py` plants 14 bugs and every one is caught. The full run after
+  it: 56 suites, 868 of 868 caught, and src put back byte for byte.
+
+## The move between a story's levels, and the Self-test sees the story (sixty-first and sixty-second passes, 2026-10-14)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: a fault in the sixtieth pass, found by
+walking the story through, fixed; and the Self-test taught the story.
+
+- **The move between a story's levels** used to take the last level down, build the next, and only then put
+  everyone at its start. In between they stood on nothing: they fell through the space the last level had left (on
+  City Shore, from the sea far below), and anyone who dropped past the new level's kill plane before being put on it
+  took a Hardcore fall at its start, death card and all. Now the screen goes to black (0.6 seconds), everyone in the
+  story is held where they stand (anchored, and passed over by the kill plane) while the levels change, then they
+  are at the next start and the screen comes back. One move at a time: someone leaving during it cannot start a
+  second. (The old gate that forbade any fade to black in Bootstrap, so the dive's blackout could not come back, now
+  looks only at the dive.)
+- **The Self-test** checks the story's place in your save is kept, read back and kept in range (the server's half),
+  and that the Story pad is in the lobby and open (the client's half).
+- **Checks**: `check_hub.py` and `check_shop.py`; `blender/mutations/pass61.py` and `pass62.py` plant 12 and 3 bugs
+  and every one is caught. The full run after them: 55 suites, 854 of 854 caught, and src put back byte for
+  byte.
+
+## Story mode (sixtieth pass, 2026-10-13)
+
+From your notes **(you)**: build story mode, with my suggestions for the four open questions (a Story pad; one
+clock and a leaderboard of its own; a death restarts only the level you are on; progress saved, both modes). How the
+pieces fit is mine **(suggested)**.
+
+- **The Story pad**: a sixth pad on the lobby's level row, between the four levels and the sandbox ("Story, 9:14 am
+  to midnight", a morning-gold window). Voted for like a level, with Chill or Hardcore and a length, and always
+  open. Its leaderboard shows on the lobby board when it is chosen.
+- **The four levels one after another**: when a level's ending has been watched, the next one is built and you are
+  put at its start, with no lobby in between. LEVEL COMPLETE says "Story 2 of 4. Next: The Sunken City"; after the
+  Flooded Halls it says "Story complete", with the story's time in Hardcore, and then everyone goes home.
+- **Together**: a group plays it as one. Whoever finishes a level first waits in the lobby (their vote card says how
+  many are still playing) and is brought back in for the next level when the rest are done. After 150 seconds the
+  story goes on without anyone still playing; they are sent to the lobby and told. Leaving from the menu, or the
+  server, takes you out of the story; if that leaves only people waiting, they go on.
+- **The clock**: in Hardcore, the story's time is each level's own fair time added up, so a fall restarts only the
+  level you are on (and its clock). It goes on the story's own leaderboard (and your best) only for a whole story,
+  played from City Shore in one go with every level's time counted (no second chance, no Near the end, not joined
+  late). Chill has no clock, as everywhere.
+- **Saved**: where you got to is kept in your save (`StoryAt`, a level walked counts). Stopped partway, the story
+  goes on from there next time: from the level the furthest-behind player in the room is on, so nobody misses one.
+  After the last level it goes back to City Shore. Every level finished in the story counts as finished for the
+  lobby's locks too, and pays its tokens as usual.
+- **The test panel**: "Story from the start" puts your save's place back to City Shore. "Near the end" works in a
+  story (that level's time and place then do not count; the story still goes on).
+- **On the dashboard**: custom events `StoryStarted` (the level it began from) and `StoryFinished` (1 for a fair
+  whole story).
+- **Checks**: `check_hub.py` (`check_story_mode`; the pad row's width now counts the Story pad);
+  `blender/mutations/pass60.py` plants 31 bugs and every one is caught. The full run after it: 53 suites, 839 of 839
+  caught, and src put back byte for byte.
+
+## One run at a time (fifty-ninth pass, 2026-10-13)
+
+What is mine **(suggested)**: a bug found while building the story, fixed.
+
+- **Nothing starts a run while anyone is still out on a level.** There is one level per server, and the lobby's Start
+  pad did not check: someone who finished first, back in the lobby, could step on it and build a new level over the
+  one the others were still playing, clearing the floor from under them. Now Start (and a vote, and a countdown that
+  would end during a story's next level) waits until everyone is back, and whoever steps on it is told how many are
+  still playing.
+- **Checks**: `check_hub.py` (`check_one_run_at_a_time`); `blender/mutations/pass59.py` plants 10 bugs and every one
+  is caught.
+
+## Every level open for an admin (fifty-eighth pass, 2026-10-13)
+
+From your notes **(you)**: a way to give yourself access to every level, locked or not, like an admin. How is mine
+**(suggested)**.
+
+- **Type `/levels` in chat** to open every level for yourself; type it again to go back to your own progress. Kept in
+  your save (`AdminOpen`), so it stays on between sessions. Your real progress is untouched and still recorded when
+  you finish a level. The vote card tells you which way it went.
+- **Who is an admin**: you, the game's owner (for a group game, the group's owner), anyone whose user id you add to
+  `ADMIN_IDS` at the top of the admin section in `EconomyService.lua`, and anyone in Studio. Anyone else typing
+  `/levels` gets nothing.
+- **What others see**: a run is the whole room's, so while you are in a server with it on, the room can vote for any
+  level and play it with you. Nobody else's progress changes unless they finish a level themselves.
+- **The chat**: a proper chat command where the place uses the new chat (the line is never shown to anyone); on the
+  old chat, a chat line the server reads.
+- **Checks**: `check_shop.py`; `blender/mutations/pass58.py` plants 14 bugs and every one is caught.
+
+## Getting further keeps a level open, and new players are told (fifty-seventh pass, 2026-10-12)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: a hole in the fifty-first pass, closed.
+
+- **A level is open when anyone here has finished the level before it, or any level after that.** It used to look
+  only at the one before, so a player carried into Sky Pools by a friend who then finished it would, alone later,
+  find Sky Pools locked again (no City Shore finished) and the Sunken City open. Now getting further keeps
+  everything behind you open: finishing Sky Pools keeps Sky Pools open and opens the Sunken City, City Shore or
+  not. The signs still say what opens a locked level ("finish City Shore first"); the Self-test expects the same.
+- **New players are told**: the welcome's second page now says "Each level is a route of materials to its end,
+  and finishing one opens the next", and the guide's first step "Step on City Shore, the first level. Finishing
+  it opens the next."
+- **Checks**: `check_hub.py` and `check_shop.py`; `blender/mutations/pass57.py` plants 6 bugs and every one is
+  caught. The full run after it: 50 suites, 783 of 783 caught, and src put back byte for byte.
+
+## The climb through the levels, on the dashboard and in the Self-test (fifty-sixth pass, 2026-10-12)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: now that levels open in order, the two
+numbers worth watching once the game is live, and the Self-test exercising the locks for real.
+
+- **On the Creator Dashboard** (Analytics, custom events; they appear once real players have played):
+  `FirstFinish_1` to `FirstFinish_4`, each level's first finish in a save (City Shore, Sky Pools, the Sunken City,
+  the Flooded Halls; so how many players open each level, and where they stop), and `LockedPad_2` to
+  `LockedPad_4`, players who stepped on a level that was still locked for them (once per player and level a
+  session). The second is the one to read before deciding whether anything to do with opening levels is worth
+  selling.
+- **The Self-test's server half** now opens and locks a level through the lobby itself: City Shore open; City
+  Shore finished in your save opens Sky Pools; taken back, Sky Pools locks again (unless someone else in the server
+  has finished City Shore). Your save is put back afterwards, as before, and the lobby looks at it again. (If your
+  vote was on Sky Pools it moves back to City Shore.)
+- **Checks**: `check_hub.py` (`check_dashboard`) and `check_shop.py`; `blender/mutations/pass56.py` plants 13
+  bugs and every one is caught. The full run after it: 49 suites, 777 of 777 caught, and src put back byte
+  for byte.
+
+## Near the end, and the Self-test sees the pads (fifty-fifth pass, 2026-10-12)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: a quicker way to test the last four
+passes in Studio.
+
+- **"Near the end"** on the test panel (Studio only): in a run, it puts you at a checkpoint about eight chunks
+  before the finish, facing on, so a level's last stretch and its ending can be seen without playing all of it:
+  the storm building by the Sky Pools slide, the lamps failing behind you in the halls (those already behind you
+  are low at once, the next ones fail as you walk), and every level's ending. A run skipped like this counts for
+  nothing: no tokens, no time, no level opened (Output says so), so a test cannot fake its way into a save. A fall
+  after it sends you back to that checkpoint, not the start.
+- **The client's half of the Self-test** also looks at the lobby (press it there): City Shore open, every locked
+  pad boarded up and saying so, every open one without boards; and the VIP tag over your head when you have VIP
+  (or after "VIP on/off"), and none without.
+- **Checks**: `check_shop.py`; `blender/mutations/pass55.py` plants 14 bugs and every one is caught. The full run after
+  it: 48 suites, 764 of 764 caught, and src put back byte for byte.
+
+## A level opened is told as you come back (fifty-fourth pass, 2026-10-12)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: finishing a level now says what it
+opened.
+
+- **Coming back to the lobby from a run that opened a level**, the vote card says so, with a two-note chime:
+  "Sky Pools is open. A new level. Step on its pad to vote for it." (or two names, if one run opened two). Each
+  player coming back is told what was shut when they went into the run and is open now, so it is said once,
+  to everyone who was there (not only whoever finished), and a level opened by someone joining with it already
+  finished is not announced. After five seconds the card goes back to the tally, or away; it can no longer come
+  back to a countdown from before the run.
+- **Checks**: `check_hub.py`; `blender/mutations/pass54.py` plants 12 bugs and every one is caught.
+
+## The lamps behind you fail, in the Flooded Halls (fifty-third pass, 2026-10-12)
+
+From your notes **(you)**: Flooded Halls, lights fail behind you (you chose it from the four). How is mine
+**(suggested)**.
+
+- **The roof lights two bays and more behind you** (the ceiling lamp over the walkway in every bay) stutter for
+  half a second with a faint click, then sink over a second to a low glow (30% of their light, the panel a dim
+  warm grey). The bay you are in, the one behind it and everything ahead stay lit, and the windows are never
+  touched, so nothing is ever dark. Sent back past them (a checkpoint behind you), they come up again over a
+  second. On your own screen only (`FloodedHallsClient`, "The lamps behind you"); each roof light now says how
+  far along the route it hangs (`FloodedHallsService`, attribute `Along`). The one fitting that already fails for
+  everyone stays the server's. Nothing during the ending, and nothing off the level.
+- **Checks**: `check_halls.py` (a low glow, never under a quarter; the lamp over you kept; fades of at least half
+  a second; a stutter that never goes out; only the roof lights; the light itself dimmed, not just the panel);
+  `blender/mutations/pass53.py` plants 16 bugs and every one is caught. The full run after the four passes: 46 suites,
+  738 of 738 caught, and src put back byte for byte.
+
+## A storm by the slide, in Sky Pools (fifty-second pass, 2026-10-12)
+
+From your notes **(you)**: Sky Pools, a storm near the slide (you chose it from the four). How is mine
+**(suggested)**.
+
+- **As you near the slide's mouth** (from 200 studs, all there at 60: the last stretch of any run, checked
+  against every laid route), the cloud sea round the tower darkens toward a slate grey (the nearest clouds
+  most, the far ones not at all; the mist over them too), the light drops a little (a colour correction:
+  brightness down 0.06, a touch less colour, a cool tint), and every 9 to 16 seconds lightning lights the
+  cloud tops below: a real light just over them, twice, soft and brief. Under the clouds, on the slide down to
+  the final pool, it clears again. Eased over seconds and written in small steps; on your screen only
+  (`SkyPoolsClient`, "The storm by the slide"); gone at once off the level, with the clouds given back their
+  own colours.
+- **Checks**: `check_skypools.py` (begins in the last half of every laid run and reaches its end; eased; never
+  dark; clears under the clouds; only on Sky Pools; lightning real, soft, cleared and only at the height of it);
+  `blender/mutations/pass52.py` plants 16 bugs and every one is caught.
+
+## Levels open in order (fifty-first pass, 2026-10-12)
+
+From your notes **(you)**: levels unlock in order (you chose it from the four). How is mine **(suggested)**.
+
+- **City Shore is always open; each level after it opens once the one before is finished** (Sky Pools after City
+  Shore, then the Sunken City, then the Flooded Halls; the sandbox is always open). What you have finished is
+  kept in your save (`Finished`), marked when a run you really played ends (the same test that pays tokens: a
+  walked route, not impossibly fast). **It opens for the whole server**: the room votes on one level for
+  everyone, so a level is open when anyone here has finished the one before. Bring a friend who has, and it is
+  open for you too.
+- **On the lobby pads**: a locked level's window is dimmed and boarded up (two planks across it, lying on the
+  pane with their ends on the frame), and its sign says "Locked: finish City Shore first". Stepping on it takes
+  no vote; the vote card tells you (to you alone) which level it is and what opens it, then goes back to the
+  tally. A locked level can never win a vote; a vote left on one that locks again (whoever opened it left) goes
+  back to City Shore.
+- **The test panel**: "Levels open/locked" finishes every level in your save, or none. The Self-test checks that
+  a run finished at once opens nothing.
+- **Checks**: `check_hub.py` (`check_levels_open_in_order`); `blender/mutations/pass51.py` plants 19 bugs and
+  every one is caught.
+
+## A VIP tag over your head (fiftieth pass, 2026-10-12)
+
+From your notes **(you)**: a VIP tag over heads (you chose it from the four). How is mine **(suggested)**.
+
+- **A VIP player has a "VIP" tag over their head** in the lobby and the squish room, for everyone in the server to
+  see: a small rounded pill in the VIP pass's own lilac, sized in studs so it shrinks with distance, drawn to 80
+  studs, over the name Roblox shows (`EconomyService.vipTag`). Put on with the rest of what they wear, put away
+  on a level (a run has nothing over anyone) and back in the lobby, and taken off if the pass is not theirs. The
+  shop's VIP tile says so: "A VIP tag over your head and in chat, and the gold sparkle".
+- **The test panel**: "VIP on/off", since a pass cannot be owned in Studio.
+- **Checks**: `check_shop.py`; `blender/mutations/pass50.py` plants 9 bugs and every one is caught.
+
+## The self-test compares what is shown (forty-ninth pass, 2026-10-12)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: the Self-test's server half also checks
+that what other players and your own screen are shown matches your save, once it is put back: the Keepsakes count
+in the player list against the journal's keepsakes, and the tokens your screen reads against the save's.
+`check_shop.py`; `blender/mutations/pass49.py` plants 3 bugs and every one is caught. The full run after this pass: 43 suites,
+678 of 678 caught, and src put back byte for byte.
+
+## Your collection in the player list (forty-eighth pass, 2026-10-12)
+
+From your notes **(you)**: work a bit more. The roadmap's "a way to show your collection to other players" is
+built here; how is mine **(suggested)**. And the "Before you test in Studio" list below is rewritten in the order
+you would do it.
+
+- **A Keepsakes column in Roblox's own player list** (leaderstats, `EconomyService.showCollection`): how many of
+  the 27 keepsakes each player has found, for everyone in the server to see. No interface of the game's own:
+  it is the list Roblox already shows (top right; folded away on a phone until opened). Counted from the journal
+  kept between sessions, so it is your whole collection; set when you join, raised the moment you pick a keepsake
+  up, and right again after the test panel empties the journal or the self-test puts your save back.
+- **Checks**: `check_story.py`; `blender/mutations/pass48.py` plants 6 bugs and every one is caught.
+
+## The self-test sees what was built, and the server answering (forty-seventh pass, 2026-10-12)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: two more things the Self-test checks for
+real, both about pieces working together.
+
+- **What was built at the start** (the server's half): the keepsake shelf in the squish room, a toy and a card for
+  every keepsake and the board on top (if the room is still being built when you press it, this says 0 and
+  fails, so press it again a little later); and your own statue in the lobby, marked as yours.
+- **The server answering this screen** (the client's half): the save, the journal and the leaderboard, asked
+  through the game's own remotes, each one answering (a save that says it is not ready yet does not count).
+- **Checks**: `check_shop.py`; `blender/mutations/pass47.py` plants 6 bugs and every one is caught.
+
+## The client's self-test sees the cursor, the pause menu and the death card (forty-sixth pass, 2026-10-12)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: the client half of the Self-test covers
+the last screens and the one bug a mouse player would feel most.
+
+- **The cursor**: with third person locked (the usual view), every screen the self-test opens must free the
+  cursor to press its buttons, checked for real: the shop, the journal, the emote picker, the pause menu and the
+  death card (the one that was missed in the thirty-fifth pass). If you have freed the cursor yourself (Ctrl,
+  or first person) the check says so and passes.
+- **The pause menu** opened and closed (PauseMenuService.setOpen and isOpen, new, the same as the tab and keys),
+  and **the death card** shown, its choices after their three seconds, then put away. The client's half now
+  takes about ten seconds.
+- **Checks**: `check_shop.py`; `blender/mutations/pass46.py` plants 9 bugs and every one is caught; all 39
+  suites together catch 663 of 663.
+
+## The self-test's client half (forty-fifth pass, 2026-10-11)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: the same Self-test button now runs a
+half on your own screen too.
+
+- **The screens a player opens**, opened and closed for real: the shop, the journal (at the keepsakes) and the
+  emote picker, each said `pass` or `FAIL` in Output under `SELF-TEST (client)`. A screen that throws, does not
+  show, or will not go away is named, instead of being found only when someone presses it. It takes about three
+  seconds and leaves everything closed.
+- **Checks**: `check_shop.py`; `blender/mutations/pass45.py` plants 6 bugs and every one is caught.
+
+## The self-test, wider (forty-fourth pass, 2026-10-11)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: more of the game run for real by the
+test panel's Self-test.
+
+- **Now also**: a second chance spent once and refused the second time; a note the server does not know (a
+  client asking for tokens through the first-five-minutes notes) changing nothing, and one it does know setting
+  its flag; the shop told the save's tokens. Then, after the save is put back, **the stores**: the leaderboard
+  read, then read again at once from what LeaderboardService kept (no second wait), and a personal best read.
+  With the data stores off in Studio the board answers empty, which still counts as an answer.
+- **Nothing waits while the save is changed** (checked): anything that happened to the save during a wait would
+  be wiped when it is put back, so the store reads, which wait on Roblox, come after.
+- **Checks**: `check_shop.py`; `blender/mutations/pass44.py` plants 6 bugs and every one is caught; all 37
+  suites together catch 648 of 648.
+
+## A self-test on the test panel (forty-third pass, 2026-10-11)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: the checkers read the code; this runs
+it, in the engine, on your Studio save.
+
+- **Self-test** (the test panel, F8, Studio only): the shop's own handler, run for real, each step said `pass`
+  or `FAIL` in Output: the cheapest thing you do not own bought (its price taken, worn at once), bought again
+  (refused, nothing taken), taken off and put back on; something too dear refused; a Robux item refused for
+  tokens; a run finished the moment it started paying nothing (EconomyService's own warning about it shows
+  just above, and is expected); a journal entry kept with the reader's name left out. Then **the save is put
+  back exactly as it was**, and any run you were really in, so it can be pressed at any time. If everything
+  wearable is already owned, press Clear purchases first.
+- **Checks**: `check_shop.py`; `blender/mutations/pass43.py` plants 7 bugs and every one is caught (all 36 suites
+  together catch 642 of 642). The stamp check
+  caught the two changed modules before they were stamped again, as it should.
+
+## The paste check knows an old copy (forty-second pass, 2026-10-11)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: the most likely way the coming test
+goes wrong is not a bug but an old file, pasted over the wrong script or skipped as "probably the same", which
+then looks exactly like a bug. The paste check found missing files; now it finds old ones.
+
+- **Every module in the paste carries a fingerprint** (`Name.STAMP = "1a2b3c4d"`, the line before its last
+  `return`): the start of a SHA-1 of its own contents, written by `python tools/stamp.py`. 42 modules carry one.
+- **Bootstrap.server knows what each fingerprint should be** (the PASTE STAMPS list, written by the same tool).
+  In Studio the paste check compares them: any server or shared module that is an old copy is named,
+  `out of date ... paste the current one`. The client's modules are checked on the client the same way,
+  six seconds in: `PASTE CHECK (client): every client module is the current copy.`, or the names of the old
+  ones.
+- **Kept honest** (`blender/check_stamps.py`, the thirteenth checker): a stamped file changed since it was stamped
+  fails, a module changed since the last commit with no stamp fails, and Bootstrap must expect exactly the
+  stamped modules. So after changing a module: `python tools/stamp.py`, then the checkers.
+  `blender/mutations/pass42.py` plants 9 bugs and every one is caught; all 35 suites together catch 635 of 635.
+
+## The paste check says what a test needs to know (forty-first pass, 2026-10-10)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: two more lines from the paste check,
+and a second look at the Robux receipts (sound: a purchase is granted once, and only after the save that has it
+is written; a receipt that comes before the save has loaded is left for Roblox to send again).
+
+- **Whether Studio can reach the data stores.** Without them nothing is kept in a Studio test (saves, the
+  journal, best times, the leaderboard), which is worth knowing before judging whether saving works. The paste
+  check asks once and, if not, says how to turn it on (publish the place, then Game Settings, Security, Enable
+  Studio Access to API Services).
+- **Which Robux items have no id yet** in `ShopCatalog.lua`: listed as "not on sale yet". Fine for testing (the
+  shop says the same and opens no prompt), needed before the game is published.
+- **Checks**: `check_hub.py`; `blender/mutations/pass41.py` plants 6 bugs and every one is caught; all 34
+  suites together catch 626 of 626.
+
+## A pass paid for is a pass had (fortieth pass, 2026-10-10)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: two things about Robux.
+
+- **A paid pass could go missing for a whole session.** On joining, the server asks Roblox whether you own each
+  pass, and that ask can fail for a moment. A failure was taken as "not owned" and never asked again, so
+  someone who had paid for VIP or 2x tokens played that session without it (the surest way to a refund
+  request). Now a check that fails is asked again five more times, 2, 4, 8, 16 and 32 seconds apart, and the
+  pass is applied (and its sparkle worn) the moment Roblox answers.
+- **Every Robux prompt's close is on the dashboard**: custom events `PassPrompt` and `ProductPrompt`, 1 when
+  bought and 0 when not, with the item's id in CustomField01. With the kiosk's visits from the last pass, that
+  is the shop's whole funnel: came to the kiosk, saw a price, paid it.
+- **Checks**: `check_shop.py`; `blender/mutations/pass40.py` plants 9 bugs and every one is caught; all 33
+  suites together catch 620 of 620.
+
+## The dashboard sees the levels (thirty-ninth pass, 2026-10-10)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: since the game is meant to earn, the
+Creator Dashboard should show where players stop, not only what they spend.
+
+- **Progression** (`Bootstrap.server`, AnalyticsService): each run is a step on one path called "Levels", the
+  level's id its step. A start is logged for everyone who starts a run (late joiners too), a completion for
+  every finish, and a fail for leaving partway, from the pause menu or by leaving the server. The mode and the
+  length go along as custom fields (CustomField01 and 02), so the dashboard can split by them. It answers:
+  how many start City Shore, how many finish it, and which level loses people.
+- **The kiosk counts its visits** (a custom event, `ShopKiosk`, from `HubService`): the top of the shop's
+  funnel, beside the purchases EconomyService already logs.
+- All of it guarded: analytics never get in the way of a run. Events show on the dashboard from the live
+  game (Analytics, Progression and Custom events), not from Studio.
+- **Checks**: `check_hub.py`; `blender/mutations/pass39.py` plants 9 bugs and every one is caught; all 32
+  suites together catch 611 of 611.
+
+## A readable Output (thirty-eighth pass, 2026-10-10)
+
+From your notes **(you)**: work a bit more, before testing in Studio. What is mine **(suggested)**: keeping the
+Output readable while you test, so the paste check and anything real are not buried.
+
+- **An error once, not every frame.** Five steps run every frame or several times a second (the emotes, the
+  first five minutes, the footsteps, the view, the lava), each guarded, and each would have said a lasting
+  failure every time it ran: hundreds of identical lines a minute. Each says a given error once now, marked
+  "(shown once)".
+- **A leaderboard that cannot be read** (Studio without API access, or the store having a bad minute) is not
+  asked again for 10 seconds, and is warned about once a minute at most; it was asked, and warned about, on
+  every redraw of every player's board.
+- **Checks**: `check_devices.py` and `check_hub.py`; `blender/mutations/pass38.py` plants 9 bugs and every one
+  is caught (and pass 34's suite follows the leaderboard's new shape); all 31 suites together catch 602 of 602.
+
+## The test panel fills the shelf (thirty-seventh pass, 2026-10-10)
+
+From your notes **(you)**: work a bit more, before testing in Studio. What is mine **(suggested)**: two buttons
+on the Studio test panel (F8) for testing the journal and the shelf without playing every level.
+
+- **All keepsakes**: every keepsake into your journal as if each had been picked up (quietly), so the shelf in
+  the squish room can be seen full.
+- **Clear journal (rejoin)**: the saved journal emptied, to test pickups from fresh; the journal on screen
+  keeps what it has until you rejoin.
+- **The panel is two buttons to a row** now, so it stays on a phone's screen in the Device Emulator.
+- **Checks**: `check_story.py`; `blender/mutations/pass37.py` plants 7 bugs and every one is caught; all 30
+  suites together catch 593 of 593.
+
+## The paste check (thirty-sixth pass, 2026-10-09)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: something for the import itself,
+which is 44 files and 26 sounds by hand, where one missed file is easy and hard to find.
+
+- **The server checks the paste** (`Bootstrap.server`, in Studio only, four seconds after it starts) and says
+  in Output, once, whether everything the game expects is in place:
+  - every module (19 server, 14 shared, 28 client) where it goes and as a ModuleScript (a module pasted into a
+    Script or LocalScript by mistake is named), the two Bootstraps, ChunkBuilder and ChunkProps;
+  - every sound (60 material, 17 button, 25 story and ending, 6 ambience), and any imported twice (the old
+    `lavaCrust` four not deleted, say), which would play old and new at random;
+  - ProfileStore in ServerScriptService;
+  - and that KeepsakeService and PromptStyleService are gone.
+  When it is all there it says `PASTE CHECK: everything is in place` in one line; otherwise a yellow list of
+  what to fix, each with where it goes. The four level chords and WhirlRoar, which have stand-ins, are listed
+  separately as fine for now.
+- **Kept honest** (`check_hub.py`): the check's lists must be exactly what `src/` and `audio/` hold, so a module
+  or sound added to the game in a later round has to be added to it too. `blender/mutations/pass36.py` plants
+  10 bugs and every one is caught; all 29 suites together catch 586 of 586.
+
+## Something to press under a locked cursor, and leaving what you are not in (thirty-fifth pass, 2026-10-09)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: the rest of the review of what a
+player can do, and one fix to the checking itself.
+
+- **The death card's buttons could not be clicked with a mouse.** In third person the cursor is locked to the
+  middle of the screen, and it is freed only while a screen with buttons is up (`ViewModeService.menuOpen`).
+  The death card was not on that list, so "Try again" and the second chance (the one that costs Robux) sat
+  under a cursor that could not reach them unless you knew to press Ctrl. It frees the cursor now while its
+  choices are showing, and so does the Studio test panel.
+- **"Leave to the lobby" worked for people not in the run.** It was taken from anyone while any run was on:
+  pressed in the squish room, it put you in the lobby still marked as in the squish room (so you were left out
+  of every vote after), and it brought the lobby back into the world in the middle of the run. Only a runner
+  leaves a run now.
+- **Into the squish room from a run**: the Studio test panel could do it, and the run would have waited for
+  you. It says "Finish or leave your run first." now.
+- **The checking, made safer** (`blender/mutations/run_all.py`): a suite puts its own files back, but on
+  Windows a write can fail for a moment (a virus scanner or an indexer holding the file), and the last full
+  run hit exactly that: one planted bug was left in `SkyPoolsService.lua` and ten suites after it refused to
+  start. It was put back from the copy taken before the run, and nothing with it in was sent to you. The
+  runner now keeps its own copy of `src`, checks after every suite, and puts back anything that differs
+  (trying again for a few seconds if the write fails).
+- **Checks**: `check_devices.py` the cursor, `check_hub.py` the leaving, `check_squishroom.py` the refusal;
+  `blender/mutations/pass35.py` plants 7 bugs and every one is caught; all 28 suites together (run again
+  with the new guard) catch 576 of 576, with nothing to put back.
+
+## What only shows with many players: the store (thirty-fourth pass, 2026-10-09)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: the rest of the many-player review,
+this time Roblox's limits on reading the data stores, which a Studio test never reaches.
+
+- **The leaderboard ran the server out of reads.** Every step anyone took onto a level pad redrew every
+  player's board, and each redraw read the ranking and that player's best from the store; so did every flip
+  of the board's lever, and every client's `RequestLeaderboardData`, which nothing limited. Roblox lets a
+  server read an ordered store only about 5 + 2 per player times a minute, so a lobby of ten stepping
+  between pads ran out within seconds, and the board went blank for everyone; a client asking over and over
+  could run it out on purpose. Now (`LeaderboardService`) each board is read once and kept for 30 seconds
+  (its season in its name), a second look while one read is on its way waits for that read, a failed read
+  shows the last good board instead of nothing, and a new time on a board clears it so the time shows at
+  once. Your own best under the board (`BestTimeService`) is kept for a minute, set the moment a new one is
+  written, and let go when you leave.
+- **Checked as well, and fine**: the hardcore restart's guard (it never waits, so two falls cannot skip one
+  another), and every client wait on something in the world has a timeout or is a shared module.
+- **Checks**: `check_hub.py` holds the caching; `blender/mutations/pass34.py` plants 11 bugs and every one is
+  caught. **One new file to paste this round**: `LeaderboardService` (ServerScriptService/Services) was not on
+  the list before.
+
+## What only shows with more than one player (thirty-third pass, 2026-10-09)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: a look at what a Studio test with one
+player can never show, because the live game will have several in a server. Four real bugs, all fixed:
+
+- **Statues piled up in the lobby.** Every player who joined got a statue built on the same plinth, and nothing
+  ever took one down, so a server collected a figure for everyone who had ever been in it, all standing
+  inside each other. Now a statue goes with its player (`HubService.removeStatue`, from Bootstrap when they
+  leave, with its pose and tint), and each screen shows only its own (`HubVoteService` hides the others,
+  figure and all, as they load and as they change pose): one statue of you, as it is when you play alone.
+- **The lobby kept a level's sky.** The lobby's light came back only when the last runner FINISHED. Leaving a
+  run from the pause menu, or the last runner leaving the server, left the level's sky (the Sunken City's
+  grey, the halls' dark) over the lobby until the next run, and the level's world standing. That one shows
+  alone too. Now the moment the last runner is out, however they got out, the lobby gets its light back and
+  the level's world goes.
+- **"Still running" counted the wrong people.** The finish's check asked whether anyone at all had not
+  finished, so anyone in the squish room, anyone who had left the run, and anyone who had joined and never
+  run kept the lobby in the level's light. It asks whether anyone is still out on the level now.
+- **A reset in the lobby put you on the level.** While any run was on, everyone who respawned was put at its
+  start, including players who had finished and were back in the lobby. Now a player respawns on the level
+  only if they are in its run (or the lobby is away), and in the lobby otherwise.
+- **Joining while a run is on.** While the lobby is away (from a run's start until its first runner is back)
+  there is nowhere to stand but the level, so someone who joins then is put on it. They were not one of its
+  runners: the run could be torn down under them, and a finish paid them nothing. Now they are counted in,
+  play it in its mode, on its clock, and are paid for finishing like everyone else. The squish room keeps
+  its own.
+- **Checks**: `check_hub.py` holds all of it; `blender/mutations/pass33.py` plants 20 bugs and every one is
+  caught; all 26 suites together catch 558 of 558.
+
+## The keepsake shelf (thirty-second pass, 2026-10-08)
+
+From your notes **(you)**: work a bit more. The shelf was on the roadmap; where it stands and how it works are
+mine **(suggested)**.
+
+- **A shelf for the 27 keepsakes** (`SquishRoomService.buildShelf`), in the squish room against the front
+  wall, left of the lift home: nine cubbies across, three high, in the order of the materials' names, on a
+  plinth on the floor, with a board on top. In the squish room rather than the lobby because the lobby is
+  an open deck crowded with pads, keys and props and a spot there could not be proved clear; the squish
+  room is the calm room you go to from the lobby, and every stud of it is known.
+- **Your own collection on it** (`JournalService`): the shelf is the same for everyone, and what is on it is
+  yours, drawn on your screen only: the toys you have found (made exactly as they are out in the levels, by
+  `Interactables.toy`, sized to the cubby and set down on its board), a "?" card leaning in each cubby you
+  have not, and "KEEPSAKES 12 of 27" on the board on top. It fills in from the saved journal when you join
+  and the moment you pick a keepsake up.
+- **Roblox's own prompt** on its plinth ("Look", Keepsakes) opens your journal at the keepsakes, where each
+  one's story is.
+- **Checks**: `check_squishroom.py` holds the shelf's size (a cubby for every keepsake), its place (clear of
+  the lift and the side wall, under the ceiling, against the wall), that it stands on the floor with every toy
+  and card on a board, and the client's side; `blender/mutations/pass32.py` plants 23 bugs and every one is
+  caught; all 25 suites together catch 538 of 538.
+
+## The journal kept between sessions, and tokens for a route walked (thirty-first pass, 2026-10-08)
+
+From your notes **(you)**: work a bit more. The journal kept between sessions is from your roadmap; how it
+works, and the token rule, are mine **(suggested)**.
+
+- **The journal is kept** (`EconomyService`, `Interactables`, `JournalService`): every note, keepsake and secret
+  you pick up is saved with your profile, in the order you found it, so the collection carries on where you
+  left off: "Keepsake 12 of 27" next week is still 12.
+  - **What is saved** is what the story wrote, written by the server alone (`Interactables.take` calls
+    `EconomyService.keepEntry`), so there is nothing in it for a client to forge. Capped at 200 entries and
+    4000 characters a field, never the same thing twice. Letters are saved with the name left out and put back
+    in when they are read, so they still say your name if you change it.
+  - **Read back** when you join: the client asks once your save has loaded (`JournalState`, a new remote the
+    server Bootstrap makes), and the entries go in quietly and already read, so joining does not light the
+    badge up or fill the corner with lines.
+  - **Shown as taken**: letters, keepsakes and notice-board notes are marked with their journal id
+    (`Interactables.mark`, tag `JournalThing`), and anything already in your journal is shown as taken when it
+    comes into view, so what is still there is what is left to find. Only on your screen, as before.
+  - **A secret's card** counts the secrets from earlier sessions too ("3 of 5", not "1 of 5" again).
+- **Tokens only for a route walked** (`Bootstrap.walkedRoute`): the same checkpoint rule a time needs to
+  count. Before, waiting out the minimum time and jumping to the finish paid a full run's tokens; now it pays
+  nothing, and the server's Output says why. A real run always passes that checkpoint.
+- **Checks**: `check_story.py` holds the journal, `check_shop.py` the token rule; `blender/mutations/pass31.py`
+  plants 23 bugs and every one is caught.
+
+## Times that count, an invite and the favourite (thirtieth pass, 2026-10-07)
+
+From your notes **(you)**: work a bit more. What is mine **(suggested)**: a review of everything a player's
+client can ask the server for, and two cheap ways for the game to grow.
+
+- **A real leaderboard exploit, closed**: the death card's "Try again" (`HardcoreRetry`) was taken from
+  anywhere in a run. It stops the clock, and the next checkpoint starts it again from nothing, so firing it
+  by hand just before the last checkpoint turned a full run into a few seconds: a personal best, its token
+  bonus, and a place on everyone's leaderboard. It is taken only from the start now, which is where a
+  hardcore fall has just put you, so the real button works exactly as before.
+- **Only a fair time is kept** (`Bootstrap.fairTime`), for a personal best and for the leaderboard: a hardcore
+  clock that ran; the runner seen by the server at the last checkpoint in the first three quarters of the
+  route (a teleport to the finish skips it); and no faster than half the floor the tokens already use
+  (ShopCatalog's `MIN_SECONDS`, 45, 90 and 135 seconds for short, medium and long). A run that fails this
+  still finishes and still pays its tokens; its time is just not kept, and the server's Output says why.
+- **Chill no longer saves a best of 0**: chill has no clock, so its "best" was saved as 0 and the lobby board
+  showed it as 00:00 in your colour. Nothing is saved for chill now, and a 0 saved before reads as no time.
+- **A client's hello to the Sunken City** is heard once and kept short, so a client sending it over and over
+  cannot fill the server's log.
+- **Invite friends**: the pause menu's bottom row is Shop, Emotes and **Invite** now (three to a row, because
+  a fourth row would not fit a phone held sideways). Invite opens Roblox's own invite screen when the account
+  may send one; in Studio, where it may not, Roblox's corner notification says "Invites open in the live
+  game, not in Studio."
+- **The favourite, asked once ever** (`OnboardingService`): not straight after the way to the kiosk, but
+  after the next run you choose to play: back in the lobby from it, with nothing else on the screen for 6
+  seconds, Roblox's own "favourite this game?" prompt. Not asked at all if the game is already a favourite, and noted in the save before it is asked, so
+  it never comes twice. The test panel's **Favourite ask again** brings it back. Favourites are how a game
+  comes back to someone's home screen. In Studio the place has no id yet, so nothing shows there; it
+  needs the published game.
+- **Checks**: `check_shop.py` holds the fair-time rules, the retry, the invite and the favourite;
+  `check_sunkencity.py` the hello. `blender/mutations/pass30.py` plants 26 bugs and every one is caught; all
+  23 suites together catch 492 of 492.
+
+## The harbour launch, and a review of passes 22 to 28 (twenty-ninth pass, 2026-10-07)
+
+From your notes **(you)**: work a bit more, and try hard. What is mine **(suggested)**:
+
+- **A review of everything new since pass 22**, read as a player would meet it. What it found, all fixed:
+  - **Gear put on before the character was there**: a new character was dressed the moment it was added,
+    sometimes before its root part existed, so a trail or aura could fail to appear. EconomyService now waits
+    for the root first.
+  - **Two screens holding you still**: the shop and the welcome each stopped your controls, and closing one
+    let you move while the other was still open. The hold is counted now (`ShopService.kit.hold`, which
+    OnboardingService uses), so you move again only when the last one closes.
+  - **The squish room's lift moved you into a place that might not have loaded**: with streaming on, the
+    hall 9000 studs away may not be there yet. The server now asks for it first (`RequestStreamAroundAsync`)
+    and runs the fade itself ("going", then "arrived"), so the screen uncovers only once you are standing in
+    the room. If the hall is still being built when you ride, the lift says so instead of fading and going
+    nowhere. A failsafe uncovers the screen after 8 seconds whatever happens.
+  - **The squish room counted as the lobby** for the guide and the hints; it does not now.
+  - **Hints could pile up** behind one another; at most three wait now.
+- **The launch in the Sunken City's harbour** (`SearchlightClient`, StarterPlayerScripts.Services, new; placed
+  by SunkenCityService): somebody is still looking. A rescue launch stands off in the basin past the end of the
+  street, bow towards you, rocking on the swell, and its searchlight goes slowly back and forth over the water
+  you are coming down. The beam ends where it meets the water, and there is a pool of real light there (it
+  lights you if it finds you). When it rains, the light is a little stronger. When the thing on the horizon
+  comes up, the lamp swings round to it and holds it until it goes down, then goes back to searching.
+  - **Everyone sees the same thing**: the server only says where the launch is (a hidden marker, like the
+    gulls, at the first of four spots in the basin clear of the drain and every buoy); each client builds it
+    and moves it from the clock every player shares.
+  - **Real light, nothing to import**: a SpotLight in the lamp, red and green running lights, a white light
+    on the mast, no Neon, no mesh and no sound. Nothing on it collides. The searchlight is a cold white, so
+    the lantern at the end of the pier stays the one warm light in the harbour.
+- **Checks**: `check_sunkencity.py` holds the launch's spots clear of the lighthouse, the barge, the wrecks, the
+  quay walls and the drain on every run, the marker hidden and not solid, and the client started and in step
+  with the thing and the rain; `check_squishroom.py` holds the lift's new fade. `blender/mutations/pass29.py`
+  plants 21 bugs and every one is caught; all 22 suites together catch 466 of 466.
+
+## The test panel and the one chord (twenty-eighth pass, 2026-10-06)
+
+From your notes **(you)**: a bit more work before the Studio test. What is mine **(suggested)**:
+
+- **The Studio test panel** (`DevPanelClient`, StarterPlayerScripts.Services, new; F8, or the DEV tab top
+  left for the Device Emulator's touch screens): +500 tokens, +1 second chance, clear purchases, the first
+  visit again (the welcome, the guide and every hint come back, without a fresh save), the way to the shop,
+  and the squish room and back. **Studio only, three times over**: its remote (`DevPanel`) is made only in
+  Studio, EconomyService and SquishRoomService listen only in Studio and check again when they are called,
+  and the client builds nothing outside Studio. `check_shop.py` holds all of that, and the panel's +500 is the
+  only new place tokens are added.
+- **One chord for all four endings**: `EndChord` (`audio/endings/EndChord.wav`), an open chord with no third,
+  played by any ending whose own chord is not in StorySounds, at its own pitch (City Shore 0.89, the Sky
+  Pools 1.19, the Sunken City 0.67, the Flooded Halls 1). `Cinema.sound` takes `alt` and `altPitch` for it.
+  One upload brings all four last notes back. `audio/gen_ending_sfx.py EndChord` writes just that file.
+- **Checks**: `check_shop.py` and `check_story.py`; `blender/mutations/pass28.py` plants 10 bugs and every one
+  is caught.
+
+## The squish room (twenty-seventh pass, 2026-10-05)
+
+From your notes **(you)**: one more thing before testing in Studio; the squish room, behind a door. How it is
+built is mine **(suggested)**.
+
+- **`SquishRoomService`** (ServerScriptService.Services, new) builds a hall with a real slab of every
+  material in MaterialConfig, cloned from ChunkBuilder's templates (visuals and all) and registered with
+  DeformationService like a level's: honey dents, bubble wrap pops, soap crumbles, the Needoh charges your
+  jump. It waits for the templates, picks each material's slab (the most cells that fits 18 by 18), and lays
+  them out in rows across a 104-stud hall, alphabetically, each with its name on a sign on two legs.
+  - **Set into the floor**: each slab's walking surface is flush with the floor, and under it is a pit the
+    shape of all it hangs below, so nothing pokes through and anything that gives way drops you at most
+    6.4 studs onto the pit's floor, from where you jump out. Walls, a ceiling on them, real lamps every 30
+    studs (no Neon).
+  - **Far away**: at (9000, 600, 9000), beyond every level's horizon and the lobby's, closed in, so it is
+    never seen from anywhere else.
+  - **The lifts**: a pink lift cabin in the lobby's clear front-right corner, (38, -35) from the lobby's
+    origin, its door towards the pool, built into the lobby's own folder so it is put away with the lobby
+    during a run; and one at the front of the hall, back to the lobby. Roblox's own prompt ("Ride"), a soft
+    fade on your screen while it moves you (`SquishRoomClient`, new).
+  - **It keeps you**: anyone in the room has `InSquishRoom` set and is left out of the lobby's vote
+    (`HubService.hubPlayers`), so a run never drags you out; while the lobby is away for a run the way back
+    is refused with a word why; a respawn in the room puts you back in it.
+- **Checks**: `blender/check_squishroom.py` (new, in `check_all.py`, the twelfth checker);
+  `blender/mutations/pass27.py` plants 18 bugs and every one is caught.
+
+## Before you test in Studio (passes 18 to 77, pasted on 2026-10-16): tested 2026-10-17
+
+In the order to do it. Each step says what you should see; anything red in Output, or anything that looks wrong,
+is worth sending.
+
+**Set up (once)**
+1. **Paste** the 46 Luau files (the zip has them laid out like the repo; line 2 of each names its place). Every
+   module changed at least once since your last test, so paste them all.
+2. **Sounds**: `EndChord` first (one upload brings back all four endings' last chords), then the other files in
+   `audio/endings`, into SoundService.StorySounds; `needohSquish_1` to `_4` and `lavaCrust_1` to `_4` into
+   MaterialSounds, **deleting the old lavaCrust four first**.
+3. **Delete** `KeepsakeService` and `PromptStyleService` (StarterPlayerScripts/Services).
+4. **ProfileStore** in ServerScriptService, named exactly that; Game Settings, Security, **Enable Studio Access
+   to API Services** (without it nothing is kept between tests). Optional: the Robux ids in `ShopCatalog.lua`, and
+   the badge ids in `ShopCatalog.BADGES` (see **Roblox badges**).
+
+**Press Play, and read Output first**
+5. **PASTE CHECK** (four seconds in): fix anything it lists (missing, the wrong kind of script, an old copy, a
+   sound twice) and play again until it says `everything is in place`. Its lines about the data stores and
+   "not on sale yet" say what this test can and cannot show.
+6. **PASTE CHECK (client)** (six seconds in): `every client module is the current copy`, or the old ones by name.
+7. **The test panel** (F8, or the DEV tab top left): press **Self-test**. The server's half (`SELF-TEST:`) buys,
+   wears and refuses things, tries the second chance and the notes, reads the stores, finds the shelf and your
+   statue, then puts your save back; the client's half (`SELF-TEST (client):`, about ten seconds) opens and
+   closes the shop, the journal, the emote picker, the pause menu and the death card, checks the cursor is free
+   on each, and asks the server for the save, the journal and the leaderboard, and looks at the lobby's level pads
+   and the VIP tag over your head (so press it in the lobby); the server's half also opens and locks Sky Pools
+   through the lobby. Every line should say `pass`.
+   (One expected warning in the server's half: "finished a short run in 0 s, faster than it can be played".)
+
+**Then play**
+8. **First visit**: the welcome's three pages, then the guide's markers (City Shore, Chill, Short, Start). Again:
+   the panel's "First visit again".
+   **Locked levels** (a fresh save): Sky Pools, the Sunken City and the Flooded Halls boarded up, their signs
+   saying what opens them; step on one and the vote card says so. Finish City Shore and Sky Pools opens: back in
+   the lobby the vote card says "Sky Pools is open", with a chime. The panel's "Levels open/locked" opens them all
+   (and locks them again).
+   **The VIP tag**: the panel's "VIP on/off", and a lilac VIP pill over your head; it goes on a level and comes
+   back in the lobby.
+   **Admin**: type `/levels` in chat: every level opens and the vote card says so; again, and they lock as before.
+   **Story**: step on the Story pad, then Start. City Shore, then (after its ending) Sky Pools straight away, and so
+   on, through a short fade to black; LEVEL COMPLETE says "Story 1 of 4. Next: Sky Pools". "Near the end" gets you
+   through each quickly. **The back rooms**: on any level, jump off seven times; the seventh drops you into them
+   (yellow rooms, humming tubes; the first time, the secret's scene on Mrs Venn's notice). Find the door marked WAY OUT and press its prompt. Then in the lobby, walk down the
+   yellow corridor by the back door to its end: it takes you back in (the panel's "Back rooms" does both). Leave
+   from the menu partway and join a new story: it goes on from the level you reached. "Story from the start" on the
+   panel puts it back to City Shore. At the end of the story: "+150 tokens (Story complete)" over the last level's own,
+   and the green ribbon in the shop's Trails (before that, its tile says "Finish the story").
+   **The daily chest**, left of the start pad: open it ("+20 tokens (Daily chest, day 1)", the lid lifts), open it
+   again ("Opened today", and how long until the next); the panel's "Daily: next day", then open it: day 2, 30 tokens.
+   **A hidden cache** on each level, about two thirds along, in a nook off the route (look for the glint): take it,
+   "+25 tokens (Hidden cache)" and a line in the journal; on the next run it is not there for you.
+   **A friend in the run**: the panel's "Friend in runs on/off", then start a run: a few seconds in, the card says
+   "+20%, Running with a friend"; finish it: "+24 tokens (With a friend)" on a medium run in Chill. The pause menu's
+   Invite says "Invites open in the live game" in Studio; in the live game its screen carries the 20% line.
+   **The challenges board**, back left by the daily chest: three challenges written on it, "New ones in ..." at the
+   foot. Do one (say "Finish City Shore"): the pill says "Challenge done", the card says which, the board ticks it
+   green. The panel's "Challenges: new three" puts up a fresh three.
+   **The starter pack**: the shop's Featured tab starts with it ("Once only", R$ 99; pressing it says not on sale yet
+   until its pass id is in). The panel's "Starter pack on/off": "+500 tokens (Starter pack) and the sea glass trail",
+   the trail in Trails to put on, the pack Owned in Passes and gone from Featured; again, and it is all taken back.
+   **The materials**: play City Shore; a soft chime the first time you stand on each material, and at the end
+   "+N tokens (N new materials)". The board beside the challenges counts them with their names; the journal's
+   Materials tab has a page for each. The panel's "Materials: 26 / none", then a run that crosses soap: the last one,
+   "and the swatch trail".
+   **The post box**, beside the start pad: "Post a code", type `harrow bay` (any case, spaces are fine): "+100 tokens
+   (Code HARROWBAY)"; again: "You've posted that code already."; a made-up one: "That code isn't one we know." The
+   panel's "Codes: post again" lets you post it once more.
+9. **The shop** at the kiosk (and from the pause menu): buy and wear a trail, an aura, a footprint (walk), a
+   step sound (walk, listen), an emote (G, then pick it); preview a tile.
+10. **The squish room**: the pink lift in the lobby's front-right corner; walk the slabs, fall through soap or
+    sand and jump out of the pit. Turn round as you arrive: the keepsake shelf, "?" in every cubby on a fresh
+    save; the panel's "All keepsakes" fills it, and the **Keepsakes** count in Roblox's player list goes to 27.
+11. **A run**: a hint the first time on each material; the ending's sounds; "+N tokens"; the way to the shop
+    after the first. In the **Sunken City**, the launch past the end of the street with its light over the
+    water (the rain about 70 seconds in, the thing on the horizon about 95, and the lamp swings to it).
+    In **Sky Pools**, the last stretch: the clouds round the tower go grey, the light drops a little, lightning in
+    the cloud tops; on the slide, it clears under the clouds. In the **Flooded Halls**, look back now and then:
+    the roof lights two bays behind you click, stutter and sink to a glow. The panel's **Near the end** takes you
+    to the last stretch of any run to see these and the endings quickly (that run then counts for nothing).
+12. **Hardcore**: fall after a few checkpoints; the death card's buttons click with the mouse in third person
+    (no Ctrl); Try again, finish, and your time is on the board. A chill finish leaves "your time" at --:--.
+13. **The journal kept**: pick up a letter or a keepsake, leave, join again: still there, already read, and the
+    thing shows as taken.
+14. **The pause menu**: Shop, Emotes and Invite on its bottom row (Invite says it opens in the live game).
+15. **Two players** (Test, Clients and Servers, 2): each window shows one statue, its own, and both names show a
+    Keepsakes count in the player list; leave a run from the pause menu and the lobby has its own sky again; one
+    finishes and resets in the lobby while the other is still on the level, and stays in the lobby, and stepping on
+    Start there says a run is still on. A story with two: the first to finish waits in the lobby and is brought back
+    for the next level when the other finishes.
+16. **Devices**: the Device Emulator (a phone sideways and upright, a tablet), and a controller if you have one
+    (D-pad up journal, D-pad down menu, D-pad right emotes, B closes, the bumpers change shop tabs).
+
+**Afterwards**: `python tools/paste_list.py --mark`, so the next list is exactly what changed since.
+
+## Emotes and the second chance (twenty-sixth pass, 2026-10-05)
+
+From your notes **(you)**: the emotes and the second chance next. How they work is mine **(suggested)**.
+
+- **Emotes** (`EmoteService`, StarterPlayerScripts.Services, new; four poses added to `Poses`): Wave, Sit
+  and squish, Stretch and Spin. A player asks the server (`Emote` remote); EconomyService checks they own it
+  (and not faster than every 0.6 s) and tells every client, which poses that character through the game's
+  own joints (AnimationConstraints, `Poses.drive`), since a joint turned on one client is seen there only.
+  Spin turns the body round on its root joint, so the character itself never moves. Sit and squish lowers
+  the body on its root joint, folds the legs, and puts a pink squishy toy in the hands, squeezed on the beat.
+  Moving ends an emote on every screen (each sees the character move, and your own client says stop at
+  once); none play over an ending's scene.
+  - **The picker**: G, D-pad right, or Emotes in the pause menu (beside Shop, the way in on a phone). A small
+    card at the bottom with a button for each emote you own and More (or Get emotes) for the shop; B or
+    Escape closes it. In the shop an emote tile shows the emote on you, and an owned one's button is Play.
+- **The second chance** (a developer product, 25 R$): a hardcore fall past the first stretch can be undone.
+  Bootstrap notes where you were and your clock before the fall resets them (`noteFall`), and the death card
+  offers it: "Second chance (N)" with some owned, its Robux price otherwise (bought in Roblox's own window and
+  used the moment it lands). Within 45 seconds it is spent and you are set down at your checkpoint with the
+  clock where it was (`TimerService.resume`). **It can never buy a place**: that run is marked, and goes
+  neither on the leaderboard nor down as a best (it still pays its tokens). Fall again and you are on a
+  fresh, fair run from the start. The shop's tile says how many you have.
+- **Checks**: `check_shop.py` and `check_devices.py` hold it all (every emote's pose, owned-only and
+  shown to everyone, let go of and ended by moving, the picker on every device; the chance spent, kept,
+  timed, never a best or a leaderboard place); `blender/mutations/pass26.py` plants 21 bugs and every one is
+  caught.
+
+**To set up**: in the Creator Dashboard, create the **Second chance** developer product (25 R$) and paste its
+id into `ShopCatalog.lua` (`productId`), as with the token packs. Until then the death card offers it only to
+someone who already owns some (in Studio: nobody), and the shop says it is not on sale yet.
+
+## Footprints and step sounds (twenty-fifth pass, 2026-10-05)
+
+From your notes **(you)**: the footprints and step sounds next. How they look and sound is mine
+**(suggested)**.
+
+- **`StepService`** (StarterPlayerScripts.Services, new). Every client draws and plays them for every
+  player within 150 studs, from what the server wrote on the player, so you see other people's prints and
+  hear their steps. A step is every 2.4 studs of ground covered at a walk or a run (not standing, not a
+  launch, not a scene, not the air); the ground under the foot is found with a ray (through water, so
+  nothing floats on the surface).
+  - **Footprints** (Heart steps, Star steps, Honey paw, Bubble sole): a flat print on the surface under each
+    foot, left and right in turn, turned the way you are going, drawn from shapes (two lobes and a
+    diamond, two crossed squares, a pad and four toes, a ring with a glint). Each holds and fades: the honey
+    paw for ten seconds, slowly closing up, the bubble sole fizzing off in under three. At most 90 at once.
+  - **Step sounds** (Crunchy, Gloopy, Poppy, Retro): they SWAP your footstep. Roblox's own (the Running
+    sound) is muted for anyone wearing a pack, and the pack plays at their feet instead, heard nearby.
+    Crunchy is the salt, snow and chocolate takes, Gloopy the honey, Needoh and slime ones, Poppy the bubble
+    wrap (all from SoundService.MaterialSounds, with built-in stand-ins); Retro is built-in blips on a
+    pentatonic scale, so a walk is a little tune, and nothing needs uploading.
+- **`EconomyService`**: footprints and step sounds can be bought, worn and taken off like trails and auras;
+  what you wear is written on you as `Footprint` and `StepSound`, only for what you own.
+- **The shop**: they come off "soon" (only the emotes and the second chance stay); tapping a footprint
+  tile walks four prints out in front of you, a sound tile plays three steps; a pack's button says Use and
+  Stop. Featured adds the Honey paw and Poppy.
+- **Checks**: `check_shop.py` holds it (a shape and a life for every footprint, a pack for every sound,
+  worn only if owned, Roblox's footstep swapped, prints capped and not laid in scenes or on water, Retro
+  needing no upload); `blender/mutations/pass25.py` plants 16 bugs and every one is caught.
+
+## Every screen on every device (twenty-fourth pass, 2026-10-04)
+
+From your notes **(you)**: every button working on PC, phone, tablet and controller, starting with the
+controller fix (the pause menu could not be opened on one). What was found and how it is fixed is mine
+**(suggested)**:
+
+- **A controller can do everything.** The pause menu opens on **D-pad down** (Start is Roblox's own menu)
+  with "Keep running" selected, B closes it. The journal moves from Y to **D-pad up**: Y is Talk, so
+  talking to anyone with a controller used to open the journal over them. It opens with its current tab
+  selected; B closes it. The death card selects "Try again". Every menu lets go of the selection when it
+  closes. The welcome and the journal's note name the right buttons.
+- **A thumb can press everything.** The journal's close (30 to 44) and its tabs (30 to 44 high).
+- **Nothing wider than a phone held upright.** The pause card, the death card's choices, the vote card and
+  the LEVEL COMPLETE banner scale to the screen, capped at their old widths.
+- **Nothing under a notch or a thumb.** The pause menu and the journal keep to the device's safe area. On
+  a touch screen with no keyboard the hardcore clock, the mode and the tooltip move from the bottom right
+  (the jump button) to the top right under the tabs, and the best times from the bottom left (the
+  thumbstick) to the top left.
+- **Checks**: `blender/check_devices.py` (new, in `check_all.py`) holds all of it across every client
+  screen: menus open, select, close and let go on a controller; nothing always-on on X, Y or A; every
+  fixed-size button at least 44 pixels (six exempt, each with its reason); no fixed width over 360 pixels.
+  `blender/mutations/pass24.py` plants 18 bugs and every one is caught.
+
+## The first five minutes (twenty-third pass, 2026-10-04)
+
+From your notes **(you)**: a player should understand what to do and what is going on in their first five
+minutes, with a welcome of some sort. How it is done is mine **(suggested)**, on your earlier rule that
+nothing comes up over the level.
+
+- **`OnboardingService`** (StarterPlayerScripts.Services, new), in the shop's look (it borrows
+  `ShopService.kit`):
+  - **The welcome**, on a first visit only: three pages (what the game is; getting to the end, with the
+    controls for the device you are on, keyboard, touch or controller; what tokens are for), then "Show me
+    how to start" or "I'll look around". Skip works from any page. Thumb-sized buttons, a controller
+    selects the first button and B closes, you stand still while it is open, the cursor is freed.
+  - **The lobby guide**: a bobbing marker over each thing to step on in turn (City Shore, Chill, Short,
+    Start) and one line at the bottom saying why. Walking into a run ends it.
+  - **The hints**: the first time you ever stand on a material, one line at the bottom says what it does
+    (every one of the 27 has one, under 90 characters) and fades after five seconds. They queue, never take
+    a press, never show in the lobby, and each is shown once ever.
+  - **The way to the shop**: after your first finished run, back in the lobby, a marker over the kiosk and
+    one line until you open the shop.
+- **`EconomyService`** keeps what has been shown (`Welcomed`, `Guided`, `Hinted`, `ShopIntro` in the save)
+  from one new remote, `Onboarding`: the client can note those four things and nothing else, a few at a
+  time, and a note can never touch tokens or what is owned. It logs the **onboarding funnel** to the
+  Creator Dashboard: 1 welcome shown, 2 welcome finished, 3 lobby guide finished, 4 first run started, 5
+  first material hint, 6 first run finished, 7 shop after first run. That is where to look to see where new
+  players stop.
+- **Checks**: `check_shop.py` holds it too (a hint for every material, no dashes, the guide pointing at pads
+  the lobby builds, the welcome once, the notes limited, the funnel's seven steps);
+  `blender/mutations/pass23.py` plants 21 bugs and every one is caught.
+
+## The shop and the economy (twenty-second pass, 2026-10-04)
+
+The game is meant to make money, so it has a shop now. The design and every decision behind it are in
+`docs/superpowers/specs/2026-10-04-shop-and-economy-design.md`. From your notes **(you)**: a shop in the
+bold style of the reference reel; tokens earned by finishing levels, with Robux packs; ProfileStore for the
+saves; footprints, trails, sound packs, passes, auras and emotes; every button working on PC, phone,
+tablet and controller; nothing dupable. How each is done is mine **(suggested)**.
+
+- **`ShopCatalog`** (ReplicatedStorage.Shared, new): every item, its tab, its price in tokens or Robux, its
+  colours, the token packs, what a run pays (`REWARD`), and `wear`, the one builder for trails and auras
+  (the server uses it for what you own, the shop for its try-on). Prices live here and nowhere else.
+- **`EconomyService`** (ServerScriptService.Services, new): one session-locked ProfileStore profile per
+  player (tokens, owned, worn, the welcome flag, tokens earned, recent Robux purchase ids). Studio saves to
+  its own store (`PlayerData_Studio`) and gives a fresh Studio save 1000 tokens to test with; the live game
+  saves to `PlayerData`. The client can only ask (`buy`, `equip`, `unequip`, with an item id), one request
+  at a time. Tokens go up in two places only: a finished run the server watched (Short 10, Medium 20, Long
+  30; Hardcore x1.5; a new hardcore best +10; 2x pass doubles; nothing for a run faster than 45 / 90 / 135
+  s), and a Robux token pack, granted once per purchase id and confirmed to Roblox only after the save
+  holding it. Every token earned and spent is logged to the Creator Dashboard (economy analytics).
+- **`ShopService`** (StarterPlayerScripts.Services, new): the shop in look A, tactile chunky. Tabs,
+  a grid of tiles with drawn icons, squishy price buttons that press down and spring back, a one-tap
+  confirm, a bubble-wrap pop when you buy, "+20 tokens" at the end of a run, a try-on for trails and
+  auras, a VIP tag in chat. Every device: inside the safe area, columns by width, thumb-sized buttons,
+  controller selection with the bumpers for tabs and B to close, Escape to close, your character paused
+  while it is open.
+- **The kiosk** (`HubService.buildKiosk`): a striped seaside booth left of the spawn, opposite the viewer,
+  with Roblox's own "Shop" prompt, four posts under the awning, the sign standing on it, a jar of tokens and
+  a real lamp. **The pause menu** has a Shop button (the way in from a run, and on a phone). The cursor is
+  freed while the shop is open (`ViewModeService`). `BestTimeService.submit` now says when a run is a new
+  best.
+- **Built and marked soon** (shown with their price, not yet for sale): footprints, sound packs, emotes and
+  the Hardcore second chance. Trails, auras, the passes and the token packs work now.
+- **Checks**: `blender/check_shop.py` (new, in `check_all.py`) holds the price list, the anti-dupe rules,
+  the device rules and the wiring; `blender/mutations/pass22.py` plants 23 bugs and every one is caught.
+
+**To set up**:
+1. Get **ProfileStore** (by loleris: Creator Store, or github.com/MadStudioRoblox/ProfileStore) and put
+   the ModuleScript in ServerScriptService, named exactly `ProfileStore`. Without it the shop works but
+   nothing is saved, and Robux purchases are refused outside Studio.
+2. Game Settings, Security: turn on **Enable Studio Access to API Services**, to test saving in Studio.
+3. Creator Dashboard, your experience, Monetization: create the passes (2x tokens, VIP) and the developer
+   products (the four token packs), and paste each id into `ShopCatalog.lua` (`passId`, `productId`). Until
+   then those tiles say "not on sale yet".
 
 ## Levels and the lobby
 
@@ -2145,10 +4264,10 @@ from that.
 
 ### Open for this level
 
-- Nothing is seen in Studio yet: the look of the water and the depth tinting, the parts count, the
+- Tested in Studio by 2026-10-17, with every pass through the ninety-second: the look of the water and the depth tinting, the parts count, the
   thing's size and speed, the surfacing and whether it is fair, the stair, the tunnel, the flat,
   the face in the mirror, the whirlpool ride and the light.
-- **Fourteenth pass, untested:** Output should show `SunkenCityClient: running, fourteenth pass`
+- **Fourteenth pass, tested by 2026-10-17:** Output should show `SunkenCityClient: running, fourteenth pass`
   (and `CityShoreClient: running, fourteenth pass`). Ride the drain to the end: out through the
   OUTFALL 3 door, down the culvert on your back, set down in the pumping station with the camera on
   your time card, then LEVEL COMPLETE and six seconds before the lobby. Swim at a shoal and watch it
@@ -2156,53 +4275,53 @@ from that.
   bubbles. Then the other two levels: dive at City Shore (head first, the scene, the street lamp),
   slide at Sky Pools (the scene, arms up), and talk to Sal, Pip, Maren, Dev, Mrs Okafor and Rudy.
   Whether Mrs Okafor sits on her cushion rather than in it or over it is worth a look.
-- **Thirteenth pass, untested:** FIRST paste `src/Client/Bootstrap.client.lua` over the Bootstrap
+- **Thirteenth pass, tested by 2026-10-17:** FIRST paste `src/Client/Bootstrap.client.lua` over the Bootstrap
   LocalScript in StarterPlayerScripts (the place's copy predates the Sky Pools and Sunken City clients).
   Output should then show `[client] started SunkenCityClient` and `SunkenCityClient: running,
   thirteenth pass`. Then: animals; the drain's four shots; the fisherman sitting; break the glass and
   watch the attendant; and if the report still says NO Ferris wheel, it now says why.
-- **Twelfth pass, untested:** press Play and read Output first. The server now says, in Studio,
+- **Twelfth pass, tested by 2026-10-17:** press Play and read Output first. The server now says, in Studio,
   exactly why SunkenCityClient is or is not running (search Output for `SunkenCity`); each client
   that runs prints `SunkenCityService: SunkenCityClient is running for ...`. Then: break the glass and
   swim in the flood; ride the drain (the rider should flail even without the client); in Sky Pools,
   look at the soda chunk through a pool or a fall.
-- **Eleventh pass, untested:** play in Studio and read the panel at the top left first: it says
+- **Eleventh pass, tested by 2026-10-17:** play in Studio and read the panel at the top left first: it says
   whether SeaRig was found (and if not, why), how many animals there are and how many are meshes,
   and what has failed. Output starts with `SunkenCityClient: running, eleventh pass`; if that line
   is missing, the client is not running at all. Then: tap the window seven times and stand in the
   gallery (it should fill over 8 seconds, then fade out and in at the checkpoint); ride the drain
   (camera, bars, flailing, shouting). Import the five `Treasure_*` meshes.
-- **Tenth pass, untested:** first, the two report lines (the server's `SunkenCityService: water
+- **Tenth pass, tested by 2026-10-17:** first, the two report lines (the server's `SunkenCityService: water
   at...` and, ten seconds in, the client's `SunkenCityClient: drawing the thing...`): together they
   say how many animals were placed, how many are drawn and from what, and which meshes were refused
   and why. Then: whether the flood now pours and rises; the landmarks' heights and colours from the
   route; the people (Output warns if one could not be built as a character). Import the new meshes
   (`Landmark_*`, `Boat_*`) and paste `SunkenNPCs` (now `Townsfolk`) as a ModuleScript next to SunkenCityService.
   SunkenCityService has 187 locals live at its top level: new tuning goes into its tables.
-- **Ninth pass, untested:** the serpent, above all whether it reads from the route through the
+- **Ninth pass, tested by 2026-10-17:** the serpent, above all whether it reads from the route through the
   water and whether it turns round cleanly at each end of its patrol; import `Sea_Serpent` WITH its
   bones. The client's report says `drawing the thing (the serpent mesh)` when it is. If anything
   pops in or freezes at a distance, the ranges are the client's `SEEN` table.
-- **Eighth pass, untested:** the client's report line now ends with SeaRig's summary, which says
+- **Eighth pass, tested by 2026-10-17:** the client's report line now ends with SeaRig's summary, which says
   which meshes are drawn and why any are not; the server's build line says whether the Ferris wheel
   stood. Import the 19 FBX files first (`Sea_*`, `Ferris_*`, `Jellyfish_*`, each WITH its Bone
   children). To judge by eye: whether the animals swim convincingly (the bend amplitudes are in the
   client's `SWIM` table, the kelp's in `KELP`), the wheel's size and speed from the route
   (`FERRIS`), and how the jellyfish bounce feels (`MaterialConfig.Jellyfish`). Top-level locals: the
   client 179, the service 182, of Luau's 200.
-- **Seventh pass, untested:** the two report lines above are the first thing to read. The part
+- **Seventh pass, tested by 2026-10-17:** the two report lines above are the first thing to read. The part
   count grows again (deep facades, vehicles, furniture, reef); `FACADE_FLOORS` and `DETAIL_NEAR` are
   the dials. SunkenCityService has 178 locals live at its top level, near Luau's 200: new tuning
   numbers go into its tables (`STAIR`, `TAP`, `SCHEDULE`, `ROADSIDE`, `GULL`), not new locals.
 - In the recording, 0.3 seconds into the second run the view went a flat dark grey for the rest of
   the video while the top bar still drew: the 3D view stopped rendering. Not reproduced here and
   not explained yet; the Output from that moment is what would say.
-- **Sixth pass, untested:** whether the ice now reads from above over the water and over Sky
+- **Sixth pass, tested by 2026-10-17:** whether the ice now reads from above over the water and over Sky
   Pools' clouds; the kelp's look and cost (up to about 1,700 client parts on a long run, only the
   near ones moving; `KELP_NEAR` in SunkenCityClient is the dial); the flood; the thing at the window.
   Slime, honey and jello soda are still Glass at 0.1 to 0.3 transparency: they read, but if any of
   them still looks thin from above, the same change as ice is the fix.
-- **Fifth pass, untested:** the part count. The last log said 6,494; the lanterns, clock tower,
+- **Fifth pass, tested by 2026-10-17:** the part count. The last log said 6,494; the lanterns, clock tower,
   skyscraper tops, roofs and containers add roughly a thousand to fifteen hundred, so expect about
   7,500 to 8,000. `DETAIL_NEAR` and `DETAIL_MID` are still the dials.
 - Whether the thing on the horizon reads through the haze at 1300 studs. To bring it nearer, lower
@@ -2345,9 +4464,9 @@ its own, people and a part in the story **(you)**. The gate chamber and the endi
 
 ### Open for this level
 
-- The fifteenth pass is untested in Studio: the flume as a scene, the dip, the gate chamber and the
+- The fifteenth pass is tested in Studio (by 2026-10-17): the flume as a scene, the dip, the gate chamber and the
   whole last scene, the three people, and the frame rate in the chamber.
-- The latest round is untested in Studio (see State above).
+- Every round through the ninety-second pass is tested in Studio (2026-10-17).
 - Part count has grown a lot: the flume is about 900 parts and the interior pass adds a few
   hundred more. Watch frame rate in the last chamber and on Long runs; `FLUME_SEGMENTS` is the
   first thing to lower.
