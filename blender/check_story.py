@@ -321,7 +321,10 @@ for needle, why in (
 ):
     if needle not in BOOT:
         fail(why)
-linger = re.search(r"sceneState\[player\] = nil\s*task\.wait\(([\d.]+)\)\s*if player\.Parent then\s*HubService\.returnToHub\(player\)", BOOT)
+# (A story player goes on through storyStep instead, after the same hold: its next level, or the lobby to wait.)
+linger = re.search(r"sceneState\[player\] = nil\s*task\.wait\(([\d.]+)\)\s*(?:--[^\n]*\n\s*)*local going = storyRun\s*"
+                   r"if going and going\.players\[player\] and player\.Parent then\s*storyStep\(player\)\s*return\s*end\s*"
+                   r"if player\.Parent then\s*HubService\.returnToHub\(player\)", BOOT)
 if not linger:
     fail("this check can no longer find the return to the lobby after a run")
 elif float(linger.group(1)) < 6:
@@ -409,7 +412,7 @@ if "if habit and now > npc.talking then" not in TOWNS or "npc.talking = os.clock
 # WHAT YOUR CHARACTER CRIES OUT ON THE WAY DOWN THE DRAIN: lettered like a voice, and slow enough to read.
 cry = SUNKEN[SUNKEN.find('gui.Name = "DrainCry"'):]
 cry = cry[:cry.find("-- THE RIDE IS SEEN")]
-if "Enum.Font.PermanentMarker" not in cry or "Enum.Font.Kalam" not in cry:
+if "Style.FONT.shout" not in cry or "Style.FONT.murmur" not in cry:
     fail("the drain's cries are no longer lettered like a voice")
 waits = [float(w) for w in re.findall(r"task\.wait\(if quiet then ([\d.]+) else ([\d.]+)\)", cry)[0]] \
     if re.search(r"task\.wait\(if quiet then ([\d.]+) else ([\d.]+)\)", cry) else []
@@ -478,7 +481,7 @@ for needle, why in (
     ("pcall(dress, model, look)", "nobody is dressed"),
     ('feature(model, head, "Hair"', "nobody has hair"),
     ("desc.HeightScale = scale[1]", "everyone is built to the same proportions"),
-    ('turn(npc, "RightShoulder", CFrame.Angles(0.6, 0, 0.12), 0.45)', "nobody talks with their hands"),
+    ('npc.model:SetAttribute("Gesture", gestureFor(npc, text))', "nobody talks with their hands"),
 ):
     if needle not in TOWNS:
         fail(why)
@@ -545,7 +548,8 @@ ALIASES = {"buttonClick": "button_clicky", "buttonLinear": "button_linear", "but
            "buttonRelease": "button_release", "buttonCombo": "button_combo", "buttonCircuit": "button_circuit"}
 for event in empty:
     stem = ALIASES.get(event, event)
-    if not ((AUDIO_DIR / "materials" / ("%s_1.wav" % stem)).exists() or (AUDIO_DIR / "buttons" / ("%s_1.wav" % stem)).exists()):
+    if not ((AUDIO_DIR / "materials" / ("%s_1.wav" % stem)).exists() or (AUDIO_DIR / "buttons" / ("%s_1.wav" % stem)).exists()
+            or any((AUDIO_DIR / "sheets").glob("%s_x[0-9]*.wav" % stem))):
         fail("%s has no sound: no ids, and no generated takes in audio/" % event)
 if 'SoundService:FindFirstChild("MaterialSounds")' not in AUDIO:
     fail("AudioService never looks in SoundService.MaterialSounds, so the generated takes have to be pasted as ids")
@@ -600,6 +604,9 @@ for text in readable_secrets:
     if "--" in text or "—" in text or "–" in text:
         fail("a secret's words have a dash in them: %r" % text)
 used_ids = set(re.findall(r'"(siren|photograph|marsh|locker|boards)"', STORY))
+# The sixth is found by falling, not on a level: Bootstrap reveals it in the back rooms.
+if 'pcall(Interactables.reveal, player, "backRooms", eye, focus, anchor)' in BOOT:
+    used_ids.add("backRooms")
 for sid, _ in secret_ids:
     if sid not in used_ids:
         fail("the secret %s is never put anywhere, so nobody can find it" % sid)
@@ -631,8 +638,40 @@ for needle, why in (
 ):
     if needle not in STORY_CLIENT:
         fail(why)
-if STORY_CLIENT.count("Cinema.begin({ hush = false })") < 2:
-    fail("a secret's scene (or the look under the boards) would silence the level like an ending")
+for scene_fn, label in (("pry", "the bar at work"), ("moment", "a secret found"), ("peek", "the look under the boards"),
+                        ("caught", "being caught in the back rooms")):
+    body = STORY_CLIENT[STORY_CLIENT.find("local function %s(" % scene_fn):]
+    body = body[:body.find("\nend\n")]
+    if "Cinema.begin({ hush = false })" not in body:
+        fail("a secret's scene (%s) would silence the level like an ending" % label)
+# THE HIDDEN CACHES: one for each of the four levels, their words without a dash; each a thing standing on its floor,
+# glinting, taken once a save for its tokens (EconomyService.foundCache) with a line in the journal, and off your
+# screen from then on (marked like a letter); put in a nook of its own two thirds along, or beside the route.
+caches_block = table_block(INTERACT, "local CACHES: { [number]: Cache } = {") or ""
+cache_levels = sorted(int(v) for v in re.findall(r"^\t\[(\d+)\] = \{ title = ", caches_block, re.M))
+if cache_levels != [1, 2, 3, 4]:
+    fail("the hidden caches are not one for each of the four levels: %s" % cache_levels)
+for text in strings(caches_block):
+    if "--" in text or "\u2014" in text or "\u2013" in text:
+        fail("a hidden cache's words have a dash in them: %r" % text)
+cache_fn = INTERACT[INTERACT.find("function Interactables.cache("):INTERACT.find("-- A LITTLE GLINT on something worth walking over to")]
+for needle, why in (
+    ("cf * CFrame.new(0, spec.size.Y / 2, 0)", "a hidden cache does not stand on its floor"),
+    ("Interactables.glint(box,", "a hidden cache has nothing to catch the eye"),
+    ('Interactables.mark(box, "note:" .. spec.title)', "a hidden cache already taken shows again next time"),
+    ("pcall(save.foundCache, player, levelId)", "a hidden cache pays nothing"),
+    ('Interactables.take(player, { title = spec.title, body = spec.body }, box, "note")', "a hidden cache leaves no line in the journal"),
+):
+    if needle not in cache_fn:
+        fail(why)
+for needle, why in (
+    ("local hidden = nookNear(0.66)", "no hidden cache is put in a nook"),
+    ("pcall(nookCache, folder, hidden, level.levelId)", "the hidden cache's nook is left empty"),
+    ("pcall(Interactables.cache, folder, besideRoute(cap, -1, 1.2), level.levelId)", "a level with no room for a nook has no hidden cache"),
+):
+    if needle not in STORY:
+        fail(why)
+
 if 'ensureRemoteEvent(remoteEventsFolder, "StoryMoment")' not in BOOT:
     fail("Bootstrap never makes the StoryMoment remote")
 
@@ -673,9 +712,10 @@ if 'sfxFallback = "claySquish"' in needoh_block and not (fallback_pitch and floa
 if "pitch = pitch or matDef.sfxFallbackPitch" not in AUDIO:
     fail("AudioService plays a borrowed sound at the lender's pitch (sfxFallbackPitch is ignored)")
 for event in ("needohSquish", "lavaCrust"):
-    for take in range(1, 5):
-        if not (AUDIO_DIR / "materials" / ("%s_%d.wav" % (event, take))).exists():
-            fail("audio/materials/%s_%d.wav is missing" % (event, take))
+    # Four takes, as single files or (since the ninety-sixth pass) as one sheet of four.
+    singles = all((AUDIO_DIR / "materials" / ("%s_%d.wav" % (event, take))).exists() for take in range(1, 5))
+    if not singles and not (AUDIO_DIR / "sheets" / ("%s_x4.wav" % event)).exists():
+        fail("audio has neither %s_1 to _4 nor a sheet %s_x4" % (event, event))
 
 # THE LAVA IS ABOUT TO GO: a glow that breathes, embers and heat haze off it, bubbles that swell and
 # spit, spurts where you stand, and a fountain when it gives way.
@@ -734,6 +774,538 @@ for needle, why in (
 ):
     if needle not in (SHORE or ""):
         fail(why)
+
+# ONE CHORD FOR ALL FOUR: each ending's last chord falls back on EndChord at its own pitch, so one upload
+# brings all four back (the four would not all upload).
+if not (AUDIO_DIR / "endings" / "EndChord.wav").exists():
+    fail("audio/endings/EndChord.wav is missing (python audio/gen_ending_sfx.py EndChord)")
+if "local alt = options and options.alt and folder and folder:FindFirstChild(options.alt)" not in (CINEMA or ""):
+    fail("Cinema has no stand-in from another story sound, so a missing chord is silence")
+for level, text, name in (("City Shore", SHORE or "", "ShoreChord"), ("the Sky Pools", SKY_CLIENT, "PoolsChord"),
+                          ("the Sunken City", SUNKEN_CLIENT, "SunkenChord")):
+    if not re.search(r'Cinema\.sound\("%s", [^\n]*alt = "EndChord", altPitch = [\d.]+' % name, text):
+        fail("the ending of %s has no EndChord to fall back on" % level)
+if 'sound("HallsChord", nil, 0.7, 1, false) or sound("EndChord", nil, 0.7, 1, false)' not in HALLS_CLIENT:
+    fail("the ending of the Flooded Halls has no EndChord to fall back on")
+
+# ===================================================================== the journal, kept between sessions
+#
+# What you pick up is saved (EconomyService.keepEntry, called by Interactables.take on the server, as the story
+# wrote it), capped and never twice; read back once the save is ready (JournalState), with the reader's name
+# put in; added on the client quietly and already read; and anything out in the world that is already in the
+# journal shows as taken.
+ECONOMY_SRC = read("Server", "Services", "EconomyService.lua") or ""
+keep = ECONOMY_SRC[ECONOMY_SRC.find("function EconomyService.keepEntry("):ECONOMY_SRC.find("-- ===== THE EMOTES =====")]
+if not keep:
+    fail("EconomyService does not keep the journal between sessions")
+for needle, why in (
+    ("Journal = {} :: { any }", "the save has no journal"),
+    ("if #journal >= JOURNAL_MOST then\n\t\treturn", "the journal in the save is not capped"),
+    ("if kept.id == id then\n\t\t\treturn", "the same thing can be kept twice"),
+    ('if typeof(id) ~= "string" or #id > 160 then', "a journal id is not checked"),
+    ("kept[field] = string.sub(value, 1, 4000)", "a journal entry's words are not capped"),
+    ("if last and now - last < 0.5 then\n\t\treturn { ready = false }", "the journal can be asked for without end"),
+    ('entry.body = (entry.body:gsub("%%s", name))', "the reader's name is not put back into the letters"),
+    ("journalState.OnServerInvoke = onJournal", "nothing answers JournalState"),
+):
+    if needle not in ECONOMY_SRC:
+        fail("EconomyService: " + why)
+if 'ensureRemoteFunction(remoteFunctionsFolder, "JournalState")' not in BOOT:
+    fail("Bootstrap never makes the JournalState remote, so the journal is never read back")
+take = INTERACT_EARLY[INTERACT_EARLY.find("function Interactables.take("):INTERACT_EARLY.find("Players.PlayerRemoving")]
+for needle, why in (
+    ("pcall(save.keepEntry, player, { id = id, kind = sort, title = entry.title, body = entry.body,",
+     "what is taken is not kept between sessions, or kept with the first reader's name in it"),
+):
+    if needle not in take:
+        fail("Interactables: " + why)
+for needle, why in (
+    ('Interactables.mark(sheet, "note:" .. entry.title)', "a letter on the ground is not marked with its journal id"),
+    ('Interactables.mark(model, "keepsake:" .. entry.thing)', "a keepsake is not marked with its journal id"),
+    ('CollectionService:AddTag(object, "JournalThing")', "nothing is tagged for the client to show as taken"),
+    ('count = math.max(count, before + (if kept["secret:" .. noteTitle] then 0 else 1))',
+     "a secret's card counts only this session's secrets"),
+):
+    if needle not in INTERACT_EARLY:
+        fail("Interactables: " + why)
+# THE TEST PANEL CAN FILL THE SHELF AND EMPTY THE JOURNAL (Studio only, through onDev): every keepsake taken as
+# if picked up, quietly, with its words and where it came from; and the saved journal emptied.
+DEV_PANEL = read("Client", "Services", "DevPanelClient.lua") or ""
+for needle, why in (
+    ('{ action = "keepsakes", text = "All keepsakes" }', "the test panel cannot fill the keepsake shelf"),
+    ('{ action = "journal", text = "Clear journal (rejoin)" }', "the test panel cannot empty the journal"),
+):
+    if needle not in DEV_PANEL:
+        fail("DevPanelClient: " + why)
+for needle, why in (
+    ('elseif action == "keepsakes" then\n\t\ttask.spawn(giveAllKeepsakes, player)', "All keepsakes does nothing"),
+    ('elseif action == "journal" then', "Clear journal does nothing"),
+    ("\t\tdata.Journal = {}\n", "Clear journal does nothing"),
+    ("{ material = item.material, from = item.from }, true)", "All keepsakes fills the corner with 27 lines"),
+):
+    if needle not in ECONOMY_SRC:
+        fail("EconomyService: " + why)
+if "line = entry.line, from = entry.from" not in INTERACT_EARLY:
+    fail("Interactables: the keepsake list leaves out each one's words, so the test panel's keepsakes are empty")
+
+# THE COLLECTION, SHOWN TO EVERYONE: a Keepsakes column in Roblox's own player list (leaderstats), counted from
+# the saved journal's keepsakes only, set on joining, raised the moment one is picked up, and right again after
+# the test panel empties the journal or the self-test puts the save back.
+show = ECONOMY_SRC[ECONOMY_SRC.find("local function showCollection("):]
+show = show[:show.find("\nend\n")]
+for needle, why in (
+    ('stats.Name = "leaderstats"', "the collection is not in Roblox's player list (leaderstats, exactly)"),
+    ('value.Name = "Keepsakes"', "the player list's column is not Keepsakes"),
+    ('if kept.kind == "keepsake" then\n\t\t\tcount += 1', "the player list counts more than the keepsakes"),
+):
+    if needle not in show:
+        fail("EconomyService: " + why)
+for needle, why in (
+    ("\tshowCollection(player)\n\tif not ready.Data.Welcomed then", "the collection is not shown on joining"),
+    ('\tif kept.kind == "keepsake" then\n\t\tshowCollection(player)\n\tend\n', "a keepsake picked up does not raise the count"),
+    ("\t\tdata.Journal = {}\n\t\tshowCollection(player)\n", "the count stays up after the journal is emptied"),
+    ("\tlastNote[player] = realNote\n\tshowCollection(player)\n", "the count can be wrong after the self-test"),
+):
+    if needle not in ECONOMY_SRC:
+        fail("EconomyService: " + why)
+
+if 'Interactables.mark(paper, "note:" .. entry.title)' not in STORY:
+    fail("StoryService: a notice board's note is not marked with its journal id")
+for needle, why in (
+    ("read = data.restored == true", "a journal read back from last time lights the badge up again"),
+    ("data.quiet = true\n\t\t\t\t\tdata.restored = true", "a journal read back from last time is announced again"),
+    ('functions:WaitForChild("JournalState", 20)', "the journal is never asked for"),
+    ('CollectionService:GetInstanceAddedSignal("JournalThing"):Connect(hideIfKept)',
+     "things already in the journal are not shown as taken when they come into view"),
+    ("task.spawn(readBack)", "the journal is never read back"),
+):
+    if needle not in JOURNAL:
+        fail("JournalService: " + why)
+
+# IMPACT FRAMES, SPEED LINES AND THOUGHTS (Cinema, 2026-10-16): an impact frame is two frames in black and white,
+# a soft flash (never full white: a beat, not a strobe), speed lines and a punch in; speed lines are drawn every frame
+# the camera is; a thought is written out over a head. Cleared away with the scene.
+impact_fn = CINEMA[CINEMA.find("function Cinema.impact("):CINEMA.find("function Cinema.think(")]
+for needle, why in (
+    ("effect.Saturation = -1", "an impact frame is not black and white"),
+    ("current.kick = math.max(current.kick, 9 * s)", "an impact frame does not punch in"),
+    ("current.burst = math.max(current.burst, math.min(1, 0.9 * s))", "an impact frame has no speed lines"),
+):
+    if needle not in impact_fn:
+        fail("Cinema: " + why)
+flash = re.search(r"current\.flash\.BackgroundTransparency = ([\d.]+)", impact_fn)
+if not flash or float(flash.group(1)) < 0.4:
+    fail("Cinema: an impact frame's flash is too near full white (a strobe, not a beat)")
+for needle, why in (
+    ("\tdrawLines(current, dt)\n", "the speed lines are never drawn"),
+    ("camera.FieldOfView = math.max(8, fov - kick)", "an impact frame's punch in is never seen"),
+    ("\tif current.impactFx then\n\t\tcurrent.impactFx:Destroy()", "an impact frame's colour is left on after the scene"),
+    ("TweenService:Create(words, TweenInfo.new(length / 30, Enum.EasingStyle.Linear), { MaxVisibleGraphemes = length }):Play()",
+     "a thought is not written out as it is thought"),
+):
+    if needle not in CINEMA:
+        fail("Cinema: " + why)
+
+# A BODY THAT ACTS (Poses): the dive pushes off and is buffeted; prying, pondering, startled, peering.
+for pose in ("pry", "ponder", "startle", "peer"):
+    if "function Poses.%s(name: string, t: number, w: number, r6: boolean): CFrame?" % pose not in POSES:
+        fail("Poses: there is no %s for a secret's scene" % pose)
+dive_fn = POSES[POSES.find("function Poses.dive("):POSES.find("function Poses.sled(")]
+for needle, why in (
+    ("local push = 1 - math.clamp(t / 0.32, 0, 1)", "the dive does not push off the board"),
+    ("local buffet = close * math.clamp((t - 1.8) / 0.6, 0, 1)", "the dive is a statue in the wind"),
+):
+    if needle not in dive_fn:
+        fail("Poses: " + why)
+
+# CITY SHORE'S DIVE, HIT LIKE AN ACTION GAME: an impact frame leaving the board, through the gulls and into the
+# water; speed lines down the drop; wind streaks and air trails; the body rolled and yawed by the wind.
+for needle, why in (
+    ("\t\t\t\tCinema.impact(1)\n", "leaving the board is not hit"),
+    ("\t\t\t\tCinema.impact(0.8)\n", "bursting through the gulls is not hit"),
+    ("\t\tCinema.impact(1.4)\n", "hitting the water is not hit"),
+    ("Cinema.speedLines(0.75)", "the drop has no speed lines"),
+    ('trail.Name = "DiveAirTrail"', "no air trails off the hands and feet"),
+    ("streaks.Rate = if not splash and t > 1.5 then 90 else 0", "no wind streaking past in the fall"),
+    ("CFrame.Angles(-math.pi * 0.95 * over, yaw, roll)", "the diver is not buffeted by the wind"),
+    ("\t\t\tfor _, made in ipairs({ a0, a1, trail }) do\n\t\t\t\ttable.insert(current.held, made)",
+     "the air trails are left on the character after the dive"),
+    # THE DIVER ACTS, AND THE DROP SHOWS WHERE IT IS GOING (the ninety-second pass): what they think off the board,
+    # turning over and with the water coming; the drop looks down past them at the sea, not up at the sky; and their
+    # face, close, on the way down.
+    ('think("brave", "Okay. Don\'t look down.", 1.8)', "the diver thinks nothing as they leave the board"),
+    ('think("looked", "I looked down.", 1.6)', "the diver thinks nothing as they turn over and see the drop"),
+    ('think("arms", "Arms together. Arms together!", 2)', "the diver thinks nothing with the water coming"),
+    ("Cinema.point(CFrame.lookAt(eye, here - Vector3.new(0, 22, 0), current.facing)",
+     "the drop looks up at the sky, away from where they are going"),
+    ('shot("face")', "the diver's face is never seen on the way down"),
+):
+    if needle not in SHORE:
+        fail("CityShoreClient: " + why)
+if "here + Vector3.new(0, -16, 0) + current.facing * 5 + side * 2" in SHORE:
+    fail("CityShoreClient: the drop is shot from under the diver looking up at the sky again")
+for words in re.findall(r'think\("\w+", "([^"]+)"', SHORE):
+    if "--" in words or "—" in words or "–" in words:
+        fail("CityShoreClient: a thought has a dash in it: %r" % words)
+
+# THE BAR SEEN AT WORK, AND YOU IN A SECRET'S SCENE: every secret has what you think before and after (no dashes);
+# the bar's first opening is shown worked (the server opens it only on the last tug, the same length on both
+# sides); the scenes pose you (prying, startled, pondering, peering), put the bar in your hands and back.
+secrets_block = INTERACT[INTERACT.find("Interactables.SECRETS = {"):INTERACT.find("local TOTAL = ")]
+secret_starts = [(m.group(1), m.start()) for m in re.finditer(r"^\t(\w+) = \{ order = \d+,", secrets_block, re.M)]
+for index, (secret_id, start) in enumerate(secret_starts):
+    entry = secrets_block[start:secret_starts[index + 1][1] if index + 1 < len(secret_starts) else len(secrets_block)]
+    think = re.search(r'think = \{ "([^"]+)", "([^"]+)" \}', entry)
+    if not think:
+        fail("Interactables: the secret %s has nothing for you to think" % secret_id)
+    else:
+        for text in think.groups():
+            if "--" in text or "\u2014" in text or "\u2013" in text:
+                fail("Interactables: a thought has a dash in it: %r" % text)
+open_fn = INTERACT[INTERACT.find("local function openable("):INTERACT.find("function Interactables.locker(")]
+for needle, why in (
+    ('remote:FireClient(player, "pry", { at = host.Position, object = object,', "the bar is never seen at work"),
+    ("wait = PRY_SECONDS", "the thing flies open before the bar has touched it"),
+    ("task.delay(wait, function()\n\t\t\t\ton.open(player)", "the thing flies open before the bar has touched it"),
+):
+    if needle not in open_fn:
+        fail("Interactables: " + why)
+if INTERACT.count("\t\tsecret = ") < 4:
+    fail("Interactables: a thing the bar opens does not say what is in it")
+if "think = if secret.think then secret.think[2] else nil" not in INTERACT:
+    fail("Interactables: what you make of a secret is never sent")
+server_pry = re.search(r"local PRY_SECONDS = ([\d.]+)", INTERACT)
+client_pry = re.search(r"local PRY_SECONDS = ([\d.]+)", STORY_CLIENT)
+if not (server_pry and client_pry) or server_pry.group(1) != client_pry.group(1):
+    fail("StoryClient: the bar's scene and the server disagree on how long the prying takes")
+for needle, why in (
+    ('elseif kind == "pry" and typeof(data) == "table" then\n\t\t\t\tpry(data)', "the bar's scene is never played"),
+    ('\tact("pry")\n', "you do not work the bar"),
+    ('\t\t\tCinema.impact(0.9)\n\t\t\tact("startle")\n', "you do not jump back when it gives (or it giving is not hit)"),
+    ('if not again and not (acting.now and acting.now.pose == "ponder") then\n\t\tact("ponder")', "you do not stop to work out what you have found"),
+    ("Cinema.think(character, data.think, 3.4)", "what you make of a secret is not over your head"),
+    ('\tact("peer")\n', "you do not lean over the gap"),
+    ("\tact(nil)\n\tbarInHands(false)\n", "the bar and your pose are not given back when a scene ends"),
+):
+    if needle not in STORY_CLIENT:
+        fail("StoryClient: " + why)
+
+# THE PEOPLE TELL IT WITH THEIR BODIES (2026-10-16): every line comes with a gesture, chosen line by line (TOLD),
+# played by every client on their joints (StoryClient, Poses.tell) with whichever hand is not holding something.
+# It used to be one hand out and back, and only for the people with nothing in their hands: most of them stood still.
+gestures_lua = re.search(r"^Poses\.GESTURES = \{ (.*?) \}", POSES, re.M)
+known = re.findall(r'"(\w+)"', gestures_lua.group(1)) if gestures_lua else []
+if len(known) < 8:
+    fail("Poses: there are %d gestures to tell a story with" % len(known))
+gesture_fn = POSES[POSES.find("local function gestureAt("):POSES.find("function Poses.tell(")]
+for g in known:
+    if g != "explain" and 'gesture == "%s"' % g not in gesture_fn:
+        fail("Poses: the gesture %s is named and never made" % g)
+lines_block = TOWNS[TOWNS.find("local LINES: {"):TOWNS.find("-- HOW EACH LINE IS TOLD")]
+told_block = TOWNS[TOWNS.find("local TOLD: {"):TOWNS.find("-- HOW LONG anything said")]
+told = {name: re.findall(r'"(\w+)"', body) for name, body in re.findall(r"^\t(\w+) = \{ (.*?) \},", told_block, re.M)}
+said_by = {name: re.findall(r'^\t\t"(?:[^"\\]|\\.)*",', body, re.M)
+           for name, body in re.findall(r"^\t(\w+) = \{\n(.*?)\n\t\},", lines_block, re.M | re.S)}
+if not said_by or not told:
+    fail("this check can no longer read the townsfolk's lines or how each is told")
+tally = {}
+for name, lines in said_by.items():
+    how = told.get(name)
+    if how is None:
+        fail("Townsfolk: nothing says how %s tells their lines" % name)
+        continue
+    if len(how) != len(lines):
+        fail("Townsfolk: %s has %d lines and %d gestures for them" % (name, len(lines), len(how)))
+    if how and how[0] != "greet":
+        fail("Townsfolk: %s does not greet you with their first line" % name)
+    for g in how:
+        tally[g] = tally.get(g, 0) + 1
+        if g not in known:
+            fail("Townsfolk: %s tells a line with %r, which Poses does not make" % (name, g))
+    for a, b in zip(how, how[1:]):
+        if a == b:
+            fail("Townsfolk: %s tells two lines running the same way (%s)" % (name, a))
+total = sum(tally.values()) or 1
+if len(tally) < 8:
+    fail("Townsfolk: the lines are told with only %d of the gestures" % len(tally))
+for g, n in tally.items():
+    if g not in ("greet", "explain") and n > 0.25 * total:
+        fail("Townsfolk: %d of %d lines are told with %s" % (n, total, g))
+for needle, why in (
+    ('npc.model:SetAttribute("Gesture", gestureFor(npc, text))', "a line is said without a gesture"),
+    ('npc.model:SetAttribute("GestureAt", workspace:GetServerTimeNow())', "a gesture is never started"),
+    ("npc.talking = os.clock() + seconds", "a habit fights the gesture of someone talking"),
+    ("for _, jointName in ipairs(ARMS) do", "a habit's arm is left where it was when a gesture starts"),
+    ('CollectionService:AddTag(model, "Townsperson")', "the clients never find the people to play their gestures"),
+    ('if to == "RightHand" or to == "LeftHand" then', "something held in a hand does not keep that hand out of the gesture"),
+    ('holds = "both", title = "Mr Wick"', "the fisherman lets go of his rod to gesture"),
+    ("local told = TOLD[npc.name]", "the lines are not told the way TOLD says"),
+):
+    if needle not in TOWNS:
+        fail("Townsfolk: " + why)
+if 'turn(npc, "RightShoulder", CFrame.Angles(0.6, 0, 0.12), 0.45)' in TOWNS:
+    fail("Townsfolk: the old one-handed wave is back alongside the gestures")
+for needle, why in (
+    ("local by = Poses.tell(gesture :: string, name, t, w,", "the people's gestures are never played"),
+    ("\tstartTellers()\n", "the people's gestures are never started"),
+    ("\t\tpcall(stepTellers)\n", "the people's gestures are never stepped"),
+    ("\t\t\t\tPoses.drive(joint, CFrame.identity)\n", "a gesture is never let go of"),
+    ("(root.Position - camera.CFrame.Position).Magnitude < TELL_SEEN", "everyone's gestures are played however far away"),
+):
+    if needle not in STORY_CLIENT:
+        fail("StoryClient: " + why)
+for needle, why in (
+    ('local mainSide = if hands == "left" then "Left" elseif hands == "none" then nil else "Right"',
+     "a gesture is made with a hand that is holding something"),
+    ('local otherSide = if hands == "both" then "Left" else nil', "a gesture's second hand lets go of what it holds"),
+    ("local nod = 0.06 * math.sin(t * 6.3) * math.sin(t * 1.7 + 0.4)", "nobody nods as they talk"),
+):
+    if needle not in POSES:
+        fail("Poses: " + why)
+
+# THE LOCKERS AND THE SECRETS' SCENES, from the second test (2026-10-16): a locker was a solid block whose door swung
+# back INTO it, so opened it showed a blank face (read as a locker turned the wrong way round), and the scene looked
+# over your shoulder (your back, or your head when the wall behind pulled the camera in) and then at that blank face.
+locker_fn = INTERACT[INTERACT.find("function Interactables.locker("):INTERACT.find("function Interactables.lockbox(")]
+holds_fn = INTERACT[INTERACT.find("local function lockerHolds("):INTERACT.find("function Interactables.locker(")]
+swing_angle = re.search(r"swing\(door, hinge, (-?)math\.rad\((\d+)\)", locker_fn)
+if not swing_angle or swing_angle.group(1) == "-":
+    fail("Interactables: a locker's door swings back into the locker instead of out toward you")
+for needle, why in (
+    ('piece(parent, "LockerSide"', "a locker is a solid block again, with nothing inside to see"),
+    ('piece(parent, "LockerLid"', "a locker has no lid over its inside"),
+    ("lockerHolds(parent, base, door, opts.secret)", "a locker holds nothing"),
+    ("TweenService:Create(lamp, TweenInfo.new(0.5), { Brightness = 0.9 }):Play()", "a locker's lamp never comes on"),
+):
+    if needle not in locker_fn:
+        fail("Interactables: " + why)
+if "Enum.Material.Neon" in locker_fn or "Enum.Material.Neon" in holds_fn:
+    fail("Interactables: a locker fakes its light with Neon")
+for needle, why in (
+    ('if what == "locker" then', "Locker 3 does not have your coat in it"),
+    ('"KeyHolderCard"', "your card is not in Locker 3"),
+    ('elseif what == "marsh" then', "Marsh's locker is empty"),
+    ('"WireHanger"', "an empty locker is not even a hanger"),
+):
+    if needle not in holds_fn:
+        fail("Interactables: " + why)
+reveal_fn = INTERACT[INTERACT.find("function Interactables.reveal("):INTERACT.find("local function openable(")]
+for needle, why in (
+    ("local again = mine[id] == true", "a secret looked at again plays its whole scene and card over again"),
+    ("again = again or kept[", "a secret found in an earlier session plays its whole scene again"),
+    ("again = again,", "the client is never told a look is a second look"),
+):
+    if needle not in reveal_fn:
+        fail("Interactables: " + why)
+if "local function overShoulder(" in STORY_CLIENT or "overShoulder(" in STORY_CLIENT:
+    fail("StoryClient: a secret's scene is shot over your shoulder again (your back, or your head, fills it)")
+two_fn = STORY_CLIENT[STORY_CLIENT.find("local function twoShot("):STORY_CLIENT.find("-- THE BAR IN YOUR HANDS")]
+for needle, why in (
+    ("mid + right * side * reach", "the two-shot is not taken from the side"),
+    ("twoShotSide = if math.max(rightRoom, leftRoom) < 3.2 then 0", "the two-shot does not choose the side with room"),
+    ("if not twoShotSide then", "the two-shot swaps sides in the middle of a scene"),
+):
+    if needle not in two_fn:
+        fail("StoryClient: " + why)
+if STORY_CLIENT.count("twoShotSide = nil") < 4:
+    fail("StoryClient: a scene keeps the last scene's side for its two-shot")
+moment_fn = STORY_CLIENT[STORY_CLIENT.find("local function moment("):STORY_CLIENT.find("local function peek(")]
+for needle, why in (
+    ("local reach = math.clamp((eye.Position - focus).Magnitude * 0.5, 1.9, 3.4)", "the close look is not close"),
+    ("local want = focus + out * (reach - 0.7 * u)", "the close look is not in front of what was found"),
+    ("local closing = if again then 3 else MOMENT.close", "a second look is as long as the first"),
+    ("if not again then\n\t\tsound(\"SecretSting\"", "a second look stings again"),
+    ("if not again then\n\t\t\t\tcard(", "a second look puts its card up again"),
+):
+    if needle not in moment_fn:
+        fail("StoryClient: " + why)
+if "Cinema.spline(path, u)" in moment_fn:
+    fail("StoryClient: the secret's scene drifts along its old curve to the outside of the thing again")
+
+# THE PEOPLE'S VOICES (2026-10-16): no words, the sound of somebody talking, one for each gesture, in one upload, at
+# each speaker's own pitch, as each line starts.
+VOICE_GEN = SRC.parent / "audio" / "gen_voice_sfx.py"
+VOICE_WAV = SRC.parent / "audio" / "story" / "TownsfolkVoice_x9.wav"
+voice_order = re.search(r'^ORDER = \((.*?)\)', VOICE_GEN.read_text(encoding="utf-8"), re.M) if VOICE_GEN.exists() else None
+if not voice_order or re.findall(r'"(\w+)"', voice_order.group(1)) != known:
+    fail("gen_voice_sfx.py's takes are not in the order of Poses.GESTURES, so a gesture would be said with another's voice")
+if not VOICE_WAV.exists():
+    fail("audio/story/TownsfolkVoice_x9.wav is missing")
+else:
+    try:
+        import numpy as np
+        from scipy.io import wavfile
+        sr, wav = wavfile.read(VOICE_WAV)
+        wav = wav.astype(float) / 32767
+        if abs(len(wav) / sr - 2.0 * len(known)) > 0.01:
+            fail("TownsfolkVoice_x9.wav is not %d two-second slots" % len(known))
+        else:
+            for k, g in enumerate(known):
+                slot = wav[int(sr * 2 * k):int(sr * 2 * (k + 1))]
+                if np.max(np.abs(slot[:int(sr * 1.95)])) < 0.1:
+                    fail("TownsfolkVoice_x9.wav: the %s voice is silent" % g)
+                if np.max(np.abs(slot[int(sr * 1.95):])) > 0.002:
+                    fail("TownsfolkVoice_x9.wav: the %s voice runs into the next slot" % g)
+    except ImportError:
+        pass
+voices = dict(re.findall(r"(\w+) = ([\d.]+)", TOWNS[TOWNS.find("local VOICES: {"):TOWNS.find("-- HOW LONG anything said")]))
+for name in said_by:
+    if name not in voices:
+        fail("Townsfolk: %s has no voice of their own" % name)
+for needle, why in (
+    ('model:SetAttribute("Voice", VOICES[name] or 1)', "nobody's voice is their own"),
+):
+    if needle not in TOWNS:
+        fail("Townsfolk: " + why)
+for needle, why in (
+    ('local sheet = folder and folder:FindFirstChild("TownsfolkVoice_x9")', "the voices are never found"),
+    ("local from = (index - 1) * VOICE_SLOT", "a gesture is said with the wrong voice"),
+    ("if typeof(gesture) == \"string\" and workspace:GetServerTimeNow() - at < 0.5 then\n\t\t\t\tspeak(model, gesture)",
+     "a voice is played for a line already being said, or never"),
+    ("(voice :: any).PlaybackRegion = NumberRange.new(from, from + VOICE_SLOT - 0.05)", "a voice runs on into the next one"),
+):
+    if needle not in STORY_CLIENT:
+        fail("StoryClient: " + why)
+
+# ONE TEXT FOR THE STORY ON SCREEN (2026-10-16): the captions were Gotham and the thoughts, whispers and the secret's
+# card Garamond, so a level told with captions (the Sunken City) and one told with thoughts (the Flooded Halls) read as
+# two games. Every line of the story on the screen is in the game's one family now (Style, the ninety-ninth pass: it was
+# Gotham, the menus Nunito); signs and notices in the world keep their own print (check_style.py).
+CINEMA_SRC = read("Client", "Services", "Cinema.lua") or ""
+for label, text in (("Cinema", CINEMA_SRC), ("StoryClient", STORY_CLIENT)):
+    if "Garamond" in text or "Style.FONT.paper" in text or "Style.WORLD.letter" in text:
+        fail("%s: a line of the story on the screen is in another typeface (the paper's Garamond) again" % label)
+
+# THE BUTTER STICKS GIVE ONLY WHERE YOU STEP, AND THEIR WRAPPER GOES WITH THEM (from the test, 2026-10-17): the dent
+# shallower than a stick is tall (gen_butter_sticks.py RISE), no travelling wave across the chunk after a step, and
+# the wax shell over the sticks driven with the butter's own dent, held and given back.
+import re as _re
+_butter = RENDERER[RENDERER.find("local BUTTER_STICK = {}"):RENDERER.find("local function softBedEffect(")]
+_press = _re.search(r"BUTTER_STICK\.PRESS = ([\d.]+)", _butter)
+_rise = _re.search(r"^RISE = ([\d.]+)", (SRC.parent / "blender" / "gen_butter_sticks.py").read_text(encoding="utf-8"), _re.M)
+if not _press or not _rise or float(_press.group(1)) >= float(_rise.group(1)):
+    fail("DeformationRenderer: a step sinks a butter stick deeper than it stands over its grooves (it caves in below them)")
+if "BUTTER_STICK.RIPPLE = nil" not in _butter:
+    fail("DeformationRenderer: a step on the butter sticks sends dips across the whole chunk again (they read as other steps)")
+if "BUTTER_STICK.SHELL = true" not in _butter:
+    fail("DeformationRenderer: the butter sticks' wrapper is not driven, so it stays up as a flat lid over every dent")
+_soft = RENDERER[RENDERER.find("local function softBedEffect("):RENDERER.find("-- MOLTEN KEYS")]
+for _needle, _why in (
+    ("driveShell(tile, down, -profile.PRESS, false)", "the wrapper does not go down with the butter"),
+    ("driveShell(tile, keep, -profile.PRESS * profile.RESIDUAL_FRACTION, false)", "the wrapper does not hold the butter's dent"),
+    ("driveShell(tile, back, 0, false)", "the wrapper never comes back up with the butter"),
+    ("if bone and onSlab and profile.RIPPLE then", "a bed with no wave still sends one"),
+):
+    if _needle not in _soft:
+        fail("DeformationRenderer: " + _why)
+# THE BUBBLE WRAP'S POPS, SEEN (the hundred-and-first pass): a puff you can see from behind, the film's flecks thrown out,
+# a glint at the instant; and the pocket swelling before it goes.
+_pop = RENDERER[RENDERER.find("local function popPuff("):RENDERER.find("local function burstPocket(")]
+for _needle, _why in (
+    ("burst:Emit(8)", "a pop's puff is too small to see"),
+    ("flecks:Emit(7)", "a pop throws no flecks of film"),
+    ("glint:Emit(1)", "a pop has no glint"),
+):
+    if _needle not in _pop:
+        fail("DeformationRenderer: " + _why)
+_swell = re.search(r"^POCKET\.SWELL = ([\d.]+)", RENDERER, re.M)
+if not _swell or float(_swell.group(1)) < 0.35:
+    fail("DeformationRenderer: a bubble wrap pocket barely swells before it pops (the half of the pop that shows)")
+
+# ===================================================================== what you say to them (the hundred-and-fourth pass)
+# Shared/Conversations.lua: every person in it is one of the people (Townsfolk.LINES); every topic has your line and
+# their answer, no dashes in either; every `after` is a topic that exists, every `needs` a clue something gives, every
+# clue given has a note for your journal; and the thread you chose, you are Marsh's child, can be followed from the
+# start (every clue can be learned, each from things you can already ask).
+CONVERSATIONS = read("Shared", "Conversations.lua") or ""
+if not CONVERSATIONS:
+    fail("Shared/Conversations.lua is missing: you cannot say anything to anyone")
+else:
+    topics_block = CONVERSATIONS[CONVERSATIONS.find("Conversations.TOPICS = {"):CONVERSATIONS.find("Conversations.NOTES = {")]
+    people = {}
+    for person, body in re.findall(r"^\t(\w+) = \{\n(.*?)^\t\},", topics_block, re.M | re.S):
+        people[person] = re.findall(r'\{ id = "(\w+)", say = "([^"]*)",(.*?)reply = \{\n(.*?)\n\t\t\} \},', body, re.S)
+        if len(people[person]) != len(re.findall(r'\bid = "', body)):
+            fail("Conversations: this check can no longer read every topic of %s's" % person)
+    notes = dict(re.findall(r'^\t(\w+) = \{ title = "([^"]+)"', CONVERSATIONS, re.M))
+    ids, gives, needs, afters = set(), {}, [], []
+    for person, rows in people.items():
+        if person not in LINES:
+            fail("Conversations: %s is no one the town has (Townsfolk.LINES)" % person)
+        if not rows:
+            fail("Conversations: %s has nothing you can ask" % person)
+        for tid, say, extra, reply in rows:
+            if tid in ids:
+                fail("Conversations: two topics are called %s" % tid)
+            ids.add(tid)
+            lines = re.findall(r'"([^"]*)"', reply)
+            if not lines:
+                fail("Conversations: %s has no answer" % tid)
+            for text in [say] + lines:
+                if re.search(r"--|—|–", text):
+                    fail("Conversations: a dash in %s: %r" % (tid, text))
+            found_after = re.search(r'after = "(\w+)"', extra)
+            found_needs = re.search(r'needs = "(\w+)"', extra)
+            found_clue = re.search(r'clue = "(\w+)"', extra)
+            if found_after:
+                afters.append((tid, found_after.group(1)))
+            if found_needs:
+                needs.append((tid, found_needs.group(1)))
+            if found_clue:
+                gives.setdefault(found_clue.group(1), []).append(tid)
+    for tid, other in afters:
+        if other not in ids:
+            fail("Conversations: %s comes after %s, which nobody can be asked" % (tid, other))
+    for tid, clue in needs:
+        if clue not in gives:
+            fail("Conversations: %s needs the clue %s, which nothing gives" % (tid, clue))
+    for clue in gives:
+        if clue not in notes:
+            fail("Conversations: the clue %s puts nothing in your journal (NOTES)" % clue)
+    # FOLLOWABLE FROM THE START: learn what can be learned, over and over, until nothing new is; every clue learned.
+    known, changed = set(), True
+    all_rows = {tid: (extra,) for rows in people.values() for tid, _, extra, _ in rows}
+    while changed:
+        changed = False
+        for tid, (extra,) in all_rows.items():
+            if tid in known:
+                continue
+            a = re.search(r'after = "(\w+)"', extra)
+            n = re.search(r'needs = "(\w+)"', extra)
+            if (not a or a.group(1) in known) and (not n or "clue:" + n.group(1) in known):
+                known.add(tid)
+                c = re.search(r'clue = "(\w+)"', extra)
+                if c:
+                    known.add("clue:" + c.group(1))
+                changed = True
+    for tid in all_rows:
+        if tid not in known:
+            fail("Conversations: %s can never be asked (what it waits for never comes)" % tid)
+    for clue in ("face", "marsh", "father", "price"):
+        if "clue:" + clue not in known:
+            fail("Conversations: the story's thread breaks: %s can never be learned" % clue)
+    for needle, why in (
+        ("function Townsfolk.offer(player: Player, npc: Person)", "your choices are never offered"),
+        ("function Townsfolk.answer(player: Player, name: string, id: string)", "a choice is never answered"),
+        ("for _, offered in ipairs(Conversations.offered(name, knownBy(player))) do", "a choice not offered can be said"),
+        ("> Conversations.REACH + 6 then", "you can talk to someone from across the level"),
+        ("Townsfolk.speakAs(player, said)", "you never say your line"),
+        ('pcall(book.take, player, { title = note.title, body = note.body }, nil, "note", { from = note.from })',
+         "what you learn is not written in your journal"),
+        ('pcall(save.markHeard, player, key)', "what you said is forgotten between sessions"),
+    ):
+        if needle not in TOWNS:
+            fail("Townsfolk: " + why)
+    TALK_CLIENT = read("Client", "Services", "TalkClient.lua") or ""
+    for needle, why in (
+        ("(root.Position - head.Position).Magnitude > reach then\n\t\t\thide()", "walking away does not put the choices away"),
+        ('remote:FireServer("say", offer.person, option.id)', "a choice is never said"),
+        ("GuiService.SelectedObject = ui.buttons[1]", "a controller cannot choose"),
+    ):
+        if needle not in TALK_CLIENT:
+            fail("TalkClient: " + why)
+    if 'ensureRemoteEvent(remoteEventsFolder, "Talk")' not in BOOT:
+        fail("Bootstrap never makes the Talk remote")
 
 if problems:
     for problem in problems:

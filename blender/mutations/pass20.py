@@ -30,8 +30,9 @@ MUTATIONS = [
     # Speech bubbles.
     ("words scaled to the bubble again", TOWNS, CITYCHECK, "\tlabel.TextSize = if shout then SHOUT_TEXT else SPEECH_TEXT\n",
      "\tlabel.TextScaled = true\n"),
-    ("a bubble that does not fit its words", TOWNS, CITYCHECK, "\tlabel.AutomaticSize = Enum.AutomaticSize.XY\n",
-     "\tlabel.AutomaticSize = Enum.AutomaticSize.None\n"),
+    ("a bubble that does not fit its words", TOWNS, CITYCHECK,
+     "\tlabel.AutomaticSize = Enum.AutomaticSize.XY\n\tlabel.TextWrapped = true\n\tlabel.TextSize = if shout",
+     "\tlabel.AutomaticSize = Enum.AutomaticSize.None\n\tlabel.TextWrapped = true\n\tlabel.TextSize = if shout"),
     # The slide.
     ("rods through the rider", SKY, SKYCHECK, "local inner = frame * Vector3.new(side * (wide / 2 + 0.4), 2.2, 0)",
      "local inner = frame * Vector3.new(0, 2.2, 0)"),

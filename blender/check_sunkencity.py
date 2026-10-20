@@ -32,6 +32,7 @@ Exits non-zero on any failure.
 """
 import json
 import math
+import pathlib
 import re
 import sys
 
@@ -236,7 +237,9 @@ if "local mirrorShown = false" not in CITY_SOURCE:
 if 'GetAttributeChangedSignal("MirrorFace")' not in CLIENT_SOURCE:
     fail("SunkenCityClient never listens for MirrorFace")
 # The reset the surge uses is the kill plane's own.
-steps = ("TimerService.resetTimer(player)", "syncTimer(player)", "PlayerFell:FireClient(player)",
+# (Both note the fall first and say whether a second chance can be offered: the same in both places.)
+steps = ("noteFall(player)", "TimerService.resetTimer(player)", "syncTimer(player)",
+         "PlayerFell:FireClient(player, secondChance.falls[player] ~= nil)",
          "restartRunFor(player)",
          "hrp.CFrame = CFrame.new(levelInstance.startPosition + Vector3.new(0, 3, 0))")
 send = BOOT[BOOT.find("sendBackToStart = function"):]
@@ -1153,6 +1156,99 @@ for needle, why in (
         fail(why)
 if "local eye = Vector3.new(spec.vortex.X + 1.4, at.Y - 11, spec.vortex.Z + 1.1)" not in CLIENT_SOURCE:
     fail("the ride has no shot falling down the shaft with the rider")
+# THE WHIRLPOOL AS MESHES (2026-10-16): smooth rings of a funnel, not boards. What gen_whirlpool.py built is what
+# the service expects (sizes, how fast each ring turns, its colour), every mesh is in meshes/ and under Roblox's
+# triangle limit, the funnel is the one the parts were, the ripples wind in against the client's turn (so the water
+# pours IN), the parts still stand in when nothing is imported, and the rider down the drain stays over the water.
+GEN_WHIRL = (pathlib.Path(__file__).resolve().parent / "gen_whirlpool.py")
+EXT_WHIRL = (pathlib.Path(__file__).resolve().parent / "whirlpool_extents.json")
+if not GEN_WHIRL.exists() or not EXT_WHIRL.exists():
+    fail("gen_whirlpool.py or whirlpool_extents.json is missing")
+else:
+    gen = GEN_WHIRL.read_text(encoding="utf-8")
+    extents = json.loads(EXT_WHIRL.read_text(encoding="utf-8"))
+
+    def gen_num(name):
+        found = re.search(r"^%s = ([\d.]+)" % name, gen, re.M)
+        return float(found.group(1)) if found else None
+    sizes = dict((m.group(1), [float(m.group(2)), float(m.group(3)), float(m.group(4))]) for m in
+                 re.finditer(r"^\t(Whirl_\w+) = Vector3\.new\(([\d.]+), ([\d.]+), ([\d.]+)\),", CITY_SOURCE, re.M))
+    if sorted(sizes) != sorted(extents):
+        fail("SunkenCityService's WHIRL_SIZE names %s, gen_whirlpool.py builds %s" % (sorted(sizes), sorted(extents)))
+    for name, entry in extents.items():
+        if name in sizes and any(abs(a - b) > 0.02 for a, b in zip(sizes[name], entry["size"])):
+            fail("%s is built %s and the service expects %s" % (name, entry["size"], sizes[name]))
+        if entry["tris"] > 10000:
+            fail("%s has %d triangles, over Roblox's 10000" % (name, entry["tris"]))
+        if not (SRC.parent / "meshes" / (name + ".fbx")).exists():
+            fail("meshes/%s.fbx is missing" % name)
+    spins_gen = re.search(r"^SPINS = \(([^)]*)\)", gen, re.M)
+    spins_lua = re.search(r"^local WHIRL_SPIN = \{ ([^}]*) \}", CITY_SOURCE, re.M)
+    if not spins_gen or not spins_lua or [float(x) for x in spins_gen.group(1).split(",")] != \
+            [float(x) for x in spins_lua.group(1).split(",")]:
+        fail("the rings turn at different speeds in gen_whirlpool.py and SunkenCityService")
+    elif any(b <= a for a, b in zip([float(x) for x in spins_lua.group(1).split(",")],
+                                     [float(x) for x in spins_lua.group(1).split(",")][1:])):
+        fail("a ring of the whirlpool turns no faster than the one outside it")
+    water_line = re.search(r"^WATER = \((.*)\)$", gen, re.M)
+    water_gen = re.findall(r"\((\d+), (\d+), (\d+)\)", water_line.group(1)) if water_line else []
+    water_lua = re.findall(r"Color3\.fromRGB\((\d+), (\d+), (\d+)\)",
+                           CITY_SOURCE[CITY_SOURCE.find("local WHIRL_WATER = {"):CITY_SOURCE.find("local WHIRL_LIP_SPIN")])
+    if not water_gen or water_gen != water_lua:
+        fail("the whirlpool's rings are coloured differently in gen_whirlpool.py's renders and the service")
+    for name, want in (("R", K.get("VORTEX_R")), ("DEPTH", K.get("FUNNEL_DEPTH")), ("HOLE", 1.5)):
+        if gen_num(name) != want:
+            fail("gen_whirlpool.py's %s is %s and the whirlpool's is %s: the meshes are another funnel" % (name, gen_num(name), want))
+    # Wound in AGAINST the turn: the client turns a ring by -spin about Y (clockwise from above), and the crests run
+    # anticlockwise going in (phi + WIND ln r constant), so as a ring turns its crests move in.
+    for needle, why in (
+        ("ARMS * (phi + WIND * lr)", "the ripples are not wound in against the turn"),
+        ("phi = crest - WIND * math.log(r)", "the foam does not lie along the ripples"),
+    ):
+        if needle not in gen:
+            fail("gen_whirlpool.py: " + why)
+    if "local turn = CFrame.new(ring.centre) * CFrame.Angles(0, -ring.spin * clock, 0) * CFrame.new(ring.centre):Inverse()" not in CLIENT_SOURCE:
+        fail("the client turns the whirlpool's rings some other way than gen_whirlpool.py's ripples are wound for")
+    wind = re.search(r"^ARMS, WIND = \d+, ([\d.]+)", gen, re.M)
+    if not wind or float(wind.group(1)) < 2.5:
+        fail("the whirlpool's spirals are wound loosely (WIND %s): spokes, not a whirlpool" % (wind.group(1) if wind else None))
+    meshes_fn = CITY_SOURCE[CITY_SOURCE.find("local function whirlOfMeshes("):CITY_SOURCE.find("local function whirlOfParts(")]
+    for needle, why in (
+        ("if not whirlOfMeshes(parent, vortex) then\n\t\twhirlOfParts(parent, vortex, rng)\n\tend", "the meshes or the parts, one or the other, are not built"),
+    ):
+        if needle not in CITY_SOURCE:
+            fail("SunkenCityService: " + why)
+    for needle, why in (
+        ("\t\tpart.CanQuery = false\n", "the whirlpool's meshes stop the camera's rays (the ride's shots are pulled in on them)"),
+        ('place(model, "Whirl_Band" .. ring, WHIRL_WATER[ring], 0, 0.12)', "the water is not opaque, so its foam sorts behind it"),
+        ('place(model, "Whirl_Foam" .. ring, FOAM, 0.12, 0)', "a ring's foam does not turn with its water"),
+        ('CollectionService:AddTag(model, "SunkenWhirlRing")', "nothing turns the whirlpool's rings"),
+        ('CollectionService:AddTag(lip, "SunkenWhirlRing")', "nothing turns the whirlpool's crest of foam"),
+        ("part.CFrame = CFrame.new(vortex)", "the meshes are not put on the whirlpool's middle"),
+        ("if not whirlTemplate(name) then\n\t\t\treturn false", "a missing mesh does not send it back to the parts"),
+    ):
+        if needle not in meshes_fn:
+            fail("SunkenCityService: " + why)
+    # THE RIDER STAYS OVER THE WATER, now that it is opaque: SunkenPath's way round and in, from anywhere the whirlpool
+    # can take them, against the meshes' funnel with its ripples at their tallest.
+    sink, depth_, hole, r_ = gen_num("SINK"), gen_num("DEPTH"), gen_num("HOLE"), gen_num("R")
+    amp = re.search(r"amp = \(([\d.]+) \+ ([\d.]+) \* \(1 - r / R\)\)", gen)
+    if not ("local r = r0 + (1.5 - r0) * s" in PATH_SOURCE and "d.from.Y + (d.funnelY - d.from.Y) * s * s" in PATH_SOURCE) \
+            or None in (sink, depth_, hole, r_) or not amp:
+        fail("this check can no longer replay the drain's ride over the whirlpool")
+    else:
+        tallest = float(amp.group(1)) + float(amp.group(2))
+        lowest = 99.0
+        for r0 in range(6, int(K.get("CAPTURE_R", 20)) + 1, 2):
+            for above in (2.0, 4.0, 6.0, 8.0):
+                for i in range(97):
+                    s = i / 100
+                    r = r0 + (1.5 - r0) * s
+                    y = above + (-depth_ - above) * s * s
+                    water = -(sink + depth_ * ((r_ - r) / (r_ - hole)) ** 1.6) if r < r_ else -sink
+                    lowest = min(lowest, y - water - tallest)
+        if lowest < 0.3:
+            fail("the rider going round the whirlpool sinks %.1f below its water (the meshes are opaque)" % -lowest)
 # THE FISH DO NOT SPIN when the glass is tapped: their turn is added up, not worked out from the clock.
 if "local a = clock * speed + index" in CLIENT_SOURCE or "shoal.turn = (shoal.turn or 0)" not in CLIENT_SOURCE:
     fail("the aquarium's fish work their place round the loop out from the clock again, and spin when tapped")
@@ -1452,6 +1548,36 @@ rider = re.search(r"\nlocal function moveRider\(.*?\n(.*?)\nend\n", CLIENT_SOURC
 if not rider or "if character ~= current.who or not (root and root:IsA(\"BasePart\")) then\n\t\tdrain = nil\n\t\tcutscene.finish()" \
         not in rider.group(1) or not rider.group(1).rstrip().endswith("drain = nil\n\tcutscene.finish()"):
     fail("the scene is not finished when the ride is over, or when the rider's character changes")
+# UNDER THE WATER ON THE WAY DOWN (2026-10-18, the fourth test: looking up from the drain, the whirlpool hung in "plain
+# nothingness", a whirlpool flying in the sky). The harbour is glass plates over air, and glass from below is a window:
+# once through the funnel you are under the water on your screen, thick enough to hide the sky, and out of it again as
+# the culvert takes you, everything put back as it was.
+ride = rider.group(1) if rider else ""
+for needle, why in (
+    ("\t\tsubmerge(frame.Position.Y < current.spec.funnelY)\n", "the drain is not under the water once you are through the funnel"),
+    ("\tsubmerge(false)\n\tif not o then", "you are still under the water in the culvert"),
+    ("\t\tdrain = nil\n\t\tcutscene.finish()\n\t\tsubmerge(false)\n", "the water is left over the screen when the rider's character changes"),
+):
+    if needle not in ride:
+        fail("SunkenCityClient: " + why)
+under = re.search(r"^local UNDER = \{ density = ([\d.]+), colour = Color3\.fromRGB\((\d+), (\d+), (\d+)\)", CLIENT_SOURCE, re.M)
+if not under:
+    fail("SunkenCityClient: this check can no longer read the drain's water (UNDER)")
+else:
+    if not 0.45 <= float(under.group(1)) <= 0.8:
+        fail("SunkenCityClient: the drain's water is %s thick: under 0.45 the sky shows through it, over 0.8 you cannot "
+             "see the whirlpool over you" % under.group(1))
+    if int(under.group(2)) >= min(int(under.group(3)), int(under.group(4))):
+        fail("SunkenCityClient: the drain's water is not the colour of the sea")
+sub = CLIENT_SOURCE[CLIENT_SOURCE.find("local function submerge("):CLIENT_SOURCE.find("local function moveRider(")]
+for needle, why in (
+    ("Density = was.density, Offset = was.offset, Color = was.colour,", "the air is not put back after the drain"),
+    ("for _, made in ipairs(was.tweens) do\n\t\tmade:Cancel()", "the water carries on thickening after it is taken away"),
+    ("game:GetService(\"Debris\"):AddItem(was.grade,", "the drain's sea tint is left on the screen"),
+    ("if was.made then\n\t\t\tgame:GetService(\"Debris\"):AddItem(was.atmosphere,", "an air made for the drain is left behind"),
+):
+    if needle not in sub:
+        fail("SunkenCityClient: " + why)
 # THE CINEMA gives everything back: the camera, the field of view, the controls.
 CINEMA_SOURCE = (SRC / "Client" / "Services" / "Cinema.lua").read_text(encoding="utf-8")
 for needle, why in (
@@ -1594,6 +1720,125 @@ if not scatter or float(scatter.group(1)) < 8 or "here += push" not in CLIENT_SO
 every = re.search(r"^local SHOAL_EVERY = ([\d.]+)", CITY_SOURCE, re.M)
 if not every or float(every.group(1)) > 60:
     fail("the shoals are spaced so far apart that the street reads as empty again")
+
+# A CLIENT'S HELLO is heard once and kept short: said a thousand times, or said long, it fills neither the
+# server's log nor its memory.
+hello = CITY_SOURCE[CITY_SOURCE.find('if what == "hello" then'):]
+hello = hello[:hello.find("\t\t\t\treturn\n")]
+if "if not studio.heard[player] then" not in hello or "string.sub(tostring(version), 1, 60)" not in hello:
+    fail("a client's hello is printed and kept every time it is said, however long")
+
+# ===================================================================== the launch in the harbour
+
+# THE LAUNCH STANDS IN OPEN WATER. Every spot the harbour may put it is past the end of the street (where
+# no block is built), clear of the drain on every run (so the drain never rules one out), and clear of
+# the lighthouse, the barge, the wrecks and the quay walls, which are always where they are. It is a
+# marker, not solid and not seen, tagged for the client that draws it, and it keeps off every buoy.
+# That client is started, keeps the thing on the horizon's timing and the rain's sum, guards its step,
+# collides with nothing, uses no Neon, asks for no light Roblox will not give, ends its beam at the
+# water, and has no sound of its own (nothing to import).
+LAUNCH_PATH = SRC / "Client" / "Services" / "SearchlightClient.lua"
+LAUNCH = LAUNCH_PATH.read_text(encoding="utf-8") if LAUNCH_PATH.exists() else ""
+if not LAUNCH:
+    fail("SearchlightClient.lua is missing, so nothing draws the launch in the harbour")
+harb = CITY_SOURCE[CITY_SOURCE.find("local function harbour("):]
+harb = harb[:harb.find("\nend\n")]
+spots_at = re.search(r"for _, spotAt in ipairs\(\{(.*?)\}\) do", harb)
+spots = [(float(x), float(z)) for x, z in re.findall(r"Vector2\.new\((-?[\d.]+), (-?[\d.]+)\)",
+                                                     spots_at.group(1))] if spots_at else []
+if not spots:
+    fail("the harbour no longer lists where the launch may stand")
+R = K.get("HARBOUR_REACH", 0)
+
+
+def harbour_spot(pattern, label):
+    found = re.search(pattern, harb)
+    if not found:
+        fail("the harbour's %s has moved or changed; check the launch's spots against it" % label)
+        return None
+    return float(found.group(1)), float(found.group(2))
+
+
+light_at = harbour_spot(r"local lightAt = frame \* CFrame\.new\((-?[\d.]+), 0, HARBOUR_REACH \* ([\d.]+)\)",
+                        "lighthouse")
+barge_at = harbour_spot(r"local barge = frame \* CFrame\.new\((-?[\d.]+), waterLevel - 3 - floorY, "
+                        r"-HARBOUR_REACH \* ([\d.]+)\)", "barge")
+sunk_at = harbour_spot(r"local boat = frame \* CFrame\.new\((-?[\d.]+), waterLevel - 6 - floorY, "
+                       r"-HARBOUR_REACH \* ([\d.]+)\)", "sunk fishing boat")
+wreck_at = harbour_spot(r"local wreck = frame \* CFrame\.new\((-?[\d.]+), 5, -HARBOUR_REACH \* ([\d.]+)\)", "wreck")
+quay_at = harbour_spot(r"local wall = frame \* CFrame\.new\((-?[\d.]+), \(quayTop - floorY\) / 2, "
+                       r"sign \* HARBOUR_REACH \* ([\d.]+)\)", "quay walls")
+quay_long = re.search(r'block\(parent, "Quay", Vector3\.new\(([\d.]+),', harb)
+fixed = []
+if light_at:
+    fixed.append(("the lighthouse", light_at[0], R * light_at[1], 60))
+if barge_at:
+    fixed.append(("the barge", barge_at[0], -R * barge_at[1], 60))
+if sunk_at:
+    fixed.append(("the sunk fishing boat", sunk_at[0], -R * sunk_at[1], 50))
+if wreck_at:
+    fixed.append(("the wreck", wreck_at[0], -R * wreck_at[1], 50))
+vortex_reach = K.get("PIER_L", 0) + K.get("VORTEX_GAP", 0)
+vortex_clear = re.search(r"local clear = Vector3\.new\(spot\.X - vortex\.X, 0, spot\.Z - vortex\.Z\)\.Magnitude "
+                         r"> VORTEX_R \+ (\d+)", harb)
+if not vortex_clear or float(vortex_clear.group(1)) < 60:
+    fail("the launch no longer keeps well clear of the drain")
+for x, z in spots:
+    if x <= 0:
+        fail("the launch may stand at (%g, %g), back up the street among the blocks; past its end only" % (x, z))
+    if math.hypot(x, z) > R - 120:
+        fail("the launch may stand at (%g, %g), out where the basin ends and the blocks begin" % (x, z))
+    for label, fx, fz, keep in fixed:
+        if math.hypot(x - fx, z - fz) < keep:
+            fail("the launch may stand at (%g, %g), %.0f studs from %s" % (x, z, math.hypot(x - fx, z - fz), label))
+    if quay_at and quay_long:
+        half = float(quay_long.group(1)) / 2
+        for sign in (-1, 1):
+            dx = max(quay_at[0] - half - x, 0, x - (quay_at[0] + half))
+            dz = z - sign * R * quay_at[1]
+            if math.hypot(dx, dz) < 40:
+                fail("the launch may stand at (%g, %g), against a quay wall" % (x, z))
+    if vortex_clear and math.hypot(x, z) - vortex_reach <= K.get("VORTEX_R", 0) + float(vortex_clear.group(1)):
+        fail("the launch's spot (%g, %g) can be ruled out by the drain, so some runs could have no launch" % (x, z))
+if not re.search(r"Enum\.Material\.SmoothPlastic, false\)\s*launch\.Transparency = 1", harb):
+    fail("the launch's marker is solid or can be seen; the client draws the launch, the marker only says where")
+if 'CollectionService:AddTag(launch, "SunkenLaunch")' not in harb \
+        or 'GetInstanceAddedSignal("SunkenLaunch")' not in LAUNCH:
+    fail("the launch's marker is not tagged SunkenLaunch, or SearchlightClient does not follow that tag")
+if 'launch:SetAttribute("Watch"' not in harb or 'GetAttribute("Watch")' not in LAUNCH:
+    fail("the launch is not told what to watch, or SearchlightClient never reads it")
+if "table.insert(buoysAt, spot)" not in harb or not re.search(r"Magnitude < (2\d|[3-9]\d) then\s*clear = false", harb):
+    fail("the launch no longer keeps off the buoys")
+if '"SearchlightClient"' not in CLIENT_BOOT:
+    fail("the client Bootstrap never starts SearchlightClient, so the harbour has no launch")
+thing_client = re.search(r"local RISE, HOLD, SINK = (\d+), (\d+), (\d+)", CLIENT_SOURCE)
+thing_launch = re.search(r"local THING_RISE, THING_HOLD, THING_SINK = (\d+), (\d+), (\d+)", LAUNCH)
+if not thing_client or not thing_launch or thing_client.groups() != thing_launch.groups():
+    fail("the launch and SunkenCityClient disagree about how long the thing on the horizon is up")
+if "return ((t - first) % every) < length" not in LAUNCH:
+    fail("the launch works out the rain differently from SunkenCityClient")
+if "pcall(stepLaunch" not in LAUNCH:
+    fail("the launch's step is not guarded; one error would warn every frame")
+if "Material.Neon" in LAUNCH:
+    fail("the launch uses Neon; its lights are real lights")
+if "CanCollide = true" in LAUNCH or "p.CanCollide = false" not in LAUNCH:
+    fail("the launch can be collided with; it is out of reach and nothing of it should be solid")
+spot_range = re.search(r"spot\.Range = (\d+)", LAUNCH)
+if not spot_range or float(spot_range.group(1)) > 60:
+    fail("the searchlight asks for a range past the 60 studs Roblox gives a SpotLight")
+if "spot.Shadows = false" not in LAUNCH or "pool.Shadows = false" not in LAUNCH:
+    fail("the searchlight casts shadows, which costs every player for a light far away")
+if "(height - 1) / -look.Y" not in LAUNCH:
+    fail("the searchlight's beam no longer ends at the water; it would show running on under the surface")
+if 'Instance.new("Sound")' in LAUNCH or "rbxassetid" in LAUNCH:
+    fail("the launch has a sound of its own, which is something to import; it is meant to need nothing")
+if "workspace:GetServerTimeNow()" not in LAUNCH:
+    fail("the launch is not swept by the shared clock, so players would see the beam in different places")
+# THE LANTERN AT THE END OF THE PIER stays the one warm light in the harbour (ROADMAP): the searchlight's
+# white has more blue in it than red.
+cold = re.search(r"local COLD = Color3\.fromRGB\((\d+), (\d+), (\d+)\)", LAUNCH)
+if not cold or int(cold.group(1)) >= int(cold.group(3)) or "spot.Color = COLD" not in LAUNCH         or "beam.Color = ColorSequence.new(COLD)" not in LAUNCH:
+    fail("the searchlight is warm; the lantern at the end of the pier is meant to be the harbour's one warm light")
 
 # ===================================================================== report
 

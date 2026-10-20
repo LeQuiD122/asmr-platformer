@@ -84,7 +84,8 @@ MUTATIONS = [
     # The flume and the mouth.
     ("the server moving the rider every frame again", HALLS, HALLCHECK, "if drawing[player] or os.clock() - started < 0.5 then",
      "if false then"),
-    ("the ride not drawn from the path", HALLSC, HALLCHECK, "\t\t\troot.CFrame = pathAt(path, f)\n", "\t\t\tlocal _ = pathAt(path, f)\n"),
+    ("the ride not drawn from the path", HALLSC, HALLCHECK, "\t\t\troot.CFrame = lying(current, path, pathAt(path, f), f, t)\n",
+     "\t\t\tlocal _ = lying(current, path, pathAt(path, f), f, t)\n"),
     ("the disc back in the mouth", MAW, HALLCHECK, "\t-- A TONGUE along the lower jaw", "\tlocal throat = Instance.new(\"Part\")\n\tthroat.Name = \"Throat\"\n\t-- A TONGUE along the lower jaw"),
     # The Sky Pools.
     ("a skim out over the rim", SKYPATH, SKYCHECK, "SkyPath.SKIM_SECONDS = 2.8", "SkyPath.SKIM_SECONDS = 7"),

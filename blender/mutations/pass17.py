@@ -38,7 +38,8 @@ MUTATIONS = [
     # An ending silences the level.
     ("an ending that never hushes", CINEMA, STORY, 'Players.LocalPlayer:SetAttribute("Hushed", true)', "local _ = true"),
     ("a secret's scene silencing the level", STORYC, STORY,
-     '\tbusy = true\n\tCinema.begin({ hush = false })\n\tsound("SecretSting"', '\tbusy = true\n\tCinema.begin()\n\tsound("SecretSting"'),
+     '\tCinema.begin({ hush = false })\n\tif not again then\n\t\tsound("SecretSting"',
+     '\tCinema.begin()\n\tif not again then\n\t\tsound("SecretSting"'),
     ("the Sunken City's mood bringing it back", SUNKC, STORY, "(1 - 0.6 * inside) * hush", "(1 - 0.6 * inside)"),
     ("the Sky Pools' water never tagged", SKY, STORY, 'CollectionService:AddTag(s, "Ambience")', "local _ = s"),
     ("the Sunken City's water never tagged", SUNK, STORY, 'CollectionService:AddTag(s, "Ambience")', "local _ = s"),
@@ -47,7 +48,7 @@ MUTATIONS = [
     ("the Sky Pools with no ambience", AMB, STORY, "\tskyPools = {", "\tskyPool = {"),
     ("an ambience bed with no file", AMB, STORY, '{ name = "BathsHum", volume = 0.3 }', '{ name = "BathsHums", volume = 0.3 }'),
     # The secrets.
-    ("the card counting wrong", INTER, STORY, "local TOTAL = 5", "local TOTAL = 4"),
+    ("the card counting wrong", INTER, STORY, "local TOTAL = 6", "local TOTAL = 4"),
     ("a secret nobody can find", STORY_SRC, STORY, 'at, "photograph", CFrame.new(', 'at, "polaroid", CFrame.new('),
     ("a dash in a secret", INTER, STORY, '"Somebody put it where nobody would look."', '"Somebody put it -- where nobody would look."'),
     ("no Siren Tower", STORY_SRC, STORY, "pcall(sirenTower, folder, instance, chunks, used, reserved)", "pcall(print, folder, instance, chunks, used, reserved)"),

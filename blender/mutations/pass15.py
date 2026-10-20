@@ -53,8 +53,8 @@ MUTATIONS = [
     ("Mr Barlow with nothing to say", TOWNS, STORY, '\tBarlow = {\n\t\t"There you are.', '\tBarlowe = {\n\t\t"There you are.'),
     ("Tobi in plain colours", TOWNS, STORY, "\tTobi = { skin", "\tToby = { skin"),
     ("nobody dressed", TOWNS, STORY, "pcall(dress, model, look)", "pcall(print, model, look)"),
-    ("nobody talking with their hands", TOWNS, STORY, 'turn(npc, "RightShoulder", CFrame.Angles(0.6, 0, 0.12), 0.45)',
-     'turn(npc, "RightShoulder", CFrame.identity, 0.45)'),
+    ("nobody talking with their hands", TOWNS, STORY, 'npc.model:SetAttribute("Gesture", gestureFor(npc, text))',
+     'npc.model:SetAttribute("Gesture", nil)'),
     ("no night engineer's spot", HALLS, STORY, 'halls:SetAttribute("EngineerSpot"', 'halls:SetAttribute("EngineSpot"'),
     # The notes.
     ("a dash in a note", STORY_SRC, STORY, '"HARBOUR HIGH WATER.', '"HARBOUR HIGH WATER -- AUGUST.'),

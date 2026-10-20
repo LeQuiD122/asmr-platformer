@@ -1089,7 +1089,7 @@ def main():
         if needle not in text:
             fail("THE FLUME: " + why + ".")
     for needle, why in (
-        ("root.CFrame = pathAt(path, f)", "never draws the ride from the path"),
+        ("root.CFrame = lying(current, path, pathAt(path, f), f, t)", "never draws the ride from the path"),
         ('hallsEvent:FireServer("riding")', "never tells the server it is drawing the ride"),
     ):
         if needle not in client_text:
@@ -1102,6 +1102,310 @@ def main():
         fail("the client Bootstrap never starts FloodedHallsClient, so the ending is not played.")
     if boot.exists() and 'ensureRemoteEvent(remoteEventsFolder, "HallsCinema")' not in boot.read_text(encoding="utf-8"):
         fail("Bootstrap never makes the HallsCinema remote.")
+
+    # THE LAMPS BEHIND YOU (FloodedHallsClient): roof lights two bays and more behind your player stutter and sink
+    # to a low glow, on your screen only; the bay you are in, the ones ahead and the windows stay lit, so nothing
+    # is dark. In small steps (a fade, a stutter that never goes out), back up if you are sent back, and only on a
+    # run through the halls. Each roof light says how far along the route it hangs.
+    if 'roof:SetAttribute("Along", leg.startAt + along)' not in text:
+        fail("FloodedHallsService: a roof light does not say how far along the route it hangs, so no client can "
+             "tell which lamps are behind it")
+    lamps = client_text[client_text.find("-- ===== THE LAMPS BEHIND YOU ====="):client_text.find("function FloodedHallsClient.start()")]
+
+    def lamp_number(name):
+        found = re.search(r"^local %s = ([0-9.]+)" % name, lamps, re.M)
+        return float(found.group(1)) if found else None
+    glow = lamp_number("LAMP_GLOW")
+    if glow is None or glow < 0.25:
+        fail("FloodedHallsClient: a failed lamp keeps less than a quarter of its light (LAMP_GLOW), which is dark")
+    kept = lamp_number("LAMPS_KEPT")
+    if kept is None or kept < 1:
+        fail("FloodedHallsClient: the lamp just behind you fails too (LAMPS_KEPT under 1), so the room you are in goes dim")
+    for name in ("LAMP_FADE", "LAMP_BACK"):
+        seconds = lamp_number(name)
+        if seconds is None or seconds < 0.5:
+            fail("FloodedHallsClient: a lamp changes at once rather than in a fade (%s under half a second)" % name)
+    stutter = re.search(r"local STUTTER = \{(.*)\}\n", lamps)
+    beats = re.findall(r"\{ ([0-9.]+), ([0-9.]+) \}", stutter.group(1)) if stutter else []
+    if not beats or min(float(b[0]) for b in beats) < 0.15 or sum(float(b[1]) for b in beats) > 0.6:
+        fail("FloodedHallsClient: the stutter goes out (under 0.15) or drags on (over 0.6 s)")
+    for needle, why in (
+        ('item.Name == "RoofLight"', "lamps other than the roof lights fail (the windows must stay lit)"),
+        ('not item:GetAttribute("Failing")', "the server's own failing fitting is fought over"),
+        ('Players.LocalPlayer:GetAttribute("InLevel") ~= "floodedHalls" or scene ~= nil', "the lamps fail off the level or in the ending"),
+        ("light.Brightness = lamp.bright * level", "the light itself is not dimmed (only the panel), which fakes it"),
+        ("local behind = here - (LAMPS_KEPT + 0.5) * LAMP_BAY", "which lamps are behind is not counted in bays from the one you are under"),
+        ("relightLamp(part, lamp)", "a lamp never comes back when you are sent back past it"),
+        ("setLamp(part, lamp, LAMP_GLOW)", "a lamp first seen already behind you stutters at once (or never goes low)"),
+        ("if lamp.turn ~= turn or not part.Parent then", "an older fade fights a newer one"),
+    ):
+        if needle not in lamps:
+            fail("FloodedHallsClient: " + why)
+    if "Neon" in lamps:
+        fail("FloodedHallsClient: the lamps behind you fake light with Neon")
+    if "RunService.Heartbeat:Connect(function()\n\t\tlocal ok, err = pcall(stepLamps)" not in client_text:
+        fail("FloodedHallsClient: the lamps behind you are never stepped")
+
+    # ===== THE FLUME RIDDEN LIKE A PERSON, AND THE MOUTH THAT HAS YOU (2026-10-16) =====
+    #
+    # The rider stood upright in the trough the whole way down (the path is a standing rider's, and only the arms
+    # were posed), the ride juddered, and the mouth showed itself two seconds before it opened. Now: laid back,
+    # feet first, on a smooth curve on the client's own clock; a body that balances, panics and flails; what they
+    # think over their head; water in the trough; and a mouth that stays dark until it springs open, with time all
+    # but stopped over it. What has to hold, restated from the numbers in the code.
+    poses_text = (SRC / "Shared" / "Poses.lua").read_text(encoding="utf-8")
+    maw_lua = (SRC / "Client" / "Services" / "Maw.lua").read_text(encoding="utf-8")
+    boot_text = (SRC / "Server" / "Bootstrap.server.lua").read_text(encoding="utf-8")
+    sfx_text = (HERE.parent / "audio" / "gen_story_sfx.py").read_text(encoding="utf-8")
+    helix_srv = number(text, r"^local SLIDE_HELIX = ([\d.]+)", "SLIDE_HELIX")
+    seconds_srv = number(text, r"^local SLIDE_SECONDS = ([\d.]+)", "SLIDE_SECONDS")
+    plunge = number(text, r"^local SLIDE_PLUNGE = ([\d.]+)", "SLIDE_PLUNGE")
+    helix_cli = number(client_text, r"^local HELIX = ([\d.]+)", "FloodedHallsClient's HELIX")
+    lie_drop = number(client_text, r"^local LIE_DROP = ([\d.]+)", "LIE_DROP")
+    recline = number(poses_text, r"^Poses\.FLUME_RECLINE = math\.rad\(([\d.]+)\)", "Poses.FLUME_RECLINE")
+    tube = re.search(r"^Poses\.FLUME_TUBE = ([\d.]+) \* ([\d.]+)", poses_text, re.M)
+    pose_seconds = number(poses_text, r"^Poses\.FLUME_SECONDS = ([\d.]+)", "Poses.FLUME_SECONDS")
+    if helix_srv != helix_cli or not tube or float(tube.group(1)) != helix_srv or float(tube.group(2)) != seconds_srv \
+            or pose_seconds != seconds_srv:
+        fail("THE FLUME: the client, Poses and the server disagree on how long the ride is or how much of it is the tube.")
+    # THE BODY IN THE TROUGH, laid back: root RIDE_SINK + LIE_DROP under the centre line, the back of the hips and
+    # the legs under them a body's thickness lower, the head up behind. On the floor, never through it.
+    if None not in (bore, sink_less, scale, lie_drop, recline):
+        floor_v = -bore * scale
+        root_v = -(bore * scale - sink_less) - lie_drop
+        th = math.radians(recline)
+        legs_v = root_v - (math.cos(th) + 0.5)
+        back_v = root_v - 0.5 * math.sin(th)
+        head_v = root_v + 2.6 * math.cos(th) + 0.6
+        lowest = min(legs_v, back_v)
+        if lowest < floor_v + 0.05:
+            fail("THE FLUME: lying back, the rider's legs go %.2f studs through the trough's floor." % (floor_v + 0.05 - lowest))
+        elif lowest > floor_v + 0.8:
+            fail("THE FLUME: lying back, the rider floats %.2f studs over the trough's floor." % (lowest - floor_v))
+        if head_v > -bore * scale * 0.2:
+            fail("THE FLUME: lying back, the rider's head comes up out of the trough.")
+    for needle, why in (
+        ("local t = os.clock() - current.clockAt", "the ride is drawn from the server's clock read every frame (a hitch at "
+                                                    "every correction)"),
+        ("clockAt = os.clock() - (workspace:GetServerTimeNow() - began)", "the ride's own clock is never set"),
+        ("+ (3 * p1 - p0 - 3 * p2 + p3) * u * u * u)", "the ride goes in straight lines from step to step (a jolt at each)"),
+        ("return frame * CFrame.new(0, -LIE_DROP * w, 0) * CFrame.Angles(recline * w, 0, 0)", "the rider stands in the trough"),
+        ("pathAt(path, math.min(f, HELIX - 0.005)).LookVector", "the shots take the way along from the root, which faces the roof"),
+        ("current.wake = startWake(root)", "nothing is thrown up off the water as they go"),
+        ("Cinema.think(Players.LocalPlayer.Character, thought[2] :: string, thought[3] :: number)",
+         "what the rider thinks is never shown"),
+        ('current.growl = sound("MawGrowl", BASS, 0.6, 0.18, false)', "no growl before the mouth"),
+        ("\t\t\t\tCinema.impact(0.8)\n", "shooting out of the end of the tube is not hit"),
+        ('keep(current, sound("MawRoar", BASS, 1, 0.32, false))', "it opens without a sound"),
+        ("\t\tCinema.impact(1.4)\n", "it opening is not hit"),
+        ("\t\t\tCinema.impact(1.5)\n", "it shutting is not hit"),
+        ("\tif m < JAWS.reveal then\n\t\tMaw.light(mouth, 0)\n", "the mouth is lit before it opens"),
+        ("\tMaw.breathe(mouth, 10)\n", "it opens without breathing"),
+        ("\telseif m < JAWS.into then\n\t\treturn HANG\n", "time does not all but stop over it"),
+        # THE DARK (2026-10-16): the shaft black on the rider's screen from the end of the tube, and put back.
+        ("\t\t\t\tdarken(current, root)\n", "the shaft is lit as you fall, and the mouth shows before it comes"),
+        ("\trelight(current)\n\tchamberStep(", "the dark is never put back before the chamber"),
+        ("\tholdMine(nil)\n\trelight(current)\n", "the dark is left on when the scene ends"),
+        ("tween(atmosphere, { Density = math.min(atmosphere.Density, DARK.airAtMost), Color = DARK.colour",
+         "the shaft's air is not made black, or is made thicker than the level's own"),
+        ("EnvironmentDiffuseScale = 0, EnvironmentSpecularScale = 0", "the sky still lights the shaft in the dark"),
+        ("lit.dimmed[item] = item.Brightness", "the shaft's own lamps stay lit in the dark"),
+        ("table.insert(lit.off, item)", "the failing fitting (its brightness set by the server many times a second) stays lit in the dark"),
+        ("\tfor _, light in ipairs(lit.off) do\n\t\tlight.Enabled = true", "the failing fitting is left switched off after the scene"),
+        ("local eye = face - Vector3.new(0, 4.4 - 0.8 * k, 0) + crown * 1.8 + side * 0.8",
+         "the look at your face is from straight under it, through your chest and arms"),
+        ("\t\t\tlight.Brightness = brightness\n", "the shaft's lamps are left dim after the scene"),
+        ("\tfor _, made in ipairs(lit.tweens) do\n\t\tmade:Cancel()", "the dark carries on fading in after the light is put back"),
+        # YOUR FACE, as you see what it is: turned over to look, then close from under it.
+        ("CFrame.Angles(math.pi / 2 + tumble - math.pi * over, 0, tumble * 0.4)", "you fall into it on your back, looking away"),
+        ("Cinema.point(CFrame.lookAt(eye, face, root.CFrame.UpVector), 54 - 6 * k)", "your face is never seen as you see it"),
+        ("\t\tpour.Enabled = false\n", "the water off the flume's lip shows as a lit column in the dark"),
+        # DARK, NOT BLACK (2026-10-18, the fourth test): you are lit all the way down by a lamp that falls with you.
+        ("lit.lamp.WorldPosition = pos + Vector3.new(0, DARK.over, 0)", "the lamp over you does not fall with you"),
+        ("\tif lit.lamp then\n\t\tlit.lamp:Destroy()", "the lamp over you is left hanging after the scene"),
+        # THE LUNGE: it waits deep, unseen, and comes up at you as it opens.
+        ("Maw.place(mouth, rest + Vector3.new(0, MAW_RISE * lunge, 0))", "the mouth does not come for you"),
+        ("Maw.facing(from - Vector3.new(0, MAW_DEEP, 0)", "the mouth is not waiting deep in the dark"),
+    ):
+        if needle not in client_text:
+            fail("FloodedHallsClient: " + why + ".")
+    if "Maw.light(current.mouth, 0.3 * (f - 0.8) / 0.2)" in client_text:
+        fail("FloodedHallsClient: the mouth lights up as you fall again, so it is seen before it opens.")
+    if "workspace:GetServerTimeNow() - current.began" in client_text:
+        fail("FloodedHallsClient: the scene reads the server's clock every frame again.")
+    thoughts = re.search(r"^local THOUGHTS = \{\n(.*?)\n\}", client_text, re.M | re.S)
+    said = re.findall(r'\{ ([\d.]+), "([^"]+)", ([\d.]+) \}', thoughts.group(1)) if thoughts else []
+    if len(said) < 4:
+        fail("FloodedHallsClient: the rider thinks %d things on the way down; they should be heard wondering, then worried." % len(said))
+    for at, words, hold in said:
+        if "--" in words or "\u2014" in words or "\u2013" in words:
+            fail("FloodedHallsClient: a thought has a dash in it: %r" % words)
+        if seconds_srv and float(at) + float(hold) > seconds_srv:
+            fail("FloodedHallsClient: the thought %r is still up when the ride is over" % words)
+    growl_at = number(client_text, r"^local GROWL_AT = ([\d.]+)", "GROWL_AT")
+    if growl_at is None or helix_cli is None or not (helix_cli < growl_at < 1):
+        fail("FloodedHallsClient: the growl is not heard in the fall, before the mouth.")
+    # THE BODY MOVES: Poses.flume bends the hips to keep the legs on the floor, and goes through its phases.
+    for needle, why in (
+        ("local hip = math.pi / 2 - Poses.FLUME_RECLINE * lie", "the legs do not lie along the floor"),
+        ("local toPanic = ease((t - 2.8) / 0.8)", "the rider never panics"),
+        ("local toFall = ease((t - (Poses.FLUME_TUBE - 0.2)) / 0.4)", "the rider does not flail out of the end"),
+        ('elseif name == "RightKnee" then\n\t\treturn blend(', "the legs never move"),
+    ):
+        if needle not in poses_text:
+            fail("Poses.flume: " + why + ".")
+    # THE MOUTH'S FALL, restated: from the speed out of the tube, all but hanging ABOVE its teeth once it has lunged up
+    # and opened, and in it before it shuts.
+    jaws = dict(re.findall(r"^\t(\w+) = ([\d.]+), --", client_text[client_text.find("local JAWS = {"):client_text.find("local function fallSpeed")], re.M))
+    keys = ("dark", "reveal", "face", "into", "bite", "snap", "caption")
+    deep = number(client_text, r"^local MAW_DEEP, MAW_RISE, LUNGE = ([\d.]+), [\d.]+, [\d.]+", "MAW_DEEP")
+    rise = number(client_text, r"^local MAW_DEEP, MAW_RISE, LUNGE = [\d.]+, ([\d.]+), [\d.]+", "MAW_RISE")
+    lunge = number(client_text, r"^local MAW_DEEP, MAW_RISE, LUNGE = [\d.]+, [\d.]+, ([\d.]+)", "LUNGE")
+    if any(k not in jaws for k in keys) or None in (deep, rise, lunge):
+        fail("FloodedHallsClient: this check can no longer read the mouth's beats (JAWS) or where it waits.")
+    else:
+        beats = [float(jaws[k]) for k in keys]
+        if beats != sorted(beats):
+            fail("FloodedHallsClient: the mouth's beats are out of order: %s" % beats)
+        # THE DARK IS NOT FOG: the air no thicker than the thickest level's (0.34); at 0.82 it hid the lit mouth.
+        air = re.search(r"airAtMost = ([\d.]+)", client_text)
+        if not air or float(air.group(1)) > 0.4:
+            fail("FloodedHallsClient: the dark thickens the air past 0.4, and black air hides the mouth even when it is lit.")
+        if re.search(r"^local DARK = \{[^}]*[{,]\s*density = ", client_text, re.M):
+            fail("FloodedHallsClient: the dark sets the air's thickness outright again (it hid the mouth).")
+        # DARK, NOT BLACK (2026-10-18, the fourth test: "I can't see anything other than the glowing light"): the air
+        # keeps some of the halls' light (the black air hides what is far), the exposure is not turned right down,
+        # and the light on you is strong enough to see you by.
+        amb = re.search(r"^local DARK = \{ ambient = Color3\.fromRGB\((\d+), (\d+), (\d+)\), exposure = (-?[\d.]+),",
+                        client_text, re.M)
+        if not amb:
+            fail("FloodedHallsClient: this check can no longer read the dark's light (DARK).")
+        else:
+            rgb = [int(v) for v in amb.groups()[:3]]
+            if min(rgb) < 16:
+                fail("FloodedHallsClient: the dark is black again (ambient %s): only the mouth's lamps show, not you or it." % rgb)
+            if max(rgb) > 48:
+                fail("FloodedHallsClient: the dark is lit (ambient %s): the halls round the shaft show." % rgb)
+            if float(amb.group(4)) < -0.2:
+                fail("FloodedHallsClient: the dark turns the exposure down to %s, which puts out the light on you too." % amb.group(4))
+        glim = re.search(r"glimmer\.Brightness = ([\d.]+)", client_text)
+        lamp = re.search(r"over\.Brightness = ([\d.]+)\n\tover\.Range = ([\d.]+)", client_text)
+        if not glim or float(glim.group(1)) < 1:
+            fail("FloodedHallsClient: you are not seen in the dark (the light on you is too faint).")
+        if not lamp or float(lamp.group(1)) < 1 or not 10 <= float(lamp.group(2)) <= 24:
+            fail("FloodedHallsClient: the lamp over you is missing, too faint, or reaches far enough to light the halls.")
+        # THE MOUTH'S OWN GLOW: faint, cold, reaching its outside, and out until it comes.
+        aura = maw_lua[maw_lua.find("local aura: { PointLight } = {}"):maw_lua.find("model.Parent = parent", maw_lua.find("local aura"))]
+        if "faint.Shadows = false" not in aura or "faint.Brightness = 0\n" not in aura:
+            fail("Maw: the mouth has no glow of its own on its outside, or it shows before the mouth comes.")
+        tint = re.search(r"faint\.Color = Color3\.fromRGB\((\d+), (\d+), (\d+)\)", aura)
+        if not tint or int(tint.group(1)) > min(int(tint.group(2)), int(tint.group(3))):
+            fail("Maw: its own glow is warm; warm light on its outside made it a glowing pumpkin.")
+        fade = re.search(r"faint\.Brightness = ([\d.]+) \* amount", maw_lua)
+        if not fade or float(fade.group(1)) > 1.0:
+            fail("Maw: its own glow is not slight (or not tied to how lit it is): it would light the shaft.")
+        # A close look at your face, long enough to read, before you drop.
+        if float(jaws.get("into", 0)) - float(jaws.get("face", 0)) < 0.45:
+            fail("FloodedHallsClient: the look at your face as you see it is too short to read.")
+        if float(jaws.get("face", 0)) - float(jaws.get("reveal", 0)) < 0.6:
+            fail("FloodedHallsClient: the wide shot of the mouth is cut before it can be seen.")
+        if lunge > 0.8 or rise < 20:
+            fail("FloodedHallsClient: the mouth does not lunge (it rises %g studs over %g s)" % (rise, lunge))
+        if float(jaws["into"]) - (float(jaws["reveal"]) + lunge) < 0.5:
+            fail("FloodedHallsClient: you never hang over the open mouth (it has only just opened as you drop in), so "
+                 "there is no moment to see what it is.")
+        maw_secs = number(text, r"^\tMAW = ([\d.]+),", "GATES.MAW")
+        if maw_secs is not None and float(jaws["caption"]) + 2 > maw_secs:
+            fail("FloodedHallsClient: the mouth's last line comes too late for the %g seconds the server gives it." % maw_secs)
+        if None not in (plunge, helix_srv, seconds_srv):
+            v0 = 2 * plunge / ((1 - helix_srv) * seconds_srv)
+            # HOW FAST YOU FALL WHILE TIME ALL BUT STOPS (HANG): slow enough that it is a hang, not a fall.
+            hang = number(client_text, r"^local HANG = ([\d.]+)", "HANG") or 3.0
+            if hang > 3:
+                fail("FloodedHallsClient: you fall at %g studs a second over the open mouth; time does not stop." % hang)
+            j = {k: float(v) for k, v in jaws.items()}
+
+            def speed(m):
+                if m < j["dark"]:
+                    return v0 - 30 * m
+                if m < j["reveal"]:
+                    a = v0 - 30 * j["dark"]
+                    x = (m - j["dark"]) / (j["reveal"] - j["dark"])
+                    return a + (hang - a) * x * x * (3 - 2 * x)
+                if m < j["into"]:
+                    return hang
+                if m < j["into"] + 0.25:
+                    x = (m - j["into"]) / 0.25
+                    return hang + (45 - hang) * x * x * (3 - 2 * x)
+                return 45 + 35 * (m - j["into"] - 0.25)
+            hinge_below = deep - rise  # where the hinge ends up under the end of the tube's fall, after the lunge
+            depth, m, lowest_open, landed = 0.0, 0.0, 1e9, None
+            while m < j["snap"]:
+                depth += speed(m + 0.005) * 0.01
+                m += 0.01
+                if j["reveal"] + lunge <= m <= j["into"]:
+                    lowest_open = min(lowest_open, hinge_below - depth)
+                if landed is None and depth >= hinge_below - 8:
+                    landed = m
+            # Open, the jaw tips stand cos(0.86) of the jaw's 52 above the hinge: about 34.
+            if lowest_open < 34 + 4:
+                fail("FloodedHallsClient: while time all but stops the rider is only %.0f over the hinge, down among the teeth "
+                     "rather than hanging over them." % lowest_open)
+            if landed is None or landed > j["snap"] - 0.4:
+                fail("FloodedHallsClient: the rider is not in the mouth when it starts to shut.")
+    # THE SHOTS STAY IN THE SHAFT AND CLEAR OF THE MAST: the hinge is a slide radius from it; the shot into it past you and
+    # the wide shot of the bite are inside the pit's walls, off the mast, and the bite's above the jaws' tips.
+    pit_half = number(text, r"^local PIT_HALF = ([\d.]+)", "PIT_HALF")
+    into_eye = re.search(r"local eye = pos \+ Vector3\.new\(0, ([\d.]+) - [\d.]+ \* k, 0\) \+ inward \* \(([\d.]+) - [\d.]+ \* k\) \+ side \* ([\d.]+)", client_text)
+    bite_eye = re.search(r"CFrame\.lookAt\(hinge\.Position \+ opens \* ([\d.]+) \+ inward \* ([\d.]+) \+ side \* ([\d.]+), hinge\.Position", client_text)
+    if not into_eye or not bite_eye or None in (pit_half, slide_r, scale):
+        fail("FloodedHallsClient: this check can no longer read where the mouth's shots are taken from.")
+    else:
+        hinge_r = slide_r * scale
+        for label, inward_, side_ in (("into it past you", float(into_eye.group(2)), float(into_eye.group(3))),
+                                      ("of the bite", float(bite_eye.group(2)), float(bite_eye.group(3)))):
+            r = math.hypot(hinge_r - inward_, side_)
+            if r > pit_half - 1:
+                fail("FloodedHallsClient: the shot %s is %.0f from the mast, in the pit's wall." % (label, r))
+            if r < 3 + 3:
+                fail("FloodedHallsClient: the shot %s is against the mast." % label)
+        if float(bite_eye.group(1)) < 52 + 2:
+            fail("FloodedHallsClient: the wide shot of the bite is down among the jaws, not over them.")
+    for needle, why in (
+        ("glow.Shadows = true", "the light inside the mouth shines through the jaws onto their outside (the glowing ball)"),
+        ("gullet.Shadows = true", "the red down its throat shines through the jaws"),
+        ("function Maw.place(built: Built, hinge: CFrame)", "the mouth cannot move"),
+    ):
+        if needle not in maw_lua:
+            fail("Maw: " + why + ".")
+    if "pour.Lifetime = NumberRange.new(0.6, 0.9)" not in text:
+        fail("THE FLUME: the water off its end falls all the way down the shaft.")
+    # THE MOUTH ITSELF: uncanny light that is never steady, red down its throat, breath, and saliva that snaps.
+    for needle, why in (
+        ('gullet.Color = Color3.fromRGB(255, 56, 40)', "no red down its throat"),
+        ("dip = if math.noise(clock * 3.1, 0.5) > 0.38 then 0.4 else 1", "its light is steady, which is a lamp, not a thing"),
+        ("function Maw.breathe(built: Built, rate: number)", "it does not breathe"),
+        ("local snapped = span > strand.snaps", "the saliva never snaps"),
+    ):
+        if needle not in maw_lua:
+            fail("Maw: " + why + ".")
+    if "Neon" in maw_lua:
+        fail("Maw: something in the mouth fakes light with Neon.")
+    # WATER IN THE FLUME, run downhill by each client; and it pours off the end.
+    for needle, why in (
+        ('game:GetService("CollectionService"):AddTag(water, "FlumeWater")', "the flume has no water in it"),
+        ('"FlumePour"', "the water does not pour off the end"),
+    ):
+        if needle not in text:
+            fail("THE FLUME: " + why + ".")
+    if "pcall(moveWater, os.clock())" not in client_text:
+        fail("FloodedHallsClient: the water in the flume never runs.")
+    # THE GROWL AND THE ROAR are made, written, and listed (as having a stand-in).
+    for name in ("MawGrowl", "MawRoar"):
+        if '("%s", ' % name not in sfx_text or not (HERE.parent / "audio" / "story" / (name + ".wav")).exists():
+            fail("audio: %s is not made, or not written to audio/story" % name)
+        if '"%s"' % name not in boot_text or "%s = true" % name not in boot_text:
+            fail("Bootstrap: %s is not in the list of story sounds, or not marked as having a stand-in" % name)
 
     print("flooded halls: scale %g, bay %g, lane +/-%g inside a %g-wide corridor, walkway %g "
           "studs above the water, %d mesh kinds placed."

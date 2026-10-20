@@ -293,12 +293,26 @@ if not short_by:
     fail("this check can no longer read how far short of the mouth the finale terrace stops")
 terrace_l = S["WALK_L"] - (float(short_by.group(1)) if short_by else 8)
 report = {}
+# THE STORM BY THE SLIDE builds over the last stretch of a run, never from its first half, and every run reaches
+# it: STORM_FROM (SkyPoolsClient) against each laid route's distance from the slide's mouth.
+storm_from_found_ = re.search(r"^local STORM_FROM = ([0-9.]+)", CLIENT, re.M)
+storm_from_ = float(storm_from_found_.group(1)) if storm_from_found_ else None
+if storm_from_ is None:
+    fail("this check can no longer read STORM_FROM from SkyPoolsClient")
 for label, count in RUNS:
     worst = {"steep": 0.0, "slide": (1e9, 0.0), "apart": 1e9, "drop": 0.0, "long": 0.0, "mouth": 1e9}
     for seed in range(300):
         radius, chunks, finish_y = lay(count, seed)
         tops = [ch["y"] + (CAP_TOP if ch["id"] == "S1_Straight" else 2) for ch in chunks]
         cloud_top, pool_y, sea_y, top_y = heights(BASE_SURFACE_Y, kill_y(chunks))
+        if storm_from_ is not None:
+            mouth_ = slide_spec(radius, chunks, finish_y)["mouth"]
+            near_ = [math.hypot(ch["pos"][0] - mouth_[0], ch["pos"][1] - mouth_[1]) < storm_from_ for ch in chunks]
+            if not near_[-1]:
+                fail("%s seed %d: the storm by the slide never reaches the end of the route" % (label, seed))
+            elif near_.index(True) < len(chunks) * 0.5:
+                fail("%s seed %d: the storm by the slide begins in the first half of the run (chunk %d of %d)"
+                     % (label, seed, near_.index(True) + 1, len(chunks)))
 
         # ----- heights in order
         if min(tops) - cloud_top < 20:
@@ -701,6 +715,242 @@ soda_ = re.search(r"\tJelloSoda = \{(.*?)\n\t\}", APPEAR, re.S)
 if not soda_ or "Enum.Material.Glass" in soda_.group(1):
     fail("JelloSoda is Glass again, so against Sky Pools' sky it vanishes from a low angle")
 
+# THE STORM BY THE SLIDE (SkyPoolsClient): near the mouth the clouds round the tower darken and the light drops a
+# little, eased over seconds and written in small steps, never dark; it clears under the clouds and is gone at
+# once off the level; lightning is a real light, soft and brief, only at the height of it.
+storm_ = CLIENT[CLIENT.find("-- ===== THE STORM BY THE SLIDE ====="):CLIENT.find("local function step()")]
+def storm_number_(name_):
+    found_ = re.search(r"^local %s = (-?[0-9.]+)" % name_, CLIENT, re.M)
+    return float(found_.group(1)) if found_ else None
+from_, full_ = storm_number_("STORM_FROM"), storm_number_("STORM_FULL")
+if from_ is None or full_ is None or not (from_ > full_ > 0):
+    fail("the storm does not build between two distances from the slide (STORM_FROM > STORM_FULL > 0)")
+ease_ = storm_number_("STORM_EASE")
+if ease_ is None or not (0 < ease_ <= 1):
+    fail("the storm does not ease in over seconds (STORM_EASE between 0 and 1)")
+darkest_ = storm_number_("STORM_DARKEST")
+if darkest_ is None or darkest_ > 0.6:
+    fail("the storm takes the clouds too far toward grey (STORM_DARKEST over 0.6)")
+grey_ = re.search(r"local STORM_GREY = Color3\.fromRGB\((\d+), (\d+), (\d+)\)", CLIENT)
+if not grey_ or min(int(v_) for v_ in grey_.groups()) < 100:
+    fail("the storm grey is too dark for clouds in daylight")
+bright_ = re.search(r"cc\.Brightness = -([0-9.]+) \* s", storm_)
+if not bright_ or float(bright_.group(1)) > 0.08:
+    fail("the storm drops the light more than a little (Brightness under -0.08)")
+lightning_ = storm_number_("LIGHTNING_BRIGHT")
+if lightning_ is None or lightning_ > 1.5:
+    fail("the lightning is brighter than a soft flash in the clouds (LIGHTNING_BRIGHT over 1.5)")
+for needle_, why_ in (
+    ("storm += (target - storm) * math.min(1, STORM_EASE * dt)", "the storm jumps instead of easing"),
+    ("if key == stormWritten then\n\t\treturn", "the storm is written every frame, not only when it moves"),
+    ("target *= math.clamp((root.Position.Y - (bottom - 30)) / 30, 0, 1)", "the storm does not clear under the clouds"),
+    ('Players.LocalPlayer:GetAttribute("InLevel") == "skyPools"', "the storm is not only on Sky Pools"),
+    ("if stormShade then\n\t\t\tstormGone()", "leaving the level leaves the screen shaded"),
+    ("\t\tpaintClouds(0)\n", "the clouds are not given back their colours when the storm goes"),
+    ("cloudBase[item] = base", "each cloud's own colour is not kept, so it cannot ease back"),
+    ('Instance.new("PointLight")', "the lightning is not a real light"),
+    ("light.Shadows = false", "the lightning casts shadows (costly, and harsh)"),
+    ("if storm < 0.6 or now < nextFlash", "the lightning is not kept to the height of the storm"),
+    ("spot:Destroy()", "a lightning light is left behind"),
+):
+    if needle_ not in storm_:
+        fail("SkyPoolsClient: " + why_)
+if "Neon" in storm_:
+    fail("SkyPoolsClient: the storm fakes light with Neon")
+if "\tmoveFalls(now)\n\tmoveStorm(now)\n" not in CLIENT:
+    fail("SkyPoolsClient: the storm is never moved")
+if 'CollectionService:GetInstanceAddedSignal("SkyPoolsLevel"):Connect(stormFor)' not in CLIENT:
+    fail("SkyPoolsClient: the storm never finds the level")
+
+# ===================================================================== the slide's shots
+#
+# WHERE THE RIDE IS GOING (2026-10-16): the deck is only about twenty studs over the cloud tops, so the old "under
+# the clouds" shot held from the push off until they came out: nine seconds of the bottom of a slide with nobody on
+# it. Restated here from SkyPoolsClient's own numbers and replayed on laid runs: the track sees the slide on ahead,
+# the plunge holds over the cloud tops, the wide shot under the cloud sea frames where the slide comes out AND the
+# pool it lands in, and the camera waits under the exit only a moment before they burst through. No shot is a flash,
+# no eye is ever inside the cloud (twice the whole picture went white).
+def lua_num(text, pattern, label):
+    found = re.search(pattern, text, re.M)
+    if not found:
+        fail("this check can no longer read %s" % label)
+        return None
+    return [float(g) for g in found.groups()]
+
+
+shot_nums = {
+    "holds": lua_num(CLIENT, r"^local PLUNGE_HOLD = ([\d.]+).*\n^local BURST_LEAD = ([\d.]+).*\n^local BURST_HOLD = ([\d.]+)",
+                     "how long the plunge, the wait under the cloud and the burst are held"),
+    "marks": lua_num(CLIENT, r"local plunge = below\(cloudTop \+ ([\d.]+), 0\)\n\tlocal out = below\(cloudBottom - ([\d.]+), plunge\)",
+                     "where the ride goes into the cloud and comes out"),
+    "track": lua_num(CLIENT, r"local eye = here \+ out \* ([\d.]+) \+ Vector3\.new\(0, ([\d.]+), 0\) - flat \* ([\d.]+)\n",
+                     "the track's eye"),
+    "plunge": lua_num(CLIENT, r"Cinema\.clear\(here - flat \* ([\d.]+) \+ out \* ([\d.]+) \+ Vector3\.new\(0, ([\d.]+), 0\), here, ignore\)",
+                      "the plunge's eye"),
+    "below": lua_num(CLIENT, r"local eye = mid \+ away \* \(([\d.]+) - ([\d.]+) \* drift\) \+ Vector3\.new\(0, ([\d.]+) \+ ([\d.]+) \* drift, 0\)",
+                     "the wide shot's eye"),
+    "aim": lua_num(CLIENT, r"Cinema\.point\(CFrame\.lookAt\(eye, mid:Lerp\(marks\.outAt, ([\d.]+)\)\), ([\d.]+), true\)",
+                   "where the wide shot looks"),
+    "burst": lua_num(CLIENT, r"marks\.outAt \+ marks\.outRun \* ([\d.]+) \+ away \* ([\d.]+) \+ Vector3\.new\(0, -([\d.]+), 0\)",
+                     "the eye that waits under the cloud"),
+    "path": lua_num(SKYPATH, r"^SkyPath\.SPEED = ([\d.]+)\n^SkyPath\.MIN_SECONDS, SkyPath\.MAX_SECONDS = ([\d.]+), ([\d.]+)\n"
+                             r"^SkyPath\.RAMP = ([\d.]+)", "the ride's speed and bounds"),
+}
+for needle, why in (
+    ("pcall(scene.markClouds, ride :: Ride)", "when the ride goes into the cloud and comes out is never worked out"),
+    ("\telseif marks and u < marks.plunge then\n", "the track does not run until they reach the cloud"),
+    ("\t\tif since < PLUNGE_HOLD and left > BURST_LEAD then\n", "the plunge is not held over the cloud tops"),
+    ('\t\telseif left > BURST_LEAD and (scene.shot == "below" or left > BURST_LEAD + 1) then\n',
+     "the way down is not shown while they are in the cloud"),
+    ("\telseif marks and (u - marks.out) * current.seconds < BURST_HOLD then\n", "the camera does not turn after them"),
+    ("\t\tCinema.point(CFrame.lookAt(scene.eye :: Vector3, here + Vector3.new(0, 1, 0)), 60, true)\n",
+     "the camera does not turn after them once they are out of the cloud"),
+    ("\t\t\tCinema.impact(0.7)\n", "bursting out of the cloud is not hit"),
+    ("\t\t\tscene.puff(here)\n", "no puff where they come out of the cloud"),
+    ("CFrame.lookAt(eye, here:Lerp(far, 0.3)", "the track looks only at the rider, never at where they are going"),
+):
+    if needle not in CLIENT:
+        fail("SkyPoolsClient: " + why)
+if 'scene.cutTo("under")' in CLIENT:
+    fail("SkyPoolsClient: the old shot of the bottom of the slide, waiting from the push off, is back")
+if all(shot_nums.values()):
+    plunge_hold, burst_lead, burst_hold = shot_nums["holds"]
+    over_top, under_bottom = shot_nums["marks"]
+    t_out, t_up, t_back = shot_nums["track"]
+    p_back, p_out, p_up = shot_nums["plunge"]
+    b_far, b_in, b_up, b_rise = shot_nums["below"]
+    b_aim, b_fov = shot_nums["aim"]
+    w_run, w_away, w_down = shot_nums["burst"]
+    speed, min_s, max_s, ramp = shot_nums["path"]
+    samples = 200
+
+    def ride_share(u):
+        norm = 1 - ramp / 2
+        return (u * u / (2 * ramp)) / norm if u < ramp else (u - ramp / 2) / norm
+
+    def flat_unit(x, z):
+        m = math.hypot(x, z)
+        return (x / m, z / m) if m > 0.01 else (1.0, 0.0)
+
+    shot_worst = {"wait": 0.0, "short": (1e9, ""), "hidden": 0.0}
+    for label, count in RUNS:
+        for seed in range(0, 300, 25):
+            radius, chunks, finish_y = lay(count, seed)
+            cloud_top, pool_y, sea_y, top_y = heights(BASE_SURFACE_Y, kill_y(chunks))
+            spec = slide_spec(radius, chunks, finish_y)
+            ctop, cbot = cloud_top + 8, cloud_top - S["CLOUD_THICK"] * 1.3
+            cx, cz = spec["centre"]
+
+            def on_slide(f):
+                (x, z), y, _ = slide_point(spec, f)
+                return (x, y, z)
+            dist = [0.0]
+            for i in range(1, samples + 1):
+                dist.append(dist[-1] + math.dist(on_slide(i / samples), on_slide((i - 1) / samples)))
+            seconds = min(max_s, max(min_s, dist[-1] / speed))
+
+            def ride_at(u):
+                t = min(1, max(0, ride_share(min(1, max(0, u))))) * dist[-1]
+                lo = 0
+                while lo < samples - 1 and dist[lo + 1] < t:
+                    lo += 1
+                span = dist[lo + 1] - dist[lo]
+                return on_slide((lo + ((t - dist[lo]) / span if span > 0 else 0)) / samples)
+
+            def first_below(y, start):
+                u = start
+                while u < 1:
+                    if ride_at(u)[1] < y:
+                        return u
+                    u += 0.002
+                return 1
+            u_in = first_below(ctop + over_top, 0)
+            u_out = first_below(cbot - under_bottom, u_in)
+            if u_out >= 1:
+                fail("%s seed %d: the ride never comes out under the cloud" % (label, seed))
+                continue
+            shot, began, shots = None, 0.0, []
+            step = 1 / 20
+            t = 0.0
+            while t < seconds:
+                u = t / seconds
+                here = ride_at(u)
+                ox, oz = flat_unit(here[0] - cx, here[2] - cz)
+                if u < 0.1:
+                    name = "push"
+                elif u < u_in:
+                    name = "track"
+                    if here[1] + t_up < ctop + 4:
+                        fail("%s seed %d: the track's eye goes down into the cloud tops" % (label, seed))
+                elif u < u_out:
+                    left, since = (u_out - u) * seconds, (u - u_in) * seconds
+                    if since < plunge_hold and left > burst_lead:
+                        name = "plunge"
+                        if shot != "plunge" and here[1] + p_up < ctop + 4:
+                            fail("%s seed %d: the plunge is watched from inside the cloud" % (label, seed))
+                    elif left > burst_lead and (shot == "below" or left > burst_lead + 1):
+                        name = "below"
+                    else:
+                        name = "wait"
+                elif (u - u_out) * seconds < burst_hold:
+                    name = "burst"
+                elif u < 0.86:
+                    name = "face"
+                else:
+                    name = "pool"
+                if name != shot:
+                    if shot is not None:
+                        shots.append((shot, t - began))
+                    shot, began = name, t
+                t += step
+            shots.append((shot, seconds - began))
+            for name, length in shots:
+                if name == "wait":
+                    shot_worst["wait"] = max(shot_worst["wait"], length)
+                if name != "pool":
+                    if length < 0.8:
+                        fail("%s seed %d: the %s shot is a flash (%.2f s)" % (label, seed, name, length))
+                    shot_worst["short"] = min(shot_worst["short"], (length, name))
+            # The camera waiting on the empty bottom of the slide: a moment, never the ride.
+            waited = sum(length for name, length in shots if name == "wait")
+            if waited > burst_lead + 1.2:
+                fail("%s seed %d: the camera waits %.1f s under the cloud on an empty slide" % (label, seed, waited))
+            if [name for name, _ in shots][:2] != ["push", "track"] or "below" not in [name for name, _ in shots]:
+                fail("%s seed %d: the shots run %s" % (label, seed, [name for name, _ in shots]))
+            # The eyes under the cloud are under it.
+            out_at = ride_at(u_out)
+            onward = ride_at(min(1, u_out + 0.02))
+            rx, rz = flat_unit(onward[0] - out_at[0], onward[2] - out_at[2])
+            ax, az = flat_unit(out_at[0] - cx, out_at[2] - cz)
+            if out_at[1] - w_down > cbot - 10:
+                fail("%s seed %d: the eye waiting for them to come out is inside the cloud" % (label, seed))
+            landing = on_slide(1)
+            mid = tuple((a + b) / 2 for a, b in zip(out_at, landing))
+            mx, mz = flat_unit(mid[0] - cx, mid[2] - cz)
+            target = tuple(a + (b - a) * b_aim for a, b in zip(mid, out_at))
+            tv = math.tan(math.radians(b_fov / 2))
+            for drift in (0.0, 1.0):
+                far = b_far - b_in * drift
+                eye = (mid[0] + mx * far, min(mid[1] + b_up + b_rise * drift, cbot - 16), mid[2] + mz * far)
+                if math.hypot(eye[0] - cx, eye[2] - cz) < S["FINAL_RADIUS"] + 15:
+                    fail("%s seed %d: the wide shot's eye is over the pool, not out in the open" % (label, seed))
+                fx, fy, fz = (target[0] - eye[0], target[1] - eye[1], target[2] - eye[2])
+                m = math.sqrt(fx * fx + fy * fy + fz * fz)
+                fx, fy, fz = fx / m, fy / m, fz / m
+                rgx, rgz = flat_unit(-fz, fx)
+                # up = right x forward, with right = (rgx, 0, rgz)
+                upx, upy, upz = (-rgz * fy, rgz * fx - rgx * fz, rgx * fy)
+                for what, p in (("where the slide comes out", out_at), ("the pool it lands in", landing),
+                                ("the cloud over the exit", (out_at[0], cbot, out_at[2]))):
+                    rel = (p[0] - eye[0], p[1] - eye[1], p[2] - eye[2])
+                    z = rel[0] * fx + rel[1] * fy + rel[2] * fz
+                    x = rel[0] * rgx + rel[2] * rgz
+                    y = rel[0] * upx + rel[1] * upy + rel[2] * upz
+                    if z <= 0 or abs(y / z) > tv * 0.97 or abs(x / z) > tv * 16 / 9 * 0.97:
+                        fail("%s seed %d: the wide shot under the cloud does not frame %s" % (label, seed, what))
+    print("slide shots: the camera waits under the cloud %.1f s at most, the shortest shot is the %s (%.1f s)"
+          % (shot_worst["wait"], shot_worst["short"][1], shot_worst["short"][0]))
+
 # ===================================================================== report
 
 for label, worst in report.items():
@@ -709,6 +959,19 @@ for label, worst in report.items():
           "mouth %s"
           % (label, worst["apart"], worst["long"], worst["drop"], worst["slide"][0], worst["slide"][1],
              worst["steep"], nearest))
+# THE FALLS BREAK UP (the hundred-and-first pass): a fall's sheet goes down VEIL_REACH studs at most, thinning as it
+# goes, and its streaks and mist carry on; a sheet from a pool to the clouds is a thin white line through everything.
+SKY_TEXT = "\n".join(SKY_SOURCE)
+reach = re.search(r"^local VEIL_REACH = ([\d.]+)", SKY_TEXT, re.M)
+if not reach or float(reach.group(1)) > 60:
+    fail("SkyPoolsService: a fall's sheet reaches further than 60 studs (a white line to the clouds)")
+for needle, why in (
+    ("local reach = math.min(height, VEIL_REACH)", "a fall's sheet goes all the way down"),
+    ("local alpha = veil.alpha + (1 - veil.alpha) * thin * 0.92", "a long fall's sheet does not thin as it falls"),
+    ('sheet:SetAttribute("Alpha", alpha)', "the shimmer puts a long fall's sheet back to solid"),
+):
+    if needle not in SKY_TEXT:
+        fail("SkyPoolsService: " + why)
 if problems:
     print("\nPROBLEMS:")
     for p in dict.fromkeys(problems):

@@ -49,7 +49,8 @@ MUTATIONS = [
     ("SeaRig expecting the gems on their side", RIG, CITY,
      "Treasure_Gems = Vector3.new(9, 12, 9)", "Treasure_Gems = Vector3.new(9, 9, 12)"),
     ("the Ferris wheel back in the window", SERVER, CITY, "\twindow = 190,", "\twindow = 120,"),
-    ("a speech bubble behind the room again", NPC, CITY, "gui.AlwaysOnTop = true", "gui.AlwaysOnTop = false"),
+    ("a speech bubble behind the room again", NPC, CITY, "gui.AlwaysOnTop = true\n\tgui.MaxDistance = if shout",
+     "gui.AlwaysOnTop = false\n\tgui.MaxDistance = if shout"),
     ("a double dash in what they say", NPC, CITY, "It's leaking! Get back from it!", "It's leaking -- get back from it!"),
 ]
 

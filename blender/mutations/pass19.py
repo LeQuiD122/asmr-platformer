@@ -46,8 +46,8 @@ MUTATIONS = [
     ("left inside your head", VIEW, STORY, "\t\tsettleThird()\n\telse", "\t\tapply()\n\telse"),
     ("first person by a scroll", VIEW, STORY, "player.CameraMinZoomDistance = LOBBY_NEAR", "player.CameraMinZoomDistance = 0.5"),
     # The drain's cries.
-    ("cries in a warning sign's letters", SUNK, STORY, "piece.Font = if quiet then Enum.Font.Kalam else Enum.Font.PermanentMarker",
-     "piece.Font = Enum.Font.GothamBlack"),
+    ("cries in a warning sign's letters", SUNK, STORY, "piece.FontFace = if quiet then Style.FONT.murmur else Style.FONT.shout",
+     "piece.FontFace = Style.FONT.display"),
     ("cries too fast to read", SUNK, STORY, "task.wait(if quiet then 2.8 else 1.7)", "task.wait(if quiet then 0.85 else 0.85)"),
     # The slime's kick.
     ("a kick that fights a scene", CBOOT, STORY, "if camera and camera.CameraType == Enum.CameraType.Custom then",
