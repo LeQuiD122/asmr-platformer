@@ -26,6 +26,7 @@ the same four ideas:
     that is already gone when you want the next one.
 """
 import pathlib
+import sys
 import zlib
 
 import numpy as np
@@ -250,7 +251,11 @@ EVENTS = [
     ("button_circuit", circuit, 2),
 ]
 
-if __name__ == "__main__":
+# WRITES NOTHING NOW (the ninety-sixth pass): the keypad is remade by gen_keypad_sfx.py (and its short sounds as sheets
+# by gen_sheet_sfx.py). The helpers above are still every older generator's; the zaps stay to read. `--old` writes them.
+if __name__ == "__main__" and "--old" not in sys.argv:
+    print("gen_button_sfx.py writes nothing now: see gen_keypad_sfx.py and gen_sheet_sfx.py")
+elif __name__ == "__main__":
     print("writing %s" % OUT)
     for stem, make, takes in EVENTS:
         for take in range(1, takes + 1):

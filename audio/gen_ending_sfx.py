@@ -1,314 +1,345 @@
-"""Each ending's own sounds, a new Needoh squeeze and a new lava crust, synthesised.
+"""Each ending's own sounds, remade (the ninety-sixth pass): every one of the eighteen, scored like the end of a film.
 
-    python audio/gen_ending_sfx.py
+    python audio/gen_ending_sfx.py               every one
+    python audio/gen_ending_sfx.py EndChord      only those named
 
-Writes 16-bit mono WAVs:
+Writes audio/endings/<Name>.wav, the same eighteen names as before, for SoundService.StorySounds: each a drop-in
+for the old one, at its loudness and (for the loops) its length, so the scenes play them as they did.
 
-  audio/endings/<Name>.wav        every ending's own sounds (below), for SoundService.StorySounds
-  audio/materials/needohSquish_<n>.wav   four takes of the squeeze toy (it was sharing clay's sound)
-  audio/materials/lavaCrust_<n>.wav      four new takes of the lava crust, replacing the old ones
+What changed is what they are made of (`sfx_kit.py`). The chords were sine waves; they are a felt piano and a soft
+string section now, in a hall. The water was band-passed hiss; it is water now: bubbles ringing, drops landing,
+cavities closing (the splash you go into the sea with is the same physics as a drip, at the size of a person). The
+wind is air shaped by how fast you are going, and the tunnels and shafts are rooms with their own echoes.
 
-THE ENDINGS, each scored like the end of a film, and each in its own voice:
+  CITY SHORE     DiveBoard, DiveWind, DiveSplash, UnderwaterHum (loop), ShoreChord
+  SKY POOLS      SlideRush (loop), CloudWhoosh, SkimSlap, PoolPlunge, PoolsChord
+  SUNKEN CITY    WhirlRoar (loop), DrainFall, CulvertWash (loop), SunkenChord
+  FLOODED HALLS  FlumeRush (loop), PlungeWind, HallsChord
+  ALL FOUR       EndChord: the open chord any ending falls back on, at its own pitch
 
-  CITY SHORE     DiveBoard (the board letting you go), DiveWind (the fall, rising), DiveSplash (going in,
-                 and the water closing), UnderwaterHum (the dark under the harbour, looped), ShoreChord
-                 (the last chord, warm, as the street lamp comes into view).
-  SKY POOLS      SlideRush (water in the trough, looped), CloudWhoosh (through the cloud sea), SkimSlap
-                 (each hop across the pool), PoolPlunge (tipping in), PoolsChord (bright, a little wistful).
-  SUNKEN CITY    WhirlRoar (the whirlpool turning, looped), DrainFall (down the shaft), CulvertWash (carried
-                 along Outfall 3, looped), SunkenChord (dark, as the time card comes into view).
-  FLOODED HALLS  FlumeRush (the flume, looped), PlungeWind (the fall into the dark), HallsChord (the tide
-                 going out: the only chord in the game that resolves).
-
-HOW TO GET THEM INTO THE GAME (as with the other story sounds): Asset Manager, Bulk Import every file in
-audio/endings/, and drag them into the Folder SoundService.StorySounds. Each scene looks its sounds up
-there by name, and plays a built-in stand-in for any it does not find. The material takes go into
-SoundService.MaterialSounds, as before (and the four old lavaCrust sounds come out of it first).
+(The Needoh's and the lava crust's takes, which this file used to write, are gen_sheet_sfx.py's now.)
 
 Seeded from each name, so re-running writes the same files.
 """
 import pathlib
 import sys
-import zlib
 
 import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from gen_button_sfx import SR, axis, envelope, filt, finish, mix, peak, phase, punch, taper  # noqa: E402
-from gen_material_sfx import MATERIALS, band, noise, ring, seamless, write  # noqa: E402
+from sfx_kit import (SR, bp, brown, bubble, bubbles, drift, droplet, env, fade, felt_piano, finish, finish_loop, gliding, hp, lp,  # noqa
+                     match, modal, n_, peak, phase, pink, place, resonate, reverb, reverb_loop, rng_for, sculpted,
+                     seamless, splash, strike, swell, t_, warm_pad, white, wood_bar, write)
 
 HERE = pathlib.Path(__file__).resolve().parent
 ENDINGS = HERE / "endings"
 
-
-def brown(duration, rng):
-    """Deep rumbling noise: white noise summed, its drift taken out."""
-    b = np.cumsum(noise(duration, rng))
-    return filt(b - np.mean(b), "high", 20, order=2)
-
-
-def echo(x, lags, decay):
-    """The signal and a few decaying copies of itself: a shaft, a tunnel, a tiled room."""
-    out = x.copy()
-    for k, lag in enumerate(lags):
-        shift = int(SR * lag)
-        if shift < len(x):
-            out[shift:] += x[:-shift] * (decay ** (k + 1))
-    return out
+# The loudness of each old file (measured), which the scenes' volumes were set against.
+LEVELS = {"DiveBoard": -16.4, "DiveWind": -17.6, "DiveSplash": -19.0, "UnderwaterHum": -25.1, "ShoreChord": -17.0,
+          "SlideRush": -18.0, "CloudWhoosh": -16.0, "SkimSlap": -18.1, "PoolPlunge": -20.5, "PoolsChord": -18.5,
+          "WhirlRoar": -17.7, "DrainFall": -14.5, "CulvertWash": -19.2, "SunkenChord": -16.5, "FlumeRush": -18.0,
+          "PlungeWind": -15.0, "HallsChord": -16.7, "EndChord": -17.4}
 
 
-def pad(duration, notes, attack, release, shimmer=0.0, rng=None):
-    """A soft chord: each note two slightly detuned sines and a quiet octave, swelling in and dying away."""
-    t = axis(duration)
-    y = np.zeros_like(t)
-    for index, freq in enumerate(notes):
-        start = 0.12 * index
-        local = np.maximum(t - start, 0)
-        voice = (np.sin(phase(np.full_like(t, freq))) + 0.8 * np.sin(phase(np.full_like(t, freq * 1.004)))
-                 + 0.25 * np.sin(phase(np.full_like(t, freq * 2.0))))
-        level = np.clip(local / attack, 0, 1) * np.clip((duration - t) / release, 0, 1) * (t >= start)
-        y += voice * level
-    if shimmer and rng is not None:
-        y += shimmer * band(noise(duration, rng), 3000, 9000) * np.clip(t / attack, 0, 1) * np.clip((duration - t) / release, 0, 1)
-    return y
+def chord(notes, seconds, rng, roll=0.07, velocity=0.4, pad=0.5, pad_attack=1.6, pad_release=3.0, brightness=0.45,
+          space="hall", wet=0.4, piano=True):
+    """A chord as the films end on one: the felt piano rolling it from the bottom up, the strings swelling in under it,
+    both in a room."""
+    layers = []
+    if piano:
+        for k, f in enumerate(notes):
+            v = velocity * (1.0 - 0.08 * k) * rng.uniform(0.9, 1.05)
+            layers.append((k * roll * rng.uniform(0.8, 1.2), 1.0 / (1 + 0.15 * k), felt_piano(f, seconds, rng, v)))
+    if pad:
+        strings = warm_pad(notes, seconds, rng, attack=pad_attack, release=pad_release, brightness=brightness)
+        layers.append((0.0, pad * 2.5, strings))
+    x = place(seconds, layers)
+    return reverb(x, space, rng, wet=wet)[:n_(seconds)]
+
+
+def wind(seconds, rng, speed, gusts=0.3, low=180, high=5000):
+    """Air going past: the faster (`speed` 0..1 over time) the brighter and louder, buffeted by turbulence."""
+    t = t_(seconds)
+    turb = 0.75 + 0.25 * drift(seconds, rng, rate=4.0) + gusts * 0.2 * drift(seconds, rng, rate=11.0)
+
+    def shape(times, freqs):
+        s = np.interp(times, t, speed)
+        centre = low + (high - low) * s ** 1.3
+        body = 1 / (1 + (freqs / centre) ** 2) * (freqs > 40)
+        rumble = 1 / (1 + (freqs / 90) ** 4) * (0.4 + s)
+        return (body + 0.6 * rumble) * (0.25 + s)
+    return sculpted(seconds, rng, shape) * turb
+
+
+def stream(seconds, rng, rate, r_mm=(0.7, 5.0), body_hz=700, body=0.8):
+    """Running water: bubbles at `rate` a second (a number or an array), over the low turbulent body of the flow."""
+    t = t_(seconds)
+    flow = bubbles(seconds, rng, rate, r_mm=r_mm, beta=2.3, xi=(0.05, 0.3))
+    level = 0.8 + 0.2 * drift(seconds, rng, rate=0.5)
+
+    def shape(times, freqs):
+        return 1 / (1 + (freqs / body_hz) ** 2.4) * (freqs > 40)
+    rush = sculpted(seconds, rng, shape) * level
+    return peak(flow) + body * peak(rush)
 
 
 # ================================================================ CITY SHORE
 def dive_board(rng):
-    """The springboard letting go: a wooden creak, a deep flex thunk, and the board's wobble ringing on."""
-    creak = band(noise(0.35, rng), 700, 2400) * (0.5 + 0.5 * np.sin(2 * np.pi * 34 * axis(0.35))) * envelope(axis(0.35), 0.05, 0.12)
-    thunk = punch(0.5, 160, 70, 0.02, 0.12, drive=2.0)
-    wobble = ring(1.4, [96, 191, 287], 0.35, rng, drop=0.02)
-    wobble = wobble * (0.6 + 0.4 * np.sin(2 * np.pi * 7.5 * axis(1.4)))
-    return finish(mix(1.6, [(0.0, 0.5, taper(peak(creak))), (0.18, 1.0, thunk), (0.2, 0.55, taper(peak(wobble)))]), -3.0,
-                  lowpass=6000)
+    d = 1.6
+    # The board creaking as your weight goes to its end (friction in the fulcrum), then letting go: the board's own
+    # deep flex, its wobble, and the roller rattling in time with it.
+    creak_t = t_(0.4)
+    creak = modal(0.4, [610, 980, 1430], [0.06, 0.05, 0.03], [1.0, 0.6, 0.3], rng)
+    taps = np.zeros(n_(0.4))
+    i = 0
+    while i < len(taps):
+        taps[i] = rng.uniform(0.3, 1.0) * np.sin(np.pi * i / len(taps))
+        i += max(1, int(SR / (45 + 30 * i / len(taps)) * rng.uniform(0.7, 1.3)))
+    creak = np.convolve(taps, creak)[:len(taps)] * env(creak_t, 0.05, 0.25)
+    flex = strike(1.4, [64, 148, 290, 512], [0.9, 0.55, 0.3, 0.15], [1.0, 0.55, 0.3, 0.12], rng, hardness=0.3)
+    wobble = 0.55 + 0.45 * np.cos(2 * np.pi * 8.5 * t_(1.4)) * np.exp(-t_(1.4) / 0.5)
+    rattle = np.zeros(n_(1.4))
+    for k in range(9):
+        at = k / 8.5 + 0.02
+        knock = strike(0.06, [rng.uniform(1700, 2100), rng.uniform(2900, 3300)], [0.02, 0.012], [1, 0.5], rng, 0.8)
+        a = n_(at)
+        rattle[a:a + len(knock)] += knock[:len(rattle) - a] * np.exp(-at / 0.35)
+    x = place(d, [(0.0, 0.35, peak(creak)), (0.17, 1.0, peak(flex * wobble)), (0.17, 0.12, peak(rattle))])
+    x = reverb(x, "open", rng, wet=0.25)[:n_(d)]
+    return finish(x, LEVELS["DiveBoard"], high_cut=6000, fade_out=0.15)
 
 
 def dive_wind(rng):
-    """The fall: air rushing past, rising in pitch and loudness as the water comes up, buffeting."""
     d = 7.0
-    t = axis(d)
-    rise = (t / d) ** 1.4
-    rushes = []
-    for lo, hi in ((200, 900), (500, 2200), (1400, 5200)):
-        rushes.append(band(noise(d, rng), lo, hi))
-    body = rushes[0] * (0.6 + 0.4 * rise) + rushes[1] * (0.3 + 0.7 * rise) + rushes[2] * (0.1 + 0.9 * rise ** 2)
-    buffet = 0.75 + 0.25 * np.sin(2 * np.pi * (3 + 5 * rise) * t + np.sin(2 * np.pi * 0.9 * t))
-    level = np.clip(t / 0.6, 0, 1) * (0.35 + 0.65 * rise) * np.clip((d - t) / 0.08, 0, 1)
-    return finish(peak(body) * buffet * level, -3.0, lowpass=9000)
+    t = t_(d)
+    speed = np.clip(t / d, 0, 1) ** 1.2
+    air = wind(d, rng, speed, gusts=1.0, low=220, high=2800)
+    # Clothes and hair flapping: a low irregular flutter that quickens as you go faster.
+    flap_rate = 9 + 14 * speed
+    flap = 0.5 + 0.5 * np.sin(phase(flap_rate + 3 * drift(d, rng, rate=3)))
+    flutter = lp(bp(white(d, rng), 120, 900), 1200) * flap ** 3 * (0.2 + speed)
+    level = swell(t, d, 0.6, 0.08) * (0.3 + 0.7 * speed)
+    x = (peak(air) + 0.3 * peak(flutter)) * level
+    return finish(x, LEVELS["DiveWind"], high_cut=7000, fade_out=0.08)
 
 
 def dive_splash(rng):
-    """Going in: the crack of the surface, a deep boom, spray falling back, then the water closing over
-    you and everything going muffled and full of bubbles."""
     d = 4.5
-    crack = filt(noise(0.08, rng), "high", 1800) * envelope(axis(0.08), 0.0008, 0.02)
-    boom = punch(1.6, 90, 28, 0.06, 0.55, drive=2.6)
-    spray = band(noise(1.8, rng), 1200, 7000) * envelope(axis(1.8), 0.02, 0.5)
-    under = filt(brown(3.4, rng), "low", 380) * np.clip(axis(3.4) / 0.2, 0, 1) * np.exp(-axis(3.4) / 2.2)
-    bubbles = []
-    for _ in range(26):
-        f = rng.uniform(260, 900)
-        size = rng.uniform(0.04, 0.09)
-        b = np.sin(phase(f * (1 + 0.6 * axis(size) / size))) * envelope(axis(size), 0.004, size / 3)
-        bubbles.append((0.35 + rng.uniform(0, 2.6), rng.uniform(0.15, 0.35), taper(b)))
-    return finish(mix(d, [(0.0, 0.8, peak(crack)), (0.0, 1.0, boom), (0.02, 0.5, taper(peak(spray))),
-                          (0.3, 0.7, taper(peak(under)))] + bubbles), -1.5, lowpass=7000)
+    t = t_(d)
+    hit = splash(rng, size=3.0, seconds=1.6)
+    boom = bubble(55, rng, xi=0.4, seconds=0.9)
+    # Then under: the world shut off, the bubbles you brought down with you rising past your ears, slowly.
+    under_t = t_(3.6)
+    rising = bubbles(3.6, rng, 420 * np.exp(-under_t / 0.9), r_mm=(1.0, 8.0), beta=2.2, xi=(0.05, 0.2))
+    pressure = lp(brown(3.6, rng), 260) * env(under_t, 0.15, 1.8)
+    under = fade(reverb(lp(peak(rising), 1100, order=4) + 0.9 * peak(pressure), "under", rng, wet=0.5)[:n_(3.6)], 0, 0.6)
+    x = place(d, [(0.0, 1.0, peak(hit)), (0.01, 0.7, peak(boom)), (0.55, 0.65, peak(under))])
+    return finish(x, LEVELS["DiveSplash"], high_cut=7000, fade_out=0.6)
 
 
-def underwater_hum(duration, rng):
-    """Down under the harbour: the water's own low pressure, slow bubbles, and far off, a lamp buzzing."""
-    t = axis(duration)
-    low = filt(brown(duration, rng), "low", 220) * (0.8 + 0.2 * np.sin(2 * np.pi * 0.11 * t))
-    buzz = (np.sin(2 * np.pi * 60 * t) + 0.4 * np.sin(2 * np.pi * 120 * t)) * (0.5 + 0.5 * np.sin(2 * np.pi * 0.07 * t))
-    y = 0.9 * peak(low) + 0.06 * buzz
-    for _ in range(int(duration * 1.2)):
-        f = rng.uniform(300, 700)
-        size = rng.uniform(0.05, 0.12)
-        at = int(SR * rng.uniform(0, duration - size))
-        b = np.sin(phase(f * (1 + 0.5 * axis(size) / size))) * envelope(axis(size), 0.005, size / 3)
-        y[at:at + len(b)] += 0.12 * b
-    return y
+def underwater_hum(seconds, rng):
+    t = t_(seconds)
+    pressure = lp(brown(seconds, rng), 240) * (0.8 + 0.2 * drift(seconds, rng, rate=0.15))
+    # Far bubbles, in slow strings of three or four, rising from the street below.
+    trains = np.zeros(n_(seconds))
+    at = rng.uniform(0.2, 1.5)
+    while at < seconds - 1:
+        for k in range(rng.integers(2, 6)):
+            b = bubble(rng.uniform(260, 620), rng, xi=rng.uniform(0.08, 0.22))
+            a = n_(at + k * rng.uniform(0.09, 0.2))
+            if a + len(b) < len(trains):
+                trains[a:a + len(b)] += b * rng.uniform(0.4, 1.0)
+        at += rng.uniform(1.2, 3.0)
+    # The lamp: its mains hum, heard through the water as something felt (a few rough harmonics, wavering).
+    f = 50 * (1 + 0.002 * drift(seconds, rng, rate=0.3))
+    ph = phase(np.full(n_(seconds), 1.0) * f)
+    lamp = sum(np.sin(k * ph + rng.uniform(0, 6)) / k ** 1.3 for k in range(1, 7))
+    lamp = lp(lamp, 300) * (0.6 + 0.4 * drift(seconds, rng, rate=0.1))
+    x = peak(pressure) + 0.35 * peak(lp(trains, 900, order=4)) + 0.05 * peak(lamp)
+    return reverb_loop(x, "under", rng, wet=0.35)
 
 
 def shore_chord(rng):
-    """The last chord, as the street lamp comes into view under the water: warm, low, unhurried."""
-    return finish(pad(9.0, [98.0, 146.8, 196.0, 246.9, 293.7], 2.5, 3.5, 0.03, rng), -6.0, lowpass=3500)
+    # G: warm and low, as the street lamp comes into view under the water.
+    x = chord([98.0, 146.8, 196.0, 246.9, 293.7], 9.0, rng, roll=0.09, velocity=0.38, pad=0.5, brightness=0.35,
+              pad_attack=2.0, pad_release=3.5)
+    return finish(x, LEVELS["ShoreChord"], high_cut=4500, fade_out=2.5)
 
 
 # ================================================================ SKY POOLS
-def slide_rush(duration, rng):
-    """Water sheeting down the trough under you, the sled's hull hissing on it, and the air going by."""
-    t = axis(duration)
-    sheet = band(noise(duration, rng), 800, 4500) * (0.8 + 0.2 * np.sin(2 * np.pi * 0.5 * t))
-    hull = band(noise(duration, rng), 150, 600) * (0.7 + 0.3 * np.sin(2 * np.pi * 2.3 * t))
-    air = band(noise(duration, rng), 2500, 8000) * 0.4
-    return 0.8 * peak(sheet) + 0.6 * peak(hull) + 0.3 * peak(air)
+def slide_rush(seconds, rng):
+    t = t_(seconds)
+    water = stream(seconds, rng, 1800 * (0.85 + 0.15 * drift(seconds, rng, rate=0.6)), r_mm=(0.6, 4.0), body_hz=900)
+    # The sled's hull on the water: a low hollow drum, and a bump at every joint of the trough.
+    hull = resonate(brown(seconds, rng), [(140, 1.0), (310, 0.4)], q=4) * (0.7 + 0.3 * drift(seconds, rng, rate=2))
+    joints = np.zeros(n_(seconds))
+    at = 0.3
+    while at < seconds - 0.3:
+        knock = strike(0.25, [rng.uniform(90, 120), rng.uniform(210, 260)], [0.12, 0.07], [1, 0.4], rng, 0.2)
+        a = n_(at)
+        joints[a:a + len(knock)] += knock[:len(joints) - a] * rng.uniform(0.5, 1.0)
+        at += rng.uniform(0.55, 0.85)
+    air = wind(seconds, rng, np.full(n_(seconds), 0.55), low=300, high=2500)
+    return peak(water) + 0.5 * peak(hull) + 0.25 * peak(joints) + 0.3 * peak(air)
 
 
 def cloud_whoosh(rng):
-    """Through the cloud sea: a big soft whoosh, the world going muffled and coming back."""
     d = 3.0
-    t = axis(d)
-    shape = np.sin(np.pi * np.clip(t / d, 0, 1)) ** 2
-    sweep = filt(noise(d, rng), "low", 600) * 0.6 + band(noise(d, rng), 400, 3000) * shape
-    return finish(peak(sweep) * shape, -5.0, lowpass=5000)
+    t = t_(d)
+    inside = np.sin(np.pi * np.clip(t / d, 0, 1)) ** 2
+    # Into the cloud: a soft enormous whoosh, the world going muffled (the top falling away) and coming back.
+    def shape(times, freqs):
+        k = np.interp(times, t, inside)
+        top = 2600 - 2000 * k
+        return (1 / (1 + (freqs / top) ** 2.5)) * (1 / (1 + (90 / np.maximum(freqs, 1)) ** 2)) * (0.3 + k)
+    air = sculpted(d, rng, shape)
+    damp = lp(pink(d, rng), 400) * inside ** 2
+    x = (peak(air) + 0.4 * peak(damp)) * swell(t, d, 0.4, 0.6)
+    return finish(x, LEVELS["CloudWhoosh"], high_cut=5000, fade_out=0.2)
 
 
 def skim_slap(rng):
-    """The sled's float slapping the water on a hop, and the spray off it."""
-    slap = filt(noise(0.05, rng), "band", [300, 2500]) * envelope(axis(0.05), 0.0008, 0.012)
-    body = punch(0.3, 180, 80, 0.015, 0.06, drive=1.8)
-    spray = band(noise(0.6, rng), 1500, 7000) * envelope(axis(0.6), 0.01, 0.18)
-    return finish(mix(0.7, [(0.0, 1.0, peak(slap)), (0.0, 0.7, body), (0.01, 0.45, taper(peak(spray)))]), -2.0,
-                  lowpass=8000)
+    x = splash(rng, size=0.6, seconds=0.7)
+    hull = strike(0.3, [180, 410], [0.08, 0.05], [1, 0.4], rng, hardness=0.35)
+    x = place(0.7, [(0.0, 1.0, peak(x)), (0.0, 0.5, peak(hull))])
+    return finish(x, LEVELS["SkimSlap"], high_cut=6500, fade_out=0.1)
 
 
 def pool_plunge(rng):
-    """Tipping out of the sled into the pool: a round splash, and bubbles going up past your ears."""
-    splash = band(noise(1.0, rng), 500, 6000) * envelope(axis(1.0), 0.005, 0.25)
-    body = punch(0.8, 120, 45, 0.04, 0.25, drive=2.0)
-    bubbles = []
-    for _ in range(14):
-        f = rng.uniform(400, 1100)
-        size = rng.uniform(0.03, 0.07)
-        b = np.sin(phase(f * (1 + 0.6 * axis(size) / size))) * envelope(axis(size), 0.003, size / 3)
-        bubbles.append((0.25 + rng.uniform(0, 1.4), rng.uniform(0.15, 0.3), taper(b)))
-    return finish(mix(2.2, [(0.0, 0.8, taper(peak(splash))), (0.0, 0.8, body)] + bubbles), -2.5, lowpass=7500)
+    d = 2.2
+    hit = splash(rng, size=1.6, seconds=1.4)
+    under_t = t_(1.8)
+    rising = bubbles(1.8, rng, 520 * np.exp(-under_t / 0.5), r_mm=(1.0, 6.0), beta=2.2, xi=(0.05, 0.2))
+    under = fade(reverb(lp(rising, 1200, order=4), "under", rng, wet=0.4)[:n_(1.8)], 0, 0.4)
+    x = place(d, [(0.0, 1.0, peak(hit)), (0.3, 0.55, peak(under))])
+    return finish(x, LEVELS["PoolPlunge"], high_cut=6500, fade_out=0.4)
 
 
 def pools_chord(rng):
-    """The last chord of the Sky Pools: bright, open, and a little wistful, with sunlight on water in it."""
-    return finish(pad(9.0, [261.6, 329.6, 392.0, 493.9, 587.3], 2.0, 3.5, 0.06, rng), -7.0, lowpass=7000)
+    # C major with its seventh and ninth: bright, open, a little wistful; wooden bars catching the light on top.
+    notes = [130.8, 261.6, 329.6, 392.0, 493.9, 587.3]
+    x = chord(notes, 9.0, rng, roll=0.08, velocity=0.42, pad=0.45, brightness=0.6, pad_attack=1.4, pad_release=3.5)
+    bars = place(9.0, [(0.5 + 0.22 * k, 0.35 - 0.04 * k, wood_bar(f, 6.0, rng, velocity=0.3))
+                       for k, f in enumerate([523.3, 659.3, 784.0, 987.8])])
+    bars = reverb(bars, "hall", rng, wet=0.5)[:n_(9.0)]
+    x = peak(x) + 0.35 * peak(bars)
+    return finish(x, LEVELS["PoolsChord"], high_cut=6500, fade_out=2.5)
 
 
 # ================================================================ THE SUNKEN CITY
-def whirl_roar(duration, rng):
-    """The whirlpool turning: a deep roar with the water's swirl sweeping round through it, and a
-    sucking drone under it where it goes down."""
-    t = axis(duration)
-    roar = filt(brown(duration, rng), "low", 700)
-    swirl_rate = 0.45
-    sweep = band(noise(duration, rng), 500, 2600) * (0.55 + 0.45 * np.sin(2 * np.pi * swirl_rate * t) ** 2)
-    suck = np.sin(phase(np.full_like(t, 41.0) + 3 * np.sin(2 * np.pi * swirl_rate * t))) * 0.6
-    return 0.9 * peak(roar) + 0.5 * peak(sweep) + 0.3 * suck
+def whirl_roar(seconds, rng):
+    t = t_(seconds)
+    turn = 2.2  # seconds a turn of the swirl takes to come round past you
+    sweep = 0.5 + 0.5 * np.sin(2 * np.pi * t / turn + 0.6 * drift(seconds, rng, rate=0.4))
+
+    def shape(times, freqs):
+        s = np.interp(times, t, sweep)
+        centre = 260 + 520 * s
+        return (1 / (1 + ((freqs - centre) / (centre * 0.8)) ** 2) + 0.5 / (1 + (freqs / 120) ** 2)) * (freqs > 30)
+    swirl = sculpted(seconds, rng, shape)
+    gulps = bubbles(seconds, rng, 140 * (0.6 + 0.4 * sweep), r_mm=(4.0, 18.0), beta=1.9, xi=(0.25, 0.5))
+    churn = bubbles(seconds, rng, 900, r_mm=(0.8, 3.5), beta=2.5, xi=(0.05, 0.25))
+    # Where it goes down: a big pipe's throat, resonating with the water pulled into it.
+    throat = resonate(brown(seconds, rng), [(46, 1.0), (93, 0.6), (141, 0.3)], q=8) * (0.7 + 0.3 * sweep)
+    return peak(swirl) + 0.45 * peak(lp(gulps, 1500)) + 0.25 * peak(churn) + 0.6 * peak(throat)
 
 
 def drain_fall(rng):
-    """Down the shaft: rushing water and air, echoing off brick, and the pipe's own low note."""
     d = 4.5
-    t = axis(d)
-    rush = band(noise(d, rng), 300, 3500) * np.clip(t / 0.3, 0, 1) * np.clip((d - t) / 1.0, 0, 1)
-    pipe = np.sin(phase(np.full_like(t, 72.0) - 18 * t / d)) * 0.4 * np.clip(t / 0.5, 0, 1) * np.clip((d - t) / 1.2, 0, 1)
-    return finish(echo(peak(rush) + pipe, (0.09, 0.19, 0.31), 0.45), -3.0, lowpass=6000)
+    t = t_(d)
+    speed = np.clip(t / 1.5, 0, 1)
+    rush = stream(d, rng, 2200 * speed, r_mm=(0.8, 6.0), body_hz=800)
+    air = wind(d, rng, 0.3 + 0.5 * speed, low=200, high=1800)
+    pipe = gliding(d, rng, 70 - 14 * t / d, partials=((1.0, 1.0), (2.0, 0.4)), q=7)
+    x = (peak(rush) + 0.45 * peak(air) + 0.4 * peak(pipe)) * swell(t, d, 0.3, 1.1)
+    x = reverb(x, "shaft", rng, wet=0.55)[:n_(d)]
+    return finish(x, LEVELS["DrainFall"], high_cut=6000, fade_out=0.5)
 
 
-def culvert_wash(duration, rng):
-    """Carried along Outfall 3: a stream running over concrete, echoing down a long brick tunnel."""
-    t = axis(duration)
-    stream = band(noise(duration, rng), 400, 3000) * (0.75 + 0.25 * np.sin(2 * np.pi * 0.3 * t))
-    low = filt(brown(duration, rng), "low", 300)
-    y = 0.8 * peak(stream) + 0.5 * peak(low)
-    return echo(y, (0.12, 0.27, 0.45), 0.4)
+def culvert_wash(seconds, rng):
+    water = stream(seconds, rng, 1100 * (0.8 + 0.2 * drift(seconds, rng, rate=0.4)), r_mm=(0.8, 6.5), body_hz=600)
+    laps = np.zeros(n_(seconds))
+    at = 0.2
+    while at < seconds - 0.6:
+        s = splash(rng, size=rng.uniform(0.25, 0.5), seconds=0.6)
+        a = n_(at)
+        laps[a:a + len(s)] += lp(s, 2500)[:len(laps) - a] * rng.uniform(0.3, 0.8)
+        at += rng.uniform(0.8, 2.2)
+    x = peak(water) + 0.4 * peak(laps)
+    return reverb_loop(x, "culvert", rng, wet=0.5)
 
 
 def sunken_chord(rng):
-    """The last chord of the Sunken City: dark, minor, a long way under the water."""
-    return finish(echo(pad(9.0, [73.4, 110.0, 146.8, 174.6, 220.0], 2.5, 3.8), (0.21, 0.47), 0.35), -6.0,
-                  lowpass=2600)
+    # D minor, low, a long way under the water: the strings carry it, the piano a dull bell under them.
+    x = chord([73.4, 110.0, 146.8, 174.6, 220.0], 9.0, rng, roll=0.11, velocity=0.3, pad=0.7, brightness=0.25,
+              pad_attack=2.4, pad_release=3.6, space="cavern", wet=0.5)
+    return finish(lp(x, 2400), LEVELS["SunkenChord"], fade_out=2.5)
 
 
 # ================================================================ THE FLOODED HALLS
-def flume_rush(duration, rng):
-    """The flume: water hissing down a plastic tube, the tube drumming a little, the halls around it."""
-    t = axis(duration)
-    hiss = band(noise(duration, rng), 1200, 6500) * (0.8 + 0.2 * np.sin(2 * np.pi * 0.7 * t))
-    drum = band(noise(duration, rng), 90, 300) * (0.6 + 0.4 * np.sin(2 * np.pi * 3.1 * t) ** 2)
-    return echo(0.8 * peak(hiss) + 0.5 * peak(drum), (0.15, 0.33), 0.3)
+def flume_rush(seconds, rng):
+    water = stream(seconds, rng, 2000 * (0.85 + 0.15 * drift(seconds, rng, rate=0.7)), r_mm=(0.6, 4.5), body_hz=1100)
+    # The tube: a plastic pipe's hollow note under the water in it (noise in its modes), drumming at the joints.
+    tube = resonate(pink(seconds, rng), [(185, 1.0), (372, 0.6), (561, 0.35), (748, 0.2)], q=10)
+    joints = np.zeros(n_(seconds))
+    at = 0.2
+    while at < seconds - 0.3:
+        knock = strike(0.3, [rng.uniform(150, 190), rng.uniform(340, 400)], [0.15, 0.08], [1, 0.5], rng, 0.25)
+        a = n_(at)
+        joints[a:a + len(knock)] += knock[:len(joints) - a] * rng.uniform(0.4, 1.0)
+        at += rng.uniform(0.35, 0.6)
+    x = peak(water) + 0.35 * peak(tube) + 0.3 * peak(joints)
+    return reverb_loop(x, "tiles", rng, wet=0.3)
 
 
 def plunge_wind(rng):
-    """Out of the tube and falling into the dark: air, and a low rumble growing under it."""
     d = 3.8
-    t = axis(d)
-    air = band(noise(d, rng), 400, 3200) * (0.4 + 0.6 * t / d)
-    rumble = filt(brown(d, rng), "low", 140) * (t / d) ** 1.5
-    level = np.clip(t / 0.2, 0, 1) * np.clip((d - t) / 0.3, 0, 1)
-    return finish((0.7 * peak(air) + 0.8 * peak(rumble)) * level, -3.0, lowpass=5000)
+    t = t_(d)
+    speed = np.clip(t / d, 0, 1)
+    air = wind(d, rng, 0.25 + 0.6 * speed, low=200, high=2200)
+    # Under it, from below, the thing: a low rumble growing, felt before it is heard.
+    rumble = resonate(brown(d, rng), [(52, 1.0), (104, 0.5)], q=4) * speed ** 1.5
+    x = (peak(air) + 0.8 * peak(rumble)) * swell(t, d, 0.2, 0.3)
+    x = reverb(x, "shaft", rng, wet=0.4)[:n_(d)]
+    return finish(x, LEVELS["PlungeWind"], high_cut=5000, fade_out=0.3)
 
 
 def halls_chord(rng):
-    """The tide going out: the one chord in the game that resolves, a suspension falling home."""
+    # The tide going out: A with a suspended fourth, held, then the fourth falling to the third (D to C sharp): the
+    # one chord in the game that resolves. The piano plays the resolution as the strings make it.
     d = 10.0
-    t = axis(d)
-    first = pad(d, [110.0, 164.8, 220.0, 293.7], 1.8, 5.5)
-    second = pad(d, [110.0, 164.8, 220.0, 277.2], 1.8, 3.5)
-    blend = np.clip((t - 4.0) / 1.5, 0, 1)
-    return finish(first * (1 - blend) + second * blend, -6.0, lowpass=4000)
+    t = t_(d)
+    first = chord([110.0, 164.8, 220.0, 293.7], d, rng, roll=0.1, velocity=0.38, pad=0.0)
+    strings_sus = warm_pad([110.0, 164.8, 220.0, 293.7], d, rng, attack=1.8, release=5.5, brightness=0.4)
+    strings_res = warm_pad([110.0, 164.8, 220.0, 277.2], d, rng, attack=1.8, release=3.5, brightness=0.4)
+    blend = np.clip((t - 4.2) / 1.4, 0, 1)
+    strings = strings_sus * (1 - blend) + strings_res * blend
+    resolve = place(d, [(4.6, 1.0, felt_piano(277.2, d - 4.6, rng, 0.4)), (4.68, 0.6, felt_piano(554.4, d - 4.68, rng, 0.25))])
+    x = peak(first) + 0.6 * peak(reverb(strings, "hall", rng, wet=0.4)[:n_(d)]) + 0.5 * peak(
+        reverb(resolve, "hall", rng, wet=0.4)[:n_(d)])
+    return finish(x, LEVELS["HallsChord"], high_cut=4500, fade_out=2.5)
 
 
-# ================================================================ THE MATERIALS
-def needoh_squish(take, rng):
-    """A NEE-DOH being squeezed: a slow, gloopy, dough-soft squish of gel moving inside a rubber skin, a
-    faint rubbery creak as the skin stretches, and a soft wet suck as it swells back. Nothing like clay,
-    which is a dense slap with no give: this is all give, slow, round, and a little funny."""
-    d = rng.uniform(0.55, 0.7)
-    t = axis(d)
-    squeeze = 0.35
-    # The gel: low filtered noise, swelling in slowly (the squeeze takes time) and easing off.
-    gel = filt(noise(d, rng), "low", 520) * np.clip(t / squeeze, 0, 1) ** 0.7 * np.exp(-np.maximum(t - squeeze, 0) / 0.12)
-    # Its "gloop": a wobbling low tone, the gel shifting inside.
-    wobble = np.sin(phase(120 + 55 * np.sin(2 * np.pi * rng.uniform(5.5, 7.5) * t) - 40 * t / d))
-    wobble *= np.clip(t / 0.08, 0, 1) * np.exp(-t / 0.28)
-    # The skin: a soft rubber creak, a fast little flutter in the mids as it stretches.
-    creak = band(noise(d, rng), 900, 2600) * (0.5 + 0.5 * np.sign(np.sin(2 * np.pi * rng.uniform(55, 80) * t)))
-    creak *= np.clip((t - 0.05) / 0.15, 0, 1) * np.exp(-np.maximum(t - 0.2, 0) / 0.08)
-    # The swell back: a wet suck, rising.
-    suck = np.sin(phase(260 + 380 * np.clip((t - squeeze) / 0.18, 0, 1))) * envelope(np.maximum(t - squeeze, 0), 0.02, 0.07)
-    suck *= t >= squeeze
-    return finish(mix(d, [(0.0, 1.0, taper(peak(gel))), (0.0, 0.55, taper(peak(wobble))),
-                          (0.0, 0.18, taper(peak(creak))), (0.0, 0.35, taper(peak(suck)))]), -4.0, lowpass=5000)
-
-
-def lava_crust(take, rng):
-    """A crust on something molten, and it is about to go: a thick low bubbling glop underneath, a crack
-    of the crust with a hot hiss out of it, and a spit of something gloopy. Heavier and hotter than the
-    old dry hiss; still not a roar, because nothing here roars."""
-    d = 0.9
-    t = axis(d)
-    hiss = band(noise(d, rng), 1600, 7000) * envelope(t, 0.02, 0.35)
-    under = filt(brown(d, rng), "low", 160) * envelope(t, 0.03, 0.4)
-    bloops = []
-    for _ in range(3 + take % 2):
-        f = rng.uniform(70, 140)
-        size = rng.uniform(0.12, 0.2)
-        b = np.sin(phase(f * (1 + 0.9 * axis(size) / size))) * envelope(axis(size), 0.01, size / 2.5)
-        bloops.append((rng.uniform(0.0, 0.5), rng.uniform(0.35, 0.55), taper(b)))
-    crack = ring(0.08, [rng.uniform(2600, 3600), rng.uniform(4200, 5200)], 0.02, rng)
-    spit = band(noise(0.12, rng), 400, 2200) * envelope(axis(0.12), 0.004, 0.03)
-    return finish(mix(d, [(0.0, 0.55, taper(peak(hiss))), (0.0, 0.8, taper(peak(under))),
-                          (rng.uniform(0.02, 0.1), 0.45, crack), (rng.uniform(0.2, 0.5), 0.35, peak(spit))] + bloops),
-                  -5.0, lowpass=8000)
+# ================================================================ ONE CHORD FOR ALL FOUR
+def end_chord(rng):
+    # Root, fifth, octave, ninth, a high fifth: no third, so it sounds right low and dark or high and bright.
+    x = chord([110.0, 164.8, 220.0, 246.9, 329.6], 9.0, rng, roll=0.08, velocity=0.4, pad=0.5, brightness=0.45)
+    return finish(x, LEVELS["EndChord"], high_cut=5000, fade_out=2.5)
 
 
 ONE_SHOTS = [("DiveBoard", dive_board), ("DiveSplash", dive_splash), ("DiveWind", dive_wind), ("ShoreChord", shore_chord),
              ("CloudWhoosh", cloud_whoosh), ("SkimSlap", skim_slap), ("PoolPlunge", pool_plunge),
              ("PoolsChord", pools_chord), ("DrainFall", drain_fall), ("SunkenChord", sunken_chord),
-             ("PlungeWind", plunge_wind), ("HallsChord", halls_chord)]
-LOOPS = [("UnderwaterHum", underwater_hum, 14, -8.0), ("SlideRush", slide_rush, 8, -5.0),
-         ("WhirlRoar", whirl_roar, 10, -3.0), ("CulvertWash", culvert_wash, 10, -5.0), ("FlumeRush", flume_rush, 8, -5.0)]
+             ("PlungeWind", plunge_wind), ("HallsChord", halls_chord), ("EndChord", end_chord)]
+LOOPS = [("UnderwaterHum", underwater_hum, 14), ("SlideRush", slide_rush, 8), ("WhirlRoar", whirl_roar, 10),
+         ("CulvertWash", culvert_wash, 10), ("FlumeRush", flume_rush, 8)]
 
 if __name__ == "__main__":
-    print("writing %s" % ENDINGS)
+    only = set(sys.argv[1:])
     for name, make in ONE_SHOTS:
-        rng = np.random.default_rng(zlib.crc32(name.encode()))
-        write(ENDINGS, "%s.wav" % name, make(rng))
-    for name, make, seconds, level in LOOPS:
-        rng = np.random.default_rng(zlib.crc32(name.encode()))
-        y = seamless(make, seconds, rng)
-        write(ENDINGS, "%s.wav" % name, peak(filt(y, "high", 28, order=2)) * (10 ** (level / 20)))
-    print("writing %s" % MATERIALS)
-    for event, make in (("needohSquish", needoh_squish), ("lavaCrust", lava_crust)):
-        for take in range(1, 5):
-            rng = np.random.default_rng(zlib.crc32(event.encode()) + take + 1800)
-            write(MATERIALS, "%s_%d.wav" % (event, take), make(take, rng))
+        if not only or name in only:
+            print(write(ENDINGS / ("%s.wav" % name), make(rng_for(name, 9500))))
+    for name, make, seconds in LOOPS:
+        if not only or name in only:
+            rng = rng_for(name, 9500)
+            print(write(ENDINGS / ("%s.wav" % name), finish_loop(make(seconds + 2.0, rng), seconds, 2.0, LEVELS[name])))

@@ -227,13 +227,13 @@ def snow_pack(take, rng):
 
 
 MATERIAL_EVENTS = [
-    ("iceCrack", ice_crack), ("jelloWobble", jello_wobble), ("leafBrush", leaf_brush),
+    ("iceCrack", ice_crack), ("jelloWobble", jello_wobble),
     ("foamCompress", foam_compress), ("switchClack", switch_clack), ("legoClick", lego_click),
-    ("charcoalSnap", charcoal_snap), ("chocolateSnap", chocolate_snap), ("claySquish", clay_squish),
-    # (lavaCrust is written by gen_ending_sfx.py now: heavier and hotter. Not here, or a re-run would
-    # put the old dry hiss back over it.)
-    ("cloudHush", cloud_hush), ("saltCrunch", salt_crunch),
-    ("ooblSquelch", oobleck_squelch), ("snowPack", snow_pack),
+    ("chocolateSnap", chocolate_snap),
+    # (lavaCrust is written by gen_ending_sfx.py now: heavier and hotter. And saltCrunch, claySquish,
+    # cloudHush, leafBrush, snowPack and charcoalSnap by gen_chunk_sfx.py, remade after the first test.
+    # Not here, or a re-run would put the old ones back over them; their old makers stay above to read.)
+    ("ooblSquelch", oobleck_squelch),
 ]
 
 
@@ -323,8 +323,56 @@ def secret_sting(rng):
     return finish(0.5 * peak(swell) + peak(note), -4.0, lowpass=4000)
 
 
+def throat(f0, harmonics, t):
+    """A voice from something enormous: a buzz at `f0` (Hz, per sample) with its harmonics falling away."""
+    ph = phase(f0)
+    return sum(np.sin(k * ph + 0.3 * k) / k ** 1.1 for k in range(1, harmonics + 1))
+
+
+def formants(x, centres, width=0.35):
+    """Through a throat's resonances: band-passes at `centres`, each as wide as `width` of its centre."""
+    return sum(gain * band(x, c * (1 - width / 2), c * (1 + width / 2), order=2) for c, gain in centres)
+
+
+def maw_growl(rng):
+    """The thing at the bottom of the shaft, before you see it: a low growl from a long way down, felt
+    more than heard. A buzz far under speech, breaking up into the rattle of a throat (vocal fry, never
+    even), through resonances a building wide, swelling and dying away."""
+    d = 4.6
+    t = axis(d)
+    drift = np.interp(t, np.linspace(0, d, 12), rng.uniform(-1, 1, 12))
+    f0 = 41 + 7 * np.clip(t / 1.6, 0, 1) - 5 * np.clip((t - 3.0) / 1.6, 0, 1) + 2.5 * drift
+    voice = throat(f0, 18, t)
+    # THE RATTLE: the buzz chopped by a slower, uneven pulse, so it catches and drags like breath in a throat.
+    fry_rate = 15 + 5 * np.interp(t, np.linspace(0, d, 20), rng.uniform(-1, 1, 20))
+    fry = 0.35 + 0.65 * (0.5 + 0.5 * np.sin(phase(fry_rate))) ** 4
+    body = formants(voice * fry, [(170, 1.0), (390, 0.55), (820, 0.22)])
+    breath = band(noise(d, rng), 90, 700) * (0.4 + 0.6 * fry)
+    swell = np.clip(t / 1.3, 0, 1) ** 2 * np.clip((d - t) / 1.6, 0, 1) ** 1.5
+    return finish((peak(body) + 0.35 * peak(breath)) * swell, -5.0, lowpass=1400)
+
+
+def maw_roar(rng):
+    """It opens: a roar, out of a mouth the size of the room. A thump of air first, then the voice tearing
+    up out of the throat and falling away, wet, with the buzz of it under everything."""
+    d = 3.2
+    t = axis(d)
+    f0 = 52 + 26 * np.clip(t / 0.35, 0, 1) - 38 * np.clip((t - 0.6) / 2.4, 0, 1) ** 1.3
+    voice = throat(f0 * (1 + 0.012 * np.sin(2 * np.pi * 7.3 * t)), 28, t)
+    fry = 0.2 + 0.8 * (0.5 + 0.5 * np.sin(phase(np.full_like(t, 21.0) + 6 * np.sin(2 * np.pi * 0.9 * t)))) ** 4
+    body = formants(voice * fry, [(240, 1.0), (640, 0.7), (1450, 0.35), (2600, 0.12)], width=0.45)
+    rush = band(noise(d, rng), 120, 3200) * envelope(t, 0.06, 1.1)
+    shape = envelope(t, 0.07, 1.4)
+    return finish(mix(d, [
+        (0.000, 0.8, punch(1.2, 60, 24, 0.12, 0.45, drive=2.4)),
+        (0.000, 1.0, peak(body * shape)),
+        (0.000, 0.4, peak(rush * (0.5 + 0.5 * fry))),
+    ]), -1.5, lowpass=5200)
+
+
 STORY_SOUNDS = [("GateGroan", gate_groan), ("WaterRush", water_rush), ("Siren", siren), ("MawRumble", maw_rumble),
-                ("JawsShut", jaws_shut), ("Heartbeat", heartbeat), ("SecretSting", secret_sting)]
+                ("JawsShut", jaws_shut), ("Heartbeat", heartbeat), ("SecretSting", secret_sting),
+                ("MawGrowl", maw_growl), ("MawRoar", maw_roar)]
 
 
 # ---------------------------------------------------------------- the levels' ambience, as seamless loops
@@ -435,7 +483,13 @@ def hold_drone(duration, rng):
 AMBIENCE_BEDS = [("ShoreSea", shore_sea, 26), ("RoofWind", roof_wind, 20), ("PartyFar", party_far, 16),
                  ("HarbourNight", harbour_night, 24), ("BathsHum", baths_hum, 20), ("HoldDrone", hold_drone, 30)]
 
-if __name__ == "__main__":
+# WRITES NOTHING NOW (the ninety-sixth pass): every sound it made has been remade by another. Its material events by
+# gen_chunk_sfx.py and gen_sheet_sfx.py (as sheets); the story's sounds by gen_story_sfx.py; the levels' beds by
+# gen_ambience_sfx.py. A re-run of the old code would put the old sounds back over the new, so it is not run; the makers
+# above stay to read. (Pass `--old` to write them anyway, into the folders they came from.)
+if __name__ == "__main__" and "--old" not in sys.argv:
+    print("gen_material_sfx.py writes nothing now: see gen_chunk_sfx, gen_sheet_sfx, gen_story_sfx, gen_ambience_sfx")
+elif __name__ == "__main__":
     print("writing %s" % MATERIALS)
     for event, make in MATERIAL_EVENTS:
         for take in range(1, 5):
