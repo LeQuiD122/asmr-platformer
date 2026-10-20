@@ -77,6 +77,8 @@ local Poses: any = (function()
 end)()
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
+local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Style"))
 
 local SunkenCityService = {}
 
@@ -286,6 +288,21 @@ local FADED = {
 -- The sounds. impact_water is the project's water sound everywhere else; action_jump_land is the
 -- character's own landing thud, which ships with the engine for exactly that reason.
 local WATER_SOUND = "rbxasset://sounds/impact_water.mp3"
+-- THE WATER'S OWN SOUNDS (WaterSounds, the ninety-eighth pass): if the module is not pasted yet, the old splash. ONE
+-- local here, the rest inside: a main chunk has room for only so many (Luau's 200).
+local WaterSounds: any = (function(): any
+	local waterModule = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("WaterSounds", 5)
+	if waterModule and waterModule:IsA("ModuleScript") then
+		return require(waterModule)
+	end
+	local function oldSplash(s: Sound, _kind: string): boolean
+		s.SoundId = "rbxasset://sounds/impact_water.mp3"
+		return false
+	end
+	local splashOnly: any = {}
+	splashOnly.dress = oldSplash
+	return splashOnly
+end)()
 local THUD_SOUND = "rbxasset://sounds/action_jump_land.mp3"
 
 -- The surface height for this build. Set once by build() before anything is made; every drowned
@@ -400,7 +417,7 @@ local function label(part: BasePart, face: Enum.NormalId, words: string, ink: Co
 	text.BackgroundTransparency = 1
 	text.Text = words
 	text.TextScaled = true
-	text.Font = Enum.Font.GothamBold
+	text.FontFace = Style.WORLD.sign
 	text.TextColor3 = ink
 	text.Parent = gui
 end
@@ -409,8 +426,15 @@ local function sound(parent: Instance, name: string, id: string, speed: number, 
 	looped: boolean): Sound
 	local s = Instance.new("Sound")
 	s.Name = name
-	s.SoundId = id
-	s.PlaybackSpeed = speed
+	-- Which water each of the level's water sounds is (by its name); the rest (the wind, the window's hum, made of the
+	-- old splash slowed right down) keep it. Here, not at the top: this module's main chunk is near Luau's 200 locals.
+	local waterKind: { [string]: string } = { Drip = "drip", Lapping = "lap", Splash = "splash", DrainRush = "stream",
+		Roar = "pour", Gurgle = "stream", WhirlpoolRush = "pour", SluiceFall = "pour", SumpSound = "stream" }
+	local kind = if id == WATER_SOUND then waterKind[name] else nil
+	if not (kind and WaterSounds.dress(s, kind)) then
+		s.SoundId = id
+		s.PlaybackSpeed = speed
+	end
 	s.Volume = volume
 	s.Looped = looped
 	s.RollOffMode = Enum.RollOffMode.InverseTapered
@@ -2567,6 +2591,7 @@ local function harbour(parent: Instance, route: Route, vortex: Vector3, floorY: 
 	end
 
 	-- BUOYS, floating on the water and chained to the floor. Tagged so the client can bob them.
+	local buoysAt: { Vector3 } = {}
 	for index = 1, 6 do
 		local spotAt = frame * CFrame.new(rng:NextNumber(-40, 260), waterLevel - floorY,
 			rng:NextNumber(-HARBOUR_REACH * 0.7, HARBOUR_REACH * 0.7))
@@ -2582,8 +2607,37 @@ local function harbour(parent: Instance, route: Route, vortex: Vector3, floorY: 
 				if red then Color3.fromRGB(190, 70, 60) else Color3.fromRGB(60, 120, 80), Enum.Material.SmoothPlastic, false)
 			buoy.Parent = parent
 			CollectionService:AddTag(buoy, "SunkenBuoy")
+			table.insert(buoysAt, spot)
 			rod(parent, "BuoyChain", spot + Vector3.new(0, -1.2, 0), Vector3.new(spot.X, floorY, spot.Z), 0.3,
 				Color3.fromRGB(70, 66, 60))
+		end
+	end
+
+	-- THE LAUNCH: somebody is still looking. A rescue launch standing off in the basin past the end of
+	-- the street, bow towards it, its searchlight going slowly over the water you are coming down. A
+	-- MARKER, like the gulls: SearchlightClient builds it, rocks it on the swell and sweeps the light,
+	-- from the clock every player shares, so the beam is in the same place for everyone and nothing
+	-- moves on the server. The first of these spots that is clear of the drain and every buoy; the
+	-- list keeps well off the lighthouse, the barge and the wrecks, which are always where they are.
+	local bow = Vector3.new(-dir.X, 0, -dir.Z)
+	bow = if bow.Magnitude > 0.01 then bow.Unit else Vector3.new(0, 0, -1)
+	for _, spotAt in ipairs({ Vector2.new(150, -120), Vector2.new(170, 110), Vector2.new(90, -170), Vector2.new(230, 60) }) do
+		local spot = (frame * CFrame.new(spotAt.X, waterLevel - floorY, spotAt.Y)).Position
+		local clear = Vector3.new(spot.X - vortex.X, 0, spot.Z - vortex.Z).Magnitude > VORTEX_R + 90
+		for _, other in ipairs(buoysAt) do
+			if Vector3.new(spot.X - other.X, 0, spot.Z - other.Z).Magnitude < 26 then
+				clear = false
+			end
+		end
+		if clear then
+			-- What it watches: the last of the street, where you come into the basin.
+			local watch = alongRoute(route, math.max(0, route.total - 60))
+			local launch = block(parent, "Launch", Vector3.new(1, 1, 1), CFrame.lookAt(spot, spot + bow), FOAM,
+				Enum.Material.SmoothPlastic, false)
+			launch.Transparency = 1
+			launch:SetAttribute("Watch", Vector3.new(watch.X, waterLevel, watch.Z))
+			CollectionService:AddTag(launch, "SunkenLaunch")
+			break
 		end
 	end
 end
@@ -3006,7 +3060,10 @@ local function aquarium(parent: Instance, frame: CFrame, floorY: number, rng: Ra
 			local timing = Random.new(90 + index)
 			while drip.Parent do
 				task.wait(timing:NextNumber(4, 13))
-				drip.PlaybackSpeed = timing:NextNumber(0.95, 1.2)
+				-- Another drip each time (another take, at its own pitch), the old one's pitch varied without them.
+				if not WaterSounds.dress(drip, "drip") then
+					drip.PlaybackSpeed = timing:NextNumber(0.95, 1.2)
+				end
 				drip:Play()
 			end
 		end)
@@ -3775,7 +3832,9 @@ local function dryFlat(parent: Instance, frame: CFrame, floorY: number): Flat
 		local timing = Random.new(4412)
 		while drip.Parent do
 			task.wait(timing:NextNumber(3, 11))
-			drip.PlaybackSpeed = timing:NextNumber(0.95, 1.25)
+			if not WaterSounds.dress(drip, "drip") then
+				drip.PlaybackSpeed = timing:NextNumber(0.95, 1.25)
+			end
 			drip:Play()
 		end
 	end)
@@ -3838,56 +3897,104 @@ local function dryFlat(parent: Instance, frame: CFrame, floorY: number): Flat
 	return { centre = put((b0 + b1) / 2, landingY, 0).Position }
 end
 
--- ===== THE PIER, THE WHIRLPOOL AND THE DRAIN =====
+-- ===== THE WHIRLPOOL =====
 --
--- In the finish frame: +X away from the middle, +Z on along the route. The pier runs on from the
--- last chunk; the whirlpool is VORTEX_GAP past its end; the drain is on the harbour floor under it.
-local function finale(parent: Instance, finish: CFrame, floorY: number, rng: Random): Vector3
-	local pierTop = finish.Position.Y
-	local stone = Color3.fromRGB(150, 150, 140)
-	block(parent, "Pier", Vector3.new(PIER_W, 2.5, PIER_L), finish * CFrame.new(0, -1.25, PIER_L / 2), stone,
-		Enum.Material.Concrete, true)
-	-- The last pair well short of the end, so no pile stands in the whirlpool's rim.
-	for _, z in ipairs({ 3, PIER_L / 2 - 2, PIER_L - 8 }) do
-		for _, x in ipairs({ -PIER_W / 2 + 2, PIER_W / 2 - 2 }) do
-			local at = finish * Vector3.new(x, 0, z)
-			column(parent, "Pile", 2, at, floorY, pierTop - 2.5, stone, true)
-		end
-	end
-	-- Bollards and a chain along each side, and a guard you cannot see along them: the pier's end is
-	-- the one way off it.
-	for _, x in ipairs({ -PIER_W / 2 + 0.8, PIER_W / 2 - 0.8 }) do
-		local previous: Vector3? = nil
-		for _, z in ipairs({ 2, PIER_L / 2, PIER_L - 0.8 }) do
-			local at = finish * Vector3.new(x, 0, z)
-			column(parent, "Bollard", 1.2, at, pierTop, pierTop + 2.2, Color3.fromRGB(60, 62, 66), true, true)
-			if previous then
-				rod(parent, "Chain", previous + Vector3.new(0, 1.8, 0), at + Vector3.new(0, 1.8, 0), 0.25, Color3.fromRGB(80, 76, 70))
-			end
-			previous = at
-		end
-		local guard = block(parent, "PierGuard", Vector3.new(0.6, 3.4, PIER_L - 1), finish * CFrame.new(x, 1.7, PIER_L / 2 + 0.5),
-			stone, Enum.Material.SmoothPlastic, true)
-		guard.Transparency = 1
-	end
-	-- THE LANTERN at the far end, the one warm light in the harbour: you see it from along the route
-	-- before you see the pier, and it hangs from its own post and arm.
-	local lanternPost = finish * Vector3.new(-PIER_W / 2 + 1.2, 0, PIER_L - 3)
-	column(parent, "LanternPost", 0.45, lanternPost, pierTop, pierTop + 6, Color3.fromRGB(60, 62, 66), true, true)
-	rod(parent, "LanternArm", lanternPost + Vector3.new(0, 5.8, 0), (finish * CFrame.new(-PIER_W / 2 + 2.6, 5.8, PIER_L - 3)).Position, 0.25,
-		Color3.fromRGB(60, 62, 66))
-	lantern(parent, finish * CFrame.new(-PIER_W / 2 + 2.6, 4.6, PIER_L - 3), true, Color3.fromRGB(255, 200, 140))
-	local post = finish * Vector3.new(PIER_W / 2 - 1.2, 0, PIER_L - 3)
-	column(parent, "SignPost", 0.4, post, pierTop, pierTop + 4, Color3.fromRGB(80, 84, 90), false, true)
-	local sign = block(parent, "DrainSign", Vector3.new(0.2, 1.8, 3.6), finish * CFrame.new(PIER_W / 2 - 1.2, 4.6, PIER_L - 3),
-		Color3.fromRGB(214, 190, 60), Enum.Material.SmoothPlastic, false)
-	label(sign, Enum.NormalId.Left, "HARBOUR DRAIN. KEEP CLEAR.", Color3.fromRGB(30, 30, 30))
-	label(sign, Enum.NormalId.Right, "HARBOUR DRAIN. KEEP CLEAR.", Color3.fromRGB(30, 30, 30))
+-- AS MESHES (blender/gen_whirlpool.py), when they are imported into ReplicatedStorage/Assets/TileMeshes:
+-- the funnel's water in six smooth rings, each with its foam, and a crest of foam round the rim. It was
+-- rings of flat boards, sixteen to a ring, stepping down: you could see every edge, and it turned like
+-- a stack of plates. A ring of a smooth funnel can turn without a seam showing, so only what is ON the
+-- water is seen to move: spiral ripples and threads of foam, wound in the opposite way to the turn, so
+-- every crest is carried in along itself and the water reads as pouring down the hole. Each ring turns
+-- faster than the one outside it (the client: SunkenWhirlRing, Centre and Spin). The water is opaque,
+-- darkening ring by ring toward the hole, and the rider down it stays over it (check_sunkencity.py).
+--
+-- What gen_whirlpool.py builds (blender/whirlpool_extents.json): an import that does not match is an
+-- old one, and the rings of parts stand in, as they do when nothing is imported.
+local WHIRL_SIZE = {
+	Whirl_Band1 = Vector3.new(48.0, 4.85, 48.0),
+	Whirl_Band2 = Vector3.new(35.0, 10.85, 35.0),
+	Whirl_Band3 = Vector3.new(26.0, 17.71, 26.0),
+	Whirl_Band4 = Vector3.new(18.2, 23.89, 18.2),
+	Whirl_Band5 = Vector3.new(12.2, 29.12, 12.2),
+	Whirl_Band6 = Vector3.new(7.6, 38.5, 7.6),
+	Whirl_Foam1 = Vector3.new(46.83, 4.62, 47.14),
+	Whirl_Foam2 = Vector3.new(34.33, 10.55, 33.62),
+	Whirl_Foam3 = Vector3.new(23.92, 17.31, 24.94),
+	Whirl_Foam4 = Vector3.new(16.57, 23.44, 16.6),
+	Whirl_Foam5 = Vector3.new(11.63, 28.92, 11.72),
+	Whirl_Foam6 = Vector3.new(7.19, 33.18, 7.41),
+	Whirl_Lip = Vector3.new(51.8, 1.88, 51.8),
+}
+local WHIRL_SPIN = { 0.3, 0.42, 0.6, 0.85, 1.2, 1.7 } -- gen_whirlpool.py's SPINS, rim to hole
+local WHIRL_WATER = { Color3.fromRGB(58, 116, 116), Color3.fromRGB(52, 106, 108), Color3.fromRGB(45, 94, 98),
+	Color3.fromRGB(38, 82, 88), Color3.fromRGB(31, 68, 76), Color3.fromRGB(22, 50, 58) }
+local WHIRL_LIP_SPIN = 0.18
 
-	-- THE WHIRLPOOL: a foam rim, and five rings of water turning faster the further in they are,
-	-- stepping down into a funnel. The client turns them (SunkenCityClient); here they only stand.
-	local vortex = (finish * CFrame.new(0, 0, PIER_L + VORTEX_GAP)).Position
-	vortex = Vector3.new(vortex.X, waterLevel, vortex.Z)
+local function whirlTemplate(name: string): MeshPart?
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local folder = assets and assets:FindFirstChild("TileMeshes")
+	local found = folder and folder:FindFirstChild(name)
+	local part = if found and found:IsA("MeshPart") then found elseif found then found:FindFirstChildWhichIsA("MeshPart", true) else nil
+	local want = WHIRL_SIZE[name]
+	if not (part and want) then
+		return nil
+	end
+	local got = part.Size
+	if math.abs(got.X - want.X) > want.X * 0.15 or math.abs(got.Y - want.Y) > want.Y * 0.15
+		or math.abs(got.Z - want.Z) > want.Z * 0.15 then
+		warn(("SunkenCityService: %s is imported at %.1f x %.1f x %.1f, built %.1f x %.1f x %.1f: an old import; the rings of parts are used.")
+			:format(name, got.X, got.Y, got.Z, want.X, want.Y, want.Z))
+		return nil
+	end
+	return part :: MeshPart
+end
+
+-- The meshes, if every one of them is there. False (and nothing built) if any is missing.
+local function whirlOfMeshes(parent: Instance, vortex: Vector3): boolean
+	for name in pairs(WHIRL_SIZE) do
+		if not whirlTemplate(name) then
+			return false
+		end
+	end
+	local function place(model: Instance, name: string, colour: Color3, transparency: number, wet: number)
+		local part = (whirlTemplate(name) :: MeshPart):Clone()
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanTouch = false
+		part.CanQuery = false
+		part.CastShadow = false
+		part.Material = Enum.Material.SmoothPlastic
+		part.Color = colour
+		part.Transparency = transparency
+		part.Reflectance = wet
+		-- Every mesh's box is centred on the whirlpool's middle at the water's level.
+		part.CFrame = CFrame.new(vortex)
+		part.Parent = model
+	end
+	for ring = 1, #WHIRL_SPIN do
+		local model = Instance.new("Model")
+		model.Name = "WhirlRing"
+		-- OPAQUE water, a little wet: the foam over it (a little see-through) is then always drawn over it.
+		place(model, "Whirl_Band" .. ring, WHIRL_WATER[ring], 0, 0.12)
+		place(model, "Whirl_Foam" .. ring, FOAM, 0.12, 0)
+		model:SetAttribute("Centre", vortex)
+		model:SetAttribute("Spin", WHIRL_SPIN[ring])
+		model.Parent = parent
+		CollectionService:AddTag(model, "SunkenWhirlRing")
+	end
+	local lip = Instance.new("Model")
+	lip.Name = "WhirlLip"
+	place(lip, "Whirl_Lip", FOAM, 0, 0.04)
+	lip:SetAttribute("Centre", vortex)
+	lip:SetAttribute("Spin", WHIRL_LIP_SPIN)
+	lip.Parent = parent
+	CollectionService:AddTag(lip, "SunkenWhirlRing")
+	return true
+end
+
+-- AS PARTS, when the meshes are not imported: a foam rim, and five rings of water turning faster the
+-- further in they are, stepping down into a funnel, with spiral arms of foam wound into the middle.
+local function whirlOfParts(parent: Instance, vortex: Vector3, rng: Random)
 	for index = 0, 23 do
 		local beta = index * 2 * math.pi / 24
 		local rim = block(parent, "WhirlRim", Vector3.new(4.2, 0.3, 2 * math.pi * (VORTEX_R + 3) / 24 + 0.4),
@@ -3972,6 +4079,62 @@ local function finale(parent: Instance, finish: CFrame, floorY: number, rng: Ran
 	arms:SetAttribute("Spin", 0.5)
 	arms.Parent = parent
 	CollectionService:AddTag(arms, "SunkenWhirlRing")
+end
+
+-- ===== THE PIER, THE WHIRLPOOL AND THE DRAIN =====
+--
+-- In the finish frame: +X away from the middle, +Z on along the route. The pier runs on from the
+-- last chunk; the whirlpool is VORTEX_GAP past its end; the drain is on the harbour floor under it.
+local function finale(parent: Instance, finish: CFrame, floorY: number, rng: Random): Vector3
+	local pierTop = finish.Position.Y
+	local stone = Color3.fromRGB(150, 150, 140)
+	block(parent, "Pier", Vector3.new(PIER_W, 2.5, PIER_L), finish * CFrame.new(0, -1.25, PIER_L / 2), stone,
+		Enum.Material.Concrete, true)
+	-- The last pair well short of the end, so no pile stands in the whirlpool's rim.
+	for _, z in ipairs({ 3, PIER_L / 2 - 2, PIER_L - 8 }) do
+		for _, x in ipairs({ -PIER_W / 2 + 2, PIER_W / 2 - 2 }) do
+			local at = finish * Vector3.new(x, 0, z)
+			column(parent, "Pile", 2, at, floorY, pierTop - 2.5, stone, true)
+		end
+	end
+	-- Bollards and a chain along each side, and a guard you cannot see along them: the pier's end is
+	-- the one way off it.
+	for _, x in ipairs({ -PIER_W / 2 + 0.8, PIER_W / 2 - 0.8 }) do
+		local previous: Vector3? = nil
+		for _, z in ipairs({ 2, PIER_L / 2, PIER_L - 0.8 }) do
+			local at = finish * Vector3.new(x, 0, z)
+			column(parent, "Bollard", 1.2, at, pierTop, pierTop + 2.2, Color3.fromRGB(60, 62, 66), true, true)
+			if previous then
+				rod(parent, "Chain", previous + Vector3.new(0, 1.8, 0), at + Vector3.new(0, 1.8, 0), 0.25, Color3.fromRGB(80, 76, 70))
+			end
+			previous = at
+		end
+		local guard = block(parent, "PierGuard", Vector3.new(0.6, 3.4, PIER_L - 1), finish * CFrame.new(x, 1.7, PIER_L / 2 + 0.5),
+			stone, Enum.Material.SmoothPlastic, true)
+		guard.Transparency = 1
+	end
+	-- THE LANTERN at the far end, the one warm light in the harbour: you see it from along the route
+	-- before you see the pier, and it hangs from its own post and arm.
+	local lanternPost = finish * Vector3.new(-PIER_W / 2 + 1.2, 0, PIER_L - 3)
+	column(parent, "LanternPost", 0.45, lanternPost, pierTop, pierTop + 6, Color3.fromRGB(60, 62, 66), true, true)
+	rod(parent, "LanternArm", lanternPost + Vector3.new(0, 5.8, 0), (finish * CFrame.new(-PIER_W / 2 + 2.6, 5.8, PIER_L - 3)).Position, 0.25,
+		Color3.fromRGB(60, 62, 66))
+	lantern(parent, finish * CFrame.new(-PIER_W / 2 + 2.6, 4.6, PIER_L - 3), true, Color3.fromRGB(255, 200, 140))
+	local post = finish * Vector3.new(PIER_W / 2 - 1.2, 0, PIER_L - 3)
+	column(parent, "SignPost", 0.4, post, pierTop, pierTop + 4, Color3.fromRGB(80, 84, 90), false, true)
+	local sign = block(parent, "DrainSign", Vector3.new(0.2, 1.8, 3.6), finish * CFrame.new(PIER_W / 2 - 1.2, 4.6, PIER_L - 3),
+		Color3.fromRGB(214, 190, 60), Enum.Material.SmoothPlastic, false)
+	label(sign, Enum.NormalId.Left, "HARBOUR DRAIN. KEEP CLEAR.", Color3.fromRGB(30, 30, 30))
+	label(sign, Enum.NormalId.Right, "HARBOUR DRAIN. KEEP CLEAR.", Color3.fromRGB(30, 30, 30))
+
+	-- THE WHIRLPOOL: a funnel of water turning faster the further in it is, under a crest of foam (see
+	-- THE WHIRLPOOL above: meshes when they are imported, rings of parts when not). The client turns it
+	-- (SunkenCityClient); here it only stands.
+	local vortex = (finish * CFrame.new(0, 0, PIER_L + VORTEX_GAP)).Position
+	vortex = Vector3.new(vortex.X, waterLevel, vortex.Z)
+	if not whirlOfMeshes(parent, vortex) then
+		whirlOfParts(parent, vortex, rng)
+	end
 
 	-- WHAT THE WATER IS CARRYING ROUND: a plank, a barrel, a lifebuoy, a crate. Nothing gets out.
 	local debris = Instance.new("Model")
@@ -4536,7 +4699,7 @@ local function finale(parent: Instance, finish: CFrame, floorY: number, rng: Ran
 	cardWords.Size = UDim2.fromScale(1, 1)
 	cardWords.BackgroundTransparency = 1
 	cardWords.TextScaled = true
-	cardWords.Font = Enum.Font.Code
+	cardWords.FontFace = Style.WORLD.typed
 	cardWords.TextColor3 = Color3.fromRGB(40, 36, 34)
 	cardWords.Text = "KEY HOLDER\n\n14 AUG\nNOT CLOCKED IN"
 	cardWords.Parent = cardGui
@@ -5026,9 +5189,14 @@ local function drainRemote(): RemoteEvent?
 		drainEvent = event
 		event.OnServerEvent:Connect(function(player: Player, what: any, version: any)
 			-- HELLO, from a client's SunkenCityClient as it starts: it is running, and which version.
+			-- Heard once per player, and only a short string kept: a client saying it a thousand times, or
+			-- saying something long, fills neither the log nor the server's memory.
 			if what == "hello" then
-				studio.heard[player] = tostring(version)
-				print(("SunkenCityService: SunkenCityClient is running for %s (%s)"):format(player.Name, tostring(version)))
+				if not studio.heard[player] then
+					studio.heard[player] = string.sub(tostring(version), 1, 60)
+					print(("SunkenCityService: SunkenCityClient is running for %s (%s)"):format(player.Name,
+						studio.heard[player]))
+				end
 				return
 			end
 			-- Only from someone the drain actually has, and it decides nothing: the server keeps
@@ -5134,7 +5302,7 @@ local function ride(player: Player, root: BasePart, humanoid: Humanoid, vortex: 
 		cry = gui
 		local function speak(text: string, quiet: boolean)
 			for _, piece in ipairs({ shadow, words }) do
-				piece.Font = if quiet then Enum.Font.Kalam else Enum.Font.PermanentMarker
+				piece.FontFace = if quiet then Style.FONT.murmur else Style.FONT.shout
 				piece.Text = text
 				piece.TextTransparency = 1
 			end
@@ -6200,7 +6368,7 @@ function studio.notice(player: Player)
 	label.BackgroundTransparency = 0.1
 	label.BorderSizePixel = 0
 	label.TextColor3 = Color3.fromRGB(255, 236, 230)
-	label.Font = Enum.Font.GothamMedium
+	label.FontFace = Style.FONT.body
 	label.TextSize = 16
 	label.TextWrapped = true
 	-- The module loads, so what never ran is the thing that starts it: an older client Bootstrap, which
@@ -6361,4 +6529,5 @@ Players.PlayerRemoving:Connect(function(player: Player)
 	arrivedAt[player] = nil
 end)
 
+SunkenCityService.STAMP = "1f4fbbe3"
 return SunkenCityService

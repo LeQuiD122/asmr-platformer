@@ -4,19 +4,26 @@
 -- StoryMoment remote):
 --
 --   whisper   one line low on the screen for a few seconds: "It is rusted shut."
---   moment    a SECRET found: a short scene (Cinema, the level's sound left alone). The camera drifts in
---             along a curve on what you have found, sharp on it and soft round it, a low sting under
---             it, its name and a line; then a card, "Secret 2 of 5", which says its words are in your
---             journal (the server has put them there: JournalService). Nothing else comes up.
---   peek      the loose board on the gangway: the camera looks straight down through the gap into the
---             shaft, and a long way down, in the dark, something opens its mouth a little and
---             breathes (Maw). Then it is only the dark again.
+--   pry       THE BAR AT WORK, the first time it opens something: over your shoulder you turn to it, set the
+--             bar, three hard tugs with dust coming out of it, what you think of it over your head; on the
+--             last tug it gives (the server opens it then): an impact frame, and you jump back.
+--   moment    a SECRET found: a short scene (Cinema, the level's sound left alone), with YOU in it: over your
+--             shoulder, hand at your chin and head tilting, working out what this is, what you make of it over
+--             your head; then the camera drifts in along a curve on what you have found, sharp on it and soft
+--             round it, a low sting under it, its name and a line; then a card, "Secret 2 of 6", which says its
+--             words are in your journal (the server has put them there: JournalService).
+--   peek      the loose board on the gangway: you lean over the gap; the camera looks straight down into the
+--             shaft, and a long way down, in the dark, something opens its mouth a little and breathes (Maw),
+--             and you jolt; then back up to you, backing off it.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
+local CollectionService = game:GetService("CollectionService")
+-- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
+local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Style"))
 
 local Cinema: any = (function()
 	local found = script.Parent and script.Parent:WaitForChild("Cinema", 15)
@@ -24,6 +31,11 @@ local Cinema: any = (function()
 end)()
 local Maw: any = (function()
 	local found = script.Parent and script.Parent:FindFirstChild("Maw")
+	return if found and found:IsA("ModuleScript") then require(found) else nil
+end)()
+local Poses: any = (function()
+	local shared = ReplicatedStorage:WaitForChild("Shared", 15)
+	local found = shared and shared:FindFirstChild("Poses")
 	return if found and found:IsA("ModuleScript") then require(found) else nil
 end)()
 
@@ -83,7 +95,7 @@ local function whisper(text: string)
 	label.AutomaticSize = Enum.AutomaticSize.Y
 	label.BackgroundTransparency = 1
 	label.TextWrapped = true
-	label.Font = Enum.Font.Garamond
+	label.FontFace = Style.FONT.body
 	label.TextSize = 22
 	label.TextColor3 = Color3.fromRGB(236, 232, 218)
 	label.TextStrokeTransparency = 0.4
@@ -139,7 +151,7 @@ local function card(title: string, found: number, total: number)
 		label.AutomaticSize = Enum.AutomaticSize.Y
 		label.TextWrapped = true
 		label.TextXAlignment = Enum.TextXAlignment.Left
-		label.Font = if index == 1 then Enum.Font.GothamBold else Enum.Font.Garamond
+		label.FontFace = if index == 1 then Style.FONT.heading else Style.FONT.body
 		label.TextSize = row[2] :: number
 		label.TextColor3 = row[3] :: Color3
 		label.Text = row[1] :: string
@@ -157,49 +169,369 @@ local function card(title: string, found: number, total: number)
 	end)
 end
 
--- A SECRET FOUND: the camera in on it, its name, a sting, then the card.
-local function moment(data: { [string]: any })
-	if busy or not Cinema then
-		card(tostring(data.title), tonumber(data.found) or 1, tonumber(data.total) or 5)
+-- ===== YOU, IN THE SCENE =====
+--
+-- The secret scenes used to be the camera alone, drifting onto what had been found, which left you wondering what had
+-- happened. Now you act it out: you turn to the thing, work the bar into it (three hard tugs), jump back when it
+-- gives, then stand there working it out, hand at your chin and head tilting, while what you make of it shows over
+-- your head (Cinema.think). Your own character, posed on this screen only (Poses, through the animations' own way in).
+type Act = { pose: string, began: number }
+local acting: { now: Act?, before: Act?, switched: number, joints: { [string]: any }?, model: Instance?,
+	hook: RBXScriptConnection? } = { now = nil, before = nil, switched = 0, joints = nil, model = nil, hook = nil }
+local BLEND = 0.3 -- seconds from one pose into the next
+
+local function poseOf(entry: Act?, name: string, r6: boolean, now: number): CFrame
+	if not (entry and Poses) then
+		return CFrame.identity
+	end
+	local make = Poses[entry.pose]
+	if type(make) ~= "function" then
+		return CFrame.identity
+	end
+	return make(name, now - entry.began, 1, r6) or CFrame.identity
+end
+
+local function driveActing()
+	local character = Players.LocalPlayer.Character
+	if not (character and Poses) then
 		return
 	end
-	local eye, focus = data.eye, data.focus
-	if typeof(eye) ~= "CFrame" or typeof(focus) ~= "Vector3" then
+	if acting.model ~= character then
+		acting.model = character
+		acting.joints = Poses.joints(character)
+	end
+	local joints = acting.joints
+	if not joints then
+		return
+	end
+	local now = os.clock()
+	local r6 = Poses.isR6(joints)
+	local blend = math.clamp((now - acting.switched) / BLEND, 0, 1)
+	blend = blend * blend * (3 - 2 * blend)
+	for name, joint in pairs(joints) do
+		local from = poseOf(acting.before, name, r6, now)
+		local to = poseOf(acting.now, name, r6, now)
+		Poses.drive(joint, from:Lerp(to, blend))
+	end
+	-- Back to the animations once the last pose has blended out.
+	if not acting.now and blend >= 1 then
+		for _, joint in pairs(joints) do
+			Poses.drive(joint, CFrame.identity)
+		end
+		local hook = acting.hook
+		if hook then
+			hook:Disconnect()
+			acting.hook = nil
+		end
+	end
+end
+
+-- Into `pose` (one of Poses': "pry", "ponder", "startle", "peer"), or out of any with nil.
+local function act(pose: string?)
+	local now = os.clock()
+	acting.before = acting.now
+	acting.now = if pose then { pose = pose, began = now } else nil
+	acting.switched = now
+	if not acting.hook then
+		acting.hook = RunService.Stepped:Connect(function()
+			pcall(driveActing)
+		end)
+	end
+end
+
+-- The thing in front of you: turned to face it (your own character, on your own screen first; the server follows).
+local function faceToward(at: Vector3)
+	local character = Players.LocalPlayer.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if root and root:IsA("BasePart") then
+		local flat = Vector3.new(at.X - root.Position.X, 0, at.Z - root.Position.Z)
+		if flat.Magnitude > 0.2 then
+			root.CFrame = CFrame.lookAt(root.Position, root.Position + flat.Unit)
+		end
+	end
+end
+
+-- THE TWO-SHOT: you and the thing, SIDE ON, so your face and what you are doing are both in it. It was over your
+-- shoulder, and your back filled the picture; on the baths' narrow gangway the wall behind you pulled the camera in
+-- until it was your head and nothing else. Now from the side with the more room (Cinema.clear tells), a little above
+-- and a little back, the side kept for the whole scene so it never swaps; from above only if neither side has room.
+local twoShotSide: number? = nil
+local function twoShot(at: Vector3, push: number): CFrame?
+	local character = Players.LocalPlayer.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not (root and root:IsA("BasePart")) then
+		return nil
+	end
+	local forward = Vector3.new(at.X - root.Position.X, 0, at.Z - root.Position.Z)
+	forward = if forward.Magnitude > 0.2 then forward.Unit else Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z).Unit
+	local right = forward:Cross(Vector3.yAxis)
+	local head = root.Position + Vector3.new(0, 1.5, 0)
+	local mid = head:Lerp(Vector3.new(at.X, math.max(at.Y, head.Y - 1.2), at.Z), 0.5)
+	local reach = 7.5 - 2 * math.clamp(push, 0, 1)
+	local ignore = { character }
+	local function from(side: number): Vector3
+		return Cinema.clear(mid + right * side * reach - forward * reach * 0.35 + Vector3.new(0, 1.4, 0), mid, ignore)
+	end
+	if not twoShotSide then
+		local rightRoom, leftRoom = (from(1) - mid).Magnitude, (from(-1) - mid).Magnitude
+		twoShotSide = if math.max(rightRoom, leftRoom) < 3.2 then 0 elseif leftRoom > rightRoom + 0.5 then -1 else 1
+	end
+	local eye = if twoShotSide == 0 then Cinema.clear(mid - forward * 4 + Vector3.new(0, 7, 0), mid, ignore)
+		else from(twoShotSide :: number)
+	return CFrame.lookAt(eye, mid)
+end
+
+-- THE BAR IN YOUR HANDS for the scene: the one on your back hidden on this screen, one in your right hand instead.
+local barHeld: { hand: BasePart?, hidden: { BasePart } } = { hand = nil, hidden = {} }
+local function barInHands(on: boolean)
+	local character = Players.LocalPlayer.Character
+	if on then
+		if barHeld.hand or not character then
+			return
+		end
+		for _, name in ipairs({ "PryBarCarried", "PryBarClaw" }) do
+			local part = character:FindFirstChild(name)
+			if part and part:IsA("BasePart") then
+				part:SetAttribute("SceneWas", part.Transparency)
+				part.Transparency = 1
+				table.insert(barHeld.hidden, part)
+			end
+		end
+		local hand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
+		if hand and hand:IsA("BasePart") then
+			local bar = Instance.new("Part")
+			bar.Name = "SceneBar"
+			bar.Size = Vector3.new(0.2, 3.2, 0.2)
+			bar.Color = Color3.fromRGB(46, 44, 48)
+			bar.Material = Enum.Material.Metal
+			bar.CanCollide = false
+			bar.CanTouch = false
+			bar.CanQuery = false
+			bar.Massless = true
+			bar.CFrame = hand.CFrame * CFrame.new(0, -0.3, -0.6) * CFrame.Angles(math.rad(-70), 0, 0)
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0, weld.Part1 = hand, bar
+			weld.Parent = bar
+			bar.Parent = character
+			barHeld.hand = bar
+		end
+	else
+		if barHeld.hand then
+			barHeld.hand:Destroy()
+			barHeld.hand = nil
+		end
+		for _, part in ipairs(barHeld.hidden) do
+			local was = part:GetAttribute("SceneWas")
+			part.Transparency = if typeof(was) == "number" then was else 0
+		end
+		table.clear(barHeld.hidden)
+	end
+end
+
+-- A puff of dust out of the thing as the bar bites.
+local function dust(at: Vector3)
+	local puff = Instance.new("Part")
+	puff.Name = "PryDust"
+	puff.Size = Vector3.new(1, 1, 1)
+	puff.Transparency = 1
+	puff.Anchored = true
+	puff.CanCollide = false
+	puff.CanTouch = false
+	puff.CanQuery = false
+	puff.CFrame = CFrame.new(at)
+	puff.Parent = workspace
+	local motes = Instance.new("ParticleEmitter")
+	motes.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	motes.Color = ColorSequence.new(Color3.fromRGB(196, 184, 166))
+	motes.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1.2) })
+	motes.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 1) })
+	motes.Lifetime = NumberRange.new(0.6, 1.1)
+	motes.Speed = NumberRange.new(1.5, 4)
+	motes.SpreadAngle = Vector2.new(60, 60)
+	motes.Acceleration = Vector3.new(0, -2, 0)
+	motes.Rate = 0
+	motes.Parent = puff
+	motes:Emit(14)
+	game:GetService("Debris"):AddItem(puff, 2)
+end
+
+-- THE SCENE'S END, whichever way it ends: the pose let go, the bar back on your back, the camera given back.
+local scene: { prying: boolean, token: number } = { prying = false, token = 0 }
+local function endScene()
+	act(nil)
+	barInHands(false)
+	twoShotSide = nil
+	scene.prying = false
+	busy = false
+	if Cinema then
+		Cinema.finish()
+	end
+end
+
+-- THE BAR AT WORK (Interactables' "pry"): you turn to it, set the bar, three hard tugs with the dust coming out, and
+-- on the last it gives (the server opens it then): an impact frame and a jump back. Then the scene of what was in it
+-- (moment, or peek for the board) takes over; with nothing in it (an empty locker) it ends by itself.
+local PRY_SECONDS = 1.75
+local function pry(data: { [string]: any })
+	local at = data.at
+	if busy or not Cinema or typeof(at) ~= "Vector3" then
 		return
 	end
 	busy = true
+	scene.prying = true
+	scene.token += 1
+	twoShotSide = nil
+	local token = scene.token
+	local character = Players.LocalPlayer.Character
+	faceToward(at)
 	Cinema.begin({ hush = false })
-	sound("SecretSting", nil, 0.7, 1)
-	local start = eye.Position
-	local toward = (focus - start)
-	local path = { start - toward.Unit * 3 + Vector3.new(0, 1.2, 0), start, start + toward * 0.22 + Vector3.new(0, -0.3, 0) }
-	Cinema.caption(tostring(data.title), tostring(data.line), 6)
+	barInHands(true)
+	act("pry")
+	Cinema.think(character, tostring(data.think or "Let's see what's in here."), 2.6)
 	local began = os.clock()
+	local tugs = { 0.4, 0.95, 1.5 }
 	local hook
 	hook = RunService.RenderStepped:Connect(function()
 		local t = os.clock() - began
-		local u = math.clamp(t / 6.5, 0, 1)
-		u = u * u * (3 - 2 * u)
-		local at = Cinema.spline(path, u)
-		Cinema.point(CFrame.lookAt(at, focus), 50 - 8 * u)
-		Cinema.focus((focus - at).Magnitude, 0.55)
-		if t > 7.2 then
+		if scene.token ~= token or not scene.prying then
 			hook:Disconnect()
-			Cinema.finish()
-			busy = false
-			card(tostring(data.title), tonumber(data.found) or 1, tonumber(data.total) or 5)
+			return
+		end
+		while tugs[1] and t >= tugs[1] do
+			table.remove(tugs, 1)
+			Cinema.shake(0.35)
+			dust(at)
+		end
+		local shot = twoShot(at, math.clamp(t / PRY_SECONDS, 0, 1))
+		if shot then
+			Cinema.point(shot, 50 - 4 * math.clamp(t / PRY_SECONDS, 0, 1))
+		end
+		if t >= PRY_SECONDS and acting.now and acting.now.pose == "pry" then
+			-- IT GIVES.
+			Cinema.impact(0.9)
+			act("startle")
+			barInHands(false)
+			task.delay(0.6, function()
+				if scene.token == token and acting.now and acting.now.pose == "startle" then
+					act("ponder")
+				end
+			end)
+		end
+		-- Nothing came of it (an empty locker): the scene ends by itself.
+		if t > PRY_SECONDS + 4 then
+			hook:Disconnect()
+			if scene.token == token and scene.prying then
+				endScene()
+			end
 		end
 	end)
 end
 
--- UNDER THE BOARDS: straight down into the shaft, and far below, the mouth, breathing.
+-- A SECRET FOUND: you, side on, working out what you have found (hand at your chin, what you make of it over your
+-- head); then close in on it, INSIDE the thing (the coat in the locker, the letter in the box), its name and a sting;
+-- then the card. Takes over from the bar's scene. It used to drift for five and a half seconds along a curve that ended
+-- against the outside of whatever it was. LOOKED AT AGAIN (`again`), it is only the close look, three seconds, with
+-- its name: no sting, no card, no scene over again.
+local MOMENT = { ponder = 2.4, close = 4.2 } -- seconds: you working it out; then close in on it
+local function moment(data: { [string]: any })
+	local takingOver = scene.prying
+	if (busy and not takingOver) or not Cinema then
+		if data.again ~= true then
+			card(tostring(data.title), tonumber(data.found) or 1, tonumber(data.total) or 5)
+		end
+		return
+	end
+	local eye, focus = data.eye, data.focus
+	if typeof(eye) ~= "CFrame" or typeof(focus) ~= "Vector3" then
+		if takingOver then
+			endScene()
+		end
+		return
+	end
+	local again = data.again == true
+	busy = true
+	scene.prying = false
+	scene.token += 1
+	twoShotSide = nil
+	local token = scene.token
+	local character = Players.LocalPlayer.Character
+	Cinema.begin({ hush = false })
+	if not again then
+		sound("SecretSting", nil, 0.7, 1)
+	end
+	faceToward(focus)
+	if not again and not (acting.now and acting.now.pose == "ponder") then
+		act("ponder")
+	end
+	-- Close in on it from the side it opens to (the way the server's eye for it looks in from), never from behind it.
+	local out = Vector3.new(eye.Position.X - focus.X, 0, eye.Position.Z - focus.Z)
+	out = if out.Magnitude > 0.1 then out.Unit else Vector3.zAxis
+	local reach = math.clamp((eye.Position - focus).Magnitude * 0.5, 1.9, 3.4)
+	local ponder = if again then 0 else MOMENT.ponder
+	local closing = if again then 3 else MOMENT.close
+	local began = os.clock()
+	local said, captioned = false, false
+	local hook
+	hook = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - began
+		if scene.token ~= token then
+			hook:Disconnect()
+			return
+		end
+		if t < ponder then
+			-- YOU, working it out: side on, a little closer as you lean in.
+			if not said and t > 0.3 and typeof(data.think) == "string" then
+				said = true
+				Cinema.think(character, data.think, 3.4)
+			end
+			local shot = twoShot(focus, 0.5 * math.clamp(t / ponder, 0, 1))
+			if shot then
+				Cinema.point(shot, 48)
+			end
+		else
+			-- WHAT IT IS: close in on it, from in front of it and a little above, easing in; sharp on it, its name.
+			if not captioned then
+				captioned = true
+				Cinema.cut()
+				Cinema.caption(tostring(data.title), tostring(data.line), if again then 3 else 5)
+			end
+			local u = math.clamp((t - ponder) / MOMENT.close, 0, 1)
+			u = u * u * (3 - 2 * u)
+			local want = focus + out * (reach - 0.7 * u) + Vector3.new(0, 0.45 - 0.15 * u, 0)
+			local at = Cinema.clear(want, focus, { character })
+			Cinema.point(CFrame.lookAt(at, focus - Vector3.new(0, 0.1, 0)), 52 - 6 * u)
+			Cinema.focus((focus - at).Magnitude, 0.55)
+		end
+		if t > ponder + closing then
+			hook:Disconnect()
+			endScene()
+			if not again then
+				card(tostring(data.title), tonumber(data.found) or 1, tonumber(data.total) or 5)
+			end
+		end
+	end)
+end
+
+-- UNDER THE BOARDS: you leaning over the gap; then straight down into the shaft, where far below the mouth opens a
+-- little and breathes (and you jolt at it); then back to you, backing off, what you make of it over your head.
 local function peek(data: { [string]: any })
 	local hole = data.eye
-	if busy or not Cinema or typeof(hole) ~= "CFrame" then
+	local takingOver = scene.prying
+	if (busy and not takingOver) or not Cinema or typeof(hole) ~= "CFrame" then
+		if takingOver then
+			endScene()
+		end
 		return
 	end
 	busy = true
+	scene.prying = false
+	scene.token += 1
+	twoShotSide = nil
+	local token = scene.token
+	local character = Players.LocalPlayer.Character
 	Cinema.begin({ hush = false })
+	faceToward(hole.Position)
+	act("peer")
 	local over = hole.Position + Vector3.new(0, 1.5, 0)
 	local mouth = if Maw then Maw.build(Maw.facing(over - Vector3.new(0, 240, 0), Vector3.yAxis, Vector3.xAxis), workspace) else nil
 	if mouth then
@@ -207,31 +539,514 @@ local function peek(data: { [string]: any })
 		Maw.light(mouth, 0)
 	end
 	sound("MawRumble", "rbxasset://sounds/bass.mp3", 0.5, 0.2)
-	Cinema.caption(tostring(data.title), tostring(data.line), 6)
 	local began = os.clock()
+	local captioned, jolted, back = false, false, false
 	local hook
 	hook = RunService.RenderStepped:Connect(function()
 		local t = os.clock() - began
-		local breath = math.clamp(math.sin(math.clamp((t - 1) / 5, 0, 1) * math.pi), 0, 1)
-		if mouth then
-			Maw.set(mouth, 0.06 + 0.3 * breath, 0.05 + 0.25 * breath)
-			Maw.light(mouth, 0.45 * breath)
-		end
-		-- Straight down: told which way is up on the screen, since looking along the world's up has no answer.
-		Cinema.point(CFrame.lookAt(over + Vector3.new(0, -2, 0), over - Vector3.new(0, 100, 0), Vector3.zAxis), 40 - 6 * math.min(1, t / 7))
-		if t > 7.5 then
+		if scene.token ~= token then
 			hook:Disconnect()
 			if Maw and mouth then
 				Maw.destroy(mouth)
 			end
-			Cinema.finish()
-			busy = false
+			return
+		end
+		local breath = math.clamp(math.sin(math.clamp((t - 1.8) / 5, 0, 1) * math.pi), 0, 1)
+		if mouth then
+			Maw.set(mouth, 0.06 + 0.3 * breath, 0.05 + 0.25 * breath)
+			Maw.light(mouth, 0.45 * breath)
+		end
+		if t < 1.8 then
+			-- YOU, leaning over the gap to look.
+			local shot = twoShot(hole.Position, 0.35)
+			if shot then
+				Cinema.point(shot, 48)
+			end
+		elseif t < 7.6 then
+			if not captioned then
+				captioned = true
+				Cinema.cut()
+				Cinema.caption(tostring(data.title), tostring(data.line), 6)
+			end
+			-- AT ITS WIDEST, it gets you: a jolt.
+			if not jolted and breath > 0.9 then
+				jolted = true
+				Cinema.impact(0.7)
+			end
+			-- Straight down: told which way is up on the screen, since looking along the world's up has no answer.
+			Cinema.point(CFrame.lookAt(over + Vector3.new(0, -2, 0), over - Vector3.new(0, 100, 0), Vector3.zAxis),
+				40 - 6 * math.min(1, (t - 1.8) / 6))
+		else
+			-- BACK UP, backing off it: what you make of it.
+			if not back then
+				back = true
+				Cinema.cut()
+				act("startle")
+				Cinema.think(character, tostring(data.think or "Is that... breathing?"), 2.4)
+			end
+			local shot = twoShot(hole.Position, 0)
+			if shot then
+				Cinema.point(shot, 50)
+			end
+		end
+		if t > 10 then
+			hook:Disconnect()
+			if Maw and mouth then
+				Maw.destroy(mouth)
+			end
+			endScene()
 			card(tostring(data.title), tonumber(data.found) or 1, tonumber(data.total) or 5)
 		end
 	end)
 end
 
+-- ===== WHAT WALKS IN THE BACK ROOMS =====
+--
+-- ===== THE BACK ROOMS ON THIS SCREEN (the hundred-and-third pass) =====
+--
+-- THEIR OWN LIGHT while you are down there: a little yellow, a little flat, the air thick with it (the room's haze),
+-- given back as you leave. THE DOOR YOU CAME IN BY, lit for you alone if you came down the lobby's corridor (the
+-- server takes you back through it); a frame round bare wall if you fell in. THE DREAD as he comes: the door banging
+-- open, the lights going out from it toward you and coming back, then your heart, louder and faster and the picture
+-- draining of colour the nearer he is. And THE SCREAMER: the lights gone, then him, an arm's length away, and his
+-- blank face splitting open down its seam into the Hold's mouth.
+local Lighting = game:GetService("Lighting")
+local backRooms = { grade = nil :: ColorCorrectionEffect?, haze = nil :: { [string]: any }?, dread = nil :: RBXScriptConnection?,
+	heart = nil :: Sound?, dreadFx = nil :: ColorCorrectionEffect? }
+
+local function backRoomsFolder(): Instance?
+	return workspace:FindFirstChild("BackRooms")
+end
+
+local function tubes(): { SurfaceLight }
+	local out = {}
+	local folder = backRoomsFolder()
+	for _, item in ipairs(if folder then folder:GetDescendants() else {}) do
+		if item:IsA("SurfaceLight") and item.Parent and item.Parent.Name == "TubePanel" then
+			table.insert(out, item)
+		end
+	end
+	return out
+end
+
+local function lightTheDoor()
+	local folder = backRoomsFolder()
+	local doorway = folder and folder:FindFirstChild("ReturnDoorway")
+	if not (doorway and doorway:IsA("BasePart")) then
+		return
+	end
+	local open = Players.LocalPlayer:GetAttribute("BackRoomsFrom") == "lobby"
+	doorway.Color = if open then Color3.fromRGB(255, 226, 140) else Color3.fromRGB(206, 186, 96)
+	doorway.Material = if open then Enum.Material.SmoothPlastic else Enum.Material.Plaster
+	local spill = doorway:FindFirstChild("Spill")
+	if spill and spill:IsA("SurfaceLight") then
+		spill.Enabled = open
+	end
+end
+
+local function backRoomsLight(on: boolean)
+	if on then
+		if not backRooms.grade then
+			local grade = Instance.new("ColorCorrectionEffect")
+			grade.Name = "BackRoomsGrade"
+			grade.TintColor = Color3.fromRGB(255, 244, 210)
+			grade.Saturation = -0.14
+			grade.Contrast = 0.1
+			grade.Parent = Lighting
+			backRooms.grade = grade
+		end
+		local air = Lighting:FindFirstChildOfClass("Atmosphere")
+		if air and not backRooms.haze then
+			backRooms.haze = { Density = air.Density, Offset = air.Offset, Color = air.Color, Decay = air.Decay, Haze = air.Haze,
+				Glare = air.Glare }
+			air.Density, air.Offset, air.Glare, air.Haze = 0.42, 0, 0, 1.4
+			air.Color, air.Decay = Color3.fromRGB(226, 212, 156), Color3.fromRGB(150, 130, 76)
+		end
+		lightTheDoor()
+	else
+		if backRooms.grade then
+			backRooms.grade:Destroy()
+			backRooms.grade = nil
+		end
+		local air = Lighting:FindFirstChildOfClass("Atmosphere")
+		local was = backRooms.haze
+		if air and was then
+			for key, value in pairs(was) do
+				(air :: any)[key] = value
+			end
+		end
+		backRooms.haze = nil
+	end
+end
+
+local function stopDread()
+	if backRooms.dread then
+		backRooms.dread:Disconnect()
+		backRooms.dread = nil
+	end
+	if backRooms.heart then
+		backRooms.heart:Destroy()
+		backRooms.heart = nil
+	end
+	if backRooms.dreadFx then
+		backRooms.dreadFx:Destroy()
+		backRooms.dreadFx = nil
+	end
+end
+
+-- The lights out from `from` toward you, one after another, and back on in the same order.
+local function lightsWave(from: Vector3)
+	local list = tubes()
+	table.sort(list, function(a, b)
+		local pa, pb = a.Parent :: BasePart, b.Parent :: BasePart
+		return (pa.Position - from).Magnitude < (pb.Position - from).Magnitude
+	end)
+	for index, light in ipairs(list) do
+		if index > 24 then
+			break
+		end
+		task.delay(index * 0.04, function()
+			local was = light.Brightness
+			light.Brightness = was * 0.08
+			task.delay(0.9, function()
+				light.Brightness = was
+			end)
+		end)
+	end
+end
+
+-- STALKED: the staff door bangs open where he is (heard from there), the lights go out from it toward you and come
+-- back, you wonder aloud; and from then until he is gone, your heart and the colour draining the nearer he is.
+local function stalked(data: { [string]: any }?)
+	local door = if data and typeof(data.door) == "Vector3" then data.door else nil
+	local folder = SoundService:FindFirstChild("StorySounds")
+	local slam = folder and folder:FindFirstChild("DoorSlam")
+	if door and slam and slam:IsA("Sound") then
+		local spot = Instance.new("Attachment")
+		spot.WorldPosition = door
+		spot.Parent = workspace.Terrain
+		local s = slam:Clone()
+		s.Volume = 1
+		s.RollOffMode = Enum.RollOffMode.InverseTapered
+		s.RollOffMinDistance = 10
+		s.RollOffMaxDistance = 140
+		s.Parent = spot
+		s:Play()
+		game:GetService("Debris"):AddItem(spot, 3)
+	end
+	if door then
+		lightsWave(door)
+	end
+	task.delay(0.8, function()
+		if Cinema then
+			Cinema.think(Players.LocalPlayer.Character, "...is someone there?", 2.4)
+		end
+	end)
+	sound("MawGrowl", "rbxasset://sounds/bass.mp3", 0.45, 0.7)
+	stopDread()
+	local beat = folder and folder:FindFirstChild("Heartbeat")
+	if beat and beat:IsA("Sound") then
+		local heart = beat:Clone()
+		heart.Looped = true
+		heart.Volume = 0
+		heart.Parent = SoundService
+		heart:Play()
+		backRooms.heart = heart
+	end
+	local fx = Instance.new("ColorCorrectionEffect")
+	fx.Name = "Dread"
+	fx.Parent = Lighting
+	backRooms.dreadFx = fx
+	backRooms.dread = RunService.RenderStepped:Connect(function()
+		local rooms = backRoomsFolder()
+		local him = rooms and rooms:FindFirstChild("Marsh")
+		local character = Players.LocalPlayer.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if not (him and him:IsA("Model") and root and root:IsA("BasePart"))
+			or Players.LocalPlayer:GetAttribute("InLevel") ~= "backRooms" then
+			stopDread()
+			return
+		end
+		local gap = (him:GetPivot().Position - root.Position).Magnitude
+		local near = math.clamp(1 - (gap - 4) / 36, 0, 1)
+		local heart = backRooms.heart
+		if heart then
+			heart.Volume = 0.12 + 0.75 * near
+			heart.PlaybackSpeed = 0.85 + 0.6 * near
+		end
+		fx.Saturation = -0.5 * near
+		fx.Contrast = 0.28 * near
+		fx.TintColor = Color3.new(1, 1, 1):Lerp(Color3.fromRGB(255, 226, 220), near)
+	end)
+end
+
+-- HIS FACE, OPENING: built on this screen only (under the camera), two halves of the pale head hinged at the back,
+-- which swing apart down the seam onto rows of long thin teeth and a dark red throat with a light in it.
+type Screamer = { model: Model, left: { { part: BasePart, offset: CFrame } }, right: { { part: BasePart, offset: CFrame } },
+	gullet: PointLight }
+local function screamerFace(): Screamer
+	local model = Instance.new("Model")
+	model.Name = "Screamer"
+	local skin, flesh, bone = Color3.fromRGB(214, 208, 200), Color3.fromRGB(70, 12, 16), Color3.fromRGB(232, 226, 206)
+	local function piece(name: string, size: Vector3, colour: Color3, material: Enum.Material?): BasePart
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.CastShadow = false
+		p.Size = size
+		p.Color = colour
+		p.Material = material or Enum.Material.SmoothPlastic
+		p.Parent = model
+		return p
+	end
+	-- Each half's pieces, by where they sit from its hinge (the back edge of the face on its side).
+	local halves = {}
+	for _, side in ipairs({ -1, 1 }) do
+		local list = {}
+		table.insert(list, { part = piece("Half", Vector3.new(0.6, 1.7, 1.25), skin), offset = CFrame.new(side * -0.3, 0, -0.62) })
+		-- The cut face, red, on the side that opens toward the other half; the teeth standing off it into the gap.
+		table.insert(list, { part = piece("Gum", Vector3.new(0.06, 1.55, 1.15), flesh), offset = CFrame.new(side * 0.02, 0, -0.62) })
+		for k = 1, 7 do
+			local tooth = piece("Tooth", Vector3.new(0.05, 0.05, 0.34), bone)
+			table.insert(list, { part = tooth, offset = CFrame.new(side * 0.08, -0.72 + k * 0.18, -1.0 + (k % 2) * 0.12)
+				* CFrame.Angles(0, side * 0.6, 0) })
+		end
+		halves[side] = list
+	end
+	local throat = piece("Throat", Vector3.new(1.0, 1.4, 0.2), flesh)
+	throat.Name = "Throat"
+	local gullet = Instance.new("PointLight")
+	gullet.Color = Color3.fromRGB(255, 70, 50)
+	gullet.Brightness = 0
+	gullet.Range = 9
+	gullet.Shadows = false
+	gullet.Parent = throat
+	model.Parent = workspace.CurrentCamera
+	return { model = model, left = halves[-1], right = halves[1], gullet = gullet }
+end
+
+-- Where the face is (its centre's frame, facing you) and how far open (0 shut, 1 wide).
+local function placeScreamer(face: Screamer, at: CFrame, open: number)
+	local swing = math.rad(78) * open
+	for _, entry in ipairs(face.left) do
+		entry.part.CFrame = at * CFrame.new(0.62, 0, 0.62) * CFrame.Angles(0, -swing, 0) * CFrame.new(-0.62, 0, -0.62) * entry.offset
+	end
+	for _, entry in ipairs(face.right) do
+		entry.part.CFrame = at * CFrame.new(-0.62, 0, 0.62) * CFrame.Angles(0, swing, 0) * CFrame.new(0.62, 0, -0.62) * entry.offset
+	end
+	local throat = face.model:FindFirstChild("Throat")
+	if throat and throat:IsA("BasePart") then
+		throat.CFrame = at * CFrame.new(0, 0, 0.35)
+	end
+end
+
+-- CAUGHT (the screamer, made far worse in the hundred-and-third pass: "make the screamer way more dramatic"): every
+-- light near you goes out and the hum with it; a beat of black and silence; then he is there, an arm's length from
+-- your eyes, the lights flaring back too bright; his face splits down its seam and swings open onto the teeth and the
+-- red throat, the stab and his roar at once, the picture punching in and shaking; he lunges into you; black. The
+-- server takes you to the lobby in the black.
+local function caught(data: { [string]: any })
+	local at = data.at
+	if not Cinema or typeof(at) ~= "Vector3" then
+		return
+	end
+	stopDread()
+	scene.token += 1
+	busy = true
+	local token = scene.token
+	-- (Not hushed: the hum goes with the lights, below, and you are in the lobby before it could matter.)
+	Cinema.begin({ hush = false })
+	act("startle")
+	faceToward(at)
+	local lights = tubes()
+	local was: { [SurfaceLight]: number } = {}
+	for _, light in ipairs(lights) do
+		was[light] = light.Brightness
+		light.Brightness = 0
+	end
+	sound("TubeDie", nil, 0.9, 1)
+	Cinema.black(true, 0.06)
+	local camera = workspace.CurrentCamera
+	local eye = camera.CFrame
+	local face: Screamer? = nil
+	local began = os.clock()
+	local struck = false
+	local blacked = false
+	local hook
+	hook = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - began
+		if scene.token ~= token then
+			hook:Disconnect()
+			if face then
+				face.model:Destroy()
+			end
+			return
+		end
+		if t >= 0.45 and not struck then
+			struck = true
+			face = screamerFace()
+			for light, brightness in pairs(was) do
+				light.Brightness = brightness * 1.6
+			end
+			Cinema.black(false)
+			sound("ScreamerStab", "rbxasset://sounds/bass.mp3", 1, 1)
+			sound("MawRoar", "rbxasset://sounds/bass.mp3", 1, 0.8)
+			Cinema.impact(2)
+			Cinema.shake(4)
+		end
+		if face then
+			local s = t - 0.45
+			local open = math.clamp(s / 0.14, 0, 1)
+			local lunge = math.clamp((s - 0.25) / 0.4, 0, 1) ^ 2
+			local distance = 2.6 - 2.2 * lunge
+			placeScreamer(face, eye * CFrame.new(0, -0.15, -distance) * CFrame.Angles(0, math.pi, 0), open)
+			face.gullet.Brightness = 2 + 3 * open + math.random() * 1.5
+			Cinema.point(eye, 70 - 40 * math.min(1, s / 0.6))
+		else
+			Cinema.point(eye, 70)
+		end
+		if t > 1.15 and not blacked then
+			blacked = true
+			Cinema.black(true, 0.04)
+			if face then
+				face.model:Destroy()
+				face = nil
+			end
+			for light, brightness in pairs(was) do
+				light.Brightness = brightness
+			end
+		end
+		if t > 2.6 then
+			hook:Disconnect()
+			endScene()
+		end
+	end)
+end
+
+-- ===== THE PEOPLE TELL IT WITH THEIR BODIES =====
+--
+-- Everyone in Harrow Bay who says a line says it with a gesture (Townsfolk sets Gesture, GestureAt and
+-- GestureFor on them, and which hand is free in Hands); here it is played on their joints every frame, on top
+-- of how they stand and the head the server turns to you: smooth, which turning them from the server is not.
+-- Only near the camera, and let go of when the line is done. Their own client's clock, set against the
+-- server's once per line.
+type Teller = { joints: { [string]: any }?, at: number?, clock: number, playing: boolean }
+local tellers: { [Instance]: Teller } = {}
+local TELL_SEEN = 90 -- studs: further than this from the camera, nobody's hands are worth turning
+
+-- THEIR VOICES: no words, the sound of somebody talking as they say a line, the one for its gesture (a hello, a
+-- mumbled explaining, a questioning hum, a worried one, a sigh: audio/gen_voice_sfx.py, nine takes in one upload,
+-- SoundService.StorySounds.TownsfolkVoice_x9, in the order of Poses.GESTURES), from their head, at their own pitch
+-- (Townsfolk's VOICES). Only as a line starts, never for one already being said. Silent until it is imported.
+local VOICE_SLOT = 2.0
+local function speak(model: Instance, gesture: string)
+	local folder = SoundService:FindFirstChild("StorySounds")
+	local sheet = folder and folder:FindFirstChild("TownsfolkVoice_x9")
+	local head = model:FindFirstChild("Head")
+	local index = if Poses and Poses.GESTURES then table.find(Poses.GESTURES, gesture) else nil
+	if not (sheet and sheet:IsA("Sound") and head and head:IsA("BasePart") and index) then
+		return
+	end
+	local voice = sheet:Clone()
+	voice.Name = "Voice"
+	local from = (index - 1) * VOICE_SLOT
+	local pitch = model:GetAttribute("Voice")
+	voice.PlaybackSpeed = (if typeof(pitch) == "number" then pitch else 1) * (0.97 + math.random() * 0.06)
+	voice.Volume = 0.55
+	voice.Looped = false
+	voice.RollOffMode = Enum.RollOffMode.InverseTapered
+	voice.RollOffMinDistance = 8
+	voice.RollOffMaxDistance = 50
+	local regioned = pcall(function()
+		(voice :: any).PlaybackRegionsEnabled = true;
+		(voice :: any).PlaybackRegion = NumberRange.new(from, from + VOICE_SLOT - 0.05)
+	end)
+	voice.TimePosition = from
+	voice.Parent = head
+	voice:Play()
+	if not regioned then
+		task.delay((VOICE_SLOT - 0.07) / voice.PlaybackSpeed, function()
+			if voice.Parent then
+				voice:Stop()
+			end
+		end)
+	end
+	-- Gone once its slot has played, at its own speed (the lowest voices take nearly three seconds over two).
+	game:GetService("Debris"):AddItem(voice, VOICE_SLOT / voice.PlaybackSpeed + 0.5)
+end
+
+local function stepTellers()
+	if not Poses then
+		return
+	end
+	local camera = workspace.CurrentCamera
+	local now = os.clock()
+	for model, teller in pairs(tellers) do
+		if not model.Parent then
+			tellers[model] = nil
+			continue
+		end
+		local gesture = model:GetAttribute("Gesture")
+		local at, span = model:GetAttribute("GestureAt"), model:GetAttribute("GestureFor")
+		if typeof(at) == "number" and at ~= teller.at then
+			teller.at = at
+			teller.clock = now - (workspace:GetServerTimeNow() - at)
+			-- A line just begun: said aloud.
+			if typeof(gesture) == "string" and workspace:GetServerTimeNow() - at < 0.5 then
+				speak(model, gesture)
+			end
+		end
+		local t = now - teller.clock
+		local root = (model :: Model).PrimaryPart
+		local active = typeof(gesture) == "string" and typeof(span) == "number" and teller.at ~= nil and t >= 0
+			and t < span and root ~= nil and camera ~= nil and (root.Position - camera.CFrame.Position).Magnitude < TELL_SEEN
+		if active then
+			if not teller.joints then
+				teller.joints = Poses.joints(model)
+			end
+			local joints = teller.joints :: { [string]: any }
+			local r6 = Poses.isR6(joints)
+			local w = Poses.weight(t, span :: number)
+			local hands = model:GetAttribute("Hands")
+			for name, joint in pairs(joints) do
+				local by = Poses.tell(gesture :: string, name, t, w, if typeof(hands) == "string" then hands else "both", r6)
+				Poses.drive(joint, by or CFrame.identity)
+			end
+			teller.playing = true
+		elseif teller.playing then
+			teller.playing = false
+			for _, joint in pairs(teller.joints or {}) do
+				Poses.drive(joint, CFrame.identity)
+			end
+		end
+	end
+end
+
+local function startTellers()
+	local function add(model: Instance)
+		if model:IsA("Model") and not tellers[model] then
+			tellers[model] = { joints = nil, at = nil, clock = 0, playing = false }
+		end
+	end
+	for _, model in ipairs(CollectionService:GetTagged("Townsperson")) do
+		add(model)
+	end
+	CollectionService:GetInstanceAddedSignal("Townsperson"):Connect(add)
+	CollectionService:GetInstanceRemovedSignal("Townsperson"):Connect(function(model: Instance)
+		tellers[model] = nil
+	end)
+	-- After the animations, as every pose in this game is.
+	RunService.Stepped:Connect(function()
+		pcall(stepTellers)
+	end)
+end
+
 function StoryClient.start()
+	-- The people's gestures first: they need nothing but the people.
+	startTellers()
 	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents", 20)
 	local event = remotes and remotes:WaitForChild("StoryMoment", 20)
 	if not (event and event:IsA("RemoteEvent")) then
@@ -243,21 +1058,38 @@ function StoryClient.start()
 		local ok, err = pcall(function()
 			if kind == "whisper" and typeof(data) == "string" then
 				whisper(data)
+			elseif kind == "pry" and typeof(data) == "table" then
+				pry(data)
 			elseif kind == "moment" and typeof(data) == "table" then
 				moment(data)
 			elseif kind == "peek" and typeof(data) == "table" then
 				peek(data)
+			elseif kind == "stalk" and typeof(data) == "table" then
+				stalked(data)
+			elseif kind == "caught" and typeof(data) == "table" then
+				caught(data)
 			end
 		end)
 		if not ok then
-			busy = false
 			warn("StoryClient: a moment failed, and the camera is given back: " .. tostring(err))
-			if Cinema then
-				pcall(Cinema.finish)
-			end
+			pcall(endScene)
+			busy = false
 		end
 	end)
+	-- THE BACK ROOMS' OWN LIGHT, and the door you came in by, as you go in and out of them.
+	local me = Players.LocalPlayer
+	local function placeChanged()
+		local down = me:GetAttribute("InLevel") == "backRooms"
+		backRoomsLight(down)
+		if not down then
+			stopDread()
+		end
+	end
+	me:GetAttributeChangedSignal("InLevel"):Connect(placeChanged)
+	me:GetAttributeChangedSignal("BackRoomsFrom"):Connect(lightTheDoor)
+	placeChanged()
 	print("StoryClient: running, " .. StoryClient.VERSION)
 end
 
+StoryClient.STAMP = "bdfcffa3"
 return StoryClient

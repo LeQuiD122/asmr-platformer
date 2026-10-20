@@ -518,7 +518,11 @@ local Materials: { [string]: MaterialDef } = {
 		-- either would blur the one contrast the pair exists to draw.
 		decayDuration = 11,
 		sfxMinGap = 0.2,
-		sfxEvent = "chocolateSnap",
+		-- ITS OWN BREAK: a block cracking, deeper and heavier than the bar's snap (audio/gen_sheet_sfx.py). Until its
+		-- sheet is imported, the bar's snap a little lower stands in.
+		sfxEvent = "chocolateChunk",
+		sfxFallback = "chocolateSnap",
+		sfxFallbackPitch = 0.82,
 		deformationAnim = "snap",
 	},
 	-- CLAY: the visitor book, and the only surface that moves itself somewhere else.
@@ -667,7 +671,9 @@ local Materials: { [string]: MaterialDef } = {
 		microBounceHeight = 5,
 		bounceCooldown = 0.45,
 		decayDuration = 3,
-		sfxEvent = "slimeBoing",
+		-- ITS OWN BOUNCE: round and soft, a gel bell (it borrowed the slime's boing). The slime's until it is imported.
+		sfxEvent = "jellyBounce",
+		sfxFallback = "slimeBoing",
 		sfxMinGap = 0.25,
 		deformationAnim = "wobble",
 	},
@@ -761,12 +767,10 @@ local Materials: { [string]: MaterialDef } = {
 		popCount = 4,
 		microBounceHeight = 4,
 		decayDuration = 7,
-		-- HALVED, and bubble wrap is the one material that wants it. Every other surface
-		-- uses 0.2 to stop a single stride firing three copies of one sample, but
-		-- overlapping crackle is the entire appeal here -- a sheet of bubble wrap popping
-		-- one bubble at a time is not what anybody is picturing. At 0.1 it can pop about
-		-- ten times a second, which is roughly what hands do to it.
-		sfxMinGap = 0.1,
+		-- THE SAME AS EVERY OTHER SURFACE now, one pop to a footfall. It was halved, for a crackle of overlapping pops,
+		-- and in play the pops ran on behind the feet that made them (reported as "way behind"); with its own crisp
+		-- takes (audio/gen_sheet_sfx.py) each lands as the foot does.
+		sfxMinGap = 0.2,
 		sfxEvent = "bubblePop",
 		deformationAnim = "pop",
 	},
@@ -795,6 +799,7 @@ local Constants = {
 }
 
 return {
+	STAMP = "dc90b4f4",
 	Materials = Materials,
 	Constants = Constants,
 }

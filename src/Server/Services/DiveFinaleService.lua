@@ -122,6 +122,21 @@ local RELEASE_AFTER = 60
 -- A built-in water impact, present in every place with no upload. Slowed, because this is a body
 -- hitting the sea from a great height rather than a drip.
 local SPLASH_SOUND = "rbxasset://sounds/impact_water.mp3"
+-- THE WATER'S OWN SOUNDS (WaterSounds, the ninety-eighth pass): if the module is not pasted yet, the old splash. ONE
+-- local here, the rest inside: a main chunk has room for only so many (Luau's 200).
+local WaterSounds: any = (function(): any
+	local waterModule = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("WaterSounds", 5)
+	if waterModule and waterModule:IsA("ModuleScript") then
+		return require(waterModule)
+	end
+	local function oldSplash(s: Sound, _kind: string): boolean
+		s.SoundId = "rbxasset://sounds/impact_water.mp3"
+		return false
+	end
+	local splashOnly: any = {}
+	splashOnly.dress = oldSplash
+	return splashOnly
+end)()
 -- How often the watch checks the platform is still there and the old finish line is still
 -- disarmed. Twice a second: a repair, not a control loop.
 local GUARD_EVERY = 0.5
@@ -332,9 +347,14 @@ local function splashEffects(finale: Finale, surface: Vector3)
 	}):Play()
 
 	local sound = Instance.new("Sound")
-	sound.SoundId = SPLASH_SOUND
+	-- The biggest of the water's own splashes, low (a body from a great height), or the old one slowed.
+	if WaterSounds.dress(sound, "splash") then
+		sound.PlaybackSpeed = 0.8
+	else
+		sound.SoundId = SPLASH_SOUND
+		sound.PlaybackSpeed = 0.7
+	end
 	sound.Volume = 1
-	sound.PlaybackSpeed = 0.7
 	sound.RollOffMaxDistance = 400
 	sound.Parent = host
 	sound:Play()
@@ -562,4 +582,5 @@ function DiveFinaleService.stop()
 	table.clear(committed)
 end
 
+DiveFinaleService.STAMP = "f9e1544f"
 return DiveFinaleService

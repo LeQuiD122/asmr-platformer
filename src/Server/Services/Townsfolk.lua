@@ -57,8 +57,11 @@
 --                     looking. MR BARLOW, the night engineer, with his lamp at the flume.
 --
 -- Each GREETS you with their first line the first time you come near, and after that says the next
--- line each time you talk to them (F). While you are near, they turn their head to you, and they talk
--- with their hands. What they say stays up for twice as long as it used to (READ, below).
+-- line each time you talk to them (F). While you are near, they turn their head to you, and they TELL IT
+-- WITH THEIR BODIES: every line comes with a gesture for what it says (a wave hello, pointing at the
+-- gates, a shrug, hands wrung over the water, a hand at the chin remembering, leaning in close), made with
+-- whichever hand is not holding something (GESTURE_WORDS, Poses.tell; each client plays it smoothly,
+-- StoryClient). What they say stays up for twice as long as it used to (READ, below).
 --
 -- === How, and why nothing has to be done by hand ===
 --
@@ -79,10 +82,13 @@ local Players = game:GetService("Players")
 local ServerStorage = game:GetService("ServerStorage")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local CollectionService = game:GetService("CollectionService")
 
 -- The joints (Poses.joints / Poses.turn), looked for with a timeout: without it the people still stand
 -- and talk, they just do not move.
 local posesModule = game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Poses", 10)
+-- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
+local Style = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Style"))
 local Poses: any = if posesModule and posesModule:IsA("ModuleScript") then require(posesModule) else nil
 if not (Poses and Poses.joints and Poses.turn) then
 	warn("Townsfolk: there is no ReplicatedStorage.Shared.Poses, so the people cannot move their joints. Paste "
@@ -96,7 +102,7 @@ export type Person = { name: string, model: Model, head: BasePart, root: BasePar
 	lines: { string }, next: number, bubble: BillboardGui?, post: CFrame, lift: number, route: { Vector3 }?,
 	busy: boolean, worn: { [string]: { part: BasePart, to: BasePart, offset: CFrame } },
 	greeted: { [Player]: boolean }, watch: number, yaw: number, pitch: number, relax: { [string]: CFrame },
-	hands: boolean, talking: number }
+	holding: { right: boolean, left: boolean }, talking: number }
 
 local living: { [string]: Person } = {}
 
@@ -201,6 +207,32 @@ local LINES: { [string]: { string } } = {
 	},
 }
 
+-- HOW EACH LINE IS TOLD: the gesture that goes with it, line for line with LINES, chosen the way a director
+-- would (Poses.GESTURES has what each looks like). Sal points out to the siren tower; Pip leans in to tell you
+-- the sand forgets, but not her; Mr Wick remembers holding the key forty years back; Tobi points at you when
+-- he sees whose face you have. Anything said that is not here (the attendant's reactions) is read for its
+-- words instead (GESTURE_WORDS).
+local TOLD: { [string]: { string } } = {
+	Sal = { "greet", "worry", "shrug", "point", "lean", "warn", "worry" },
+	Pip = { "greet", "explain", "worry", "explain", "lean", "sad" },
+	Maren = { "greet", "worry", "point", "warn", "point", "explain" },
+	Dev = { "greet", "remember", "shrug", "explain", "worry", "lean" },
+	Okafor = { "greet", "shrug", "lean", "explain", "sad", "worry" },
+	Rudy = { "greet", "shrug", "point", "lean", "explain" },
+	Attendant = { "greet", "shrug", "warn", "point", "remember", "warn" },
+	Fisherman = { "greet", "remember", "sad", "worry", "lean", "worry", "remember", "warn" },
+	Venn = { "greet", "point", "shrug", "lean", "explain", "warn", "remember", "shrug" },
+	Tobi = { "greet", "worry", "sad", "point", "explain" },
+	Barlow = { "greet", "explain", "point", "lean", "sad", "warn", "explain" },
+}
+
+-- THEIR VOICES' PITCH: each says their lines with the same nine sounds (no words: audio/gen_voice_sfx.py, played by
+-- StoryClient with each gesture), at their own pitch, so nobody sounds like anybody else. 1 is a grown-up's middle.
+local VOICES: { [string]: number } = {
+	Sal = 1.12, Pip = 1.45, Maren = 1.15, Dev = 1.0, Okafor = 1.1, Rudy = 0.95, Attendant = 1.04, Fisherman = 0.78,
+	Venn = 1.08, Tobi = 0.9, Barlow = 0.8, Watcher = 0.7,
+}
+
 -- HOW LONG anything said stays up: twice what a line was first given, so there is time to read it
 -- twice and look at who said it.
 local READ = 2
@@ -243,25 +275,26 @@ local JOINTS = { "Neck", "Waist", "LeftShoulder", "RightShoulder", "LeftElbow", 
 --   shoes                   nil for bare feet
 --   scale                   HumanoidDescription's height, width, depth and head
 --   beard, moustache, glasses
---   hands                   false when the level gives them something to hold, so they do not talk
---                           with the hand that is holding it
+--   holds                   "both" for someone whose hands are on something welded to them elsewhere
+--                           (the fisherman's rod); a thing worn on a hand (Townsfolk.wear) marks that
+--                           hand by itself, and they gesture with the other
 --   title                   what their Talk prompt calls them
 type Look = { skin: Color3, hair: Color3?, hairStyle: string?, top: Color3?, sleeves: string?, bottom: Color3,
 	legs: string?, shoes: Color3?, scale: { number }?, beard: Color3?, moustache: Color3?, glasses: boolean?,
-	hands: boolean?, title: string? }
+	holds: string?, title: string? }
 local LOOKS: { [string]: Look } = {
 	Sal = { skin = Color3.fromRGB(226, 192, 158), hair = Color3.fromRGB(120, 78, 52), hairStyle = "bun",
 		top = Color3.fromRGB(236, 120, 150), sleeves = "short", bottom = Color3.fromRGB(70, 74, 96), legs = "long",
-		shoes = Color3.fromRGB(246, 242, 236), scale = { 0.97, 1.06, 1.04, 1 }, hands = false },
+		shoes = Color3.fromRGB(246, 242, 236), scale = { 0.97, 1.06, 1.04, 1 } },
 	Pip = { skin = Color3.fromRGB(150, 104, 74), hair = Color3.fromRGB(38, 26, 20), hairStyle = "ponytail",
 		top = Color3.fromRGB(250, 214, 90), sleeves = "short", bottom = Color3.fromRGB(70, 130, 190), legs = "shorts",
-		shoes = Color3.fromRGB(230, 70, 60), scale = { 0.72, 0.8, 0.8, 1.12 }, hands = false, title = "Pip" },
+		shoes = Color3.fromRGB(230, 70, 60), scale = { 0.72, 0.8, 0.8, 1.12 }, title = "Pip" },
 	Maren = { skin = Color3.fromRGB(198, 150, 112), hair = Color3.fromRGB(232, 198, 122), hairStyle = "ponytail",
 		top = Color3.fromRGB(214, 52, 48), sleeves = "none", bottom = Color3.fromRGB(214, 52, 48), legs = "shorts",
 		scale = { 1.04, 1, 1, 1 } },
 	Dev = { skin = Color3.fromRGB(226, 192, 158), hair = Color3.fromRGB(62, 44, 34), hairStyle = "short",
 		top = Color3.fromRGB(80, 170, 190), sleeves = "short", bottom = Color3.fromRGB(240, 240, 236), legs = "shorts",
-		shoes = Color3.fromRGB(60, 62, 70), scale = { 1, 0.95, 0.95, 1 }, hands = false },
+		shoes = Color3.fromRGB(60, 62, 70), scale = { 1, 0.95, 0.95, 1 } },
 	Okafor = { skin = Color3.fromRGB(120, 84, 60), hair = Color3.fromRGB(28, 20, 16), hairStyle = "bob",
 		top = Color3.fromRGB(214, 120, 60), sleeves = "none", bottom = Color3.fromRGB(240, 200, 120), legs = "skirt",
 		shoes = Color3.fromRGB(196, 150, 96), scale = { 0.96, 1.08, 1.05, 1 }, title = "Mrs Okafor" },
@@ -273,19 +306,19 @@ local LOOKS: { [string]: Look } = {
 		shoes = Color3.fromRGB(20, 20, 24), title = "Aquarium attendant" },
 	Fisherman = { skin = Color3.fromRGB(214, 170, 130), beard = Color3.fromRGB(184, 180, 172),
 		top = Color3.fromRGB(226, 186, 44), sleeves = "long", bottom = Color3.fromRGB(52, 58, 66), legs = "long",
-		shoes = Color3.fromRGB(30, 34, 30), scale = { 1.02, 1.1, 1.06, 1 }, hands = false, title = "Mr Wick" },
+		shoes = Color3.fromRGB(30, 34, 30), scale = { 1.02, 1.1, 1.06, 1 }, holds = "both", title = "Mr Wick" },
 	Watcher = { skin = Color3.fromRGB(200, 196, 190), top = Color3.fromRGB(40, 40, 44), sleeves = "long",
-		bottom = Color3.fromRGB(40, 40, 44), legs = "long", shoes = Color3.fromRGB(24, 24, 26), hands = false },
+		bottom = Color3.fromRGB(40, 40, 44), legs = "long", shoes = Color3.fromRGB(24, 24, 26) },
 	Venn = { skin = Color3.fromRGB(232, 202, 178), hair = Color3.fromRGB(200, 200, 204), hairStyle = "bun",
 		top = Color3.fromRGB(116, 138, 108), sleeves = "long", bottom = Color3.fromRGB(70, 70, 82), legs = "skirt",
 		shoes = Color3.fromRGB(44, 32, 30), scale = { 0.94, 1.02, 1, 1 }, glasses = true, title = "Mrs Venn" },
 	Tobi = { skin = Color3.fromRGB(120, 84, 60), hair = Color3.fromRGB(20, 16, 14), hairStyle = "short",
 		moustache = Color3.fromRGB(20, 16, 14), sleeves = "none", bottom = Color3.fromRGB(40, 70, 140), legs = "shorts",
-		scale = { 1.04, 1.04, 1, 1 }, hands = false, title = "Tobi Okafor" },
+		scale = { 1.04, 1.04, 1, 1 }, title = "Tobi Okafor" },
 	Barlow = { skin = Color3.fromRGB(214, 170, 140), hair = Color3.fromRGB(150, 150, 152), hairStyle = "receding",
 		moustache = Color3.fromRGB(150, 150, 152), top = Color3.fromRGB(62, 82, 112), sleeves = "long",
 		bottom = Color3.fromRGB(62, 82, 112), legs = "long", shoes = Color3.fromRGB(42, 34, 30),
-		scale = { 1.02, 1.12, 1.08, 1 }, hands = false, title = "Mr Barlow" },
+		scale = { 1.02, 1.12, 1.08, 1 }, title = "Mr Barlow" },
 }
 
 local function quiet(model: Model)
@@ -488,6 +521,47 @@ local function pose(npc: Person, shape: { [string]: CFrame })
 	end
 end
 
+-- ===== TELLING IT WITH THEIR BODIES =====
+--
+-- Which gesture goes with a line: the one TOLD gives it, or, for anything else, from its words: the first
+-- group whose words are in it, in this order, so "I don't know" is a shrug before "don't" is a warning. A
+-- question nobody has words for is a shrug; anything else is told with both hands (explain).
+local GESTURE_WORDS: { { any } } = {
+	{ "lean", { "between you and me", "don't tell", "they say", "word is", "i heard", "rumour", "secret" } },
+	{ "shrug", { "don't know", "never heard", "no idea", "who knows", "funny", "backrooms", "always has been", "can't say" } },
+	{ "warn", { "mind the", "careful", "please", "don't tap", "stay back", "get back", "keep clear", "don't go", "the glass" } },
+	{ "sad", { "never came", "never come", "none came", "nobody came", "came back", "gone", "miss" } },
+	{ "point", { "gates", "drain", "outfall", "down there", "up there", "over there", "tower" } },
+	{ "remember", { "remember", "used to", "years", "when i was", "in my day", "1979", "back then" } },
+	{ "worry", { "water", "tide", "the sea", "flood", "rain", "storm", "midnight" } },
+}
+
+local function gestureFor(npc: Person, text: string): string
+	local told = TOLD[npc.name]
+	local index = table.find(npc.lines, text)
+	if told and index and told[index] then
+		return told[index]
+	end
+	local lower = string.lower(text)
+	for _, group in ipairs(GESTURE_WORDS) do
+		for _, word in ipairs(group[2] :: { string }) do
+			if string.find(lower, word, 1, true) then
+				return group[1] :: string
+			end
+		end
+	end
+	return if string.find(text, "?", 1, true) then "shrug" else "explain"
+end
+
+-- Which of their hands are free, for the gesture: "both", "right", "left" or "none".
+local function handsFree(npc: Person): string
+	local right, left = not npc.holding.right, not npc.holding.left
+	return if right and left then "both" elseif right then "right" elseif left then "left" else "none"
+end
+
+-- The arms a habit or a gesture moves, set back to how they rest before a gesture starts.
+local ARMS = { "RightShoulder", "RightElbow", "RightWrist", "LeftShoulder", "LeftElbow", "LeftWrist" }
+
 -- Says `text` over their head for `seconds`. A shout is bigger, redder and has no bubble round it.
 function Townsfolk.say(npc: Person, text: string, seconds: number?, shout: boolean?)
 	if npc.bubble then
@@ -524,7 +598,7 @@ function Townsfolk.say(npc: Person, text: string, seconds: number?, shout: boole
 	widest.Parent = label
 	if shout then
 		label.BackgroundTransparency = 1
-		label.Font = Enum.Font.GothamBlack
+		label.FontFace = Style.FONT.shout
 		label.TextColor3 = Color3.fromRGB(255, 244, 236)
 		label.TextStrokeColor3 = Color3.fromRGB(150, 24, 30)
 		label.TextStrokeTransparency = 0
@@ -533,7 +607,7 @@ function Townsfolk.say(npc: Person, text: string, seconds: number?, shout: boole
 		label.BackgroundColor3 = Color3.fromRGB(250, 248, 242)
 		label.BackgroundTransparency = 0
 		label.TextColor3 = Color3.fromRGB(34, 38, 44)
-		label.Font = Enum.Font.GothamBold
+		label.FontFace = Style.FONT.heading
 		local edge = Instance.new("UIStroke")
 		edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		edge.Color = Color3.fromRGB(34, 38, 44)
@@ -556,19 +630,22 @@ function Townsfolk.say(npc: Person, text: string, seconds: number?, shout: boole
 	gui.Adornee = npc.head
 	gui.Parent = npc.head
 	npc.bubble = gui
-	-- AND THEY TALK WITH THEIR HANDS: a hand out and back while they say it, unless it is holding
-	-- something or they are running for their lives. Their habit (HABITS) leaves their arms alone meanwhile.
+	-- AND THEY TELL IT WITH THEIR BODIES: the gesture for what they are saying, for as long as it takes to say,
+	-- on every client (StoryClient plays it on their joints, smoothly, over how they stand). Their habit (HABITS)
+	-- leaves their arms alone meanwhile, and lets go of them first. Not while running for their lives.
 	npc.talking = os.clock() + 2.6
-	if not shout and npc.hands and not npc.busy and Poses then
-		local relax = npc.relax
-		turn(npc, "RightShoulder", CFrame.Angles(0.6, 0, 0.12), 0.45)
-		turn(npc, "RightElbow", CFrame.Angles(0.95, 0, 0), 0.45)
-		task.delay(1.8, function()
-			if not npc.busy and npc.model.Parent then
-				turn(npc, "RightShoulder", relax.RightShoulder or CFrame.identity, 0.7)
-				turn(npc, "RightElbow", relax.RightElbow or CFrame.identity, 0.7)
+	if not shout and not npc.busy then
+		local seconds = math.clamp(#text / 14, 2.4, 6)
+		npc.talking = os.clock() + seconds
+		for _, jointName in ipairs(ARMS) do
+			if npc.joints[jointName] then
+				turn(npc, jointName, npc.relax[jointName] or CFrame.identity)
 			end
-		end)
+		end
+		npc.model:SetAttribute("Hands", handsFree(npc))
+		npc.model:SetAttribute("Gesture", gestureFor(npc, text))
+		npc.model:SetAttribute("GestureFor", seconds)
+		npc.model:SetAttribute("GestureAt", workspace:GetServerTimeNow())
 	end
 	task.delay((seconds or 4.5) * READ, function()
 		if npc.bubble == gui then
@@ -577,6 +654,225 @@ function Townsfolk.say(npc: Person, text: string, seconds: number?, shout: boole
 		gui:Destroy()
 	end)
 end
+
+-- ===== WHAT YOU SAY TO THEM (the hundred-and-fourth pass, your idea) =====
+--
+-- Talk to someone (F) and you choose what to say (ReplicatedStorage.Shared.Conversations: what each can be asked, and
+-- what each answer tells you about your father). Your choices come up on your screen (TalkClient); choose one and you
+-- say it, in a bubble of your own over your head for anyone near to see, and they answer it line by line; then what
+-- else you could say comes up, while you are still there. Walk away and the choices go by themselves. What you have
+-- said and learned is kept in your save (EconomyService.heard), and each thing you learn goes in your journal as a
+-- note. Without the module or the remote, F says their next line, as it always did.
+local conversationsModule = game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Conversations", 10)
+local Conversations: any = if conversationsModule and conversationsModule:IsA("ModuleScript")
+	then require(conversationsModule) else nil
+local TALK = { remote = nil :: RemoteEvent?, wired = false, session = {} :: { [Player]: { [string]: boolean } },
+	busy = {} :: { [Player]: boolean } }
+
+-- A module beside this one (EconomyService, Interactables), found when it is first wanted: they need nothing of this.
+local function sibling(name: string): any
+	local module = script.Parent and script.Parent:FindFirstChild(name)
+	if module and module:IsA("ModuleScript") then
+		local ok, loaded = pcall(require, module)
+		if ok and type(loaded) == "table" then
+			return loaded
+		end
+	end
+	return nil
+end
+
+-- What `player` has said and learned: kept in their save, and this session's besides (a save not loaded yet).
+local function knownBy(player: Player): { [string]: boolean }
+	local known = {}
+	local save = sibling("EconomyService")
+	if save and save.heard then
+		for key in pairs(save.heard(player)) do
+			known[key] = true
+		end
+	end
+	for key in pairs(TALK.session[player] or {}) do
+		known[key] = true
+	end
+	return known
+end
+
+local function learn(player: Player, key: string)
+	local mine = TALK.session[player] or {}
+	TALK.session[player] = mine
+	mine[key] = true
+	local save = sibling("EconomyService")
+	if save and save.markHeard then
+		pcall(save.markHeard, player, key)
+	end
+end
+
+-- YOUR LINE, over your own head, for anyone near to see: on the screen's dark panel with its warm edge, so it is never
+-- taken for one of theirs (theirs are pale), and the same size of text as theirs.
+function Townsfolk.speakAs(player: Player, text: string)
+	local character = player.Character
+	local head = character and character:FindFirstChild("Head")
+	if not (head and head:IsA("BasePart")) then
+		return
+	end
+	local old = head:FindFirstChild("YourLine")
+	if old then
+		old:Destroy()
+	end
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "YourLine"
+	gui.Size = UDim2.fromOffset(SPEECH_WIDE + 40, 240)
+	gui.SizeOffset = Vector2.new(0, 0.5)
+	gui.StudsOffset = Vector3.new(0, 2.8, 0)
+	gui.AlwaysOnTop = true
+	gui.MaxDistance = 48
+	gui.LightInfluence = 0
+	local label = Instance.new("TextLabel")
+	label.AnchorPoint = Vector2.new(0.5, 1)
+	label.Position = UDim2.fromScale(0.5, 1)
+	label.Size = UDim2.new()
+	label.AutomaticSize = Enum.AutomaticSize.XY
+	label.TextWrapped = true
+	label.TextSize = SPEECH_TEXT
+	label.Text = text
+	label.BackgroundColor3 = Style.COLOUR.panel
+	label.TextColor3 = Style.COLOUR.ink
+	label.FontFace = Style.FONT.heading
+	label.LineHeight = 1.05
+	local widest = Instance.new("UISizeConstraint")
+	widest.MaxSize = Vector2.new(SPEECH_WIDE, math.huge)
+	widest.Parent = label
+	local edge = Instance.new("UIStroke")
+	edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	edge.Color = Style.COLOUR.accent
+	edge.Thickness = 2
+	edge.Parent = label
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = label
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 12), UDim.new(0, 12)
+	pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 8), UDim.new(0, 8)
+	pad.Parent = label
+	label.Parent = gui
+	gui.Adornee = head
+	gui.Parent = head
+	task.delay(math.clamp(#text / 14, 2.4, 6) * READ * 0.6, function()
+		gui:Destroy()
+	end)
+end
+
+local function talkRemote(): RemoteEvent?
+	if TALK.remote then
+		return TALK.remote
+	end
+	local folder = game:GetService("ReplicatedStorage"):FindFirstChild("RemoteEvents")
+	local found = folder and folder:FindFirstChild("Talk")
+	if not (found and found:IsA("RemoteEvent")) then
+		return nil
+	end
+	TALK.remote = found
+	if not TALK.wired then
+		TALK.wired = true
+		found.OnServerEvent:Connect(function(player: Player, kind: any, name: any, id: any)
+			if kind == "say" and typeof(name) == "string" and typeof(id) == "string" then
+				local ok, err = pcall(Townsfolk.answer, player, name, id)
+				TALK.busy[player] = nil
+				if not ok then
+					warn("Townsfolk: a conversation failed: " .. tostring(err))
+				end
+			end
+		end)
+	end
+	return found
+end
+
+-- WHAT `player` CAN SAY TO `npc` NOW, to their screen: the topics ready for them, then smalltalk.
+function Townsfolk.offer(player: Player, npc: Person)
+	local remote = talkRemote()
+	if not (remote and Conversations) then
+		return
+	end
+	local options = {}
+	for _, topic in ipairs(Conversations.offered(npc.name, knownBy(player))) do
+		table.insert(options, { id = topic.id, say = topic.say })
+	end
+	if #npc.lines > 0 then
+		table.insert(options, { id = "smalltalk", say = Conversations.SMALLTALK })
+	end
+	local look = LOOKS[npc.name]
+	remote:FireClient(player, "offer", { person = npc.name, title = if look and look.title then look.title else npc.name,
+		head = npc.head, options = options })
+end
+
+-- `player` CHOSE `id` to say to `name`: if it was theirs to say (offered, and they are near), said, and answered.
+function Townsfolk.answer(player: Player, name: string, id: string)
+	local npc = living[name]
+	if not (npc and Conversations) or TALK.busy[player] or npc.busy then
+		return
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not (root and root:IsA("BasePart")) or (root.Position - npc.head.Position).Magnitude > Conversations.REACH + 6 then
+		return
+	end
+	local said: string, replies: { string }
+	local topic = nil
+	if id == "smalltalk" then
+		if #npc.lines == 0 then
+			return
+		end
+		said, replies = Conversations.SMALLTALK, { npc.lines[npc.next] }
+		npc.next = npc.next % #npc.lines + 1
+	else
+		local ready = false
+		for _, offered in ipairs(Conversations.offered(name, knownBy(player))) do
+			if offered.id == id then
+				ready, topic = true, offered
+			end
+		end
+		if not (ready and topic) then
+			return
+		end
+		said, replies = topic.say, topic.reply
+	end
+	TALK.busy[player] = true
+	Townsfolk.speakAs(player, said)
+	task.wait(1.4)
+	for index, line in ipairs(replies) do
+		if not npc.model.Parent then
+			break
+		end
+		Townsfolk.say(npc, line)
+		if index < #replies then
+			task.wait(math.clamp(#line / 16, 2.2, 5))
+		end
+	end
+	if topic then
+		local fresh = topic.clue ~= nil and not knownBy(player)["clue:" .. topic.clue]
+		learn(player, topic.id)
+		if fresh then
+			learn(player, "clue:" .. topic.clue)
+			local note = Conversations.NOTES[topic.clue]
+			local book = sibling("Interactables")
+			if note and book and book.take then
+				pcall(book.take, player, { title = note.title, body = note.body }, nil, "note", { from = note.from })
+			end
+		end
+	end
+	task.wait(1.2)
+	TALK.busy[player] = nil
+	-- And on, while you are still there: what else you could say.
+	local stillRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if stillRoot and stillRoot:IsA("BasePart") and npc.model.Parent
+		and (stillRoot.Position - npc.head.Position).Magnitude <= Conversations.REACH then
+		Townsfolk.offer(player, npc)
+	end
+end
+
+Players.PlayerRemoving:Connect(function(player: Player)
+	TALK.session[player] = nil
+	TALK.busy[player] = nil
+end)
 
 -- Stands one up. `feet` is where they stand and which way they face; `pose` is "stand" or "sit".
 function Townsfolk.spawn(parent: Instance, name: string, feet: CFrame, stance: string,
@@ -614,7 +910,8 @@ function Townsfolk.spawn(parent: Instance, name: string, feet: CFrame, stance: s
 	local npc: Person = { name = name, model = model, head = head, root = root, joints = {},
 		lines = LINES[name] or {}, next = 1, post = root.CFrame, lift = lift, busy = false, worn = {},
 		greeted = {}, watch = watch or 22, yaw = 0, pitch = 0, relax = {},
-		hands = not (look and look.hands == false), talking = 0 }
+		holding = { right = look ~= nil and (look.holds == "both" or look.holds == "right"),
+			left = look ~= nil and (look.holds == "both" or look.holds == "left") }, talking = 0 }
 	if Poses then
 		for jointName, joint in pairs(Poses.joints(model)) do
 			if table.find(JOINTS, jointName) then
@@ -648,7 +945,11 @@ function Townsfolk.spawn(parent: Instance, name: string, feet: CFrame, stance: s
 	for jointName, by in pairs(npc.relax) do
 		turn(npc, jointName, by)
 	end
+	model:SetAttribute("Hands", handsFree(npc))
+	model:SetAttribute("Voice", VOICES[name] or 1)
 	model.Parent = parent
+	-- Tagged for the clients, which play their gestures (StoryClient).
+	CollectionService:AddTag(model, "Townsperson")
 	living[name] = npc
 	Townsfolk.live()
 	if #npc.lines > 0 then
@@ -662,8 +963,20 @@ function Townsfolk.spawn(parent: Instance, name: string, feet: CFrame, stance: s
 		prompt.KeyboardKeyCode = Enum.KeyCode.F
 		prompt.GamepadKeyCode = Enum.KeyCode.ButtonY
 		prompt.Parent = root
-		prompt.Triggered:Connect(function()
+		prompt.Triggered:Connect(function(player: Player)
 			if npc.busy then
+				return
+			end
+			-- YOUR CHOICE OF WHAT TO SAY (the hundred-and-fourth pass), greeted first if they have not greeted you yet.
+			if Conversations and talkRemote() then
+				if not npc.greeted[player] then
+					npc.greeted[player] = true
+					Townsfolk.say(npc, npc.lines[npc.next])
+					npc.next = npc.next % #npc.lines + 1
+				end
+				if not TALK.busy[player] then
+					Townsfolk.offer(player, npc)
+				end
 				return
 			end
 			Townsfolk.say(npc, npc.lines[npc.next])
@@ -698,6 +1011,15 @@ function Townsfolk.wear(npc: Person, partName: string, size: Vector3, colour: Co
 	weld.Parent = p
 	p.Parent = npc.model
 	npc.worn[partName] = { part = p, to = anchor, offset = offset }
+	-- Something in a hand: that hand is holding it, and they gesture with the other.
+	if to == "RightHand" or to == "LeftHand" then
+		if to == "RightHand" then
+			npc.holding.right = true
+		else
+			npc.holding.left = true
+		end
+		npc.model:SetAttribute("Hands", handsFree(npc))
+	end
 	return p
 end
 
@@ -1146,4 +1468,5 @@ function Townsfolk.find(name: string): Person?
 	return if npc and npc.model.Parent then npc else nil
 end
 
+Townsfolk.STAMP = "eb96a0f8"
 return Townsfolk

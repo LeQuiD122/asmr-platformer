@@ -28,6 +28,8 @@ local tabTag: TextLabel
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+-- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
+local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Style"))
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -42,20 +44,21 @@ local UIService = {}
 -- and reads as a debug overlay dropped on the game. Tinting the neutrals toward the
 -- level's own palette -- the sea, the pastel backdrop -- makes the HUD belong to the
 -- world it floats over, and every pairing below still clears 4.5:1.
+-- THE MENUS' COLOURS (Shared/Style, the ninety-ninth pass): the run's panels were a purple of their own.
 local COLOUR = {
-	surface = Color3.fromRGB(22, 19, 28),
-	surfaceRaised = Color3.fromRGB(33, 28, 42),
-	stroke = Color3.fromRGB(78, 68, 96),
+	surface = Style.COLOUR.panel,
+	surfaceRaised = Style.COLOUR.panelRaised,
+	stroke = Style.COLOUR.edge,
 
-	textPrimary = Color3.fromRGB(243, 239, 249), -- ~16:1 on surface
-	textSecondary = Color3.fromRGB(178, 168, 196), -- ~7.5:1 on surface
-	textMuted = Color3.fromRGB(126, 116, 145),
+	textPrimary = Style.COLOUR.ink, -- ~16:1 on surface
+	textSecondary = Style.COLOUR.inkSoft, -- ~7.5:1 on surface
+	textMuted = Style.COLOUR.inkMuted,
 
 	-- Chill is cool and quiet, hardcore is warm and awake. Deliberately a HUE shift rather
 	-- than only a brightness one, so it survives being seen in peripheral vision.
-	chill = Color3.fromRGB(150, 196, 236),
-	hardcore = Color3.fromRGB(255, 138, 160),
-	gold = Color3.fromRGB(255, 214, 140),
+	chill = Style.COLOUR.chill,
+	hardcore = Style.COLOUR.hardcore,
+	gold = Style.COLOUR.accent,
 }
 
 -- 4/8 rhythm. Every gap, pad and offset below is one of these.
@@ -64,7 +67,7 @@ local SPACE = { xs = 4, sm = 8, md = 12, lg = 16, xl = 24 }
 -- 12 / 14 / 16 / 18 / 22 / 32. Six steps, and nothing between them.
 local TEXT = { caption = 12, body = 14, label = 16, control = 18, mono = 22, display = 32 }
 
-local RADIUS = UDim.new(0, 12)
+local RADIUS = Style.RADIUS.button
 
 -- One rhythm for the whole HUD. Exits run at 65% of entrances: an exit that takes as long
 -- as its entrance feels like the interface is reluctant to get out of the way.
@@ -109,17 +112,17 @@ local function panel(name: string, parent: Instance): Frame
 
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = COLOUR.stroke
-	stroke.Thickness = 1
+	stroke.Thickness = Style.STROKE.hair
 	stroke.Transparency = 0.45
 	stroke.Parent = frame
 
 	return frame
 end
 
-local function newLabel(parent: Instance, size: number, colour: Color3, font: Enum.Font): TextLabel
+local function newLabel(parent: Instance, size: number, colour: Color3, font: Font): TextLabel
 	local text = Instance.new("TextLabel")
 	text.BackgroundTransparency = 1
-	text.Font = font
+	text.FontFace = font
 	text.TextSize = size
 	text.TextColor3 = colour
 	text.RichText = true
@@ -168,7 +171,7 @@ modeCorner.Parent = modeButton
 
 local modeStroke = Instance.new("UIStroke")
 modeStroke.Color = COLOUR.chill
-modeStroke.Thickness = 1
+modeStroke.Thickness = Style.STROKE.hair
 modeStroke.Transparency = 0.35
 modeStroke.Parent = modeButton
 
@@ -187,7 +190,7 @@ local modeDotCorner = Instance.new("UICorner")
 modeDotCorner.CornerRadius = UDim.new(1, 0)
 modeDotCorner.Parent = modeDot
 
-local modeText = newLabel(modeButton, TEXT.control, COLOUR.textPrimary, Enum.Font.GothamMedium)
+local modeText = newLabel(modeButton, TEXT.control, COLOUR.textPrimary, Style.FONT.heading)
 modeText.Size = UDim2.new(1, -(SPACE.md * 2 + SPACE.sm), 1, 0)
 modeText.Position = UDim2.new(0, SPACE.md + SPACE.sm + SPACE.xs, 0, 0)
 modeText.TextSize = 13
@@ -233,7 +236,7 @@ timerPanel.AnchorPoint = Vector2.new(1, 1)
 timerPanel.Position = UDim2.new(1, -SPACE.xl, 1, -(SPACE.xl + 44 + SPACE.sm))
 timerPanel.Visible = false
 
-local timerText = newLabel(timerPanel, TEXT.mono, COLOUR.textPrimary, Enum.Font.RobotoMono)
+local timerText = newLabel(timerPanel, TEXT.mono, COLOUR.textPrimary, Style.FONT.number)
 timerText.Size = UDim2.new(1, 0, 1, 0)
 timerText.Text = "0:00.00"
 
@@ -261,7 +264,7 @@ tooltip.Visible = false
 local tooltipStroke = tooltip:FindFirstChildOfClass("UIStroke") :: UIStroke
 tooltipStroke.Transparency = 1
 
-local tooltipText = newLabel(tooltip, TEXT.body, COLOUR.textSecondary, Enum.Font.Gotham)
+local tooltipText = newLabel(tooltip, TEXT.body, COLOUR.textSecondary, Style.FONT.body)
 tooltipText.Size = UDim2.new(1, -SPACE.lg * 2, 1, 0)
 tooltipText.Position = UDim2.new(0, SPACE.lg, 0, 0)
 tooltipText.TextWrapped = true
@@ -431,7 +434,12 @@ end
 
 local completion = panel("CompletionBanner", screenGui)
 completion.ZIndex = BLACKOUT_ZINDEX + 1
-completion.Size = UDim2.new(0, 520, 0, 172)
+-- NO WIDER THAN THE SCREEN on a phone held upright: 520 wherever it fits.
+completion.Size = UDim2.new(0.92, 0, 0, 172)
+local completionMost = Instance.new("UISizeConstraint")
+completionMost.MaxSize = Vector2.new(520, 172)
+completionMost.Parent = completion
+Style.fit(completion, Vector2.new(520, 172))
 completion.AnchorPoint = Vector2.new(0.5, 0.5)
 completion.Position = UDim2.new(0.5, 0, 0.36, 0)
 completion.BackgroundTransparency = 1
@@ -441,7 +449,7 @@ completion.ClipsDescendants = true
 
 local completionStroke = completion:FindFirstChildOfClass("UIStroke") :: UIStroke
 completionStroke.Transparency = 1
-completionStroke.Thickness = 1.5
+completionStroke.Thickness = Style.STROKE.button
 
 -- The panel's own colour is the level's, and this only shades it downward, so the banner reads as
 -- one lit object rather than a flat rectangle.
@@ -578,14 +586,14 @@ local function buildMotif(look: any): (Instance?, { [string]: any }?)
 	return nil, nil
 end
 
-local completionEyebrow = newLabel(completion, TEXT.caption, COLOUR.gold, Enum.Font.GothamBold)
+local completionEyebrow = newLabel(completion, TEXT.caption, COLOUR.gold, Style.FONT.heading)
 completionEyebrow.ZIndex = BLACKOUT_ZINDEX + 3
 completionEyebrow.Size = UDim2.new(1, -SPACE.xl * 2, 0, 16)
 completionEyebrow.Position = UDim2.new(0, SPACE.xl, 0, SPACE.xl)
 completionEyebrow.TextXAlignment = Enum.TextXAlignment.Left
 completionEyebrow.TextTransparency = 1
 
-local completionTitle = newLabel(completion, TEXT.display, COLOUR.textPrimary, Enum.Font.GothamBold)
+local completionTitle = newLabel(completion, TEXT.display, COLOUR.textPrimary, Style.FONT.display)
 completionTitle.ZIndex = BLACKOUT_ZINDEX + 3
 completionTitle.Size = UDim2.new(1, -SPACE.xl * 2, 0, 40)
 completionTitle.Position = UDim2.new(0, SPACE.xl, 0, SPACE.xl + 20)
@@ -604,14 +612,18 @@ completionRule.ZIndex = BLACKOUT_ZINDEX + 3
 completionRule.BackgroundTransparency = 1
 completionRule.Parent = completion
 
-local completionMode = newLabel(completion, TEXT.label, COLOUR.textSecondary, Enum.Font.Gotham)
+local completionMode = newLabel(completion, TEXT.label, COLOUR.textSecondary, Style.FONT.body)
 completionMode.ZIndex = BLACKOUT_ZINDEX + 3
 completionMode.Size = UDim2.new(0.5, -SPACE.xl, 0, 26)
 completionMode.Position = UDim2.new(0, SPACE.xl, 0, SPACE.xl + 84)
 completionMode.TextXAlignment = Enum.TextXAlignment.Left
 completionMode.TextTransparency = 1
+-- A STORY'S LINE ("Story 2 of 4. Next: The Sunken City") is longer than "Hardcore run": shrunk to fit, never bigger.
+local completionModeCap = Instance.new("UITextSizeConstraint")
+completionModeCap.MaxTextSize = TEXT.label
+completionModeCap.Parent = completionMode
 
-local completionTime = newLabel(completion, TEXT.mono, COLOUR.textPrimary, Enum.Font.GothamBold)
+local completionTime = newLabel(completion, TEXT.mono, COLOUR.textPrimary, Style.FONT.number)
 completionTime.ZIndex = BLACKOUT_ZINDEX + 3
 completionTime.AnchorPoint = Vector2.new(1, 0)
 completionTime.Size = UDim2.new(0.5, -SPACE.xl, 0, 30)
@@ -622,7 +634,7 @@ completionTime.TextTransparency = 1
 local completionToken = 0
 local COMPLETION_HOLD = 3.6
 
-function UIService.showCompletion(levelId: number?, time: number?)
+function UIService.showCompletion(levelId: number?, time: number?, story: any?)
 	completionToken += 1
 	local token = completionToken
 	local look: any = (levelId and COMPLETION_LOOKS[levelId]) or COMPLETION_FALLBACK
@@ -638,6 +650,20 @@ function UIService.showCompletion(levelId: number?, time: number?)
 		completionTime.Text = ("%d:%05.2f"):format(minutes, time - minutes * 60)
 	else
 		completionTime.Text = ""
+	end
+	-- THE STORY (Bootstrap): which of the four this was and what comes next; after the last, the story's own time.
+	completionMode.TextScaled = false
+	if type(story) == "table" and type(story.step) == "number" then
+		completionMode.TextScaled = true
+		if story.next then
+			completionMode.Text = ("Story %d of %d. Next: %s"):format(story.step, tonumber(story.of) or 4, tostring(story.next))
+		else
+			completionMode.Text = "Story complete"
+			if type(story.total) == "number" then
+				local minutes = math.floor(story.total / 60)
+				completionTime.Text = ("%d:%05.2f"):format(minutes, story.total - minutes * 60)
+			end
+		end
 	end
 
 	completion.BackgroundColor3 = look.tint
@@ -724,6 +750,7 @@ end
 
 local settingsFrame = panel("SettingsMenu", screenGui)
 settingsFrame.Size = UDim2.new(0, 300, 0, 320)
+Style.fit(settingsFrame, Vector2.new(300, 320))
 settingsFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 settingsFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 settingsFrame.Visible = false
@@ -739,14 +766,14 @@ leaveButton.Size = UDim2.new(1, -32, 0, 34)
 leaveButton.Position = UDim2.new(0, 16, 1, -50)
 leaveButton.BackgroundColor3 = Color3.fromRGB(92, 46, 52)
 leaveButton.AutoButtonColor = true
-leaveButton.Font = Enum.Font.GothamMedium
+leaveButton.FontFace = Style.FONT.heading
 leaveButton.TextSize = 14
 leaveButton.TextColor3 = Color3.fromRGB(244, 226, 228)
 leaveButton.Text = "Leave level"
 leaveButton.Parent = settingsFrame
 
 local leaveCorner = Instance.new("UICorner")
-leaveCorner.CornerRadius = UDim.new(0, 6)
+leaveCorner.CornerRadius = Style.RADIUS.small
 leaveCorner.Parent = leaveButton
 
 leaveButton.Activated:Connect(function()
@@ -767,14 +794,14 @@ boardToggle.Size = UDim2.new(1, -32, 0, 34)
 boardToggle.Position = UDim2.new(0, 16, 1, -92)
 boardToggle.BackgroundColor3 = Color3.fromRGB(48, 44, 60)
 boardToggle.AutoButtonColor = true
-boardToggle.Font = Enum.Font.GothamMedium
+boardToggle.FontFace = Style.FONT.heading
 boardToggle.TextSize = 14
 boardToggle.TextColor3 = Color3.fromRGB(226, 228, 240)
 boardToggle.Text = "Chill leaderboard: off"
 boardToggle.Parent = settingsFrame
 
 local boardToggleCorner = Instance.new("UICorner")
-boardToggleCorner.CornerRadius = UDim.new(0, 6)
+boardToggleCorner.CornerRadius = Style.RADIUS.small
 boardToggleCorner.Parent = boardToggle
 
 boardToggle.Activated:Connect(function()
@@ -800,6 +827,7 @@ local leaderboard = panel("LeaderboardDisplay", screenGui)
 -- SMALLER. 288 by 300 is a quarter of a phone screen given over to times nobody has set
 -- yet, parked over the corner of the level you are trying to look at.
 leaderboard.Size = UDim2.new(0, 218, 0, 208)
+Style.fit(leaderboard, Vector2.new(218, 208))
 leaderboard.AnchorPoint = Vector2.new(0, 1)
 leaderboard.Position = UDim2.new(0, SPACE.xl, 1, -SPACE.xl)
 leaderboard.Visible = false
@@ -837,7 +865,7 @@ leaderboardList.Parent = leaderboardContent
 -- Small, muted, and spaced out by hand. A panel heading competing with its own contents is
 -- the commonest way a data panel ends up looking cluttered: the rows are the content, and
 -- the title only has to say which table this is.
-local leaderboardTitle = newLabel(leaderboardContent, TEXT.caption, COLOUR.textMuted, Enum.Font.GothamBold)
+local leaderboardTitle = newLabel(leaderboardContent, TEXT.caption, COLOUR.textMuted, Style.FONT.heading)
 leaderboardTitle.Name = "Title"
 leaderboardTitle.Size = UDim2.new(1, 0, 0, 18)
 leaderboardTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -882,7 +910,7 @@ collapse.AnchorPoint = Vector2.new(1, 0)
 collapse.Position = UDim2.new(1, 0, 0, 0)
 collapse.Size = UDim2.new(0, 30, 0, 26)
 collapse.BackgroundTransparency = 1
-collapse.Font = Enum.Font.GothamBold
+collapse.FontFace = Style.FONT.heading
 collapse.TextSize = 18
 collapse.TextColor3 = Color3.fromRGB(190, 196, 214)
 collapse.Text = "-"
@@ -955,7 +983,7 @@ tabTag.Name = "TabTag"
 tabTag.Size = UDim2.new(1, -34, 1, 0)
 tabTag.Position = UDim2.new(0, 10, 0, 0)
 tabTag.BackgroundTransparency = 1
-tabTag.Font = Enum.Font.GothamMedium
+tabTag.FontFace = Style.FONT.heading
 tabTag.TextSize = 12
 tabTag.TextXAlignment = Enum.TextXAlignment.Left
 tabTag.TextColor3 = Color3.fromRGB(178, 184, 206)
@@ -1020,7 +1048,7 @@ function UIService.refreshLeaderboard(data: { { userId: number, time: number } }
 	clearRows()
 
 	if #data == 0 then
-		local empty = newLabel(leaderboardContent, TEXT.body, COLOUR.textMuted, Enum.Font.Gotham)
+		local empty = newLabel(leaderboardContent, TEXT.body, COLOUR.textMuted, Style.FONT.body)
 		empty.Name = "Empty"
 		empty.Size = UDim2.new(1, 0, 0, 44)
 		empty.TextXAlignment = Enum.TextXAlignment.Left
@@ -1046,16 +1074,16 @@ function UIService.refreshLeaderboard(data: { { userId: number, time: number } }
 		row.Parent = leaderboardContent
 
 		local rowCorner = Instance.new("UICorner")
-		rowCorner.CornerRadius = UDim.new(0, 6)
+		rowCorner.CornerRadius = Style.RADIUS.small
 		rowCorner.Parent = row
 
-		local rank = newLabel(row, TEXT.body, if i == 1 then COLOUR.gold else COLOUR.textMuted, Enum.Font.GothamBold)
+		local rank = newLabel(row, TEXT.body, if i == 1 then COLOUR.gold else COLOUR.textMuted, Style.FONT.heading)
 		rank.Size = UDim2.new(0, 22, 1, 0)
 		rank.Position = UDim2.new(0, SPACE.sm, 0, 0)
 		rank.TextXAlignment = Enum.TextXAlignment.Left
 		rank.Text = tostring(i)
 
-		local who = newLabel(row, TEXT.body, if mine then COLOUR.textPrimary else COLOUR.textSecondary, Enum.Font.Gotham)
+		local who = newLabel(row, TEXT.body, if mine then COLOUR.textPrimary else COLOUR.textSecondary, Style.FONT.body)
 		who.Size = UDim2.new(1, -(SPACE.sm + 22 + 84), 1, 0)
 		who.Position = UDim2.new(0, SPACE.sm + 22, 0, 0)
 		who.TextXAlignment = Enum.TextXAlignment.Left
@@ -1065,7 +1093,7 @@ function UIService.refreshLeaderboard(data: { { userId: number, time: number } }
 		-- Times right-aligned and monospaced, so the digits form a column you can compare
 		-- straight down instead of a ragged edge you have to read row by row.
 		local minutes = math.floor(entry.time / 60)
-		local when = newLabel(row, TEXT.body, COLOUR.textPrimary, Enum.Font.RobotoMono)
+		local when = newLabel(row, TEXT.body, COLOUR.textPrimary, Style.FONT.number)
 		when.Size = UDim2.new(0, 76, 1, 0)
 		when.Position = UDim2.new(1, -(76 + SPACE.sm), 0, 0)
 		when.TextXAlignment = Enum.TextXAlignment.Right
@@ -1089,4 +1117,25 @@ function UIService.refreshLeaderboard(data: { { userId: number, time: number } }
 	UIService.reapplyCollapse()
 end
 
+-- ===================================================================== phones and tablets
+--
+-- ON A TOUCH SCREEN WITH NO KEYBOARD the bottom corners are Roblox's own: the thumbstick on the left,
+-- jump on the right. The hardcore clock, the mode and the tooltip go to the top right, under the menu
+-- and journal tabs, and the best times to the top left, so nothing sits under a thumb.
+do
+	local input = game:GetService("UserInputService")
+	if input.TouchEnabled and not input.KeyboardEnabled then
+		local top = 72
+		modeButton.AnchorPoint = Vector2.new(1, 0)
+		modeButton.Position = UDim2.new(1, -SPACE.xl, 0, top)
+		timerPanel.AnchorPoint = Vector2.new(1, 0)
+		timerPanel.Position = UDim2.new(1, -SPACE.xl, 0, top + 26 + SPACE.sm)
+		tooltip.AnchorPoint = Vector2.new(1, 0)
+		tooltip.Position = UDim2.new(1, -SPACE.xl, 0, top + 26 + SPACE.sm + 46 + SPACE.sm)
+		leaderboard.AnchorPoint = Vector2.new(0, 0)
+		leaderboard.Position = UDim2.new(0, SPACE.xl, 0, SPACE.xl)
+	end
+end
+
+UIService.STAMP = "f88bd7c7"
 return UIService

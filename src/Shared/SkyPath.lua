@@ -207,4 +207,5 @@ function SkyPath.rideFrame(spec: Spec, distances: { number }, u: number): CFrame
 	return CFrame.lookAt(here, ahead, up)
 end
 
+SkyPath.STAMP = "ee880e00"
 return SkyPath

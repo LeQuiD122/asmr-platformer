@@ -44,6 +44,12 @@
 -- server clock so every player sees them in the same place, and now and then a burner flares. Two
 -- flocks of gulls, made here and nowhere else, wheel round the fountain tower: the level's only
 -- other living thing, and a calm one.
+--
+-- === The storm by the slide ===
+--
+-- As you near the slide's mouth the cloud sea round the tower darkens, the light drops a little, and now
+-- and then lightning lights the cloud tops below. Under the clouds, on the way down to the final pool, it
+-- clears again. Only on your own screen, eased over seconds and written in small steps: a shade, never dark.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -51,6 +57,9 @@ local TweenService = game:GetService("TweenService")
 local CollectionService = game:GetService("CollectionService")
 local SoundService = game:GetService("SoundService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
+-- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
+local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Style"))
 
 -- The slide's shape and timing, shared with the server. Looked for with a timeout: without it there
 -- is no ride drawn here, which the server copes with, so it must not stop the rest of this.
@@ -73,6 +82,21 @@ local SkyPoolsClient = {}
 SkyPoolsClient.VERSION = "twenty-first pass, 2026-09-30"
 
 local WATER_SOUND = "rbxasset://sounds/impact_water.mp3"
+-- THE WATER'S OWN SOUNDS (WaterSounds, the ninety-eighth pass): if the module is not pasted yet, the old splash. ONE
+-- local here, the rest inside: a main chunk has room for only so many (Luau's 200).
+local WaterSounds: any = (function(): any
+	local waterModule = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("WaterSounds", 5)
+	if waterModule and waterModule:IsA("ModuleScript") then
+		return require(waterModule)
+	end
+	local function oldSplash(s: Sound, _kind: string): boolean
+		s.SoundId = "rbxasset://sounds/impact_water.mp3"
+		return false
+	end
+	local splashOnly: any = {}
+	splashOnly.dress = oldSplash
+	return splashOnly
+end)()
 local RIPPLE_EVERY = 0.45 -- seconds between rings while wading
 local RIPPLE_LIFE = 1.4
 local RIPPLE_FROM, RIPPLE_TO = 0.8, 4.5
@@ -97,6 +121,25 @@ local turntables: { [BasePart]: { rest: CFrame, axis: Vector3, spin: number } } 
 local ripples: { Ripple } = {}
 local wasIn = false
 local lastRipple = 0
+
+-- THE STORM BY THE SLIDE (moveStorm).
+local STORM_FROM = 200 -- studs from the slide's mouth, flat, where it begins: the last stretch of any run
+local STORM_FULL = 60 -- and where it is all there: the last chunk and the deck
+local STORM_EASE = 0.35 -- the share of the way it moves in a second: over seconds, never at once
+local STORM_GREY = Color3.fromRGB(122, 130, 150) -- what the nearest clouds are taken toward
+local STORM_DARKEST = 0.5 -- the most any cloud is taken toward it
+local STORM_NEAR, STORM_REACH = 300, 1400 -- clouds this near the tower darken fully, this far not at all
+local STORM_TINT = Color3.fromRGB(226, 232, 246)
+local LIGHTNING_EVERY = { 9, 16 } -- seconds between flashes, at the height of it
+local LIGHTNING_BRIGHT = 1.3
+local stormLevel: Instance? = nil
+local storm = 0 -- eased toward how near the slide you are, 0 to 1
+local stormAt = os.clock()
+local stormWritten = -1
+local cloudsWritten = -1
+local stormShade: ColorCorrectionEffect? = nil
+local cloudBase: { [Instance]: { colour: Color3, weight: number } } = {}
+local nextFlash = 0
 
 -- Where a pool's water is, relative to a point: whether the point is over it, and its surface height.
 local function over(pool: BasePart, point: Vector3): (boolean, number)
@@ -132,10 +175,13 @@ local function sliver(parent: Instance): Part
 	return part
 end
 
-local function play(speed: number, volume: number)
+local function play(kind: string, speed: number, volume: number)
 	local s = Instance.new("Sound")
-	s.SoundId = WATER_SOUND
-	s.PlaybackSpeed = speed
+	-- The pool's own water: a splash or a dip, one of several takes; the old splash at its old pitch without them.
+	if not WaterSounds.dress(s, kind) then
+		s.SoundId = WATER_SOUND
+		s.PlaybackSpeed = speed
+	end
 	s.Volume = volume
 	s.Parent = SoundService
 	s:Play()
@@ -168,7 +214,7 @@ local function splash(at: Vector3)
 	spray.Rate = 0
 	spray.Parent = host
 	spray:Emit(28)
-	play(1.1 + math.random() * 0.2, 0.4)
+	play("splash", 1.1 + math.random() * 0.2, 0.4)
 	task.delay(1.5, function()
 		host:Destroy()
 	end)
@@ -183,7 +229,7 @@ local function ripple(at: Vector3)
 		table.insert(parts, sliver(holder))
 	end
 	table.insert(ripples, { parts = parts, centre = at, born = os.clock() })
-	play(1.5 + math.random() * 0.3, 0.12)
+	play("dip", 1.5 + math.random() * 0.3, 0.12)
 end
 
 local function gullPart(parent: Instance, name: string, size: Vector3, colour: Color3): Part
@@ -300,11 +346,20 @@ local rideRemote: RemoteEvent? = nil
 --
 -- On the rider's own screen (Cinema), the long way down is shot like the end of a film:
 --   THE PUSH OFF (to 0.1)    over their shoulder, down the slide ahead of them.
---   THE TRACK                above the clouds: alongside them, out past the slide's edge and a
---                            little over it, going round the tower with them.
---   THROUGH THE CLOUDS       from UNDER the cloud sea, looking up at where the slide comes out of it,
---                            and they burst through in a puff of cloud. The camera is never inside a
---                            cloud: twice the whole picture went white.
+--   THE TRACK                above the clouds: alongside them and over them, looking a little ahead,
+--                            so the slide is seen running on down into the cloud sea before they reach it.
+--   THE PLUNGE               held over the cloud tops where they go in, looking down as the cloud
+--                            closes over them, a whoosh and a few speed lines.
+--   WHERE IT GOES            while they are in the cloud (five or six seconds, out of sight): under the
+--                            cloud sea, wide, the slide coming down out of it and round into the pool it
+--                            lands in, drifting slowly in. This is where you are going.
+--   OUT OF THE CLOUD         cut a moment BEFORE they come out (the moment is worked out when the ride
+--                            starts: scene.marks), under where the slide leaves the cloud, looking up at
+--                            it; they burst through in a puff, an impact frame, and the camera turns
+--                            after them. It used to wait there from the push off: nine seconds of the
+--                            bottom of a slide with nobody on it, which said nothing about where the
+--                            ride was going. The camera is never inside a cloud: twice the whole
+--                            picture went white.
 --   THE FACE                 from ahead of the sled, looking back at them, arms up: fourteen studs
 --                            off, not seven, where they were too close to see.
 --   THE POOL (from 0.86)     from the water, as they come down into it.
@@ -319,15 +374,51 @@ local rideRemote: RemoteEvent? = nil
 local scene = { landedAt = nil :: number?, spec = nil :: any, landing = nil :: Vector3?,
 	riders = {} :: { [Player]: { began: number, seconds: number, model: Instance?, joints: { [string]: any }? } },
 	stepped = nil :: RBXScriptConnection?, shot = nil :: string?, burst = false, hops = 0, told = false,
-	rush = nil :: Sound?, whooshed = false }
+	rush = nil :: Sound?, whooshed = false, shotAt = 0, eye = nil :: Vector3?,
+	marks = nil :: { plunge: number, out: number, outAt: Vector3, outRun: Vector3 }? }
 local HOLD = 4.5 -- seconds the pool is held on screen after the splash (and longer if a caption is up)
+local PLUNGE_HOLD = 1.1 -- seconds held over the cloud tops as they go in
+local BURST_LEAD = 1.3 -- seconds before they come out of the cloud that the camera is waiting under it
+local BURST_HOLD = 1.5 -- seconds the camera turns after them once they are out
 
 -- A new shot is a cut: the camera does not pan from one to the next.
 function scene.cutTo(name: string)
 	if scene.shot ~= name then
 		scene.shot = name
+		scene.shotAt = os.clock()
 		Cinema.cut()
 	end
+end
+
+-- WHEN THEY GO INTO THE CLOUD AND WHEN THEY COME OUT, as shares of the ride, worked out once when it starts:
+-- the first u where the sled is below each height, so a shot can be cut to a moment before it happens.
+function scene.markClouds(current: Ride)
+	scene.marks = nil
+	local cloudTop = current.sled:GetAttribute("CloudTop")
+	local cloudBottom = current.sled:GetAttribute("CloudBottom")
+	if typeof(cloudTop) ~= "number" or typeof(cloudBottom) ~= "number" then
+		return
+	end
+	local function below(y: number, from: number): number
+		local u = from
+		while u < 1 do
+			if SkyPath.rideFrame(current.spec, current.distances, u).Position.Y < y then
+				return u
+			end
+			u += 0.002
+		end
+		return 1
+	end
+	local plunge = below(cloudTop + 3, 0)
+	local out = below(cloudBottom - 8, plunge)
+	if out >= 1 then
+		return
+	end
+	local outAt = SkyPath.rideFrame(current.spec, current.distances, out).Position
+	local onward = SkyPath.rideFrame(current.spec, current.distances, math.min(1, out + 0.02)).Position
+	local run = Vector3.new(onward.X - outAt.X, 0, onward.Z - outAt.Z)
+	scene.marks = { plunge = plunge, out = out, outAt = outAt,
+		outRun = if run.Magnitude > 0.01 then run.Unit else Vector3.new(0, 0, -1) }
 end
 
 function scene.shoot(current: Ride, u: number)
@@ -344,39 +435,91 @@ function scene.shoot(current: Ride, u: number)
 	out = if out.Magnitude > 0.01 then out.Unit else Vector3.xAxis
 	local character = Players.LocalPlayer.Character
 	local ignore = if character then { character, current.sled } else { current.sled }
-	local cloudTop = current.sled:GetAttribute("CloudTop")
+	local marks = scene.marks
 	local cloudBottom = current.sled:GetAttribute("CloudBottom")
-	local clouds = typeof(cloudTop) == "number" and typeof(cloudBottom) == "number"
+	-- Where the slide comes out of the cloud, and the eye under it that waits for them there.
+	local function waitUnder()
+		if scene.shot ~= "burst" and marks then
+			scene.cutTo("burst")
+			local away = Vector3.new(marks.outAt.X - current.spec.centre.X, 0, marks.outAt.Z - current.spec.centre.Z)
+			away = if away.Magnitude > 0.01 then away.Unit else Vector3.xAxis
+			scene.eye = Cinema.clear(marks.outAt + marks.outRun * 30 + away * 22 + Vector3.new(0, -24, 0), marks.outAt, ignore)
+			Cinema.speedLines(0)
+		end
+	end
 	if u < 0.1 then
 		scene.cutTo("push")
 		local eye = Cinema.clear(here - flat * 10 + Vector3.new(0, 5.5, 0), here, ignore)
 		Cinema.point(CFrame.lookAt(eye, SkyPath.rideFrame(current.spec, current.distances, math.min(1, u + 0.12)).Position), 64)
-	elseif clouds and here.Y > (cloudTop :: number) + 22 then
-		-- THE TRACK: alongside, out past the edge and over it, well above the cloud tops.
+	elseif marks and u < marks.plunge then
+		-- THE TRACK: alongside and over them, looking a little ahead, so the slide is seen running on down
+		-- into the cloud sea before they get there: where they are going, not only where they are.
 		scene.cutTo("track")
-		local eye = here + out * 24 + Vector3.new(0, 9, 0) - flat * 6
-		Cinema.point(CFrame.lookAt(eye, here + Vector3.new(0, 1, 0)), 52)
-	elseif clouds and here.Y > (cloudBottom :: number) - 12 then
-		-- THROUGH THE CLOUDS: from under them, looking up at where the slide comes out.
-		scene.cutTo("under")
-		if not scene.whooshed then
-			scene.whooshed = true
-			Cinema.sound("CloudWhoosh", 0.8)
+		local far = SkyPath.rideFrame(current.spec, current.distances, math.min(1, marks.plunge + 0.03)).Position
+		local eye = here + out * 22 + Vector3.new(0, 10, 0) - flat * 12
+		Cinema.point(CFrame.lookAt(eye, here:Lerp(far, 0.3) + Vector3.new(0, 1, 0)), 56)
+	elseif marks and u < marks.out then
+		local left = (marks.out - u) * current.seconds
+		local since = (u - marks.plunge) * current.seconds
+		if since < PLUNGE_HOLD and left > BURST_LEAD then
+			-- THE PLUNGE: held over the cloud tops where they go in, looking down as it closes over them.
+			if scene.shot ~= "plunge" then
+				scene.cutTo("plunge")
+				scene.eye = Cinema.clear(here - flat * 14 + out * 9 + Vector3.new(0, 15, 0), here, ignore)
+				Cinema.speedLines(0.45)
+				if not scene.whooshed then
+					scene.whooshed = true
+					Cinema.sound("CloudWhoosh", 0.8)
+				end
+			end
+			local held = os.clock() - scene.shotAt
+			Cinema.point(CFrame.lookAt(scene.eye :: Vector3, here), 60 - math.min(held, PLUNGE_HOLD) * 6)
+		elseif left > BURST_LEAD and (scene.shot == "below" or left > BURST_LEAD + 1) then
+			-- WHERE IT GOES: they are in the cloud, out of sight, so this is the way down instead: under the cloud
+			-- sea, wide, the slide coming down out of it and round into the pool it lands in, drifting slowly in.
+			-- (Never for a moment only: with too little of the cloud left, the camera waits under it instead.)
+			if scene.shot ~= "below" then
+				scene.cutTo("below")
+				Cinema.speedLines(0)
+			end
+			local held = os.clock() - scene.shotAt
+			local landing = SkyPath.point(current.spec, 1)
+			local mid = marks.outAt:Lerp(landing, 0.5)
+			local away = Vector3.new(mid.X - current.spec.centre.X, 0, mid.Z - current.spec.centre.Z)
+			away = if away.Magnitude > 0.01 then away.Unit else Vector3.xAxis
+			local drift = math.clamp(held / 5, 0, 1)
+			local eye = mid + away * (150 - 28 * drift) + Vector3.new(0, 6 + 6 * drift, 0)
+			if typeof(cloudBottom) == "number" then
+				eye = Vector3.new(eye.X, math.min(eye.Y, cloudBottom - 16), eye.Z)
+			end
+			Cinema.point(CFrame.lookAt(eye, mid:Lerp(marks.outAt, 0.38)), 66, true)
+		else
+			-- OUT OF THE CLOUD, a moment before: under where the slide leaves it, looking up at it.
+			waitUnder()
+			Cinema.point(CFrame.lookAt(scene.eye :: Vector3, marks.outAt + Vector3.new(0, 5, 0)), 60, true)
 		end
-		local exitY = (cloudBottom :: number) - 12
-		local eye = Vector3.new(here.X, exitY - 30, here.Z) + out * 34 + flat * 40
-		Cinema.point(CFrame.lookAt(eye, Vector3.new(here.X, math.max(exitY, here.Y), here.Z) + flat * 6), 60, true)
-	elseif u < 0.86 then
-		-- THE PUFF as they come out of the cloud, once.
-		if clouds and not scene.burst then
+	elseif marks and (u - marks.out) * current.seconds < BURST_HOLD then
+		-- THROUGH: a puff where they came out, an impact frame, and the camera turning after them.
+		waitUnder()
+		if not scene.burst then
 			scene.burst = true
 			scene.puff(here)
+			Cinema.impact(0.7)
+			Cinema.speedLines(0.4)
 		end
-		-- THE FACE: ahead of them looking back, far enough off to see all of them.
-		scene.cutTo("face")
+		Cinema.point(CFrame.lookAt(scene.eye :: Vector3, here + Vector3.new(0, 1, 0)), 60, true)
+	elseif u < 0.86 then
+		-- THE FACE: ahead of them looking back, far enough off to see all of them, the speed still on.
+		if scene.shot ~= "face" then
+			scene.cutTo("face")
+			Cinema.speedLines(0.3)
+		end
 		local eye = Cinema.clear(here + run * 14 + Vector3.new(0, 4.5, 0), here, ignore)
 		Cinema.point(CFrame.lookAt(eye, here + Vector3.new(0, 1.2, 0)), 58)
 	else
+		if scene.shot ~= "pool" then
+			Cinema.speedLines(0)
+		end
 		scene.cutTo("pool")
 		local landing = SkyPath.point(current.spec, 1)
 		local last = SkyPath.point(current.spec, 0.97)
@@ -532,7 +675,7 @@ local function ensureRideGui()
 	drop.AnchorPoint = Vector2.new(0.5, 0)
 	drop.Position = UDim2.new(0.5, 0, 0.1, 0)
 	drop.Size = UDim2.new(0, 320, 0, 34)
-	drop.Font = Enum.Font.GothamBold
+	drop.FontFace = Style.FONT.heading
 	drop.TextSize = 26
 	drop.TextColor3 = Color3.fromRGB(246, 248, 255)
 	drop.TextTransparency = 1
@@ -546,7 +689,7 @@ local function ensureRideGui()
 	caption.AnchorPoint = Vector2.new(0.5, 0)
 	caption.Position = UDim2.new(0.5, 0, 0.1, 30)
 	caption.Size = UDim2.new(0, 320, 0, 20)
-	caption.Font = Enum.Font.Gotham
+	caption.FontFace = Style.FONT.body
 	caption.TextSize = 14
 	caption.TextColor3 = Color3.fromRGB(206, 214, 236)
 	caption.TextTransparency = 1
@@ -635,6 +778,8 @@ local function rideStarted(sled: Instance)
 	scene.hops = 0
 	scene.told = false
 	scene.whooshed = false
+	scene.eye = nil
+	pcall(scene.markClouds, ride :: Ride)
 	if Cinema then
 		Cinema.begin()
 		Cinema.caption("The Long Way Down", "Everyone takes it in the end.", 7)
@@ -735,10 +880,168 @@ local function holdLanding()
 	if not scene.told then
 		scene.told = true
 		Cinema.caption("The Sky Pools", "Everybody who came up for the party is still up there. You are the only one who came down.", 8)
-		Cinema.sound("PoolsChord", 0.7, { keep = true, fadeIn = 1 })
+		Cinema.sound("PoolsChord", 0.7, { keep = true, fadeIn = 1, alt = "EndChord", altPitch = 1.19 })
 		Cinema.done()
 	end
-	Cinema.point(CFrame.lookAt(landing + away * 26 + Vector3.new(0, 7, 0), landing + Vector3.new(0, 14, 0)), 70)
+	-- Low over the water and further off, so you are in it (the lower third, in the pool) with the tower going up
+	-- behind you: it looked up at the tower from higher, and you were under the bottom bar the whole time it was held
+	-- (check_shots.py).
+	Cinema.point(CFrame.lookAt(landing + away * 32 + Vector3.new(0, 4, 0), landing + Vector3.new(0, 7, 0)), 70)
+end
+
+-- ===== THE STORM BY THE SLIDE =====
+
+local function ensureStormShade(): ColorCorrectionEffect
+	local existing = stormShade
+	if existing and existing.Parent then
+		return existing
+	end
+	local made = Instance.new("ColorCorrectionEffect")
+	made.Name = "SkyStorm"
+	made.Parent = Lighting
+	stormShade = made
+	return made
+end
+
+-- The cloud sea, taken toward storm grey by u (0 to 1): the clouds round the tower most, the far ones not at
+-- all. Each cloud's own colour is kept the first time it is seen, so it always eases back to it.
+local function paintClouds(u: number)
+	local level = stormLevel
+	local sea = level and level:FindFirstChild("CloudSea")
+	local centre = level and level:GetAttribute("SlideCentre")
+	if not sea or typeof(centre) ~= "Vector3" then
+		return
+	end
+	for _, item in ipairs(sea:GetDescendants()) do
+		local base = cloudBase[item]
+		if not base then
+			local at: Vector3? = nil
+			local colour: Color3? = nil
+			if item:IsA("BasePart") and item.Name == "Cloud" then
+				at, colour = item.Position, item.Color
+			elseif item:IsA("ParticleEmitter") and item.Parent and item.Parent:IsA("BasePart") then
+				at, colour = (item.Parent :: BasePart).Position, item.Color.Keypoints[1].Value
+			end
+			if at and colour then
+				local away = Vector3.new(at.X - centre.X, 0, at.Z - centre.Z).Magnitude
+				base = { colour = colour, weight = math.clamp((STORM_REACH - away) / (STORM_REACH - STORM_NEAR), 0, 1) }
+				cloudBase[item] = base
+			end
+		end
+		if base and base.weight > 0 then
+			local shade = base.colour:Lerp(STORM_GREY, STORM_DARKEST * base.weight * u)
+			if item:IsA("BasePart") then
+				item.Color = shade
+			elseif item:IsA("ParticleEmitter") then
+				item.Color = ColorSequence.new(shade)
+			end
+		end
+	end
+end
+
+-- Written only when it has moved: the shade to a hundredth, the clouds (hundreds of them) to a twentieth.
+local function applyStorm()
+	local key = math.floor(storm * 100 + 0.5)
+	if key == stormWritten then
+		return
+	end
+	stormWritten = key
+	local s = key / 100
+	local cc = ensureStormShade()
+	cc.Brightness = -0.06 * s
+	cc.Saturation = -0.12 * s
+	cc.Contrast = 0.03 * s
+	cc.TintColor = Color3.new(1, 1, 1):Lerp(STORM_TINT, s)
+	local cloudKey = math.floor(s * 20 + 0.5)
+	if cloudKey ~= cloudsWritten then
+		cloudsWritten = cloudKey
+		paintClouds(cloudKey / 20)
+	end
+end
+
+-- LIGHTNING in the cloud tops near the tower: a real light just over them, twice, briefly, soft. Nothing to see
+-- but the clouds it lights.
+local function flashLightning(now: number)
+	local level = stormLevel
+	if storm < 0.6 or now < nextFlash or not level then
+		return
+	end
+	nextFlash = now + math.random(LIGHTNING_EVERY[1], LIGHTNING_EVERY[2])
+	local centre = level:GetAttribute("SlideCentre")
+	local top = level:GetAttribute("CloudTop")
+	if typeof(centre) ~= "Vector3" or typeof(top) ~= "number" then
+		return
+	end
+	local angle = math.random() * math.pi * 2
+	local reach = 120 + math.random() * 200
+	local spot = Instance.new("Attachment")
+	spot.Name = "Lightning"
+	spot.Position = Vector3.new(centre.X + math.cos(angle) * reach, top + 4, centre.Z + math.sin(angle) * reach)
+	spot.Parent = workspace.Terrain
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(220, 228, 255)
+	light.Range = 90
+	light.Shadows = false
+	light.Brightness = 0
+	light.Parent = spot
+	local strength = storm
+	task.spawn(function()
+		light.Brightness = LIGHTNING_BRIGHT * strength
+		task.wait(0.07)
+		light.Brightness = 0
+		task.wait(0.12)
+		light.Brightness = LIGHTNING_BRIGHT * 0.6 * strength
+		task.wait(0.1)
+		spot:Destroy()
+	end)
+end
+
+-- Out of the level, or the level gone: no storm at all, at once (the lobby is never left shaded), and the clouds
+-- given back their own colours while they are still known (a late join would otherwise keep them grey for good).
+local function stormGone()
+	if next(cloudBase) ~= nil then
+		paintClouds(0)
+	end
+	storm = 0
+	stormWritten, cloudsWritten = -1, -1
+	cloudBase = {}
+	if stormShade then
+		stormShade:Destroy()
+		stormShade = nil
+	end
+end
+
+local function moveStorm(now: number)
+	local dt = math.min(now - stormAt, 0.25)
+	stormAt = now
+	local level = stormLevel
+	if not (level and level.Parent and Players.LocalPlayer:GetAttribute("InLevel") == "skyPools") then
+		if stormShade then
+			stormGone()
+		end
+		return
+	end
+	local target = 0
+	local mouth = level:GetAttribute("SlideMouth")
+	local bottom = level:GetAttribute("CloudBottom")
+	local character = Players.LocalPlayer.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if typeof(mouth) == "CFrame" and root and root:IsA("BasePart") then
+		local flat = Vector3.new(root.Position.X - mouth.Position.X, 0, root.Position.Z - mouth.Position.Z).Magnitude
+		target = math.clamp((STORM_FROM - flat) / (STORM_FROM - STORM_FULL), 0, 1)
+		-- UNDER THE CLOUDS it clears: the end of the ride comes out into calm air over the pool.
+		if typeof(bottom) == "number" then
+			target *= math.clamp((root.Position.Y - (bottom - 30)) / 30, 0, 1)
+		end
+	end
+	storm += (target - storm) * math.min(1, STORM_EASE * dt)
+	applyStorm()
+	flashLightning(now)
+end
+
+local function stormFor(level: Instance)
+	stormGone()
+	stormLevel = level
 end
 
 local function step()
@@ -748,6 +1051,7 @@ local function step()
 	moveSled(serverNow)
 	holdLanding()
 	moveFalls(now)
+	moveStorm(now)
 	local character = Players.LocalPlayer.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	if root and root:IsA("BasePart") then
@@ -887,9 +1191,15 @@ function SkyPoolsClient.start()
 
 	for _, item in ipairs(CollectionService:GetTagged("SkyPoolsLevel")) do
 		flocksFor(item)
+		stormFor(item)
 	end
 	CollectionService:GetInstanceAddedSignal("SkyPoolsLevel"):Connect(flocksFor)
+	CollectionService:GetInstanceAddedSignal("SkyPoolsLevel"):Connect(stormFor)
 	CollectionService:GetInstanceRemovedSignal("SkyPoolsLevel"):Connect(function(item)
+		if stormLevel == item then
+			stormGone()
+			stormLevel = nil
+		end
 		local entry = flocks[item]
 		if entry then
 			for _, flock in ipairs(entry.list) do
@@ -917,4 +1227,5 @@ function SkyPoolsClient.start()
 	RunService.RenderStepped:Connect(step)
 end
 
+SkyPoolsClient.STAMP = "503f7b67"
 return SkyPoolsClient

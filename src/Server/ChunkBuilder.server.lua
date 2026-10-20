@@ -34,6 +34,8 @@ local ChunkDefinitions = require(Shared:WaitForChild("ChunkDefinitions"))
 local MaterialAppearance = require(Shared:WaitForChild("MaterialAppearance"))
 local MaterialConfig = require(Shared:WaitForChild("MaterialConfig"))
 local PlanShapes = require(Shared:WaitForChild("PlanShapes"))
+-- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
+local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Style"))
 
 -- === Scale ===
 -- DEVIATION FROM GDD v1.1: the doc's chunk sizes (6x4 to 12x4 studs) are about
@@ -1797,7 +1799,7 @@ local function attachWrapperText(slab: BasePart, surfaceLocalY: number, material
 		label.Size = UDim2.fromScale(1, 1)
 		label.BackgroundTransparency = 1
 		label.Text = print_.text
-		label.Font = Enum.Font.GothamBlack
+		label.FontFace = Style.WORLD.signHeavy
 		label.TextScaled = true
 		label.TextColor3 = print_.color
 		label.TextTransparency = 0.35

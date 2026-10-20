@@ -133,6 +133,10 @@ local SOUND_IDS_BY_EVENT: { [string]: { string } } = {
 	charcoalSnap = {},
 	chocolateSnap = {},
 	claySquish = {},
+	-- Their own now (the eighty-eighth pass): the solid chocolate's deeper break, and the jellyfish's gel bounce (they
+	-- borrowed the chocolate bar's and the slime's). Until their sheets are in, MaterialConfig's sfxFallback stands in.
+	chocolateChunk = {},
+	jellyBounce = {},
 	cloudHush = {},
 	-- The Needoh's own (twenty-first pass): it was borrowing clay's. audio/gen_ending_sfx.py writes four
 	-- takes, needohSquish_1 to _4, for SoundService.MaterialSounds.
@@ -198,6 +202,18 @@ for event, ids in pairs(SOUND_IDS_BY_EVENT) do
 	usableIds[event] = filled
 end
 
+-- A SHEET: one upload holding several takes (audio/gen_sheet_sfx.py writes `<event>_x4.wav`, four takes, each in its
+-- own SHEET_SLOT seconds). A take of a sheet is kept as `id@start`; applyTake plays it from its own slot. Eleven
+-- uploads instead of forty-four, against Roblox's limit on how many sounds can be uploaded a month.
+local SHEET_SLOT = 1.0
+-- THE FOLDER'S TAKES REPLACE THE LIST ABOVE for these, once there are any: the sand, remade, and the bubble wrap,
+-- whose uploads started late (heard behind the foot that popped them). Anything else adds to the list.
+local FOLDER_REPLACES: { [string]: boolean } = { kineticSandImprint = true, bubblePop = true }
+-- AND THE OTHER WAY ROUND: YOUR OWN RECORDING, ALONE (the hundred-and-first pass). The soap's crumble you uploaded
+-- "crumbled better", and the folder's generated takes, played between yours, "sound too similar to each other": while
+-- the list above has an id of yours for these, the folder adds nothing to them.
+local OWN_ONLY: { [string]: boolean } = { soapCrumble = true }
+
 -- AND ANY SOUND IN SoundService.MaterialSounds, with no ids to copy.
 --
 -- audio/gen_material_sfx.py writes takes named for their event (iceCrack_1.wav, iceCrack_2.wav...).
@@ -217,18 +233,53 @@ do
 	local folder = SoundService:FindFirstChild("MaterialSounds")
 	local added, unknown = 0, {}
 	if folder then
+		-- Sheets first: an event with a sheet takes its takes from the sheet, and any single files of the same event
+		-- (older takes left in the folder) are passed over, so old and new are never picked between at random.
+		local fromFolder: { [string]: { string } } = {}
+		local sheeted: { [string]: boolean } = {}
 		for _, item in ipairs(folder:GetDescendants()) do
 			if item:IsA("Sound") and item.SoundId ~= "" then
+				local stem, count = string.match(item.Name, "^(.-)_x(%d+)$")
+				if stem and count then
+					local event = ALIAS[stem] or stem
+					if usableIds[event] then
+						sheeted[event] = true
+						fromFolder[event] = fromFolder[event] or {}
+						for k = 0, (tonumber(count) :: number) - 1 do
+							table.insert(fromFolder[event], ("%s@%g"):format(item.SoundId, k * SHEET_SLOT))
+						end
+					else
+						table.insert(unknown, item.Name)
+					end
+				end
+			end
+		end
+		for _, item in ipairs(folder:GetDescendants()) do
+			if item:IsA("Sound") and item.SoundId ~= "" and not string.match(item.Name, "_x%d+$") then
 				local stem = string.match(item.Name, "^(.-)_%d+$") or item.Name
 				local event = ALIAS[stem] or stem
-				local list = usableIds[event]
-				if list then
-					if not table.find(list, item.SoundId) then
-						table.insert(list, item.SoundId)
-						added += 1
+				if usableIds[event] then
+					if not sheeted[event] then
+						fromFolder[event] = fromFolder[event] or {}
+						table.insert(fromFolder[event], item.SoundId)
 					end
 				else
 					table.insert(unknown, item.Name)
+				end
+			end
+		end
+		for event, takes in pairs(fromFolder) do
+			local list = usableIds[event]
+			if OWN_ONLY[event] and #list > 0 then
+				continue
+			end
+			if FOLDER_REPLACES[event] and #takes > 0 then
+				table.clear(list)
+			end
+			for _, take in ipairs(takes) do
+				if not table.find(list, take) then
+					table.insert(list, take)
+					added += 1
 				end
 			end
 		end
@@ -262,11 +313,17 @@ local ContentProvider = game:GetService("ContentProvider")
 
 task.spawn(function()
 	local probes = {}
+	local asked: { [string]: boolean } = {}
 	for _, ids in pairs(usableIds) do
 		for _, id in ipairs(ids) do
-			local probe = Instance.new("Sound")
-			probe.SoundId = id
-			table.insert(probes, probe)
+			-- A sheet's takes are one asset: fetched once.
+			local asset = string.match(id, "^(.-)@") or id
+			if not asked[asset] then
+				asked[asset] = true
+				local probe = Instance.new("Sound")
+				probe.SoundId = asset
+				table.insert(probes, probe)
+			end
 		end
 	end
 	if #probes == 0 then
@@ -331,6 +388,58 @@ function AudioService.setAmbientMusic(enabled: boolean)
 			ambient:Stop()
 		end
 	end
+end
+
+-- A TAKE ON A SOUND: its id, and for a take of a sheet, the slot it plays from (only that slot: PlaybackRegion, or,
+-- where that is not to be had, started there and stopped at the slot's end).
+function AudioService.applyTake(sound: Sound, take: string)
+	local asset, start = string.match(take, "^(.-)@([%d%.]+)$")
+	if not (asset and start) then
+		sound.SoundId = take
+		return
+	end
+	local from = tonumber(start) :: number
+	sound.SoundId = asset
+	local regioned = pcall(function()
+		(sound :: any).PlaybackRegionsEnabled = true;
+		(sound :: any).PlaybackRegion = NumberRange.new(from, from + SHEET_SLOT - 0.05)
+	end)
+	sound.TimePosition = from
+	if not regioned then
+		task.delay(0.02, function()
+			local speed = math.max(0.1, sound.PlaybackSpeed)
+			task.delay((SHEET_SLOT - 0.07) / speed, function()
+				if sound.Parent then
+					sound:Stop()
+				end
+			end)
+		end)
+	end
+end
+
+-- THE TONE OF A SOUND as it plays, for the ones that were liked as they are but wanted LOUDER AND CREAMIER (the
+-- oobleck, the lego, the keyboards): the same takes, a little more gain, the low end lifted and the top softened.
+local TONE: { [string]: { gain: number, low: number, mid: number, high: number } } = {
+	ooblSquelch = { gain = 1.5, low = 4, mid = 1, high = -6 },
+	legoClick = { gain = 1.45, low = 3, mid = 1, high = -5 },
+	keyThock = { gain = 1.4, low = 4, mid = 0, high = -5 },
+}
+function AudioService.dress(sound: Sound, event: string)
+	local tone = TONE[event]
+	if not tone then
+		return
+	end
+	sound.Volume *= tone.gain
+	local eq = Instance.new("EqualizerSoundEffect")
+	eq.LowGain, eq.MidGain, eq.HighGain = tone.low, tone.mid, tone.high
+	eq.Parent = sound
+end
+
+-- AN EVENT'S TAKES, as sound ids (the recordings listed above and the takes imported into MaterialSounds), for the
+-- shop's step sounds (StepService), so they are the same sounds the chunks make. Play one with applyTake.
+function AudioService.takesFor(event: string): { string }
+	local ids = usableIds[event]
+	return if ids then table.clone(ids) else {}
 end
 
 -- True when an event has at least one uploaded take.
@@ -446,7 +555,7 @@ function AudioService.playSfx(material: string, region: BasePart, mine: boolean?
 	-- the general case, since walking at 16 studs/sec put you out of range in under a
 	-- second and quietly thinned every long sample.
 	local sound = Instance.new("Sound")
-	sound.SoundId = soundId
+	AudioService.applyTake(sound, soundId)
 	-- PITCH AND GAIN JITTER, which is the cheapest trick in game audio and the one that
 	-- does most for a small sample set. A footstep replayed at exactly the same pitch and
 	-- level is recognisably the same FILE within about three hearings; nudged a couple of
@@ -460,6 +569,7 @@ function AudioService.playSfx(material: string, region: BasePart, mine: boolean?
 	-- single upload, so this is doing the work a second recording would.
 	sound.Volume = (volumeByMaterial[material] or 1) * rng:NextNumber(0.92, 1.0) * (gain or 1)
 	sound.PlaybackSpeed = if pitch then pitch * rng:NextNumber(0.995, 1.005) else rng:NextNumber(0.94, 1.06)
+	AudioService.dress(sound, event)
 	if mine then
 		-- Parented to SoundService, which makes it 2D and ignores rolloff entirely.
 		sound.Parent = SoundService
@@ -514,4 +624,5 @@ function AudioService.playSfx(material: string, region: BasePart, mine: boolean?
 	end)
 end
 
+AudioService.STAMP = "c13317c7"
 return AudioService

@@ -12,10 +12,15 @@
 --                   you dropping away. She saw you go.
 --   THE TURN        close, going round them as they turn over, head down, the spiral they climbed
 --                   standing behind them.
---   THE DROP        falling with them, from just under them looking up: the tower and the sky going
---                   away above, the wind in the picture.
+--   THE DROP        over them and a little behind, falling with them, looking down past them at the sea
+--                   coming up: where they are going (it looked up at the sky, away from it).
+--   THEIR FACE      close, from under it, head first at the water, the wind in it: what they tell themselves.
+--   THE DROP        again, the sea near now.
 --   THE WATER       from the surface, low, as they come down at it: only in the last second or so, when
 --                   they are near enough to see.
+--
+-- AND THEY THINK ON THE WAY (Cinema.think, over their head): "Okay. Don't look down." off the board, "I looked
+-- down." as they turn over and see it, and "Arms together. Arms together!" with the water coming.
 --   THE SPLASH      spray thrown up, a white flash, the camera knocked.
 --   UNDER           the water closes over them and the camera follows them down into the dark, shafts of
 --                   light slanting down round them and a few fish going by, and far below a street lamp
@@ -23,7 +28,11 @@
 --                   City). Held until the lobby takes them.
 --
 -- AND THINGS HAPPEN ON THE WAY DOWN: the sun flares as you leave the board, you drop through a flock of
--- gulls that bursts apart round you, and the air rushes past. SCORED (Cinema.sound; audio/endings): the
+-- gulls that bursts apart round you, and the air rushes past. HIT LIKE AN ACTION GAME (the eighty-first pass):
+-- an impact frame as you leave the board, as you burst through the gulls and as you hit the water (Cinema.impact);
+-- speed lines streaming in from the edges and wind streaking past you all the way down, air trails off your hands
+-- and feet; the camera leaning into the fall (a Dutch tilt, buffeted); and you are never still in the air: rolling
+-- and swaying in the wind, arms and legs working against it (Poses.dive). SCORED (Cinema.sound; audio/endings): the
 -- board letting you go, the wind rising all the way down, the splash, the hum under the harbour, and the
 -- last chord as the lamp comes into view.
 --
@@ -57,13 +66,14 @@ local Cinema: any = (function()
 end)()
 
 local CityShoreClient = {}
-CityShoreClient.VERSION = "twenty-first pass, 2026-09-30"
+CityShoreClient.VERSION = "ninety-third pass, 2026-10-17"
 
 type Gull = { body: BasePart, left: BasePart, right: BasePart, home: Vector3, out: Vector3, flap: number, fled: number? }
 type Scene = { began: number, water: number, tip: Vector3, from: Vector3, facing: Vector3, splash: Vector3?,
 	splashAt: number?, lamp: Vector3?, held: { Instance }, carryFrom: Vector3?, carryAt: number?, told: boolean,
 	shot: string?, maren: BasePart?, gulls: { Gull }, rush: BasePart?, wind: Sound?, sunWas: number?,
-	shafts: { { part: BasePart, rest: CFrame, phase: number } }, fish: { { part: BasePart, from: Vector3, to: Vector3, speed: number } } }
+	shafts: { { part: BasePart, rest: CFrame, phase: number } }, fish: { { part: BasePart, from: Vector3, to: Vector3, speed: number } },
+	hit: { [string]: boolean }, streaks: ParticleEmitter?, dropTop: number? }
 local scene: Scene? = nil
 -- The fastest the diver falls and drifts while the scene is on (studs a second).
 local FALL_SPEED = 110
@@ -158,7 +168,7 @@ local function beginScene(water: number, tip: Vector3)
 	end
 	local current: Scene = { began = os.clock(), water = water, tip = tip, from = root.Position, facing = facing,
 		held = {}, carryFrom = nil, carryAt = nil, told = false, shot = nil, maren = maren, gulls = {}, rush = nil,
-		wind = nil, sunWas = nil, shafts = {}, fish = {} }
+		wind = nil, sunWas = nil, shafts = {}, fish = {}, hit = {}, streaks = nil, dropTop = nil }
 	scene = current
 	humanoid.PlatformStand = true
 	-- THE GULLS, circling halfway down the fall out from the board, which you drop straight through.
@@ -212,6 +222,50 @@ local function beginScene(water: number, tip: Vector3)
 	wisps.Rate = 0
 	wisps.Parent = rush
 	current.rush = rush
+	-- WIND STREAKS: long thin lines of air left behind in the sky as you fall, so they whip up past you.
+	local streaks = Instance.new("ParticleEmitter")
+	streaks.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	streaks.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255))
+	streaks.LightEmission = 0.4
+	streaks.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.12), NumberSequenceKeypoint.new(1, 0.05) })
+	streaks.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 1) })
+	streaks.Lifetime = NumberRange.new(0.25, 0.45)
+	streaks.Speed = NumberRange.new(0, 0.5)
+	streaks.Shape = Enum.ParticleEmitterShape.Box
+	streaks.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	streaks.Rate = 0
+	-- Stretched along the fall where this Roblox can (Squash), round motes where it cannot.
+	pcall(function()
+		(streaks :: any).Squash = NumberSequence.new(-2.6)
+	end)
+	streaks.Parent = rush
+	current.streaks = streaks
+	-- AIR TRAILS off your hands and feet, the way a skydiver's hands draw lines in the sky.
+	for _, limb in ipairs({ "RightHand", "LeftHand", "RightFoot", "LeftFoot", "Right Arm", "Left Arm" }) do
+		local part = character and character:FindFirstChild(limb)
+		if part and part:IsA("BasePart") then
+			local a0 = Instance.new("Attachment")
+			a0.Name = "DiveTrailA"
+			a0.Position = Vector3.new(0, 0.18, 0)
+			a0.Parent = part
+			local a1 = Instance.new("Attachment")
+			a1.Name = "DiveTrailB"
+			a1.Position = Vector3.new(0, -0.18, 0)
+			a1.Parent = part
+			local trail = Instance.new("Trail")
+			trail.Name = "DiveAirTrail"
+			trail.Attachment0, trail.Attachment1 = a0, a1
+			trail.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255))
+			trail.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1) })
+			trail.Lifetime = 0.35
+			trail.LightEmission = 0.3
+			trail.FaceCamera = true
+			trail.Parent = part
+			for _, made in ipairs({ a0, a1, trail }) do
+				table.insert(current.held, made)
+			end
+		end
+	end
 	-- THE SUN, flaring as you go out into it.
 	local rays = Lighting:FindFirstChildOfClass("SunRaysEffect")
 	if rays then
@@ -245,6 +299,11 @@ local function moveGulls(current: Scene, here: Vector3, now: number)
 	for _, gull in ipairs(current.gulls) do
 		if not gull.fled and here.Y - gull.home.Y < 24 then
 			gull.fled = now
+			-- THROUGH THE FLOCK: an impact frame the first time, as they burst apart round you.
+			if not current.hit.gulls and Cinema then
+				current.hit.gulls = true
+				Cinema.impact(0.8)
+			end
 		end
 		local at, heading
 		if gull.fled then
@@ -367,7 +426,7 @@ local function splashed(at: Vector3)
 		Cinema.sound("UnderwaterHum", 0.55, { looped = true, fadeIn = 1.5 })
 		task.delay(2.6, function()
 			if scene == current then
-				Cinema.sound("ShoreChord", 0.7, { keep = true, fadeIn = 1 })
+				Cinema.sound("ShoreChord", 0.7, { keep = true, fadeIn = 1, alt = "EndChord", altPitch = 0.89 })
 			end
 		end)
 	end
@@ -398,6 +457,8 @@ local function splashed(at: Vector3)
 		{ Brightness = 0 }):Play()
 	if Cinema then
 		Cinema.cut()
+		Cinema.impact(1.4)
+		Cinema.speedLines(0)
 		Cinema.shake(2.4)
 		Cinema.caption("Harrow Bay", "Somewhere under the water, a street lamp is still on.", 9)
 		-- THE STORY IS TOLD once that has been read: the banner may come up, the lobby may take them. The
@@ -452,7 +513,11 @@ local function stepScene()
 		root.AssemblyLinearVelocity = Vector3.new(across.X, math.max(v.Y, -limit), across.Z)
 		local over = math.clamp((t - 0.35) / 1.4, 0, 1)
 		over = over * over * (3 - 2 * over)
-		root.CFrame = CFrame.lookAt(here, here + current.facing) * CFrame.Angles(-math.pi * 0.95 * over, 0, 0)
+		-- BUFFETED: once over, the wind rolls and yaws the body a little, never still.
+		local wind = math.clamp((t - 1.6) / 0.8, 0, 1)
+		local roll = 0.16 * math.noise(t * 1.3, 2.1) * wind
+		local yaw = 0.12 * math.noise(t * 0.9, 5.7) * wind
+		root.CFrame = CFrame.lookAt(here, here + current.facing) * CFrame.Angles(-math.pi * 0.95 * over, yaw, roll)
 		root.AssemblyAngularVelocity = Vector3.zero
 	end
 	-- THE GULLS, THE AIR, and under the water THE LIGHT AND THE FISH, whatever the camera is doing.
@@ -463,7 +528,11 @@ local function stepScene()
 		rush.CFrame = CFrame.new(here - Vector3.new(0, 10, 0))
 		local wisps = rush:FindFirstChildOfClass("ParticleEmitter")
 		if wisps then
-			wisps.Rate = if not splash and t > 1.3 then 45 else 0
+			wisps.Rate = if not splash and t > 1.3 then 60 else 0
+		end
+		local streaks = current.streaks
+		if streaks then
+			streaks.Rate = if not splash and t > 1.5 then 90 else 0
 		end
 	end
 	for _, shaft in ipairs(current.shafts) do
@@ -486,13 +555,31 @@ local function stepScene()
 			Cinema.cut()
 		end
 	end
+	-- WHAT THEY THINK, once each, over their head.
+	local function think(key: string, words: string, seconds: number)
+		if not current.hit[key] then
+			current.hit[key] = true
+			Cinema.think(character, words, seconds)
+		end
+	end
 	if not splash then
 		local height = here.Y - current.water
 		if t < 1.6 then
-			-- THE LEAP: low beside the board, looking up at them going out against the sky.
+			-- THE LEAP: low beside the board, looking up at them going out against the sky; hit as they leave it,
+			-- then a slow push in on the hang, the frame tipping as they turn.
 			shot("leap")
-			local eye = current.tip + side * 7 - current.facing * 3 + Vector3.new(0, -2.5, 0)
-			Cinema.point(CFrame.lookAt(eye, here + Vector3.new(0, 1, 0)), 56 - 4 * math.min(1, t / 1.6))
+			if not current.hit.leap and t > 0.18 then
+				current.hit.leap = true
+				Cinema.impact(1)
+			end
+			if t > 0.55 then
+				think("brave", "Okay. Don't look down.", 1.8)
+			end
+			-- (Lower and a little wider than it was, aimed under them: close to the lens and falling, their feet went
+			-- under the bottom bar for the first moment of it. check_shots.py.)
+			local eye = current.tip + side * 7 - current.facing * 3 + Vector3.new(0, -4, 0)
+			local tip = 0.12 * math.clamp((t - 0.6) / 1.0, 0, 1)
+			Cinema.point(CFrame.lookAt(eye, here + Vector3.new(0, -0.5, 0)) * CFrame.Angles(0, 0, tip), 60 - 10 * math.min(1, t / 1.6))
 		elseif t < 2.7 and current.maren and current.maren.Parent then
 			-- MAREN: over her shoulder on the deck, looking down past her at them dropping away.
 			shot("maren")
@@ -502,28 +589,62 @@ local function stepScene()
 			local eye = head - toward * 3.2 + Vector3.new(0, 1.3, 0) + Vector3.new(-toward.Z, 0, toward.X) * 1.4
 			Cinema.point(CFrame.lookAt(eye, here), 44)
 		elseif t < 4.2 then
-			-- THE TURN: close, going round them as they turn head down.
+			-- THE TURN: close, going round them as they turn head down, the speed starting to show.
 			shot("turn")
+			if t > 3.1 then
+				think("looked", "I looked down.", 1.6)
+			end
+			Cinema.speedLines(0.35 * math.clamp((t - 2.7) / 1.5, 0, 1))
 			local a = (t - 2.7) * 0.9
 			local round = side * math.cos(a) + current.facing * math.sin(a)
-			Cinema.point(CFrame.lookAt(here + round * 12 + Vector3.new(0, -3, 0), here), 60)
+			Cinema.point(CFrame.lookAt(here + round * 12 + Vector3.new(0, -3, 0), here) * CFrame.Angles(0, 0, -0.1), 64)
 		elseif height > WATER_SHOT then
-			-- THE DROP: just under them, falling with them, looking up past them at the sky.
-			shot("drop")
-			Cinema.shake(0.35)
-			local eye = here + Vector3.new(0, -16, 0) + current.facing * 5 + side * 2
-			Cinema.point(CFrame.lookAt(eye, here + Vector3.new(0, 6, 0), current.facing), 72)
+			-- How far down the drop they are, from where it began to where the camera goes to the water.
+			local top = current.dropTop or height
+			current.dropTop = top
+			local down = math.clamp((top - height) / math.max(1, top - WATER_SHOT), 0, 1)
+			if down >= 0.5 then
+				-- THEIR FACE, close, from under it, for the second half of the drop: head first at the water (their face
+				-- is to the tower, upside down, after the turn), the wind in it and the sky behind, and what they tell
+				-- themselves. (The drop is two seconds: split three ways, no shot of it lasted long enough to read.)
+				shot("face")
+				think("arms", "Arms together. Arms together!", 2)
+				Cinema.shake(0.6)
+				Cinema.speedLines(0.85)
+				local headPart = character and character:FindFirstChild("Head")
+				local face = if headPart and headPart:IsA("BasePart") then headPart.Position else here
+				local eye = Cinema.clear(face - current.facing * 4.2 - Vector3.new(0, 2.2, 0) + side * 1.1, face, { character })
+				Cinema.point(CFrame.lookAt(eye, face) * CFrame.Angles(0, 0, 0.07 * math.sin(t * 2.3)), 58)
+			else
+				-- THE DROP: over them and a little behind, falling with them, looking down past them at the sea
+				-- coming up at them: where they are going, they in the top half of the picture and the sea filling the
+				-- rest. Leaning into the fall, the frame rocking with the wind, wide, so the speed shows. (It looked a
+				-- third of the way to the sea, and they were under the top bar the whole time: check_shots.py.)
+				shot("drop")
+				Cinema.shake(0.5)
+				Cinema.speedLines(0.75)
+				local lean = 0.14 + 0.06 * math.sin(t * 1.7)
+				-- (Kept clear of anything of the tower's still beside them, near the top.)
+				local eye = Cinema.clear(here + Vector3.new(0, 9, 0) - current.facing * 4 + side * 2.5, here, { character })
+				Cinema.point(CFrame.lookAt(eye, here - Vector3.new(0, 22, 0), current.facing) * CFrame.Angles(0, 0, lean), 78)
+			end
 		else
-			-- THE WATER: from the surface, low, as they come down at it.
+			-- THE WATER: from the surface, low, as they come down at it. Aimed ahead of their fall, under them: aimed at
+			-- them, the camera turned after them too slowly in the last moment and they fell out of the picture.
 			shot("water")
+			Cinema.speedLines(0.35)
 			local below = Vector3.new(here.X, current.water, here.Z)
-			Cinema.point(CFrame.lookAt(below + current.facing * 22 + side * 6 + Vector3.new(0, 2.5, 0), here), 50)
+			Cinema.point(CFrame.lookAt(below + current.facing * 22 + side * 6 + Vector3.new(0, 2.5, 0), here - Vector3.new(0, 14, 0)), 50)
 		end
 	else
+		-- UNDER: behind them and a little over them (never above the surface), on them as they sink for two seconds,
+		-- then tilting down past them to the lamp on the drowned street. It was in front of them and turned toward
+		-- the lamp at once, and they were behind the camera within a second.
 		local since = os.clock() - (current.splashAt :: number)
-		local eye = here + Vector3.new(0, -3 - math.min(since, 10) * 0.8, 0) + current.facing * 7
+		local eye = here - current.facing * 7 + side * 1.5 + Vector3.new(0, 3 - math.min(since, 10) * 0.2, 0)
+		eye = Vector3.new(eye.X, math.min(eye.Y, current.water - 1.5), eye.Z)
 		local lamp = current.lamp or (here - Vector3.new(0, 100, 0))
-		Cinema.point(CFrame.lookAt(eye, here:Lerp(lamp, math.clamp(since / 5, 0, 0.7))), 64)
+		Cinema.point(CFrame.lookAt(eye, here:Lerp(lamp, math.clamp((since - 2) / 3.5, 0, 0.7))), 66)
 	end
 end
 
@@ -571,4 +692,5 @@ function CityShoreClient.start()
 	print("CityShoreClient: running, " .. CityShoreClient.VERSION)
 end
 
+CityShoreClient.STAMP = "a1d9908a"
 return CityShoreClient

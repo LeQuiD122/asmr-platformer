@@ -65,6 +65,8 @@ local Townsfolk: any = if townsModule and townsModule:IsA("ModuleScript") then r
 local interactModule = script.Parent:FindFirstChild("Interactables") or script.Parent:WaitForChild("Interactables", 5)
 local Interactables: any = if interactModule and interactModule:IsA("ModuleScript") then require(interactModule) else nil
 local CollectionService = game:GetService("CollectionService")
+-- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
+local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Style"))
 
 local StoryService = {}
 
@@ -163,7 +165,7 @@ function StoryService.opening(player: Player, levelId: number)
 		local label = Instance.new("TextLabel")
 		label.BackgroundTransparency = 1
 		label.Size = UDim2.new(1, 0, 0, if index == 2 then 28 elseif index == 1 then 18 else 22)
-		label.Font = if index == 3 then Enum.Font.Gotham else Enum.Font.GothamBold
+		label.FontFace = if index == 3 then Style.FONT.body else Style.FONT.heading
 		label.TextSize = if index == 2 then 24 elseif index == 1 then 14 else 18
 		label.TextColor3 = if index == 2 then Color3.fromRGB(246, 242, 230)
 			elseif index == 1 then Color3.fromRGB(200, 204, 198) else Color3.fromRGB(214, 216, 210)
@@ -270,7 +272,7 @@ local function sal(parent: Instance, cap: BasePart)
 	text.Size = UDim2.fromScale(1, 1)
 	text.BackgroundTransparency = 1
 	text.TextScaled = true
-	text.Font = Enum.Font.GothamBold
+	text.FontFace = Style.WORLD.sign
 	text.TextColor3 = Color3.fromRGB(255, 255, 255)
 	text.Text = "SAL'S ICES"
 	text.Parent = gui
@@ -325,7 +327,7 @@ local function venn(parent: Instance, cap: BasePart)
 	text.Size = UDim2.fromScale(1, 1)
 	text.BackgroundTransparency = 1
 	text.TextScaled = true
-	text.Font = Enum.Font.GothamBold
+	text.FontFace = Style.WORLD.sign
 	text.TextColor3 = Color3.fromRGB(40, 60, 70)
 	text.Text = "CORPORATION BATHS. TICKETS"
 	text.Parent = gui
@@ -682,7 +684,7 @@ local function noticeBoard(parent: Instance, at: CFrame, entry: Note)
 	text.Size = UDim2.fromScale(1, 1)
 	text.BackgroundTransparency = 1
 	text.TextScaled = true
-	text.Font = Enum.Font.Garamond
+	text.FontFace = Style.WORLD.letter
 	text.TextColor3 = Color3.fromRGB(44, 38, 32)
 	text.Text = entry.title
 	text.Parent = gui
@@ -694,6 +696,9 @@ local function noticeBoard(parent: Instance, at: CFrame, entry: Note)
 	prompt.MaxActivationDistance = 10
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = board
+	if Interactables and Interactables.mark then
+		Interactables.mark(paper, "note:" .. entry.title)
+	end
 	prompt.Triggered:Connect(function(player: Player)
 		if Interactables then
 			Interactables.take(player, entry, paper, "note")
@@ -736,6 +741,16 @@ local function nookKeepsake(parent: Instance, nook: Nook, material: string): boo
 		prop(parent, "NookStoolLeg", Vector3.new(0.2, 1.48, 0.2), stool * CFrame.new(corner[1], 0.74, corner[2]), wood, Enum.Material.Wood)
 	end
 	return Interactables.keepsake(parent, stool * CFrame.new(0, 1.725, 0), material) ~= nil
+end
+
+-- THE HIDDEN CACHE in a nook (Interactables.cache): in its far corner by the rail, turned a little.
+local function nookCache(parent: Instance, nook: Nook, levelId: number): boolean
+	if not (Interactables and Interactables.cache) then
+		return false
+	end
+	nook.taken.corner = true
+	local at = nook.frame * CFrame.new(NOOK.D / 2 - 1.6, 0, -NOOK.W / 2 + 1.8) * CFrame.Angles(0, 0.6, 0)
+	return Interactables.cache(parent, at, levelId) ~= nil
 end
 
 -- ===== THINGS TO READ ON THE ROUTE (only where there is nowhere else) =====
@@ -1284,7 +1299,21 @@ function StoryService.stage(level: any, instance: any, players: { Player })
 			leave(nook)
 		end
 	end
+	-- THE HIDDEN CACHE: in a nook of its own, two thirds of the way along; where none fits, tucked beside the route on
+	-- a stable chunk past it.
+	if Interactables and Interactables.cache then
+		local hidden = nookNear(0.66)
+		if hidden then
+			pcall(nookCache, folder, hidden, level.levelId)
+		else
+			local _, cap = stableFrom(math.floor(#chunks * 0.66), #chunks - 1)
+			if cap then
+				pcall(Interactables.cache, folder, besideRoute(cap, -1, 1.2), level.levelId)
+			end
+		end
+	end
 	print(("StoryService: %d nooks off the route, %d keepsakes in them."):format(#nooks, count))
 end
 
+StoryService.STAMP = "618da104"
 return StoryService

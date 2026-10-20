@@ -30,6 +30,16 @@ local player = Players.LocalPlayer
 
 local DeformationRenderer = {}
 
+-- AN ERROR ONCE, NOT EVERY FRAME: the step below runs every frame (or several times a second), and the same
+-- failure said every frame buries everything else in Output, the paste check included.
+local warnedOnce: { [string]: boolean } = {}
+local function warnOnce(text: string)
+	if not warnedOnce[text] then
+		warnedOnce[text] = true
+		warn(text .. " (shown once)")
+	end
+end
+
 -- === Per-tile bookkeeping ===
 
 local restCFrame: { [BasePart]: CFrame } = {}
@@ -4018,7 +4028,7 @@ POCKET.SLACK = 0.68
 -- How far the pocket bulges under the weight before it goes. This is the anticipation
 -- beat and it is the visible half of the pop, since everything below flat is hidden
 -- inside the film.
-POCKET.SWELL = 0.26
+POCKET.SWELL = 0.4
 -- Burst radius around a footfall, in studs. ONLY WHAT YOU ACTUALLY TROD ON.
 --
 -- This was 2.4, deliberately, to burst a knot of three or four at a time -- and that
@@ -4150,32 +4160,75 @@ local function shockNeighbours(pockets: { Bone }, origin: Vector3)
 	end
 end
 
--- The puff of air a pocket lets go of. Tiny, fast, and gone: the point is a flicker at
--- the instant of the burst, not a cloud.
+-- The puff of air a pocket lets go of, and the film tearing: SEEN (the hundred-and-first pass, "I do not see the
+-- bubbles popping"). It was five tiny wisps for a fifth of a second, which nobody could see from a camera behind
+-- you. Now a puff you can see from there, a ring of the film's flecks thrown out and falling back, and a glint at
+-- the instant it goes; still gone in half a second.
 local function popPuff(tile: BasePart, at: Vector3)
 	local anchor = Instance.new("Attachment")
 	anchor.Name = "PopPuff"
-	anchor.WorldPosition = at
+	anchor.WorldPosition = at + Vector3.new(0, 0.25, 0)
 	anchor.Parent = tile
 
 	local burst = Instance.new("ParticleEmitter")
 	burst.Texture = "rbxasset://textures/particles/smoke_main.dds"
 	burst.Color = ColorSequence.new(Color3.fromRGB(244, 250, 255))
 	burst.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.45),
+		NumberSequenceKeypoint.new(0, 0.3),
 		NumberSequenceKeypoint.new(1, 1),
 	})
 	burst.Size = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.35),
-		NumberSequenceKeypoint.new(1, 1.1),
+		NumberSequenceKeypoint.new(0, 0.6),
+		NumberSequenceKeypoint.new(1, 2.0),
 	})
-	burst.Lifetime = NumberRange.new(0.12, 0.2)
-	burst.Speed = NumberRange.new(3, 6)
+	burst.Lifetime = NumberRange.new(0.18, 0.32)
+	burst.Speed = NumberRange.new(4, 8)
 	burst.SpreadAngle = Vector2.new(180, 180)
 	burst.Rate = 0
 	burst.Parent = anchor
-	burst:Emit(5)
-	Debris:AddItem(anchor, 0.6)
+	burst:Emit(8)
+
+	-- The film's flecks: little bright scraps thrown out round the pocket and pulled back down.
+	local flecks = Instance.new("ParticleEmitter")
+	flecks.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	flecks.Color = ColorSequence.new(Color3.fromRGB(236, 246, 255))
+	flecks.LightEmission = 0.3
+	flecks.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	flecks.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.28),
+		NumberSequenceKeypoint.new(1, 0.08),
+	})
+	flecks.Lifetime = NumberRange.new(0.3, 0.45)
+	flecks.Speed = NumberRange.new(6, 10)
+	flecks.SpreadAngle = Vector2.new(70, 70)
+	flecks.Acceleration = Vector3.new(0, -40, 0)
+	flecks.EmissionDirection = Enum.NormalId.Top
+	flecks.Rate = 0
+	flecks.Parent = anchor
+	flecks:Emit(7)
+
+	-- A glint at the instant: one bright flash the size of the pocket.
+	local glint = Instance.new("ParticleEmitter")
+	glint.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	glint.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255))
+	glint.LightEmission = 0.6
+	glint.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	glint.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1.4),
+		NumberSequenceKeypoint.new(1, 0.2),
+	})
+	glint.Lifetime = NumberRange.new(0.1, 0.12)
+	glint.Speed = NumberRange.new(0, 0)
+	glint.Rate = 0
+	glint.Parent = anchor
+	glint:Emit(1)
+	Debris:AddItem(anchor, 0.8)
 end
 
 -- One pocket going: SWELL, snap, then settle to slack film.
@@ -5629,7 +5682,7 @@ function lavaLife.start()
 	game:GetService("RunService").Heartbeat:Connect(function()
 		local ok, err = pcall(lavaLife.step)
 		if not ok then
-			warn("DeformationRenderer: the lava's life failed: " .. tostring(err))
+			warnOnce("DeformationRenderer: the lava's life failed: " .. tostring(err))
 		end
 	end)
 end
@@ -7016,9 +7069,16 @@ NEEDOH.RIPPLE = RippleProfiles.Needoh
 local BUTTER_STICK = {}
 -- Deeper than the Needoh and it gives most of it back far more slowly. Butter is the softest
 -- thing here; it should feel like standing in it rather than on it.
-BUTTER_STICK.PRESS = 1.62
-BUTTER_STICK.RESIDUAL_FRACTION = 0.74
-BUTTER_STICK.RIPPLE = RippleProfiles.ButterStick
+--
+-- AND ONLY WHERE YOU STEPPED (from your test, 2026-10-17). It pressed 1.62 studs into a stick that stands 1.45 over
+-- its grooves, so a stick caved in below the sticks beside it; and every step sent a slow wave of dips across the
+-- whole chunk after it, which read as steps where nobody had stepped. Now: a dent shallower than the stick is tall,
+-- no travelling wave at all (butter has no spring), and the wrapper over the sticks (the wax shell) going down with
+-- the butter under it, where it used to stay up as a flat lid over the dent.
+BUTTER_STICK.PRESS = 0.9
+BUTTER_STICK.RESIDUAL_FRACTION = 0.6
+BUTTER_STICK.RIPPLE = nil
+BUTTER_STICK.SHELL = true
 
 -- ONE DRIVER, TWO MATERIALS. They differ by four numbers and a name, so writing them out
 -- twice would mean two places to fix the next time the press is retuned.
@@ -7032,28 +7092,37 @@ local function softBedEffect(profile: any)
 		if ctx.state == "deformed" then
 			-- Quick down, because the give is immediate on both of these -- there is no
 			-- viscosity holding your foot up the way honey has.
-			moveTile(tile, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-				-profile.PRESS, 0.95, 1.08)
-			if bone and onSlab then
+			local down = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+			moveTile(tile, down, -profile.PRESS, 0.95, 1.08)
+			if bone and onSlab and profile.RIPPLE then
 				rippleFrom(onSlab, bone.WorldPosition, profile.RIPPLE)
+			end
+			-- THE WRAPPER GOES DOWN WITH IT: the same dent, on the same falloff as the bed's own bones.
+			if profile.SHELL then
+				driveShell(tile, down, -profile.PRESS, false)
 			end
 		elseif ctx.state == "decaying" then
 			-- Stepped off, and the dent stays. On the Needoh it eases back most of the way;
 			-- on butter it barely moves, which is what the two fractions above encode.
+			local keep = TweenInfo.new(1.0, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
 			if bone then
-				setResidual(tile, bone,
-					TweenInfo.new(1.0, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
-					-profile.PRESS * profile.RESIDUAL_FRACTION)
+				setResidual(tile, bone, keep, -profile.PRESS * profile.RESIDUAL_FRACTION)
 			else
 				settleTile(tile, 0.8)
 			end
+			if profile.SHELL then
+				driveShell(tile, keep, -profile.PRESS * profile.RESIDUAL_FRACTION, false)
+			end
 		else
 			-- pristine: the decay window closed and the surface has come back.
+			local back = TweenInfo.new(2.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
 			if bone then
-				setResidual(tile, bone,
-					TweenInfo.new(2.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), 0)
+				setResidual(tile, bone, back, 0)
 			else
 				settleTile(tile, 0.8)
+			end
+			if profile.SHELL then
+				driveShell(tile, back, 0, false)
 			end
 		end
 	end
@@ -7607,4 +7676,5 @@ local DeformationUpdate = RemoteEvents:WaitForChild("DeformationUpdate")
 DeformationUpdate.OnClientEvent:Connect(DeformationRenderer.onDeformationUpdate)
 lavaLife.start()
 
+DeformationRenderer.STAMP = "e633bde2"
 return DeformationRenderer

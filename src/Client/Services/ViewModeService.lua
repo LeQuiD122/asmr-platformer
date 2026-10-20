@@ -37,8 +37,20 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local ProximityPromptService = game:GetService("ProximityPromptService")
+-- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
+local Style = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Style"))
 
 local ViewModeService = {}
+
+-- AN ERROR ONCE, NOT EVERY FRAME: the step below runs every frame (or several times a second), and the same
+-- failure said every frame buries everything else in Output, the paste check included.
+local warnedOnce: { [string]: boolean } = {}
+local function warnOnce(text: string)
+	if not warnedOnce[text] then
+		warnedOnce[text] = true
+		warn(text .. " (shown once)")
+	end
+end
 ViewModeService.VERSION = "nineteenth pass, 2026-09-30"
 
 -- How far behind you the camera is held in a run, and how far over your shoulder when the cursor is
@@ -169,7 +181,7 @@ local function toggleCursor()
 	end
 end
 
--- Is a menu open that wants the cursor (the journal, the pause menu)? Then it is free, whatever Ctrl
+-- Is a menu open that wants the cursor (the journal, the pause menu, the shop, the welcome, the emotes)? Then it is free, whatever Ctrl
 -- says, and locked again when the menu shuts.
 local function menuOpen(): boolean
 	local playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
@@ -180,7 +192,30 @@ local function menuOpen(): boolean
 	local book = journal and journal:FindFirstChild("Book")
 	local pause = playerGui:FindFirstChild("PauseMenu")
 	local card = pause and pause:FindFirstChild("Card")
+	local shop = playerGui:FindFirstChild("Shop")
+	local panel = shop and shop:FindFirstChild("Panel")
+	local welcome = playerGui:FindFirstChild("Welcome")
+	local emotes = playerGui:FindFirstChild("Emotes")
+	local picker = emotes and emotes:FindFirstChild("Panel")
+	-- THE DEATH CARD'S CHOICES (DeathService): "Try again" and the second chance were under a cursor locked to
+	-- the middle of the screen, so a mouse could press neither without Ctrl first. And the Studio test panel.
+	local death = playerGui:FindFirstChild("DeathCard")
+	local choices = death and death:FindFirstChild("Choices", true)
+	local dev = playerGui:FindFirstChild("DevPanel")
+	local devPanel = dev and dev:FindFirstChild("Panel")
+	-- THE POST BOX'S CARD (ShopService.openCodes): a box to type in and two buttons.
+	local codeBox = playerGui:FindFirstChild("CodeBox")
+	-- WHAT YOU SAY TO SOMEONE (TalkClient): the choices, to be pressed.
+	local talk = playerGui:FindFirstChild("Talk")
 	return (book ~= nil and book:IsA("GuiObject") and book.Visible) or (card ~= nil and card:IsA("GuiObject") and card.Visible)
+		or (panel ~= nil and panel:IsA("GuiObject") and panel.Visible)
+		or (welcome ~= nil and welcome:IsA("ScreenGui") and welcome.Enabled)
+		or (picker ~= nil and picker:IsA("GuiObject") and picker.Visible)
+		or (death ~= nil and death:IsA("ScreenGui") and death.Enabled and choices ~= nil and choices:IsA("GuiObject")
+			and choices.Visible)
+		or (devPanel ~= nil and devPanel:IsA("GuiObject") and devPanel.Visible)
+		or (codeBox ~= nil and codeBox:IsA("ScreenGui") and codeBox.Enabled)
+		or (talk ~= nil and talk:IsA("ScreenGui") and talk.Enabled)
 end
 
 -- Every frame, after the camera: the cursor, the shoulder, and which way you face.
@@ -238,7 +273,7 @@ local function build()
 	word.Position = UDim2.new(0.5, 0, 1, -64)
 	word.Size = UDim2.fromOffset(360, 22)
 	word.BackgroundTransparency = 1
-	word.FontFace = Font.new("rbxasset://fonts/families/Nunito.json", Enum.FontWeight.Bold)
+	word.FontFace = Style.FONT.heading
 	word.TextSize = 16
 	word.TextColor3 = Color3.fromRGB(246, 240, 226)
 	word.TextStrokeColor3 = Color3.fromRGB(12, 12, 16)
@@ -304,10 +339,11 @@ function ViewModeService.start()
 	RunService:BindToRenderStep(STEP, Enum.RenderPriority.Camera.Value + 1, function(dt: number)
 		local ok, err = pcall(step, dt)
 		if not ok then
-			warn("ViewModeService: " .. tostring(err))
+			warnOnce("ViewModeService: " .. tostring(err))
 		end
 	end)
 	print("ViewModeService: running, " .. ViewModeService.VERSION)
 end
 
+ViewModeService.STAMP = "fa7b7c02"
 return ViewModeService

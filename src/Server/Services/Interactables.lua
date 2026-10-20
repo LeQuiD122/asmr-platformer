@@ -25,12 +25,39 @@
 -- changes for everyone when it opens: a door somebody has opened is open. What you pick up is gone
 -- from YOUR screen only (JournalService hides it), so the next player can still find it.
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Debris = game:GetService("Debris")
+-- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
+local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Style"))
 
 local Interactables = {}
+
+-- THE SAVE (EconomyService keeps the journal between sessions): looked for when first needed, not required at
+-- the top, so a place without it still has its story.
+local economy: any = nil
+local function keeper(): any
+	if economy == nil then
+		economy = false
+		local module = script.Parent and script.Parent:FindFirstChild("EconomyService")
+		if module and module:IsA("ModuleScript") then
+			local ok, result = pcall(require, module)
+			if ok and type(result) == "table" then
+				economy = result
+			end
+		end
+	end
+	return if economy then economy else nil
+end
+
+-- WHAT CAN BE TAKEN INTO THE JOURNAL, marked with the id it goes in under, so a client whose journal already
+-- has it (kept from an earlier session) shows it as taken (JournalService).
+function Interactables.mark(object: Instance, id: string)
+	object:SetAttribute("JournalId", id)
+	CollectionService:AddTag(object, "JournalThing")
+end
 
 -- What each keepsake is (ReplicatedStorage.Shared.Keepsakes): looked for, not waited on forever.
 local keepsakeData: { [string]: any } = (function()
@@ -52,32 +79,45 @@ export type Secret = { order: number, title: string, line: string, note: Note? }
 --
 -- One or more a level, in the order a player would come to them. No dashes in anything read.
 Interactables.SECRETS = {
-	siren = { order = 1, title = "The Siren Room", line = "Somebody has been sounding it every midnight.", note = {
+	-- `think`: what you think, over your head, as you set to it and when you see what is there (StoryClient).
+	siren = { order = 1, title = "The Siren Room", line = "Somebody has been sounding it every midnight.",
+		think = { "These bricks are loose. Something's behind them.", "A letter? Somebody hid this in the wall." }, note = {
 		title = "Behind the bricks",
 		body = "TO WHOEVER HOLDS THE KEY NEXT.\n\nThe siren is tested at twelve noon, every day, and has been since 1911. "
 			.. "On the eleventh I sounded it at midnight, because the water was coming, and nobody came.\n\nI have sounded it "
 			.. "every midnight since. I do not know how many midnights that is.\n\nIf you can read this it is still morning up "
 			.. "here and still midnight down there. Go down. It is the only way on.\n\nR. Pell, Siren Keeper",
 	} },
-	photograph = { order = 2, title = "At the bottom of the pool", line = "Somebody put it where nobody would look.", note = {
+	photograph = { order = 2, title = "At the bottom of the pool", line = "Somebody put it where nobody would look.",
+		think = { "Rusted shut. Something rattles inside.", "A photograph... who would keep this down here?" }, note = {
 		title = "A photograph",
 		body = "Dry, inside the box. Tobi and Pip on the Front, a sandcastle between them, both squinting into the sun. "
 			.. "Stamped on the back: 13 AUGUST.\n\nUnder it, in pencil:\n\nFor the key holder. So you know what you are "
 			.. "opening the gates for.",
 	} },
-	marsh = { order = 3, title = "Staff locker, aquarium", line = "It has not been opened since 1979.", note = {
+	marsh = { order = 3, title = "Staff locker, aquarium", line = "It has not been opened since 1979.",
+		think = { "Rusted shut. Nobody has opened this in years.", "A letter. 1979? Who was E. Marsh?" }, note = {
 		title = "A letter in the locker",
 		body = "A peaked cap, a torch that still works, and this.\n\nE. MARSH, OUTFALL 3.\n\nI waited for somebody to come and "
 			.. "help. I waited so long I forgot what I looked like.\n\nDo not wait. Nobody comes. You are the one who comes.",
 	} },
-	locker = { order = 4, title = "Locker 3", line = "Yours. You knew which one before you looked.", note = {
+	locker = { order = 4, title = "Locker 3", line = "Yours. You knew which one before you looked.",
+		think = { "Locker 3. Why do I know that number?", "That's... my coat. My card." }, note = {
 		title = "Locker 3",
 		body = "Your coat, on the hook, still wet. Your Waterworks card: KEY HOLDER, OUTFALL 3, %s.\n\nIn the pocket, a note in "
 			.. "your own handwriting:\n\nI'll go in tomorrow.",
 	} },
-	boards = { order = 5, title = "Under the boards", line = "Something down there is breathing." },
+	boards = { order = 5, title = "Under the boards", line = "Something down there is breathing.",
+		think = { "There's a cold draught coming up through here.", "Is that... breathing?" } },
+	-- THE SIXTH, under all of them: found by falling one time too many (Bootstrap reveals it, in the back rooms).
+	backRooms = { order = 6, title = "The back rooms", line = "Staff only. You came down once too often.",
+		think = { "Where am I?", "Staff only? How did I end up down here?" }, note = {
+		title = "The back rooms",
+		body = "Mrs Venn's notice, on the wall where you came through:\n\nCORPORATION BATHS. BACK ROOMS. STAFF ONLY.\n\n"
+			.. "If you have come down too many times, the way out is the door marked WAY OUT. Mind the carpet, it is damp.",
+	} },
 }
-local TOTAL = 5
+local TOTAL = 6
 
 local found: { [Player]: { [string]: boolean } } = {}
 local holding: { [Player]: boolean } = {}
@@ -151,6 +191,13 @@ function Interactables.take(player: Player, entry: Note, object: Instance?, kind
 	taken[player] = mine
 	local again = mine[id] == true
 	mine[id] = true
+	-- KEPT BETWEEN SESSIONS, as the story wrote it: the reader's name goes in when it is read back.
+	local save = keeper()
+	if save and save.keepEntry then
+		pcall(save.keepEntry, player, { id = id, kind = sort, title = entry.title, body = entry.body,
+			from = extra and extra.from, secret = extra and extra.secret, total = extra and extra.total,
+			material = extra and extra.material })
+	end
 	local remote = storyRemote()
 	if not remote then
 		return
@@ -185,18 +232,62 @@ function Interactables.letter(parent: Instance, cf: CFrame, entry: Note)
 	text.Size = UDim2.fromScale(1, 1)
 	text.BackgroundTransparency = 1
 	text.TextScaled = true
-	text.Font = Enum.Font.Garamond
+	text.FontFace = Style.WORLD.letter
 	text.TextColor3 = Color3.fromRGB(70, 60, 50)
 	text.Text = entry.title
 	text.Parent = ink
 	piece(parent, "Stone", Vector3.new(0.5, 0.35, 0.45), sheet.CFrame * CFrame.new(0.55, 0.19, 0.8) * CFrame.Angles(0, 0.7, 0),
 		Color3.fromRGB(110, 108, 102), Enum.Material.Slate)
 	-- Taken, not read on the spot: the sheet goes into the journal and off your screen; the stone stays.
+	Interactables.mark(sheet, "note:" .. entry.title)
 	local p = prompt(sheet, "Take", entry.title)
 	p.Triggered:Connect(function(player: Player)
 		Interactables.take(player, entry, sheet, "note")
 	end)
 	return sheet
+end
+
+-- ===== THE HIDDEN CACHES =====
+--
+-- One a level (StoryService puts it in a nook of its own past the middle of the route, or beside the route where no
+-- nook fits): something somebody kept, with a few tokens in it. Taken once a save (EconomyService.foundCache pays
+-- ShopCatalog.REWARD.CACHE), with a line in the journal, and off your screen from then on, marked like a letter.
+type Cache = { title: string, body: string, size: Vector3, colour: Color3, material: Enum.Material }
+local CACHES: { [number]: Cache } = {
+	[1] = { title = "Sal's float", size = Vector3.new(1.3, 0.6, 1.3), colour = Color3.fromRGB(196, 58, 52),
+		material = Enum.Material.Metal,
+		body = "A biscuit tin tucked away from the Front, heavy with change.\n\nSAL'S FLOAT. DO NOT TOUCH.\n\nShe has been "
+			.. "counting it since 9:12. She will not miss a little." },
+	[2] = { title = "Pool money", size = Vector3.new(1.4, 0.9, 0.8), colour = Color3.fromRGB(70, 120, 196),
+		material = Enum.Material.Fabric,
+		body = "A swim bag left where nobody would sit on it, still dry inside.\n\nA purse with a few coins, and a ticket for "
+			.. "the roof: ADMIT ONE, 14 AUGUST." },
+	[3] = { title = "The jam jar", size = Vector3.new(0.8, 1.1, 0.8), colour = Color3.fromRGB(214, 150, 70),
+		material = Enum.Material.SmoothPlastic,
+		body = "A jam jar of coins, the water just under it.\n\nFOR THE BUS HOME, in a child's writing. The buses stopped "
+			.. "at 23:52." },
+	[4] = { title = "Tea money", size = Vector3.new(1.0, 0.8, 1.0), colour = Color3.fromRGB(64, 120, 92),
+		material = Enum.Material.Metal,
+		body = "A tea tin, warm from the boilers.\n\nTEA MONEY. STAFF ONLY. MRS VENN.\n\nShe would want you to have a cup." },
+}
+
+function Interactables.cache(parent: Instance, cf: CFrame, levelId: number): BasePart?
+	local spec = CACHES[levelId]
+	if not spec then
+		return nil
+	end
+	local box = piece(parent, "Cache", spec.size, cf * CFrame.new(0, spec.size.Y / 2, 0), spec.colour, spec.material)
+	Interactables.glint(box, Color3.fromRGB(255, 226, 150))
+	Interactables.mark(box, "note:" .. spec.title)
+	local p = prompt(box, "Take", spec.title)
+	p.Triggered:Connect(function(player: Player)
+		local save = keeper()
+		if save and save.foundCache then
+			pcall(save.foundCache, player, levelId)
+		end
+		Interactables.take(player, { title = spec.title, body = spec.body }, box, "note")
+	end)
+	return box
 end
 
 -- A LITTLE GLINT on something worth walking over to: a few sparkles a second, and a small warm light
@@ -308,10 +399,26 @@ local TOYS: { [string]: { Piece } } = {
 
 -- THE KEEPSAKE FOR `material`, sitting at `cf` (its base on a floor), for anyone to pick up. Returns the
 -- model, or nil if the material has no keepsake.
-function Interactables.keepsake(parent: Instance, cf: CFrame, material: string): Model?
+-- EVERY KEEPSAKE, by its material's name: what the shelf in the squish room holds (SquishRoomService).
+function Interactables.keepsakeList(): { { material: string, thing: string, line: string?, from: string? } }
+	local list = {}
+	for material, entry in pairs(keepsakeData) do
+		if type(entry) == "table" and typeof(entry.thing) == "string" then
+			table.insert(list, { material = material, thing = entry.thing, line = entry.line, from = entry.from })
+		end
+	end
+	table.sort(list, function(a, b)
+		return a.material < b.material
+	end)
+	return list
+end
+
+-- THE TOY FOR `material` and nothing else (no glint, no prompt), its base at `cf`: the keepsake below, and
+-- the shelf in the squish room. Returns the model and its first part, or nil if the material has none.
+function Interactables.toy(parent: Instance, cf: CFrame, material: string): (Model?, BasePart?)
 	local entry = keepsakeData[material]
 	if not entry then
-		return nil
+		return nil, nil
 	end
 	local looks = ReplicatedStorage:FindFirstChild("Shared")
 	local appearance = looks and looks:FindFirstChild("MaterialAppearance")
@@ -348,9 +455,21 @@ function Interactables.keepsake(parent: Instance, cf: CFrame, material: string):
 		first = first or p
 	end
 	model.Parent = parent
-	local host = first :: BasePart
+	return model, first
+end
+
+-- THE KEEPSAKE FOR `material`, sitting at `cf` (its base on a floor), for anyone to pick up. Returns the
+-- model, or nil if the material has no keepsake.
+function Interactables.keepsake(parent: Instance, cf: CFrame, material: string): Model?
+	local entry = keepsakeData[material]
+	local model, first = Interactables.toy(parent, cf, material)
+	if not (entry and model and first) then
+		return nil
+	end
+	local host = first
 	host.CanQuery = true
 	Interactables.glint(host)
+	Interactables.mark(model, "keepsake:" .. entry.thing)
 	local p = prompt(host, "Pick up", entry.thing)
 	p.MaxActivationDistance = 8
 	p.Triggered:Connect(function(player: Player)
@@ -471,16 +590,33 @@ function Interactables.reveal(player: Player, id: string, eye: CFrame, focus: Ve
 	end
 	local mine = found[player] or {}
 	found[player] = mine
+	-- LOOKED AT AGAIN (found this session already, or kept in the journal from before): a short look at it on the
+	-- client, not the whole scene and its card over again.
+	local again = mine[id] == true
 	mine[id] = true
 	local count = 0
 	for _ in pairs(mine) do
 		count += 1
 	end
+	-- AND THE ONES FOUND IN EARLIER SESSIONS (the journal keeps them), with this one if it is new to it.
+	local save = keeper()
+	local kept = save and save.keptIds and save.keptIds(player)
+	if kept then
+		local noteTitle = (secret.note or secret).title
+		local before = 0
+		for keptId in pairs(kept) do
+			if string.sub(keptId, 1, 7) == "secret:" then
+				before += 1
+			end
+		end
+		count = math.max(count, before + (if kept["secret:" .. noteTitle] then 0 else 1))
+		again = again or kept["secret:" .. noteTitle] == true
+	end
 	local remote = storyRemote()
 	if remote then
 		remote:FireClient(player, kind or "moment", {
 			id = id, title = secret.title, line = secret.line, eye = eye, focus = focus, index = secret.order,
-			found = count, total = TOTAL,
+			found = count, total = TOTAL, think = if secret.think then secret.think[2] else nil, again = again,
 		})
 	end
 	local note = secret.note or { title = secret.title, body = secret.line }
@@ -490,7 +626,12 @@ end
 
 -- Something that opens: `open(player)` runs once, the first time, and every trigger after that (and
 -- the first) is `look(player)`. `needsBar` refuses without the bar, with `refusal`.
-type Handlers = { open: (Player) -> (), look: (Player) -> () }
+--
+-- THE BAR IS SEEN AT WORK. The first time the bar opens something, whoever holds it is shown working it in
+-- (StoryClient's "pry": three hard tugs, what they think of it over their head) and the thing gives on the last
+-- tug, PRY_SECONDS later, rather than flying open before anyone has touched it. `on.secret` names what is in it.
+type Handlers = { open: (Player) -> (), look: (Player) -> (), secret: string? }
+local PRY_SECONDS = 1.75
 local function openable(host: BasePart, action: string, object: string, needsBar: boolean, refusal: string, on: Handlers)
 	local opened = false
 	local p = prompt(host, action, object, Enum.KeyCode.E, if needsBar then 0.9 else 0)
@@ -503,9 +644,21 @@ local function openable(host: BasePart, action: string, object: string, needsBar
 			opened = true
 			p.ActionText = "Look"
 			p.HoldDuration = 0
-			on.open(player)
-			task.delay(1.2, function()
-				on.look(player)
+			local wait = 0
+			if needsBar then
+				local secret = if on.secret then Interactables.SECRETS[on.secret] else nil
+				local remote = storyRemote()
+				if remote then
+					remote:FireClient(player, "pry", { at = host.Position, object = object,
+						think = if secret and secret.think then secret.think[1] else "Let's see what's in here." })
+				end
+				wait = PRY_SECONDS
+			end
+			task.delay(wait, function()
+				on.open(player)
+				task.delay(1.2, function()
+					on.look(player)
+				end)
 			end)
 		else
 			on.look(player)
@@ -515,12 +668,104 @@ end
 
 -- A staff locker standing on `base` (its floor, front along base's LookVector). `opts.label` is
 -- stencilled on the door; `opts.bar` wants the pry bar; `opts.secret` is what is in it.
+--
+-- HOLLOW, AND WITH SOMETHING IN IT. It was one solid block with a door on the front, and the door swung back INTO it:
+-- opened, a locker showed a blank face of diamond plate, which read as a locker turned round the wrong way, and the
+-- scene that followed looked at that blank face for eight seconds. Now it is a box of five panels, dark inside, with
+-- a shelf, a hook and a small lamp under its lid that comes on when it opens; the door swings OUT, toward you, on its
+-- hinge; and what is in it is there to be seen (LOCKER_HOLDS): your coat, still wet, and your card pinned inside the
+-- door in Locker 3; Marsh's cap, torch and letter in the aquarium's; a wire hanger in the empty ones.
+local function lockerHolds(parent: Instance, base: CFrame, door: BasePart, what: string?)
+	local function bit(name: string, size: Vector3, at: CFrame, colour: Color3, material: Enum.Material?,
+		shape: Enum.PartType?): Part
+		local p = piece(parent, name, size, base * at, colour, material or Enum.Material.SmoothPlastic, false, shape)
+		p.CastShadow = false
+		return p
+	end
+	local wire = Color3.fromRGB(150, 150, 146)
+	if what == "locker" then
+		-- YOUR COAT on the hook, dark wool, still wet (a drip off its hem), and your card pinned inside the door.
+		local wool = Color3.fromRGB(38, 46, 62)
+		bit("CoatHanger", Vector3.new(0.9, 0.06, 0.06), CFrame.new(0, 4.62, 0.2), wire, Enum.Material.Metal)
+		local coat = bit("Coat", Vector3.new(1.02, 2.7, 0.34), CFrame.new(0, 3.2, 0.22), wool, Enum.Material.Fabric)
+		coat.Reflectance = 0.08
+		bit("CoatCollar", Vector3.new(1.06, 0.32, 0.42), CFrame.new(0, 4.48, 0.2), wool, Enum.Material.Fabric)
+		for _, x in ipairs({ -0.62, 0.62 }) do
+			bit("CoatSleeve", Vector3.new(0.24, 2.3, 0.3), CFrame.new(x, 3.3, 0.22) * CFrame.Angles(0, 0, x * 0.12), wool,
+				Enum.Material.Fabric)
+		end
+		bit("CoatButtons", Vector3.new(0.08, 1.6, 0.04), CFrame.new(0.12, 3.2, 0.04), Color3.fromRGB(196, 170, 110))
+		local drip = Instance.new("ParticleEmitter")
+		drip.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		drip.Color = ColorSequence.new(Color3.fromRGB(200, 226, 236))
+		drip.Size = NumberSequence.new(0.12)
+		drip.Lifetime = NumberRange.new(0.5, 0.7)
+		drip.Speed = NumberRange.new(0, 0.2)
+		drip.Acceleration = Vector3.new(0, -24, 0)
+		drip.EmissionDirection = Enum.NormalId.Bottom
+		drip.Rate = 1.2
+		drip.Parent = coat
+		local card = piece(parent, "KeyHolderCard", Vector3.new(0.62, 0.4, 0.03), door.CFrame * CFrame.new(0.05, 0.6, 0.07),
+			Color3.fromRGB(236, 230, 210), Enum.Material.SmoothPlastic)
+		card.Anchored = false
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0, weld.Part1 = door, card
+		weld.Parent = card
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = Enum.NormalId.Back
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 120
+		gui.Parent = card
+		local text = Instance.new("TextLabel")
+		text.Size = UDim2.fromScale(1, 1)
+		text.BackgroundTransparency = 1
+		text.TextScaled = true
+		text.FontFace = Style.WORLD.sign
+		text.TextColor3 = Color3.fromRGB(40, 44, 50)
+		text.Text = "HARROW BAY WATERWORKS\nKEY HOLDER\nOUTFALL 3"
+		text.Parent = gui
+	elseif what == "marsh" then
+		-- E. MARSH'S: his peaked cap and his torch on the shelf, and the letter on the floor of it.
+		bit("MarshCapCrown", Vector3.new(0.34, 0.74, 0.74), CFrame.new(-0.2, 5.12, 0.1) * CFrame.Angles(0, 0, math.pi / 2),
+			Color3.fromRGB(34, 46, 80), Enum.Material.Fabric, Enum.PartType.Cylinder)
+		bit("MarshCapPeak", Vector3.new(0.6, 0.05, 0.3), CFrame.new(-0.2, 4.98, -0.3), Color3.fromRGB(24, 26, 30))
+		bit("MarshTorch", Vector3.new(0.7, 0.2, 0.2), CFrame.new(0.38, 5.06, 0.15) * CFrame.Angles(0, math.rad(70), 0),
+			Color3.fromRGB(196, 168, 60), Enum.Material.Metal, Enum.PartType.Cylinder)
+		bit("MarshLetter", Vector3.new(0.7, 0.03, 0.5), CFrame.new(0, 0.14, 0.05) * CFrame.Angles(0, 0.3, 0),
+			Color3.fromRGB(230, 220, 196))
+	else
+		-- Nothing in it: a wire hanger, and the smell of the sea.
+		bit("WireHanger", Vector3.new(0.8, 0.05, 0.05), CFrame.new(0, 4.4, 0.2) * CFrame.Angles(0, 0, 0.08), wire, Enum.Material.Metal)
+	end
+end
+
 function Interactables.locker(parent: Instance, base: CFrame, opts: { label: string, bar: boolean?, secret: string?,
 	eye: CFrame?, dud: boolean? })
 	local steel = Color3.fromRGB(88, 104, 110)
-	local body = piece(parent, "Locker", Vector3.new(1.5, 6, 1.4), base * CFrame.new(0, 3, 0), steel, Enum.Material.DiamondPlate, true)
-	piece(parent, "LockerBack", Vector3.new(1.3, 5.6, 0.05), base * CFrame.new(0, 3, 0.62), Color3.fromRGB(30, 34, 36),
+	-- THE BOX: back, sides, lid and floor; dark inside, a shelf and a hook. "Locker" is the back, which a secret's
+	-- scene is anchored to.
+	local body = piece(parent, "Locker", Vector3.new(1.5, 6, 0.1), base * CFrame.new(0, 3, 0.65), steel, Enum.Material.DiamondPlate, true)
+	for _, x in ipairs({ -0.71, 0.71 }) do
+		piece(parent, "LockerSide", Vector3.new(0.08, 6, 1.4), base * CFrame.new(x, 3, 0), steel, Enum.Material.DiamondPlate, true)
+	end
+	piece(parent, "LockerLid", Vector3.new(1.5, 0.1, 1.4), base * CFrame.new(0, 5.95, 0), steel, Enum.Material.DiamondPlate, true)
+	piece(parent, "LockerFloor", Vector3.new(1.34, 0.1, 1.3), base * CFrame.new(0, 0.05, 0), steel, Enum.Material.DiamondPlate, true)
+	piece(parent, "LockerBack", Vector3.new(1.3, 5.6, 0.05), base * CFrame.new(0, 3, 0.57), Color3.fromRGB(30, 34, 36),
 		Enum.Material.SmoothPlastic)
+	piece(parent, "LockerShelf", Vector3.new(1.34, 0.06, 1.2), base * CFrame.new(0, 4.9, 0.05), steel, Enum.Material.Metal)
+	piece(parent, "LockerHook", Vector3.new(0.3, 0.08, 0.08), base * CFrame.new(0, 4.7, 0.4) * CFrame.Angles(0, math.pi / 2, 0),
+		Color3.fromRGB(150, 150, 146), Enum.Material.Metal, false, Enum.PartType.Cylinder)
+	-- ITS LAMP, under the lid, off until the door opens: a real light, small and warm, its own bulb and cap.
+	piece(parent, "LockerLampCap", Vector3.new(0.3, 0.06, 0.3), base * CFrame.new(0, 5.87, -0.3), Color3.fromRGB(60, 62, 66),
+		Enum.Material.Metal)
+	local bulb = piece(parent, "LockerBulb", Vector3.new(0.16, 0.16, 0.16), base * CFrame.new(0, 5.78, -0.3),
+		Color3.fromRGB(250, 236, 200), Enum.Material.SmoothPlastic, false, Enum.PartType.Ball)
+	local lamp = Instance.new("PointLight")
+	lamp.Color = Color3.fromRGB(255, 220, 170)
+	lamp.Brightness = 0
+	lamp.Range = 5
+	lamp.Shadows = false
+	lamp.Parent = bulb
 	local door = piece(parent, "LockerDoor", Vector3.new(1.4, 5.8, 0.1), base * CFrame.new(0, 3, -0.75), steel, Enum.Material.Metal, true)
 	for k = 0, 3 do
 		local vent = piece(parent, "LockerVent", Vector3.new(0.9, 0.08, 0.04), door.CFrame * CFrame.new(0, 2.2 - k * 0.25, -0.06),
@@ -545,19 +790,22 @@ function Interactables.locker(parent: Instance, base: CFrame, opts: { label: str
 	text.Size = UDim2.fromScale(1, 1)
 	text.BackgroundTransparency = 1
 	text.TextScaled = true
-	text.Font = Enum.Font.GothamBold
+	text.FontFace = Style.WORLD.sign
 	text.TextColor3 = Color3.fromRGB(40, 44, 46)
 	text.Text = opts.label
 	text.Parent = gui
 	local hinge = base * CFrame.new(-0.7, 3, -0.75)
 	local inside = base * CFrame.new(0, 3.4, 0)
+	lockerHolds(parent, base, door, opts.secret)
 	-- The one with something in it catches the light at its label, from along the gallery.
 	if opts.secret then
 		Interactables.glint(plate, Color3.fromRGB(240, 230, 200))
 	end
 	openable(door, "Open", "Locker " .. opts.label, opts.bar == true, "It is rusted shut. It would take something to prise it.", {
 		open = function()
-			swing(door, hinge, -math.rad(105), 0.9)
+			-- OUT, toward whoever opened it (a positive turn: the door's free edge comes forward), and its lamp on.
+			swing(door, hinge, math.rad(105), 0.9)
+			TweenService:Create(lamp, TweenInfo.new(0.5), { Brightness = 0.9 }):Play()
 		end,
 		look = function(player: Player)
 			if opts.secret then
@@ -566,6 +814,7 @@ function Interactables.locker(parent: Instance, base: CFrame, opts: { label: str
 				Interactables.whisper(player, "Empty. A wire hanger, and the smell of the sea.")
 			end
 		end,
+		secret = opts.secret,
 	})
 	return body
 end
@@ -605,6 +854,7 @@ function Interactables.lockbox(parent: Instance, base: CFrame, secret: string, e
 		look = function(player: Player)
 			Interactables.reveal(player, secret, eye, box.Position, box)
 		end,
+		secret = secret,
 	})
 end
 
@@ -644,6 +894,7 @@ function Interactables.looseBricks(parent: Instance, face: CFrame, secret: strin
 		look = function(player: Player)
 			Interactables.reveal(player, secret, eye, paper.Position, paper)
 		end,
+		secret = secret,
 	})
 end
 
@@ -679,7 +930,9 @@ function Interactables.loosePlank(parent: Instance, base: CFrame, secret: string
 		look = function(player: Player)
 			Interactables.reveal(player, secret, hole, (hole * CFrame.new(0, 0, -200)).Position, gap, "peek")
 		end,
+		secret = secret,
 	})
 end
 
+Interactables.STAMP = "14cc0d41"
 return Interactables

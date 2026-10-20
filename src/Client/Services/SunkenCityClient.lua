@@ -50,6 +50,8 @@ local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local SunkenPath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("SunkenPath"))
+-- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
+local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Style"))
 -- SEARIG (the meshes), LOOKED FOR WITH A TIMEOUT. This line used to wait for it forever: a place
 -- without ReplicatedStorage.Shared.SeaRig pasted in stopped this whole client right here, with no
 -- error, only an "Infinite yield possible" line in Output -- and the animals, the flood, the Ferris
@@ -132,7 +134,7 @@ end)()
 local SunkenCityClient = {}
 -- WHICH CODE IS RUNNING, said in Output as it starts, in the report and on the Studio panel: the
 -- first question whenever something that should be there is not.
-SunkenCityClient.VERSION = "twenty-first pass, 2026-09-30"
+SunkenCityClient.VERSION = "ninety-fifth pass, 2026-10-18"
 
 local SEGMENTS = SunkenPath.SEGMENTS
 local SPACING = SunkenPath.SPACING
@@ -827,8 +829,10 @@ function cutscene.drainShot(spec: any, u: number, at: Vector3, clock: number)
 		return
 	end
 	if u >= 0.9 then
-		local eye = Vector3.new(spec.vortex.X + 4.2, spec.bottomY - 1.2, spec.vortex.Z + 3)
-		Cinema.point(CFrame.lookAt(clearOf(eye, head), head), 72)
+		-- From the mouth of the culvert, low, looking up into the sluice as they come down into it and land: where
+		-- the water takes them next. (It was down in the shaft itself, and they landed on the lens: check_shots.py.)
+		local eye = Vector3.new(spec.vortex.X - 10, spec.bottomY + 0.5, spec.vortex.Z)
+		Cinema.point(CFrame.lookAt(clearOf(eye, head), head - Vector3.new(0, 3, 0)), 78)
 		return
 	end
 	-- DOWN THE SHAFT WITH THEM: once they are through the funnel, the camera falls just under them in
@@ -865,9 +869,10 @@ function cutscene.outfallShot(o: any, reveal: any, v: number, at: Vector3)
 		-- Alongside: carried, turning, flailing weakly.
 		Cinema.point(CFrame.lookAt(clearOf(head + side * 3.6 - run * 1 + Vector3.new(0, 1.6, 0), head), head), 52)
 	elseif v < 0.9 then
-		-- Over the shoulder, down the culvert to the light at the end of it.
-		local eye = clearOf(head - run * 6 + Vector3.new(0, 3, 0), head)
-		Cinema.point(CFrame.lookAt(eye, head + run * 30), 64)
+		-- Over the shoulder, down the culvert to the light at the end of it: they in the lower half, the culvert running
+		-- on ahead. (Closer and lower, looking thirty studs on, it had them under the bottom bar: check_shots.py.)
+		local eye = clearOf(head - run * 9 + Vector3.new(0, 4, 0), head)
+		Cinema.point(CFrame.lookAt(eye, head + run * 10 - Vector3.new(0, 1, 0)), 64)
 	else
 		-- The station, from high in its corner, as they are set down on the landing.
 		Cinema.point(CFrame.lookAt(reveal.eye, head), 70)
@@ -968,7 +973,65 @@ local function drainStarted(vortex: Vector3, from: Vector3, funnelY: number, bot
 	end
 	guard("the ride's camera", cutscene.start)
 	if Cinema and drain then
-		drain.roar = Cinema.sound("WhirlRoar", 0.7, { looped = true, fadeIn = 1.5 })
+		drain.roar = Cinema.sound("WhirlRoar", 0.7, { looped = true, fadeIn = 1.5, fallback = "rbxasset://sounds/action_falling.mp3", speed = 0.45 })
+	end
+end
+
+-- UNDER THE WATER ON THE WAY DOWN (2026-10-18, from your fourth test: looking up as you fall down the drain, the
+-- whirlpool hung in "plain nothingness", "a flying in the sky whirlpool"). The harbour over the drain is a skin of
+-- glass plates and air under it, and from below glass is a window: the funnel was all there was between you and the
+-- sky. Once you are through the funnel, on your screen, you are under the water: the air turns to sea, thick and
+-- green-dark (it swallows the sky and anything far off, so the funnel overhead fades up into water, not air), a sea
+-- tint over everything, eased in; and eased back out as the culvert carries you on. Put back exactly as it was.
+type Under = { atmosphere: Atmosphere, made: boolean, density: number, offset: number, colour: Color3, decay: Color3,
+	haze: number, glare: number, grade: ColorCorrectionEffect, tweens: { Tween } }
+local UNDER = { density = 0.62, colour = Color3.fromRGB(34, 82, 86), decay = Color3.fromRGB(14, 40, 46), haze = 1.6,
+	tint = Color3.fromRGB(176, 224, 222), into = 0.5, out = 0.8 }
+local under: Under? = nil
+local function submerge(on: boolean)
+	if on == (under ~= nil) then
+		return
+	end
+	if on then
+		local found = Lighting:FindFirstChildOfClass("Atmosphere")
+		local atmosphere = found or Instance.new("Atmosphere")
+		local grade = Instance.new("ColorCorrectionEffect")
+		grade.Name = "DrainUnder"
+		grade.Parent = Lighting
+		local was: Under = { atmosphere = atmosphere, made = found == nil, density = atmosphere.Density,
+			offset = atmosphere.Offset, colour = atmosphere.Color, decay = atmosphere.Decay, haze = atmosphere.Haze,
+			glare = atmosphere.Glare, grade = grade, tweens = {} }
+		if not found then
+			atmosphere.Density = 0
+			atmosphere.Parent = Lighting
+		end
+		under = was
+		local ease = TweenInfo.new(UNDER.into, Enum.EasingStyle.Sine)
+		for _, pair in ipairs({
+			{ atmosphere, { Density = UNDER.density, Offset = 0, Color = UNDER.colour, Decay = UNDER.decay, Haze = UNDER.haze,
+				Glare = 0 } },
+			{ grade, { TintColor = UNDER.tint, Saturation = -0.08, Contrast = 0.05 } },
+		}) do
+			local made = TweenService:Create(pair[1] :: Instance, ease, pair[2] :: any)
+			table.insert(was.tweens, made)
+			made:Play()
+		end
+		return
+	end
+	local was = under :: Under
+	under = nil
+	for _, made in ipairs(was.tweens) do
+		made:Cancel()
+	end
+	local ease = TweenInfo.new(UNDER.out, Enum.EasingStyle.Sine)
+	TweenService:Create(was.grade, ease, { TintColor = Color3.new(1, 1, 1), Saturation = 0, Contrast = 0 }):Play()
+	game:GetService("Debris"):AddItem(was.grade, UNDER.out + 0.2)
+	if was.atmosphere.Parent then
+		TweenService:Create(was.atmosphere, ease, { Density = was.density, Offset = was.offset, Color = was.colour,
+			Decay = was.decay, Haze = was.haze, Glare = was.glare }):Play()
+		if was.made then
+			game:GetService("Debris"):AddItem(was.atmosphere, UNDER.out + 0.2)
+		end
 	end
 end
 
@@ -982,6 +1045,7 @@ local function moveRider(serverNow: number)
 	if character ~= current.who or not (root and root:IsA("BasePart")) then
 		drain = nil
 		cutscene.finish()
+		submerge(false)
 		return
 	end
 	local rider = root :: BasePart
@@ -996,6 +1060,8 @@ local function moveRider(serverNow: number)
 		local u = math.max(0, t / current.seconds)
 		local frame = SunkenPath.drainFrame(current.spec, u) * SunkenPath.tumble(u, clock)
 		rider.CFrame = frame
+		-- UNDER THE WATER from the bottom of the funnel down (above): never sky round the whirlpool.
+		submerge(frame.Position.Y < current.spec.funnelY)
 		-- DOWN THE SHAFT: the rush of the drop, once.
 		if Cinema and not current.dropped and frame.Position.Y < current.spec.funnelY - 8 then
 			current.dropped = true
@@ -1004,6 +1070,8 @@ local function moveRider(serverNow: number)
 		cutscene.drainShot(current.spec, u, frame.Position, clock)
 		return
 	end
+	-- Out of the drain and into the culvert: back out of the water, eased.
+	submerge(false)
 	if not o then
 		-- A server without the outfall: the old ending, in the sluice.
 		drain = nil
@@ -1030,7 +1098,7 @@ local function moveRider(serverNow: number)
 			if Cinema then
 				Cinema.caption("Harbour Pumping Station", "Outfall 3. The gates are still closed.", 7)
 				Cinema.fade(current.wash, 3)
-				Cinema.sound("SunkenChord", 0.7, { keep = true, fadeIn = 0.8 })
+				Cinema.sound("SunkenChord", 0.7, { keep = true, fadeIn = 0.8, alt = "EndChord", altPitch = 0.67 })
 			end
 		end
 		cutscene.revealShot(current.reveal, r)
@@ -2599,7 +2667,7 @@ function panel.start()
 	label.BackgroundColor3 = Color3.fromRGB(14, 20, 24)
 	label.BackgroundTransparency = 0.25
 	label.BorderSizePixel = 0
-	label.Font = Enum.Font.Code
+	label.FontFace = Style.FONT.number
 	label.TextSize = 14
 	label.TextColor3 = Color3.fromRGB(214, 236, 232)
 	label.TextXAlignment = Enum.TextXAlignment.Left
@@ -2619,7 +2687,7 @@ function panel.start()
 	shut.Size = UDim2.fromOffset(22, 22)
 	shut.BackgroundColor3 = Color3.fromRGB(60, 70, 76)
 	shut.BorderSizePixel = 0
-	shut.Font = Enum.Font.GothamBold
+	shut.FontFace = Style.FONT.heading
 	shut.TextSize = 14
 	shut.TextColor3 = Color3.fromRGB(236, 240, 238)
 	shut.Text = "x"
@@ -3121,4 +3189,5 @@ if (script :: any):IsA("LocalScript") then
 	task.spawn(SunkenCityClient.start)
 end
 
+SunkenCityClient.STAMP = "3f209060"
 return SunkenCityClient

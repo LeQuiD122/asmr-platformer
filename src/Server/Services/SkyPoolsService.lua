@@ -41,6 +41,8 @@ local CollectionService = game:GetService("CollectionService")
 local MaterialService = game:GetService("MaterialService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+-- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
+local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Style"))
 
 -- THE SLIDE'S SHAPE AND TIMING ARE SHARED with the client, which draws the ride from them, so they
 -- live in one module both sides read. Looked for with a timeout for SunkenPath's reason: a bare
@@ -161,6 +163,24 @@ local GULLS = 7 -- in each of two flocks the client flies round the tower (SkyPo
 
 -- The water sound everywhere else in the project, pitched per use.
 local WATER_SOUND = "rbxasset://sounds/impact_water.mp3"
+-- THE WATER'S OWN SOUNDS (WaterSounds, the ninety-eighth pass): if the module is not pasted yet, the old splash. ONE
+-- local here, the rest inside: a main chunk has room for only so many (Luau's 200).
+local WaterSounds: any = (function(): any
+	local waterModule = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("WaterSounds", 5)
+	if waterModule and waterModule:IsA("ModuleScript") then
+		return require(waterModule)
+	end
+	local function oldSplash(s: Sound, _kind: string): boolean
+		s.SoundId = "rbxasset://sounds/impact_water.mp3"
+		return false
+	end
+	local splashOnly: any = {}
+	splashOnly.dress = oldSplash
+	return splashOnly
+end)()
+-- Which water each of the level's sounds is (by its name); the rest keep the old splash, slowed (a hum, not water).
+local WATER_KIND: { [string]: string } = { Roar = "pour", FallLanding = "pour", CurtainSplash = "pour", Shower = "stream",
+	SlideRush = "stream" }
 
 -- ===== Colours =====
 -- A STEP OFF WHITE, all of the pale ones (the nineteenth pass): decks, coping, stone and rail were within
@@ -318,7 +338,7 @@ local function label(part: BasePart, face: Enum.NormalId, words: string, ink: Co
 	text.BackgroundTransparency = 1
 	text.Text = words
 	text.TextScaled = true
-	text.Font = Enum.Font.GothamBold
+	text.FontFace = Style.WORLD.sign
 	text.TextColor3 = ink
 	text.Parent = gui
 end
@@ -327,9 +347,12 @@ end
 local function waterSound(parent: Instance, name: string, speed: number, volume: number, near: number, far: number): Sound
 	local s = Instance.new("Sound")
 	s.Name = name
-	s.SoundId = WATER_SOUND
+	local kind = WATER_KIND[name]
+	if not (kind and WaterSounds.dress(s, kind)) then
+		s.SoundId = WATER_SOUND
+		s.PlaybackSpeed = speed
+	end
 	s.Looped = true
-	s.PlaybackSpeed = speed
 	s.Volume = volume
 	s.RollOffMode = Enum.RollOffMode.InverseTapered
 	s.RollOffMinDistance = near
@@ -419,22 +442,33 @@ local VEILS = {
 	{ out = 0.9, alpha = 0.64, spread = 0.3, thick = 2, tone = 0.4 },
 	{ out = -0.9, alpha = 0.8, spread = 0.55, thick = 2.8, tone = 0.7 },
 }
+-- THE SHEET BREAKS UP (the hundred-and-first pass). A long fall was one sheet from the lip to the clouds hundreds of
+-- studs below, and a pale sheet that tall, seen from the side, is a thin white line through everything: what was
+-- reported as a light bug across the route. Water falling that far does not stay a sheet; it breaks into spray within
+-- a few tens of studs. So the sheet goes down VEIL_REACH studs at most, in pieces, thinning to nothing as it goes, and
+-- below that the fall is its streaks and its mist, which already carry on to where it lands.
+local VEIL_REACH = 36
+local VEIL_PIECE = 9
 local function waterfall(parent: Instance, top: Vector3, facing: Vector3, wide: number, bottomY: number, roar: number?)
 	local height = top.Y - bottomY
 	if height <= 1 then
 		return
 	end
-	local pieces = math.ceil(height / LONGEST)
-	local each = height / pieces
+	local reach = math.min(height, VEIL_REACH)
+	local pieces = math.max(1, math.ceil(reach / VEIL_PIECE))
+	local each = reach / pieces
 	for veilIndex, veil in ipairs(VEILS) do
 		for index = 1, pieces do
 			local deep = (index - 0.5) * each
 			local centre = Vector3.new(top.X, top.Y - deep, top.Z) + facing * veil.out
+			-- Thinning as it falls, when it falls further than the sheet reaches: the last piece nearly gone.
+			local thin = if height > VEIL_REACH then ((index - 0.5) / pieces) ^ 1.4 else 0
+			local alpha = veil.alpha + (1 - veil.alpha) * thin * 0.92
 			local sheet = block(parent, "Waterfall",
-				Vector3.new(wide * (1 + veil.spread * deep / height), each, veil.thick),
+				Vector3.new(wide * (1 + veil.spread * deep / reach), each, veil.thick),
 				CFrame.lookAt(centre, centre + facing), FALL:Lerp(Color3.new(1, 1, 1), veil.tone or 0),
 				SHEEN, false)
-			sheet.Transparency = veil.alpha
+			sheet.Transparency = alpha
 			sheet.Reflectance = 0.08
 			sheet.CastShadow = false
 			-- TAGGED, so the client can run the shimmer down it (SkyPoolsClient). A sheet of glass
@@ -442,7 +476,7 @@ local function waterfall(parent: Instance, top: Vector3, facing: Vector3, wide: 
 			-- "moving" is the light travelling down it, and that is done where it costs nobody
 			-- anything.
 			sheet:SetAttribute("Veil", index + veilIndex * 0.37)
-			sheet:SetAttribute("Alpha", veil.alpha)
+			sheet:SetAttribute("Alpha", alpha)
 			CollectionService:AddTag(sheet, "SkyFall")
 		end
 	end
@@ -2210,8 +2244,10 @@ local function splash(at: Vector3)
 	spray.Parent = host
 	spray:Emit(70)
 	local s = Instance.new("Sound")
-	s.SoundId = WATER_SOUND
-	s.PlaybackSpeed = 0.9
+	if not WaterSounds.dress(s, "splash") then
+		s.SoundId = WATER_SOUND
+		s.PlaybackSpeed = 0.9
+	end
 	s.Volume = 0.9
 	s.RollOffMaxDistance = 150
 	s.Parent = host
@@ -2452,4 +2488,5 @@ Players.PlayerRemoving:Connect(function(player: Player)
 	arrivedAt[player] = nil
 end)
 
+SkyPoolsService.STAMP = "3b8f2fe4"
 return SkyPoolsService

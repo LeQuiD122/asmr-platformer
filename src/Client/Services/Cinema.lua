@@ -22,6 +22,12 @@
 --   shake()     a jolt that dies away: a door giving, jaws closing.
 --   focus()     depth of field: what the shot is about sharp, the rest soft.
 --   black()     the picture to black (or back) at once or over a moment: a cut to black.
+--   impact()    an IMPACT FRAME, the kind a comic or an action game hits a big moment with: two frames in
+--               hard black and white, a soft white flash, a burst of speed lines from the edges, the lens
+--               punched in and a jolt, then the colour back, a little punchier, settling. A leap, a crash.
+--   speedLines() lines streaming in from the edges of the picture while something is going fast (0 to 1).
+--   think()     a thought over a character's head, in a little bubble, written out as if being thought: what
+--               they make of it ("These bricks are loose."), what they are afraid of ("Where does this go?").
 --
 -- AN ENDING SILENCES THE LEVEL. begin() fades out every ambient sound (tagged Ambience, and the
 -- player's ambience beds: AmbienceService) and they stay gone: the scene's own sounds are all you hear.
@@ -57,6 +63,8 @@ local Lighting = game:GetService("Lighting")
 local Cinema = {}
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
+local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Style"))
 
 local BARS = 0.11 -- each bar, as a share of the screen's height
 local CAPTION_SECONDS = 7 -- how long a caption stays up unless a scene says
@@ -74,7 +82,10 @@ local SHOW = "CinemaKeepsYouInShot"
 type Live = { gui: ScreenGui, top: Frame, bottom: Frame, veil: Frame, fov: number, controls: any, words: Frame,
 	aim: CFrame?, eye: Vector3?, at: number, cut: boolean, shake: number, focus: DepthOfFieldEffect?,
 	ending: boolean, told: boolean, finishing: boolean, readUntil: number, freeAt: number, queue: number,
-	sounds: { Sound } }
+	sounds: { Sound }, lines: { Frame }, lineAmount: number, burst: number, kick: number, flash: Frame,
+	impactFx: ColorCorrectionEffect? }
+-- THE SPEED LINES: this many, streaming in from the edges of the picture.
+local LINE_COUNT = 36
 local live: Live? = nil
 
 -- An ending's word to the server: "began" when it starts, "done" when it has been watched.
@@ -175,6 +186,32 @@ function Cinema.begin(options: { hush: boolean? }?)
 		return frame
 	end
 	local top, bottom = bar(0), bar(1)
+	-- THE SPEED LINES and THE IMPACT'S FLASH, over the picture, under the bars and the words.
+	local lineBox = Instance.new("Frame")
+	lineBox.Name = "SpeedLines"
+	lineBox.Size = UDim2.fromScale(1, 1)
+	lineBox.BackgroundTransparency = 1
+	lineBox.ZIndex = 1
+	lineBox.Parent = gui
+	local lines: { Frame } = {}
+	for _ = 1, LINE_COUNT do
+		local line = Instance.new("Frame")
+		line.AnchorPoint = Vector2.new(0.5, 0.5)
+		line.BackgroundColor3 = Color3.new(1, 1, 1)
+		line.BackgroundTransparency = 1
+		line.BorderSizePixel = 0
+		line.ZIndex = 1
+		line.Parent = lineBox
+		table.insert(lines, line)
+	end
+	local flash = Instance.new("Frame")
+	flash.Name = "ImpactFlash"
+	flash.Size = UDim2.fromScale(1, 1)
+	flash.BackgroundColor3 = Color3.new(1, 1, 1)
+	flash.BackgroundTransparency = 1
+	flash.BorderSizePixel = 0
+	flash.ZIndex = 1
+	flash.Parent = gui
 	-- A SOFT DARK BAND over the bottom of the picture, under the captions: white type over snow, cloud
 	-- or sky was unreadable. Shown only while a caption is.
 	local band = Instance.new("Frame")
@@ -212,7 +249,8 @@ function Cinema.begin(options: { hush: boolean? }?)
 	end
 	live = { gui = gui, top = top, bottom = bottom, veil = veil, fov = camera.FieldOfView, controls = found,
 		words = words, aim = nil, eye = nil, at = os.clock(), cut = true, shake = 0, focus = nil,
-		ending = ending, told = false, finishing = false, readUntil = 0, freeAt = 0, queue = 0, sounds = {} }
+		ending = ending, told = false, finishing = false, readUntil = 0, freeAt = 0, queue = 0, sounds = {},
+		lines = lines, lineAmount = 0, burst = 0, kick = 0, flash = flash, impactFx = nil }
 	if ending then
 		tell("began")
 	end
@@ -238,6 +276,32 @@ function Cinema.cut()
 	local current = live
 	if current then
 		current.cut = true
+	end
+end
+
+-- The speed lines this frame: some of them redrawn somewhere new each frame, so they stream and flicker.
+local function drawLines(current: Live, dt: number)
+	local amount = math.max(current.lineAmount, current.burst)
+	current.burst = current.burst * math.exp(-6 * dt)
+	local size = current.gui.AbsoluteSize
+	if amount < 0.02 or size.X < 1 then
+		for _, line in ipairs(current.lines) do
+			line.BackgroundTransparency = 1
+		end
+		return
+	end
+	local cx, cy = size.X / 2, size.Y / 2
+	local reach = math.sqrt(cx * cx + cy * cy)
+	for _, line in ipairs(current.lines) do
+		if math.random() < 0.45 then
+			local a = math.random() * math.pi * 2
+			local r = reach * (0.55 + math.random() * 0.45)
+			local length = reach * (0.12 + math.random() * 0.3) * (0.6 + amount)
+			line.Position = UDim2.fromOffset(cx + math.cos(a) * r, cy + math.sin(a) * r)
+			line.Size = UDim2.fromOffset(length, 1 + math.random() * 2.5 * amount)
+			line.Rotation = math.deg(a)
+			line.BackgroundTransparency = 1 - amount * (0.25 + math.random() * 0.45)
+		end
 	end
 end
 
@@ -275,8 +339,150 @@ function Cinema.point(cf: CFrame, fov: number?, steady: boolean?)
 		current.shake = jolt * math.exp(-4.5 * dt)
 	end
 	camera.CFrame = CFrame.new(cf.Position) * (aim :: CFrame) * drift
+	-- AN IMPACT's punch in, dying away.
+	local kick = current.kick
+	current.kick = kick * math.exp(-7 * dt)
 	if fov then
-		camera.FieldOfView = fov
+		camera.FieldOfView = math.max(8, fov - kick)
+	end
+	drawLines(current, dt)
+end
+
+-- AN IMPACT FRAME (`strength` about 1; 1.5 for a crash): two frames in hard black and white, a soft white
+-- flash, a burst of speed lines, the lens punched in and a jolt; then the colour comes back a little punchier
+-- and settles. Brief, and never a full white: a beat, not a strobe.
+function Cinema.impact(strength: number?)
+	local current = live
+	if not current then
+		return
+	end
+	local s = math.clamp(strength or 1, 0.2, 2)
+	current.burst = math.max(current.burst, math.min(1, 0.9 * s))
+	current.kick = math.max(current.kick, 9 * s)
+	current.shake = math.max(current.shake, 1.2 * s)
+	local fx = current.impactFx
+	if not fx then
+		local made = Instance.new("ColorCorrectionEffect")
+		made.Name = "CinemaImpact"
+		made.Parent = Lighting
+		current.impactFx = made
+		fx = made
+	end
+	local effect = fx :: ColorCorrectionEffect
+	effect.Saturation = -1
+	effect.Contrast = 0.9
+	effect.Brightness = 0.12
+	current.flash.BackgroundTransparency = 0.55
+	TweenService:Create(current.flash, TweenInfo.new(0.22, Enum.EasingStyle.Quad), { BackgroundTransparency = 1 }):Play()
+	task.delay(0.07, function()
+		if live == current and effect.Parent then
+			effect.Saturation = 0.35
+			effect.Contrast = 0.3
+			effect.Brightness = 0
+			TweenService:Create(effect, TweenInfo.new(0.45, Enum.EasingStyle.Quad), { Saturation = 0, Contrast = 0 }):Play()
+		end
+	end)
+end
+
+-- A THOUGHT over `character`'s head for `seconds`: a soft bubble with a little trail of dots down to them, the
+-- words written out as if being thought. A new thought replaces the last. Only on this screen.
+function Cinema.think(character: Model?, text: string, seconds: number?)
+	local head = character and character:FindFirstChild("Head")
+	local playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	if not (head and head:IsA("BasePart") and playerGui) then
+		return
+	end
+	local old = playerGui:FindFirstChild("CinemaThought")
+	if old then
+		old:Destroy()
+	end
+	local board = Instance.new("BillboardGui")
+	board.Name = "CinemaThought"
+	board.Adornee = head
+	board.Size = UDim2.fromOffset(250, 96)
+	board.StudsOffset = Vector3.new(0, 2.9, 0)
+	board.AlwaysOnTop = true
+	board.MaxDistance = 80
+	board.ResetOnSpawn = false
+	board.Parent = playerGui
+	local bubble = Instance.new("Frame")
+	bubble.Name = "Bubble"
+	bubble.AnchorPoint = Vector2.new(0.5, 0)
+	bubble.Position = UDim2.fromScale(0.5, 0)
+	bubble.Size = UDim2.new(1, 0, 0, 62)
+	bubble.BackgroundColor3 = Color3.fromRGB(252, 250, 244)
+	bubble.BackgroundTransparency = 1
+	bubble.BorderSizePixel = 0
+	bubble.Parent = board
+	local round = Instance.new("UICorner")
+	round.CornerRadius = Style.RADIUS.panel
+	round.Parent = bubble
+	local edge = Instance.new("UIStroke")
+	edge.Color = Color3.fromRGB(60, 54, 48)
+	edge.Thickness = Style.STROKE.panel
+	edge.Transparency = 1
+	edge.Parent = bubble
+	local words = Instance.new("TextLabel")
+	words.BackgroundTransparency = 1
+	words.Position = UDim2.fromOffset(12, 6)
+	words.Size = UDim2.new(1, -24, 1, -12)
+	words.FontFace = Style.FONT.body
+	words.TextScaled = true
+	words.TextWrapped = true
+	words.TextColor3 = Color3.fromRGB(40, 36, 32)
+	words.TextTransparency = 1
+	words.Text = text
+	words.MaxVisibleGraphemes = 0
+	words.Parent = bubble
+	local most = Instance.new("UITextSizeConstraint")
+	most.MaxTextSize = 22
+	most.Parent = words
+	local dots: { Frame } = {}
+	for k, d in ipairs({ 12, 8 }) do
+		local dot = Instance.new("Frame")
+		dot.AnchorPoint = Vector2.new(0.5, 0)
+		dot.Position = UDim2.new(0.5, -6 * k, 0, 62 + 4 + (k - 1) * 13)
+		dot.Size = UDim2.fromOffset(d, d)
+		dot.BackgroundColor3 = Color3.fromRGB(252, 250, 244)
+		dot.BackgroundTransparency = 1
+		dot.BorderSizePixel = 0
+		dot.Parent = board
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0.5, 0)
+		c.Parent = dot
+		table.insert(dots, dot)
+	end
+	local appear = TweenInfo.new(0.25, Enum.EasingStyle.Quad)
+	TweenService:Create(bubble, appear, { BackgroundTransparency = 0.05 }):Play()
+	TweenService:Create(edge, appear, { Transparency = 0.2 }):Play()
+	TweenService:Create(words, appear, { TextTransparency = 0 }):Play()
+	for _, dot in ipairs(dots) do
+		TweenService:Create(dot, appear, { BackgroundTransparency = 0.05 }):Play()
+	end
+	-- Written out as it is thought: a letter at a time, about thirty a second.
+	local length = utf8.len(text) or #text
+	TweenService:Create(words, TweenInfo.new(length / 30, Enum.EasingStyle.Linear), { MaxVisibleGraphemes = length }):Play()
+	task.delay(seconds or 3.5, function()
+		if board.Parent then
+			local gone = TweenInfo.new(0.4, Enum.EasingStyle.Quad)
+			TweenService:Create(bubble, gone, { BackgroundTransparency = 1 }):Play()
+			TweenService:Create(edge, gone, { Transparency = 1 }):Play()
+			TweenService:Create(words, gone, { TextTransparency = 1 }):Play()
+			for _, dot in ipairs(dots) do
+				TweenService:Create(dot, gone, { BackgroundTransparency = 1 }):Play()
+			end
+			task.delay(0.45, function()
+				board:Destroy()
+			end)
+		end
+	end)
+end
+
+-- SPEED LINES streaming in from the edges while something goes fast: `amount` 0 (none) to 1 (a dive at full pelt).
+function Cinema.speedLines(amount: number)
+	local current = live
+	if current then
+		current.lineAmount = math.clamp(amount, 0, 1)
 	end
 end
 
@@ -410,7 +616,7 @@ local function showCaption(current: Live, ticket: number, place: string, line: s
 			local label = Instance.new("TextLabel")
 			label.BackgroundTransparency = 1
 			label.Size = UDim2.new(1, 0, 0, if index == 1 then 30 else 26)
-			label.Font = if index == 1 then Enum.Font.GothamBold else Enum.Font.Gotham
+			label.FontFace = if index == 1 then Style.FONT.heading else Style.FONT.body
 			label.TextSize = if index == 1 then 26 else 21
 			label.TextColor3 = if index == 1 then Color3.fromRGB(248, 244, 232) else Color3.fromRGB(226, 230, 224)
 			label.TextStrokeColor3 = Color3.fromRGB(8, 10, 12)
@@ -484,15 +690,21 @@ end
 -- nothing plays. A scene's sounds fade out when it finishes, unless `keep` (the last chord, which should
 -- ring on past the bars opening). `pitch` scales whichever plays.
 export type SoundOptions = { fallback: string?, speed: number?, looped: boolean?, keep: boolean?, pitch: number?,
-	fadeIn: number? }
+	fadeIn: number?, alt: string?, altPitch: number? }
 
 function Cinema.sound(name: string, volume: number, options: SoundOptions?): Sound?
 	local folder = game:GetService("SoundService"):FindFirstChild("StorySounds")
 	local own = folder and folder:FindFirstChild(name)
 	local made: Sound
+	-- ANOTHER OF THE STORY'S SOUNDS standing in, at its own pitch: the endings' chords fall back on the one
+	-- EndChord, so one upload brings all four last notes back.
+	local alt = options and options.alt and folder and folder:FindFirstChild(options.alt)
 	if own and own:IsA("Sound") then
 		made = own:Clone()
 		made.PlaybackSpeed = (options and options.pitch) or 1
+	elseif alt and alt:IsA("Sound") and options then
+		made = alt:Clone()
+		made.PlaybackSpeed = (options.altPitch or 1) * (options.pitch or 1)
 	elseif options and options.fallback then
 		made = Instance.new("Sound")
 		made.SoundId = options.fallback
@@ -590,6 +802,9 @@ function Cinema.finish(now: boolean?)
 	if current.focus then
 		current.focus:Destroy()
 	end
+	if current.impactFx then
+		current.impactFx:Destroy()
+	end
 	local camera = workspace.CurrentCamera
 	local character = Players.LocalPlayer.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -623,4 +838,5 @@ function Cinema.finish(now: boolean?)
 	end)
 end
 
+Cinema.STAMP = "370ca4e7"
 return Cinema

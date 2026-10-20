@@ -45,6 +45,16 @@ function TimerService.resetTimer(player: Player)
 	t.running = false -- waits for the chunk-2 crossing trigger to restart
 end
 
+-- THE CLOCK PUT BACK where it was and running again (a hardcore second chance, Bootstrap).
+function TimerService.resume(player: Player, elapsed: number)
+	local t = timers[player]
+	if not t then
+		return
+	end
+	t.elapsed = math.max(0, elapsed)
+	t.running = true
+end
+
 function TimerService.isRunning(player: Player): boolean
 	local t = timers[player]
 	return t ~= nil and t.running == true
@@ -67,4 +77,5 @@ RunService.Heartbeat:Connect(function(dt: number)
 	end
 end)
 
+TimerService.STAMP = "4c754864"
 return TimerService

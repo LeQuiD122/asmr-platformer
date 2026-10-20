@@ -6,16 +6,20 @@
 --
 -- === On the rider's own screen (Cinema) ===
 --
---   THE FLUME      drawn by this client, from the path the server wrote down (FlumePath), so it is
---                  smooth: the server writing the rider sixty times a second was the lag. Over your
---                  shoulder into the tube; chasing you down it; from the shaft's wall as you come
---                  round towards it; from just ahead, looking back at you; from below as you shoot out
---                  of the end of it; and from above as you fall into the dark.
---   THE MOUTH      at the bottom of the fall there is something in the dark. From above, falling with
---                  you, its jaws open under you and a light comes up inside it, the teeth catching it;
---                  from inside it, between the jaws, looking up at you coming down; from the side, level
---                  with the teeth, the jaws shut. Black. A heartbeat. "The Hold. It keeps what it is
---                  given." (Maw.lua; on your screen only, and nothing but its mouth is ever seen.)
+--   THE FLUME      drawn by this client, from the path the server wrote down (FlumePath), on a smooth
+--                  curve through it and on this client's own clock, so it does not judder. You lie back
+--                  in the water running down the trough, feet first, spray thrown up behind you, and
+--                  what you think comes up over your head (THOUGHTS). Over your shoulder into the tube;
+--                  chasing you down it; from the shaft's wall as you come round towards it; from just
+--                  ahead, looking back at you; from below as you shoot out of the end of it (hit); and
+--                  from above as you fall into the dark. A growl, from far below, before anything shows.
+--   THE MOUTH      at the bottom of the fall there is something in the dark, and it is not lit until it
+--                  has you. Falling on into nothing; then the light comes up in it all at once and it
+--                  OPENS, a roar and an impact frame, and time all but stops: from over you, a speck over
+--                  a mouth that fills the shaft; from beyond its teeth, you hanging over it; then you
+--                  drop, and from inside it you are seen coming down into it; from its side, in profile,
+--                  the jaws shut like a trap. Black. A heartbeat. "The Hold. It keeps what it is given."
+--                  (Maw.lua; on your screen only, and nothing but its mouth is ever seen.)
 --   THE DARK       the server moves you while it is black, and you come up in the GATE CHAMBER, the
 --                  lowest room of the waterworks, as if you had been spat out into its sump.
 --   THE SUMP       you come up out of the water and climb the ladder.
@@ -33,7 +37,16 @@
 --
 -- === On everyone's ===
 --
--- The rider lies back with their arms crossed on the way down the flume (Poses.flume).
+-- The rider lies back on the way down the flume and rides it the way a person would: balancing, then
+-- grabbing at the walls and scrabbling, then flailing as they shoot out of the end (Poses.flume).
+--
+-- === The lamps behind you ===
+--
+-- The halls are failing as you go through them: the roof lights two bays and more behind you stutter and
+-- sink to a low glow, with a faint click, and if you are sent back past them (a checkpoint behind) they
+-- come up again. On your own screen only, and only the roof lights: the bay you are in and everything
+-- ahead stay lit, and the windows are never touched, so nothing is ever dark. The one fitting that fails
+-- on everyone's screen (FloodedHallsService's Failing light) is left to the server.
 --
 -- === Sounds ===
 --
@@ -46,6 +59,7 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local SoundService = game:GetService("SoundService")
+local CollectionService = game:GetService("CollectionService")
 
 local Poses: any = (function()
 	local found = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Poses", 15)
@@ -59,9 +73,13 @@ local Maw: any = (function()
 	local found = script.Parent and script.Parent:WaitForChild("Maw", 15)
 	return if found and found:IsA("ModuleScript") then require(found) else nil
 end)()
+local HallRoute: any = (function()
+	local found = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HallRoute", 15)
+	return if found and found:IsA("ModuleScript") then require(found) else nil
+end)()
 
 local FloodedHallsClient = {}
-FloodedHallsClient.VERSION = "twenty-first pass, 2026-09-30"
+FloodedHallsClient.VERSION = "ninety-fifth pass, 2026-10-18"
 
 local GROAN = "rbxasset://sounds/bass.mp3"
 local RUSH = "rbxasset://sounds/impact_water.mp3"
@@ -191,7 +209,9 @@ end
 type Scene = { began: number, slide: number, gates: number, halls: Instance, chamber: Instance?, frame: CFrame?,
 	done: { [string]: boolean }, sounds: { Sound }, speed: number?, arrived: boolean, fallEye: Vector3?,
 	gateRest: CFrame?, wheelRest: CFrame?, maw: number, mouth: any, fallFrom: Vector3?, heart: Sound?,
-	rumble: Sound?, lastFall: Vector3?, path: { CFrame }? }
+	rumble: Sound?, lastFall: Vector3?, path: { CFrame }?, rush: Sound?, clockAt: number, exitFrame: CFrame?,
+	thought: number, wake: Instance?, growl: Sound?, exitSpeed: number?, fallM: number?, fallD: number?,
+	tumble: number?, lit: any?, mawRest: CFrame?, lungeAt: number? }
 local scene: Scene? = nil
 local hallsEvent: RemoteEvent? = nil
 
@@ -203,6 +223,154 @@ local function once(current: Scene, key: string): boolean
 	return true
 end
 
+-- THE DARK. Out of the end of the tube the shaft goes black on this screen: no light from the sky or the air (ambient,
+-- the environment's light), the shaft's own lamps all but out, a cold grade over everything, and only a faint light on
+-- you (as if from the tube's mouth above), so you are seen falling and nothing under you is, until the mouth lights
+-- itself. NOT FOG. The first dark thickened the air to 0.82, more than twice the thickest of any level's (the halls'
+-- own notes say 0.42 already erased the water), and the black air hid the mouth even when it was lit: it was reported
+-- as gone. The air is made black here at the level's own thickness or less. Put back as the chamber starts, or
+-- whenever the scene ends, with anything still fading stopped first.
+-- DARK, NOT BLACK (2026-10-18, from your fourth test: "too dark, I can't see anything other than the glowing light; I
+-- need to see the player, but not so bright that I can see the surroundings"). The light from the air was taken to
+-- 5, 5, 7 under an exposure turned down, a sixth of the halls' own: only the mouth's lamps showed, and you were not a
+-- figure but nothing. Now the air keeps two thirds of the halls' light, cold, and the exposure is left nearly as it
+-- was; what hides the halls is the black air (no thicker than the level's), which swallows anything a few tens of
+-- studs off. And a lamp hangs a little over you as you fall, as if from the tube's mouth above, so you are always seen.
+type Lit = { ambient: Color3, outdoor: Color3, brightness: number, exposure: number, diffuse: number, specular: number,
+	density: number?, colour: Color3?, decay: Color3?, haze: number?, glare: number?, grade: ColorCorrectionEffect,
+	glimmer: PointLight?, lamp: Attachment?, pour: ParticleEmitter?, dimmed: { [Light]: number }, off: { Light },
+	tweens: { Tween } }
+local DARK = { ambient = Color3.fromRGB(24, 26, 34), exposure = -0.1, colour = Color3.fromRGB(5, 5, 7), airAtMost = 0.36,
+	dim = 0.08, reach = 90, over = 7 }
+local function darken(current: Scene, root: BasePart)
+	if current.lit then
+		return
+	end
+	local Lighting = game:GetService("Lighting")
+	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+	local grade = Instance.new("ColorCorrectionEffect")
+	grade.Name = "HoldDark"
+	grade.Brightness = 0
+	grade.Parent = Lighting
+	local lit: Lit = { ambient = Lighting.Ambient, outdoor = Lighting.OutdoorAmbient, brightness = Lighting.Brightness,
+		exposure = Lighting.ExposureCompensation, diffuse = Lighting.EnvironmentDiffuseScale,
+		specular = Lighting.EnvironmentSpecularScale, density = if atmosphere then atmosphere.Density else nil,
+		colour = if atmosphere then atmosphere.Color else nil, decay = if atmosphere then atmosphere.Decay else nil,
+		haze = if atmosphere then atmosphere.Haze else nil, glare = if atmosphere then atmosphere.Glare else nil,
+		grade = grade, glimmer = nil, pour = nil, dimmed = {}, off = {}, tweens = {} }
+	current.lit = lit
+	local fade = TweenInfo.new(1.2, Enum.EasingStyle.Sine)
+	local function tween(target: Instance, goal: { [string]: any })
+		local made = TweenService:Create(target, fade, goal)
+		table.insert(lit.tweens, made)
+		made:Play()
+	end
+	tween(Lighting, { Ambient = DARK.ambient, OutdoorAmbient = DARK.ambient, Brightness = 0,
+		ExposureCompensation = DARK.exposure, EnvironmentDiffuseScale = 0, EnvironmentSpecularScale = 0 })
+	if atmosphere then
+		tween(atmosphere, { Density = math.min(atmosphere.Density, DARK.airAtMost), Color = DARK.colour, Decay = DARK.colour,
+			Haze = 0, Glare = 0 })
+	end
+	tween(grade, { Brightness = 0, Contrast = 0.14, Saturation = -0.25, TintColor = Color3.fromRGB(212, 218, 236) })
+	-- THE SHAFT'S OWN LAMPS, all but out on this screen: every light of the halls within DARK.reach of the shaft's
+	-- middle (the mast). Not the mouth's, which it has with it, nor the one on you.
+	local slideFrame = current.halls:GetAttribute("SlideFrame")
+	local middle = if typeof(slideFrame) == "CFrame" then slideFrame.Position else root.Position
+	for _, item in ipairs(current.halls:GetDescendants()) do
+		if item:IsA("Light") and item.Enabled and item.Brightness > 0 then
+			local holder = item.Parent
+			local at = if holder and holder:IsA("BasePart") then holder.Position
+				elseif holder and holder:IsA("Attachment") then holder.WorldPosition
+				else nil
+			if at and Vector3.new(at.X - middle.X, 0, at.Z - middle.Z).Magnitude < DARK.reach then
+				if holder and holder:GetAttribute("Failing") then
+					-- The failing fitting: the server sets its brightness many times a second (its stutter), so it is
+					-- switched off here for the scene instead.
+					item.Enabled = false
+					table.insert(lit.off, item)
+				else
+					lit.dimmed[item] = item.Brightness
+					tween(item, { Brightness = item.Brightness * DARK.dim })
+				end
+			end
+		end
+	end
+	-- A cold light on you, so you are a figure in the dark and not nothing.
+	local head = root.Parent and root.Parent:FindFirstChild("Head")
+	local glimmer = Instance.new("PointLight")
+	glimmer.Name = "FallGlimmer"
+	glimmer.Color = Color3.fromRGB(170, 190, 230)
+	glimmer.Brightness = 1.2
+	glimmer.Range = 14
+	glimmer.Shadows = false
+	glimmer.Parent = if head and head:IsA("BasePart") then head else root
+	lit.glimmer = glimmer
+	-- AND A LAMP OVER YOU, falling with you (the fall moves it, DARK.over studs above): a light from inside the head
+	-- lights the shoulders and not the face, and this lights you from above as the tube's mouth would, all the way
+	-- down. Its reach is short, so it finds you and not the walls.
+	local lamp = Instance.new("Attachment")
+	lamp.Name = "FallLamp"
+	lamp.WorldPosition = root.Position + Vector3.new(0, DARK.over, 0)
+	lamp.Parent = workspace.Terrain
+	local over = Instance.new("PointLight")
+	over.Color = Color3.fromRGB(176, 196, 232)
+	over.Brightness = 1.4
+	over.Range = 18
+	over.Shadows = false
+	over.Parent = lamp
+	lit.lamp = lamp
+	-- The water pouring off the flume's lip, on this screen, off: in the dark it was a lit column down to the mouth.
+	local spout = current.halls:FindFirstChild("FlumePour", true)
+	local pour = spout and spout:FindFirstChildOfClass("ParticleEmitter")
+	if pour then
+		pour.Enabled = false
+		lit.pour = pour
+	end
+end
+
+-- The light put back: everything darken changed, as it was (anything still fading toward the dark stopped first, or
+-- it would carry on into the light put back).
+local function relight(current: Scene)
+	local lit: Lit? = current.lit
+	if not lit then
+		return
+	end
+	current.lit = nil
+	for _, made in ipairs(lit.tweens) do
+		made:Cancel()
+	end
+	local Lighting = game:GetService("Lighting")
+	Lighting.Ambient, Lighting.OutdoorAmbient = lit.ambient, lit.outdoor
+	Lighting.Brightness, Lighting.ExposureCompensation = lit.brightness, lit.exposure
+	Lighting.EnvironmentDiffuseScale, Lighting.EnvironmentSpecularScale = lit.diffuse, lit.specular
+	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+	if atmosphere and lit.density then
+		atmosphere.Density = lit.density
+		atmosphere.Color = lit.colour :: Color3
+		atmosphere.Decay = lit.decay :: Color3
+		atmosphere.Haze = lit.haze :: number
+		atmosphere.Glare = lit.glare :: number
+	end
+	for light, brightness in pairs(lit.dimmed) do
+		if light.Parent then
+			light.Brightness = brightness
+		end
+	end
+	for _, light in ipairs(lit.off) do
+		light.Enabled = true
+	end
+	lit.grade:Destroy()
+	if lit.glimmer then
+		lit.glimmer:Destroy()
+	end
+	if lit.lamp then
+		lit.lamp:Destroy()
+	end
+	if lit.pour then
+		lit.pour.Enabled = true
+	end
+end
+
 local function endScene()
 	local current = scene
 	if not current then
@@ -210,6 +378,11 @@ local function endScene()
 	end
 	scene = nil
 	holdMine(nil)
+	relight(current)
+	if current.wake then
+		current.wake:Destroy()
+		current.wake = nil
+	end
 	if Maw and current.mouth then
 		Maw.destroy(current.mouth)
 		current.mouth = nil
@@ -239,37 +412,119 @@ local function keep(current: Scene, s: Sound?)
 	end
 end
 
--- WHERE THE RIDER IS, f of the way down, from the path the server wrote down: between two of its steps.
+-- WHERE THE RIDER IS, f of the way down, from the path the server wrote down: on a smooth curve through its
+-- steps (Catmull-Rom), facing along the curve. It was straight lines from step to step, and the rider's speed and
+-- heading changed with a jolt at every one of the 220: the judder in the ride was that.
 local function pathAt(path: { CFrame }, f: number): CFrame
 	local last = #path - 1
 	local x = math.clamp(f, 0, 1) * last
 	local i = math.min(math.floor(x), last - 1)
-	return path[i + 1]:Lerp(path[i + 2], x - i)
+	local u = x - i
+	local p0 = path[math.max(1, i)].Position
+	local p1, p2 = path[i + 1].Position, path[i + 2].Position
+	local p3 = path[math.min(#path, i + 3)].Position
+	local at = 0.5 * (2 * p1 + (p2 - p0) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u * u
+		+ (3 * p1 - p0 - 3 * p2 + p3) * u * u * u)
+	local run = 0.5 * ((p2 - p0) + (2 * p0 - 5 * p1 + 4 * p2 - p3) * 2 * u + (3 * p1 - p0 - 3 * p2 + p3) * 3 * u * u)
+	local turn = path[i + 1]:Lerp(path[i + 2], u)
+	local up = turn.UpVector
+	if run.Magnitude < 0.01 or math.abs(run.Unit:Dot(up)) > 0.98 then
+		return turn - turn.Position + at
+	end
+	return CFrame.lookAt(at, at + run, up)
+end
+
+-- THE RIDER LIES BACK IN THE TROUGH, feet first. The path is a standing rider's (the server's, which check_halls
+-- keeps inside the trough), and stood up in it they rode the flume like a statue on a moving walkway, which is how
+-- it was reported. So the root is laid back by Poses.FLUME_RECLINE over Poses.FLUME_LIE seconds, let down LIE_DROP
+-- onto the trough's floor, and Poses.flume bends the hips so the legs lie along it. Out of the end of the tube it
+-- is held the way it came out and turned over onto its back, face up, which is how the mouth finds it.
+local LIE_DROP = 2.4
+local HELIX = 0.68 -- FloodedHallsService's SLIDE_HELIX: the share of the ride in the tube; the rest is the fall
+local function lying(current: Scene, path: { CFrame }, frame: CFrame, f: number, t: number): CFrame
+	local recline = if Poses then Poses.FLUME_RECLINE else math.rad(62)
+	local w = ease(t / (if Poses then Poses.FLUME_LIE else 0.6))
+	if f <= HELIX then
+		return frame * CFrame.new(0, -LIE_DROP * w, 0) * CFrame.Angles(recline * w, 0, 0)
+	end
+	local exit = current.exitFrame or pathAt(path, HELIX)
+	current.exitFrame = exit
+	local out = (exit - exit.Position + frame.Position) * CFrame.new(0, -LIE_DROP, 0) * CFrame.Angles(recline, 0, 0)
+	local flat = CFrame.new(frame.Position) * CFrame.Angles(math.pi / 2, 0, 0)
+	return out:Lerp(flat, ease((f - HELIX) / (1 - HELIX) / 0.6))
+end
+
+-- WHAT GOES THROUGH THEIR HEAD on the way down, over it (Cinema.think): seconds in, the words, how long.
+local THOUGHTS = {
+	{ 1.0, "Staff only... and here I am.", 2.4 },
+	{ 3.4, "It just keeps going down.", 2.2 },
+	{ 5.6, "Too fast. Way too fast!", 1.9 },
+	{ 7.7, "Where is the bottom?!", 1.6 },
+	{ 9.7, "...what was that?", 1.3 },
+}
+local GROWL_AT = 0.84 -- f: the growl, from far below, before anything can be seen
+
+-- THE WAKE: spray thrown up off the water in the trough as they go, on this screen. Gone when they leave the tube.
+local function startWake(root: BasePart): Instance
+	local at = Instance.new("Attachment")
+	at.Name = "FlumeWake"
+	at.CFrame = CFrame.new(0, -0.6, 0.6)
+	local spray = Instance.new("ParticleEmitter")
+	spray.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	spray.Color = ColorSequence.new(Color3.fromRGB(226, 244, 246))
+	spray.LightEmission = 0.2
+	spray.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 1.8) })
+	spray.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 1) })
+	spray.Lifetime = NumberRange.new(0.35, 0.7)
+	spray.Speed = NumberRange.new(5, 11)
+	spray.SpreadAngle = Vector2.new(35, 35)
+	spray.Acceleration = Vector3.new(0, -30, 0)
+	spray.EmissionDirection = Enum.NormalId.Top
+	spray.Rate = 45
+	spray.Parent = at
+	local drops = Instance.new("ParticleEmitter")
+	drops.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	drops.Color = ColorSequence.new(Color3.fromRGB(236, 250, 252))
+	drops.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 0.08) })
+	drops.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+	drops.Lifetime = NumberRange.new(0.3, 0.6)
+	drops.Speed = NumberRange.new(8, 14)
+	drops.SpreadAngle = Vector2.new(50, 50)
+	drops.Acceleration = Vector3.new(0, -50, 0)
+	drops.EmissionDirection = Enum.NormalId.Top
+	drops.Rate = 30
+	drops.Parent = at
+	at.Parent = root
+	return at
 end
 
 -- THE FLUME, f of the way down it.
 local function flumeShot(current: Scene, root: BasePart, f: number)
 	local here = root.Position
 	local up = Vector3.yAxis
-	local look = root.CFrame.LookVector
+	-- The way the ride goes, from the path, not the root: the root lies back, so its front faces the roof. Past
+	-- the end of the tube, the way it was going as it came out (straight down has no way along).
+	local path = current.path
+	local look = if path then pathAt(path, math.min(f, HELIX - 0.005)).LookVector else root.CFrame.LookVector
 	local flat = Vector3.new(look.X, 0, look.Z)
 	flat = if flat.Magnitude > 0.05 then flat.Unit else Vector3.new(0, 0, -1)
 	local slideFrame = current.halls:GetAttribute("SlideFrame")
 	local axis = if typeof(slideFrame) == "CFrame" then slideFrame.Position else here
 	local out = Vector3.new(here.X - axis.X, 0, here.Z - axis.Z)
 	out = if out.Magnitude > 0.05 then out.Unit else Vector3.xAxis
-	local path = current.path
 	local character = Players.LocalPlayer.Character
 	local ignore = if character then { character } else {}
 	if f < 0.09 then
 		-- OVER THE SHOULDER, into the tube.
 		local eye = Cinema.clear(here - flat * 10 + up * 5, here, ignore)
 		Cinema.point(CFrame.lookAt(eye, here + flat * 10 - up * 3), 62)
+		Cinema.speedLines(0.12)
 	elseif f < 0.34 and path then
 		-- CHASING: behind the rider along the trough and a little over it, the tube ahead of them.
 		local behind = pathAt(path, f - 0.045)
 		local eye = behind.Position + behind.UpVector * 4.2 + Vector3.new(0, 1.5, 0)
 		Cinema.point(CFrame.lookAt(eye, here + look * 6 + up * 0.8), 70)
+		Cinema.speedLines(0.3)
 	elseif f < 0.5 then
 		-- FROM THE SHAFT'S WALL, as they come round towards it: never across the mast from them.
 		if once(current, "wall") then
@@ -278,19 +533,27 @@ local function flumeShot(current: Scene, root: BasePart, f: number)
 			Cinema.cut()
 		end
 		Cinema.point(CFrame.lookAt(current.fallEye :: Vector3, here + Vector3.new(0, 1, 0)), 46)
-	elseif f < 0.68 and path then
-		-- FROM JUST AHEAD, looking back at them: lying back, arms crossed, the helix going up behind.
-		local ahead = pathAt(path, math.min(1, f + 0.04))
+		Cinema.speedLines(0.2)
+	elseif f < 0.64 and path then
+		-- FROM JUST AHEAD, looking back at them: lying back, holding on, the helix going up behind. Always a point IN
+		-- the tube: with the end of it near, the point ahead was out past it in the air, and the camera hung over the
+		-- end of the tube while they went through it (check_shots.py found it).
+		local ahead = pathAt(path, math.min(HELIX - 0.005, f + 0.04))
 		local eye = ahead.Position + ahead.UpVector * 3 + Vector3.new(0, 1, 0)
 		Cinema.point(CFrame.lookAt(eye, here + Vector3.new(0, 1, 0)), 64)
+		Cinema.speedLines(0.45)
 	elseif f < 0.8 then
-		-- FROM BELOW, as they shoot out of the end of the tube and past: the water's rush left behind in
-		-- the tube, and only the air now.
+		-- FROM BELOW THE END OF THE TUBE, waiting there a moment before they reach it (where they are going), then as
+		-- they shoot out of it and past: the water's rush left behind in the tube, and only the air now.
 		if once(current, "below") then
-			current.fallEye = here - up * 34 + Vector3.new(flat.Z, 0, -flat.X) * 16 + flat * 10
+			local exit = if path then pathAt(path, HELIX - 0.005) else nil
+			local endAt = if exit then exit.Position else here
+			local endRun = if exit then Vector3.new(exit.LookVector.X, 0, exit.LookVector.Z) else flat
+			endRun = if endRun.Magnitude > 0.05 then endRun.Unit else flat
+			current.fallEye = endAt - up * 34 + Vector3.new(endRun.Z, 0, -endRun.X) * 16 + endRun * 10
 			Cinema.cut()
 		end
-		if once(current, "wind") then
+		if f >= HELIX and once(current, "wind") then
 			local rush = current.rush
 			if rush and rush.Parent then
 				TweenService:Create(rush, TweenInfo.new(0.6), { Volume = 0 }):Play()
@@ -298,9 +561,11 @@ local function flumeShot(current: Scene, root: BasePart, f: number)
 			keep(current, sound("PlungeWind", WIND, 0.5, 0.8, false))
 		end
 		Cinema.point(CFrame.lookAt(current.fallEye :: Vector3, here), 58)
+		Cinema.speedLines(0.55)
 	else
-		-- FROM ABOVE, as they fall into the dark, and far below something starts to show.
+		-- FROM ABOVE, as they fall into the dark. Nothing below shows yet: whatever is down there is not lit.
 		Cinema.point(CFrame.lookAt(here + up * 15 + flat * 3, here - up * 12), 74)
+		Cinema.speedLines(0.65)
 	end
 end
 
@@ -399,6 +664,7 @@ local function chamberStep(current: Scene, root: BasePart, humanoid: Humanoid, b
 		if once(current, "walk") then
 			current.speed = humanoid.WalkSpeed
 			humanoid.WalkSpeed = 9
+			Cinema.cut()
 		end
 		if once(current, "walk" .. math.floor(b)) then
 			humanoid:MoveTo(stand.Position)
@@ -419,15 +685,19 @@ local function chamberStep(current: Scene, root: BasePart, humanoid: Humanoid, b
 			root.CFrame = CFrame.lookAt(p, p + ahead)
 			holdMine("key")
 			Cinema.caption("The key", "It was in your pocket the whole time.", 7)
+			Cinema.cut()
 		end
 		if b > BEAT.key + 2.4 and once(current, "click") then
 			keep(current, sound(nil, CLICK, 0.9, 0.55, false))
 		end
-		Cinema.point(CFrame.lookAt(at(-2.8, 4.2, -20.4), at(-8, 2.8, -22.6)), 48)
+		-- Low, ahead of you and to your right, looking up: your face over the lock as the key goes in, the wheel beside
+		-- you. (It looked at the lock from your side, with you half out of the picture: check_shots.py.)
+		Cinema.point(CFrame.lookAt(at(-2, 3.6, -25.5), at(-8, 3.8, -21.1)), 46)
 	elseif b < BEAT.midnight then
 		-- THE WHEEL, AND THE GATE GOING UP.
 		if once(current, "wheel") then
 			holdMine("wheel")
+			Cinema.cut()
 		end
 		local axis = chamber:GetAttribute("WheelAxis")
 		local wheel = chamber:FindFirstChild("Wheel")
@@ -508,9 +778,11 @@ local function chamberStep(current: Scene, root: BasePart, humanoid: Humanoid, b
 				end
 			end
 		end
+		-- Behind you and to your left, easing in: you at the wheel in the lower half of the picture, from the waist up,
+		-- and the gate going up behind you. (It looked up at the gate and left you under the bottom bar.)
 		local push = ease((b - BEAT.wheel) / (BEAT.midnight - BEAT.wheel))
-		local eye = at(-12, 6, -8):Lerp(at(-6, 8, -15), push)
-		Cinema.point(CFrame.lookAt(eye, at(0, 13, -40)), 66)
+		local eye = at(-13, 6, -8):Lerp(at(-12, 6, -12), push)
+		Cinema.point(CFrame.lookAt(eye, at(-4, 9, -34)), 70)
 	elseif b < BEAT.last then
 		-- MIDNIGHT.
 		local face = chamber:GetAttribute("ClockFace")
@@ -537,7 +809,7 @@ local function chamberStep(current: Scene, root: BasePart, humanoid: Humanoid, b
 		if once(current, "last") then
 			Cinema.caption("Harrow Bay", "14 August. 9:14 in the morning.", 7)
 			-- The only chord of the four endings that resolves, left to ring out after the scene.
-			local chord = sound("HallsChord", nil, 0.7, 1, false)
+			local chord = sound("HallsChord", nil, 0.7, 1, false) or sound("EndChord", nil, 0.7, 1, false)
 			if chord then
 				game:GetService("Debris"):AddItem(chord, 12)
 			end
@@ -550,13 +822,47 @@ local function chamberStep(current: Scene, root: BasePart, humanoid: Humanoid, b
 	end
 end
 
--- THE MOUTH, `m` seconds after the fall out of the tube ends. Its beats, in seconds:
+-- THE MOUTH, `m` seconds after the fall out of the tube ends. The one moment in the game meant to frighten, so it
+-- does not show itself until it has you. You fall on into the black with the growl still in your ears; then the light
+-- comes up in it all at once and it LUNGES up out of the dark at you, jaws springing open, a roar and an impact frame;
+-- time all but stops with you hanging over a mouth that fills the shaft, seen past you from above at an angle, so its
+-- teeth ring the gullet and it can only be a mouth, and you twist over in the air to look down at it; then YOUR FACE,
+-- close, from under it, lit green from below, as you see what it is; then you drop in, seen from inside it (your face
+-- coming at it, not your back); then from above, wide, it shuts on you. Its beats, in seconds:
+-- Every shot in it at least eight tenths of a second, so it can be seen (check_shots.py): they were half that, and the
+-- whole of it was over in three and a half seconds of cuts. Only the bite itself is a slam.
 local JAWS = {
-	fall = 1.7, -- from above, falling in, the mouth opening under you
-	inside = 2.9, -- from inside it, looking up at you coming down
-	snap = 3.45, -- from the side, level with the teeth, as it shuts
-	caption = 3.9, -- in the dark: the one line
+	dark = 0.45, -- falling on, fast, into nothing
+	reveal = 0.8, -- the light comes up in it and it lunges up at you, opening
+	face = 1.8, -- past you from above at an angle: a speck over a mouth that fills the shaft, turning over to look
+	into = 2.6, -- your face, close, from under it, lit from below by the mouth: "No. No no no no."; then you drop
+	bite = 3.5, -- from inside it, looking up at you coming down into it
+	snap = 3.95, -- from above, wide: it shuts on you
+	caption = 4.55, -- in the dark: the one line
 }
+-- Where it waits, and how far it lunges: MAW_DEEP under the end of the tube's fall in the dark, then MAW_RISE up at you.
+-- HANG: how fast you fall while time all but stops over it (studs a second).
+local MAW_DEEP, MAW_RISE, LUNGE = 116, 34, 0.55
+local HANG = 2
+-- TURNING OVER to look: from lying on your back (as you came out of the tube) to face down into it, TURN seconds from
+-- a moment after it lights.
+local TURN_AT, TURN = 0.1, 0.55
+
+-- HOW FAST THEY FALL, `m` seconds into the mouth: as fast as they came out of the tube (`v0`), slowing as it comes
+-- for them until they all but hang over it, then dropping in fast.
+local function fallSpeed(m: number, v0: number): number
+	if m < JAWS.dark then
+		return v0 - 30 * m
+	elseif m < JAWS.reveal then
+		local from = v0 - 30 * JAWS.dark
+		return from + (HANG - from) * ease((m - JAWS.dark) / (JAWS.reveal - JAWS.dark))
+	elseif m < JAWS.into then
+		return HANG
+	elseif m < JAWS.into + 0.25 then
+		return HANG + (45 - HANG) * ease((m - JAWS.into) / 0.25)
+	end
+	return 45 + 35 * (m - JAWS.into - 0.25)
+end
 
 local function mawStep(current: Scene, root: BasePart, humanoid: Humanoid, m: number)
 	local mouth = current.mouth
@@ -568,24 +874,57 @@ local function mawStep(current: Scene, root: BasePart, humanoid: Humanoid, m: nu
 		end
 		return
 	end
-	local hinge: CFrame = mouth.hinge
-	local opens = -hinge.LookVector
-	local side = hinge.UpVector
 	local slideFrame = current.halls:GetAttribute("SlideFrame")
-	local axis = if typeof(slideFrame) == "CFrame" then slideFrame.Position else hinge.Position
-	local inward = Vector3.new(axis.X - hinge.Position.X, 0, axis.Z - hinge.Position.Z)
-	inward = if inward.Magnitude > 0.1 then inward.Unit else Vector3.xAxis
+	local character = Players.LocalPlayer.Character
+	local ignore = if character then { character, mouth.model } else { mouth.model }
 	if once(current, "fall") then
 		humanoid.PlatformStand = true
 		holdMine("flail")
 		current.rumble = sound("MawRumble", BASS, 0.9, 0.2, false)
 		keep(current, current.rumble)
 		Cinema.cut()
+		darken(current, root)
+		-- As fast as the end of the tube's fall: no jolt as one becomes the other.
+		local path = current.path
+		local n = if path then #path else 0
+		current.exitSpeed = if path and n > 2 then (path[n].Position - path[n - 1].Position).Magnitude * (n - 1) / current.slide
+			else 40
+		current.fallM, current.fallD, current.tumble = 0, 0, 0
 	end
-	-- THE RIDER falls on into it, turning over, and is held where the jaws close.
+	-- THE LUNGE: up out of the dark at you, fast and then slowing, as it opens.
+	local rest: CFrame = current.mawRest or mouth.hinge
+	current.mawRest = rest
+	local lunge = if m < JAWS.reveal then 0 else 1 - (1 - math.clamp((m - JAWS.reveal) / LUNGE, 0, 1)) ^ 3
+	-- (Only while it rises: carrying every part of it each frame once it has stopped would be work for nothing.)
+	if lunge ~= current.lungeAt then
+		current.lungeAt = lunge
+		Maw.place(mouth, rest + Vector3.new(0, MAW_RISE * lunge, 0))
+	end
+	local hinge: CFrame = mouth.hinge
+	local opens = -hinge.LookVector
+	local side = hinge.UpVector
+	local axis = if typeof(slideFrame) == "CFrame" then slideFrame.Position else hinge.Position
+	local inward = Vector3.new(axis.X - hinge.Position.X, 0, axis.Z - hinge.Position.Z)
+	inward = if inward.Magnitude > 0.1 then inward.Unit else Vector3.xAxis
+	-- THE RIDER falls on into it, turning over (slowly while time all but stops), and is held where the jaws close.
+	local v0 = current.exitSpeed or 40
+	local lastM = current.fallM or 0
+	if m < lastM then
+		lastM, current.fallD = 0, 0
+	end
+	local d = current.fallD or 0
+	local s = lastM
+	while s < m do
+		local h = math.min(0.01, m - s)
+		d += fallSpeed(s + h / 2, v0) * h
+		s += h
+	end
+	-- Turned over to face it, the tumble all but stops: you go in face first, looking at it.
+	local over = ease(math.clamp((m - JAWS.reveal - TURN_AT) / TURN, 0, 1))
+	current.tumble = (current.tumble or 0) + (m - lastM) * 0.9 * math.clamp(fallSpeed(m, v0) / 45, 0.12, 1.2) * (1 - 0.75 * over)
+	current.fallM, current.fallD = m, d
 	local floor = hinge.Position.Y + 8
-	local drop = 22 * m + 7 * m * m
-	local pos = from - Vector3.new(0, drop, 0)
+	local pos = from - Vector3.new(0, d, 0)
 	if pos.Y < floor then
 		pos = Vector3.new(pos.X, floor, pos.Z)
 	end
@@ -593,53 +932,102 @@ local function mawStep(current: Scene, root: BasePart, humanoid: Humanoid, m: nu
 		pos = current.lastFall or pos
 	end
 	current.lastFall = pos
-	root.CFrame = CFrame.new(pos) * CFrame.Angles(math.pi / 2 + m * 0.9, 0, m * 0.35)
+	local tumble = current.tumble or 0
+	root.CFrame = CFrame.new(pos) * CFrame.Angles(math.pi / 2 + tumble - math.pi * over, 0, tumble * 0.4)
+	local lit: Lit? = current.lit
+	if lit and lit.lamp then
+		lit.lamp.WorldPosition = pos + Vector3.new(0, DARK.over, 0) + inward * 2
+	end
 	root.AssemblyLinearVelocity = Vector3.zero
 	root.AssemblyAngularVelocity = Vector3.zero
-	-- THE JAWS: opening wide under you, breathing, then shut.
-	local upper, lower
-	if m < JAWS.fall then
-		local u = ease(m / JAWS.fall)
-		upper, lower = 0.28 + (0.8 - 0.28) * u, 0.24 + (0.66 - 0.24) * u
-	elseif m < JAWS.inside then
-		local breath = 0.03 * math.sin((m - JAWS.fall) * 6)
-		upper, lower = 0.8 + breath, 0.66 + breath
-	else
-		local u = math.clamp((m - JAWS.inside) / (JAWS.snap - JAWS.inside - 0.1), 0, 1)
+	-- THE JAWS: shut in the dark; SPRUNG open as it lunges; breathing, slow, while you hang; then shut on you.
+	local upper, lower = 0.04, 0.03
+	if m >= JAWS.reveal and m < JAWS.snap - 0.4 then
+		local u = 1 - (1 - math.clamp((m - JAWS.reveal) / 0.35, 0, 1)) ^ 3
+		local breath = 0.03 * math.sin((m - JAWS.reveal) * 2.2)
+		upper, lower = 0.04 + (0.86 - 0.04) * u + breath, 0.03 + (0.72 - 0.03) * u + breath
+	elseif m >= JAWS.snap - 0.4 then
+		local u = math.clamp((m - (JAWS.snap - 0.4)) / 0.36, 0, 1)
 		u = u * u * u
-		upper, lower = 0.8 + (0.02 - 0.8) * u, 0.66 + (0.02 - 0.66) * u
+		upper, lower = 0.86 + (0.02 - 0.86) * u, 0.72 + (0.02 - 0.72) * u
 	end
 	Maw.set(mouth, upper, lower)
-	Maw.light(mouth, if m < JAWS.fall then 0.3 + 0.7 * ease(m / JAWS.fall) else 1)
-	if m < JAWS.fall then
-		-- FROM ABOVE, falling with you: the mouth opening in the dark under you, the light coming up in
-		-- it, pushing in as it rushes up (wider, then narrower: a dolly zoom).
-		local u = ease(m / JAWS.fall)
-		local back = 9 + 14 * u
-		local fov = math.deg(2 * math.atan(6.2 / back))
-		Cinema.point(CFrame.lookAt(pos + Vector3.new(0, back, 0) + inward * 2.5, pos - Vector3.new(0, 40, 0), side), fov)
-		Cinema.focus(back + 30, 0.25)
-	elseif m < JAWS.inside then
-		-- FROM INSIDE IT, between the jaws a little up from the hinge, looking up at you coming down,
-		-- the teeth either side of the picture.
+	-- ITS LIGHT: nothing until it comes for you, then all at once (one stutter as it catches), then never steady.
+	if m < JAWS.reveal then
+		Maw.light(mouth, 0)
+	elseif m < JAWS.reveal + 0.12 then
+		Maw.light(mouth, 0.3)
+	else
+		Maw.light(mouth, 1, os.clock())
+	end
+	if m >= JAWS.reveal and once(current, "reveal") then
+		-- IT COMES: a roar, an impact frame, the shaft shaking, its breath coming up out of it.
+		keep(current, sound("MawRoar", BASS, 1, 0.32, false))
+		local growl = current.growl
+		if growl and growl.Parent then
+			TweenService:Create(growl, TweenInfo.new(0.3), { Volume = 0 }):Play()
+		end
+		Cinema.impact(1.4)
+		Cinema.shake(2.4)
+		Cinema.speedLines(0)
+		Maw.breathe(mouth, 10)
+		Cinema.cut()
+	end
+	if m >= JAWS.face + 0.05 and once(current, "no") then
+		Cinema.think(character, "No. No no no no.", 1.6)
+	end
+	if m < JAWS.reveal then
+		-- FROM ABOVE, falling with you, into nothing: black under you, and the growl.
+		Cinema.speedLines(0.65)
+		Cinema.point(CFrame.lookAt(pos + Vector3.new(0, 9, 0) + inward * 3 + side * 1.5, pos - Vector3.new(0, 30, 0), side), 66)
+	elseif m < JAWS.face then
+		-- PAST YOU, FROM ABOVE AT AN ANGLE, into it: you in the top third of the picture, small, and under you a mouth
+		-- that fills the shaft, its teeth ringing a gullet lit from inside; you twisting over to look. Easing in. (It
+		-- looked further down, and you were above the picture, under the top bar, the whole shot: check_shots.py.)
+		local k = ease((m - JAWS.reveal) / (JAWS.face - JAWS.reveal))
+		local eye = pos + Vector3.new(0, 14 - 1 * k, 0) + inward * (20 - 2 * k) + side * 8
+		local target = (hinge.Position + opens * 16):Lerp(pos, 0.76)
+		Cinema.point(CFrame.lookAt(eye, target, Vector3.yAxis), 74 - 4 * k)
+		Cinema.focus(nil)
+	elseif m < JAWS.into then
+		-- YOUR FACE, close, from under it (between you and the mouth): lit green from below, the dark above you, as you
+		-- see what it is. The picture's up is your head's, so the face is the right way up in it.
+		if once(current, "face") then
+			Cinema.cut()
+		end
+		local headPart = character and character:FindFirstChild("Head")
+		local face = if headPart and headPart:IsA("BasePart") then headPart.Position else pos
+		local k = ease((m - JAWS.face) / (JAWS.into - JAWS.face))
+		-- Under your face and out past the crown of your head (lying as you are, your chest and arms would be
+		-- in the way straight under it).
+		local crown = Vector3.new(root.CFrame.UpVector.X, 0, root.CFrame.UpVector.Z)
+		crown = if crown.Magnitude > 0.1 then crown.Unit else inward
+		local eye = face - Vector3.new(0, 4.4 - 0.8 * k, 0) + crown * 1.8 + side * 0.8
+		Cinema.point(CFrame.lookAt(eye, face, root.CFrame.UpVector), 54 - 6 * k)
+		Cinema.focus((face - eye).Magnitude, 0.6)
+		Cinema.shake(0.4)
+	elseif m < JAWS.bite then
+		-- FROM INSIDE IT, low between the jaws, looking up at you coming down into it, the teeth either side.
 		if once(current, "inside") then
 			Cinema.cut()
 		end
-		local eye = hinge.Position + opens * 10 + inward * 4
-		Cinema.point(CFrame.lookAt(eye, pos, side), 76)
+		local eye = hinge.Position + opens * 9 + inward * 5
+		Cinema.point(CFrame.lookAt(eye, pos, side), 82)
 		Cinema.focus((pos - eye).Magnitude, 0.35)
-	elseif m < JAWS.snap then
-		-- FROM THE SIDE, level with the teeth, as it shuts: kept inside the shaft's walls.
+	elseif m < JAWS.snap + 0.1 then
+		-- FROM ABOVE, WIDE: the jaws slamming shut on you, teeth through teeth.
 		if once(current, "bite") then
 			Cinema.cut()
 			Cinema.focus(nil)
 		end
 		if m > JAWS.snap - 0.2 and once(current, "snap") then
 			keep(current, sound("JawsShut", BASS, 1, 0.3, false))
+			Cinema.impact(1.5)
 			Cinema.shake(3)
+			Maw.breathe(mouth, 0)
 		end
-		local eye = hinge.Position + opens * 30 + side * 24 + inward * 8
-		Cinema.point(CFrame.lookAt(eye, hinge.Position + opens * 26), 58)
+		Cinema.point(CFrame.lookAt(hinge.Position + opens * 55 + inward * 24 + side * 14, hinge.Position + opens * 22,
+			Vector3.yAxis), 70)
 	else
 		-- BLACK. Then only a heartbeat, from inside something.
 		if once(current, "dark") then
@@ -671,19 +1059,48 @@ local function stepScene()
 		endScene()
 		return
 	end
-	local t = workspace:GetServerTimeNow() - current.began
+	-- ON THIS CLIENT'S OWN CLOCK, set against the server's once when the ride began: the server's time read
+	-- fresh every frame is corrected now and then as the clocks agree, and every correction was a hitch.
+	local t = os.clock() - current.clockAt
 	local f = t / current.slide
 	if f < 1 then
 		-- THE RIDE, drawn here: the rider's root on the path, every frame, lying back in the trough.
 		local path = current.path
 		if path and f >= 0 then
 			humanoid.PlatformStand = true
-			root.CFrame = pathAt(path, f)
+			root.CFrame = lying(current, path, pathAt(path, f), f, t)
 			root.AssemblyLinearVelocity = Vector3.zero
 			root.AssemblyAngularVelocity = Vector3.zero
+			if f < HELIX and not current.wake and once(current, "wake") then
+				current.wake = startWake(root)
+			end
+		end
+		if f >= HELIX then
+			if current.wake then
+				current.wake:Destroy()
+				current.wake = nil
+			end
+			-- SHOT OUT OF THE END OF IT, into the air: hit, and the shaft goes black (THE DARK).
+			if once(current, "shot out") then
+				Cinema.impact(0.8)
+				darken(current, root)
+			end
 		end
 		if f >= 0.02 and once(current, "title") then
 			Cinema.caption("The Corporation Baths", "Staff only beyond the flume.", 7)
+		end
+		-- WHAT THEY THINK, over their head as they go: where this goes, then that it does not stop.
+		for index, thought in ipairs(THOUGHTS) do
+			if index > current.thought and t >= thought[1] then
+				current.thought = index
+				Cinema.think(Players.LocalPlayer.Character, thought[2] :: string, thought[3] :: number)
+			end
+		end
+		-- THE GROWL, from a long way down, before anything can be seen: low, felt more than heard.
+		if current.mouth and f >= GROWL_AT and once(current, "growl") then
+			current.growl = sound("MawGrowl", BASS, 0.6, 0.18, false)
+			keep(current, current.growl)
+			Cinema.shake(0.35)
 		end
 		-- THE MOUTH, in the dark under the end of the fall, before anyone could see it.
 		if current.chamber and Maw and current.maw > 0 and f >= 0.6 and once(current, "mouth") then
@@ -694,16 +1111,15 @@ local function stepScene()
 				local radial = Vector3.new(from.X - slideFrame.Position.X, 0, from.Z - slideFrame.Position.Z)
 				radial = if radial.Magnitude > 0.1 then radial.Unit else Vector3.xAxis
 				current.fallFrom = from
-				-- Ninety studs down: far enough that the fall into it can be watched, near enough that the
-				-- lit teeth show from the end of the tube.
-				current.mouth = Maw.build(Maw.facing(from - Vector3.new(0, 90, 0), Vector3.yAxis, Vector3.yAxis:Cross(radial)),
+				-- MAW_DEEP down, in the dark, where nothing of it can be seen from the fall; it lunges up MAW_RISE at you
+				-- (mawStep).
+				current.mouth = Maw.build(Maw.facing(from - Vector3.new(0, MAW_DEEP, 0), Vector3.yAxis, Vector3.yAxis:Cross(radial)),
 					workspace)
-				Maw.set(current.mouth, 0.28, 0.24)
+				-- Shut, and DARK: nothing of it shows until it opens (mawStep). It used to light up as you fell,
+				-- so by the time it opened you had been looking at it for two seconds.
+				Maw.set(current.mouth, 0.06, 0.05)
 				Maw.light(current.mouth, 0)
 			end
-		end
-		if current.mouth and f >= 0.8 then
-			Maw.light(current.mouth, 0.3 * (f - 0.8) / 0.2)
 		end
 		flumeShot(current, root, f)
 		return
@@ -718,6 +1134,8 @@ local function stepScene()
 		mawStep(current, root, humanoid, t - current.slide)
 		return
 	end
+	-- The light back, in the black before the chamber.
+	relight(current)
 	chamberStep(current, root, humanoid, t - current.slide - current.maw)
 end
 
@@ -757,7 +1175,9 @@ local function started(player: Player, began: number, slide: number, gates: numb
 	scene = { began = began, slide = slide, gates = gates, halls = halls, chamber = chamber,
 		frame = if typeof(frame) == "CFrame" then frame else nil, done = {}, sounds = {}, speed = nil,
 		arrived = false, fallEye = nil, gateRest = nil, wheelRest = nil, maw = maw, mouth = nil, fallFrom = nil,
-		heart = nil, rumble = nil, lastFall = nil, path = path }
+		heart = nil, rumble = nil, lastFall = nil, path = path, rush = nil,
+		clockAt = os.clock() - (workspace:GetServerTimeNow() - began), exitFrame = nil, thought = 0, wake = nil,
+		growl = nil, exitSpeed = nil, fallM = nil, fallD = nil, tumble = nil, lit = nil, mawRest = nil, lungeAt = nil }
 	if path and hallsEvent then
 		hallsEvent:FireServer("riding")
 	end
@@ -782,7 +1202,186 @@ local function started(player: Player, began: number, slide: number, gates: numb
 	end
 end
 
+-- ===== THE WATER IN THE FLUME =====
+--
+-- FloodedHallsService lays a sheet of water down the trough; here it runs downhill: each piece's texture slid
+-- along it, the way the piece was laid (its +Z is downstream), at FLUME_FLOW studs a second.
+local FLUME_FLOW = 14
+local flumeWater: { [Texture]: boolean } = {}
+local function moveWater(clock: number)
+	for flow in pairs(flumeWater) do
+		if flow.Parent then
+			flow.OffsetStudsV = (clock * FLUME_FLOW) % flow.StudsPerTileV
+		else
+			flumeWater[flow] = nil
+		end
+	end
+end
+local function waterAdded(part: Instance)
+	local flow = part:FindFirstChild("Flow")
+	if flow and flow:IsA("Texture") then
+		flumeWater[flow] = true
+	end
+end
+
+-- ===== THE LAMPS BEHIND YOU =====
+
+local LAMPS_KEPT = 2 -- bays behind you whose roof lights stay lit
+local LAMP_GLOW = 0.3 -- what a failed lamp keeps of its light: a low glow, never off
+local LAMP_DIM = Color3.fromRGB(96, 88, 70) -- the panel's colour with nothing behind it
+local LAMP_FADE = 1.2 -- seconds from the stutter down to the glow
+local LAMP_BACK = 0.8 -- seconds back up, when you are sent back past it
+-- The stutter as it fails: how much light, for how long. Never below a sixth, and over in half a second.
+local STUTTER = { { 0.18, 0.06 }, { 1, 0.08 }, { 0.18, 0.1 }, { 0.85, 0.12 } }
+local LAMP_BAY: number = if HallRoute and typeof(HallRoute.BAY) == "number" then HallRoute.BAY else 96
+
+type Lamp = { light: SurfaceLight?, bright: number, colour: Color3, along: number, failed: boolean, level: number,
+	turn: number, fresh: boolean }
+local lamps: { [BasePart]: Lamp } = {}
+local lampsAt = 0
+local lampsSeen = 0
+
+local function setLamp(part: BasePart, lamp: Lamp, level: number)
+	lamp.level = level
+	local light = lamp.light
+	if light and light.Parent then
+		light.Brightness = lamp.bright * level
+	end
+	part.Color = LAMP_DIM:Lerp(lamp.colour, level)
+end
+
+-- From where it is now to `level` over `seconds`, unless something newer has been asked of it.
+local function fadeLamp(part: BasePart, lamp: Lamp, level: number, seconds: number, turn: number)
+	local from = lamp.level
+	local began = os.clock()
+	while lamp.turn == turn and part.Parent do
+		local u = math.clamp((os.clock() - began) / seconds, 0, 1)
+		setLamp(part, lamp, from + (level - from) * u)
+		if u >= 1 then
+			break
+		end
+		task.wait()
+	end
+end
+
+local function failLamp(part: BasePart, lamp: Lamp)
+	lamp.failed = true
+	lamp.turn += 1
+	local turn = lamp.turn
+	task.spawn(function()
+		local click = Instance.new("Sound")
+		click.SoundId = CLICK
+		click.Volume = 0.3
+		click.PlaybackSpeed = 0.8
+		click.RollOffMaxDistance = 300
+		click.Parent = part
+		click:Play()
+		click.Ended:Once(function()
+			click:Destroy()
+		end)
+		for _, beat in ipairs(STUTTER) do
+			if lamp.turn ~= turn or not part.Parent then
+				return
+			end
+			setLamp(part, lamp, beat[1])
+			task.wait(beat[2])
+		end
+		fadeLamp(part, lamp, LAMP_GLOW, LAMP_FADE, turn)
+	end)
+end
+
+local function relightLamp(part: BasePart, lamp: Lamp)
+	lamp.failed = false
+	lamp.turn += 1
+	local turn = lamp.turn
+	task.spawn(fadeLamp, part, lamp, 1, LAMP_BACK, turn)
+end
+
+local function stepLamps()
+	local now = os.clock()
+	if now - lampsAt < 0.2 then
+		return
+	end
+	lampsAt = now
+	local halls = workspace:FindFirstChild("FloodedHalls")
+	if not halls then
+		if next(lamps) ~= nil then
+			lamps = {}
+		end
+		return
+	end
+	-- Only on a run through the halls, and not during the ending (the scene has the room's lamps to itself).
+	if Players.LocalPlayer:GetAttribute("InLevel") ~= "floodedHalls" or scene ~= nil then
+		return
+	end
+	-- THE ROOF LIGHTS, looked for now and then: with streaming on they arrive as you get near them, and one that
+	-- comes back after streaming out is a new part, found again here.
+	if now - lampsSeen > 1 then
+		lampsSeen = now
+		for _, item in ipairs(halls:GetChildren()) do
+			if item:IsA("BasePart") and item.Name == "RoofLight" and not lamps[item] and not item:GetAttribute("Failing") then
+				local along = item:GetAttribute("Along")
+				if typeof(along) == "number" then
+					local light = item:FindFirstChildOfClass("SurfaceLight")
+					lamps[item] = { light = light, bright = if light then light.Brightness else 0, colour = item.Color,
+						along = along, failed = false, level = 1, turn = 0, fresh = true }
+				end
+			end
+		end
+	end
+	local character = Players.LocalPlayer.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not (root and root:IsA("BasePart")) then
+		return
+	end
+	-- WHERE YOU ARE: the bay of the nearest roof light.
+	local nearest, here = math.huge, nil
+	for part, lamp in pairs(lamps) do
+		if part.Parent then
+			local gap = Vector3.new(part.Position.X - root.Position.X, 0, part.Position.Z - root.Position.Z).Magnitude
+			if gap < nearest then
+				nearest, here = gap, lamp.along
+			end
+		else
+			lamps[part] = nil
+		end
+	end
+	if here == nil then
+		return
+	end
+	local behind = here - (LAMPS_KEPT + 0.5) * LAMP_BAY
+	for part, lamp in pairs(lamps) do
+		local gone = lamp.along < behind
+		if lamp.fresh then
+			-- First seen already behind you (a late join, or streamed back in): low at once, no stutter.
+			lamp.fresh = false
+			if gone then
+				lamp.failed = true
+				setLamp(part, lamp, LAMP_GLOW)
+			end
+		elseif gone and not lamp.failed then
+			failLamp(part, lamp)
+		elseif not gone and lamp.failed and lamp.along > behind + LAMP_BAY * 0.5 then
+			relightLamp(part, lamp)
+		end
+	end
+end
+
 function FloodedHallsClient.start()
+	-- The lamps first: they need nothing from the server but the halls themselves.
+	local lampsWarned = false
+	for _, part in ipairs(CollectionService:GetTagged("FlumeWater")) do
+		waterAdded(part)
+	end
+	CollectionService:GetInstanceAddedSignal("FlumeWater"):Connect(waterAdded)
+	RunService.Heartbeat:Connect(function()
+		local ok, err = pcall(stepLamps)
+		pcall(moveWater, os.clock())
+		if not ok and not lampsWarned then
+			lampsWarned = true
+			warn("FloodedHallsClient: the lamps behind you stopped: " .. tostring(err))
+		end
+	end)
 	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents", 20)
 	local event = remotes and remotes:WaitForChild("HallsCinema", 20)
 	if not (event and event:IsA("RemoteEvent")) then
@@ -808,4 +1407,5 @@ function FloodedHallsClient.start()
 	print("FloodedHallsClient: running, " .. FloodedHallsClient.VERSION)
 end
 
+FloodedHallsClient.STAMP = "49a6c165"
 return FloodedHallsClient

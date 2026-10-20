@@ -6,6 +6,82 @@ local Players = game:GetService("Players")
 print("[client] Bootstrap starting")
 
 local Services = script.Parent:WaitForChild("Services")
+
+-- THE PASTE CHECK'S CLIENT HALF (Studio only): every client module's STAMP against what the server's Bootstrap
+-- says it should be (it publishes them as PasteStamps, from tools/stamp.py), so an old copy of a client module
+-- is named too. Missing modules are the server's half to name.
+local function pasteCheckClient()
+	local raw = ReplicatedStorage:GetAttribute("PasteStamps")
+	if type(raw) ~= "string" then
+		return
+	end
+	local expected = game:GetService("HttpService"):JSONDecode(raw)
+	if type(expected) ~= "table" then
+		return
+	end
+	local names = {}
+	for name in pairs(expected) do
+		table.insert(names, name)
+	end
+	table.sort(names)
+	-- ANOTHER MODULE'S CODE IN IT (pasted into the wrong script): any of the game's modules here whose STAMP is the
+	-- one expected of a different module, stamped or not itself. Only the game's own (the stamped ones and the four
+	-- with no stamp, UNSTAMPED, which check_stamps.py keeps right): anything else here, a module taken out of the game
+	-- and not yet deleted, is left alone rather than started up by being required.
+	local UNSTAMPED = { "CloudService", "InputService", "SeaService" }
+	local owner: { [string]: string } = {}
+	for name, stamp in pairs(expected) do
+		owner[stamp] = name
+	end
+	local wrong: { string } = {}
+	local misplaced: { [string]: boolean } = {}
+	local ours = table.clone(names)
+	for _, name in ipairs(UNSTAMPED) do
+		table.insert(ours, name)
+	end
+	for _, name in ipairs(ours) do
+		local found = Services:FindFirstChild(name)
+		if found and found:IsA("ModuleScript") then
+			local ok, loaded = pcall(require, found)
+			local stamp = if ok and type(loaded) == "table" then loaded.STAMP else nil
+			local whose = if type(stamp) == "string" then owner[stamp] else nil
+			if whose and whose ~= found.Name then
+				misplaced[found.Name] = true
+				table.insert(wrong, ("%s has %s's code in it: paste src/Client/Services/%s.lua into it (and check %s)")
+					:format(found.Name, whose, found.Name, whose))
+			end
+		end
+	end
+	local stale = {}
+	for _, name in ipairs(names) do
+		local found = Services:FindFirstChild(name)
+		if found and found:IsA("ModuleScript") and not misplaced[name] then
+			local ok, loaded = pcall(require, found)
+			local stamp = if ok and type(loaded) == "table" then loaded.STAMP else nil
+			if stamp ~= expected[name] then
+				table.insert(stale, name)
+			end
+		end
+	end
+	if #wrong > 0 then
+		warn("PASTE CHECK (client): pasted into the wrong script in StarterPlayerScripts/Services:\n  "
+			.. table.concat(wrong, "\n  "))
+	end
+	if #stale == 0 and #wrong == 0 then
+		print("PASTE CHECK (client): every client module is the current copy.")
+	elseif #stale > 0 then
+		warn(("PASTE CHECK (client): %d old cop%s in StarterPlayerScripts/Services, paste the current one: %s"):format(
+			#stale, if #stale == 1 then "y" else "ies", table.concat(stale, ", ")))
+	end
+end
+if game:GetService("RunService"):IsStudio() then
+	task.delay(6, function()
+		local ok, err = pcall(pasteCheckClient)
+		if not ok then
+			warn("PASTE CHECK (client) could not run: " .. tostring(err))
+		end
+	end)
+end
 local UIService = require(Services:WaitForChild("UIService"))
 local InputService = require(Services:WaitForChild("InputService"))
 require(Services:WaitForChild("AudioService"))
@@ -48,10 +124,16 @@ task.spawn(CloudService.start)
 -- Each says in Output that it started, or exactly why it did not: an older copy of this file had
 -- none of these lines, and the only sign was that nothing on those levels moved.
 -- AND THE JOURNAL (what you pick up, to read when you choose) and THE VIEW (third person, first through
--- the lobby's viewer, and Ctrl for the cursor). The prompts are Roblox's own: a restyled one was tried
+-- the lobby's viewer, and Ctrl for the cursor), THE SHOP (the lobby kiosk and the pause menu), and THE FIRST
+-- FIVE MINUTES (the welcome, the lobby guide, each material's hint once), and THE FOOTPRINTS AND STEP
+-- SOUNDS everyone wears (StepService), THE EMOTES everyone sees (EmoteService), and THE SQUISH ROOM'S lifts
+-- (SquishRoomClient), and THE LAUNCH in the Sunken City's harbour with its searchlight (SearchlightClient). And
+-- in Studio only, the test panel (DevPanelClient, F8). The prompts are Roblox's own: a restyled one was tried
 -- and taken out, because it swallowed the camera's right-click release when the cursor was over it.
 for _, name in ipairs({ "SkyPoolsClient", "SunkenCityClient", "CityShoreClient", "FloodedHallsClient",
-	"AmbienceService", "StoryClient", "JournalService", "ViewModeService" }) do
+	"AmbienceService", "StoryClient", "JournalService", "ViewModeService", "ShopService", "OnboardingService",
+	"StepService", "EmoteService", "SquishRoomClient", "DevPanelClient", "SearchlightClient", "CosmeticsClient",
+	"TalkClient" }) do
 	task.spawn(function()
 		local module = Services:WaitForChild(name, 30)
 		if module and module:IsA("ModuleScript") then
@@ -313,7 +395,7 @@ LevelCompleted.OnClientEvent:Connect(function(payload)
 			task.wait(0.2)
 			waited += 0.2
 		end
-		UIService.showCompletion(payload.levelId, payload.time)
+		UIService.showCompletion(payload.levelId, payload.time, payload.story)
 
 		local character = Players.LocalPlayer.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart")

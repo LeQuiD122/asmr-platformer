@@ -508,4 +508,5 @@ end
 
 print("[ScreenEffects] loaded, 16 material lens looks (7 materials leave no mark)")
 
+ScreenEffects.STAMP = "1aad43c7"
 return ScreenEffects

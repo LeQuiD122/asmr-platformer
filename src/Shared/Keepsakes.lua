@@ -157,4 +157,5 @@ local Keepsakes: { [string]: Keepsake } = {
 	},
 }
 
+Keepsakes.STAMP = "3c18d973"
 return Keepsakes

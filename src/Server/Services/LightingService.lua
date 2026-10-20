@@ -367,4 +367,5 @@ function LightingService.apply(region: string?)
 	-- to deliver a reminder. It stays documented in the header instead.
 end
 
+LightingService.STAMP = "913e4c54"
 return LightingService

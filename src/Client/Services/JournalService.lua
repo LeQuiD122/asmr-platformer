@@ -26,24 +26,28 @@
 -- furniture, Garamond for anything somebody wrote). It frees the mouse while it is open, so it works
 -- in first person too.
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local ContextActionService = game:GetService("ContextActionService")
 local SoundService = game:GetService("SoundService")
+-- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
+local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Style"))
 
 local JournalService = {}
-JournalService.VERSION = "eighteenth pass, 2026-09-29"
+JournalService.VERSION = "kept between sessions, 2026-10-08"
 
-local TITLE = Font.new("rbxasset://fonts/families/Nunito.json", Enum.FontWeight.Bold)
-local BODY = Font.new("rbxasset://fonts/families/Nunito.json", Enum.FontWeight.Medium)
-local COVER = Color3.fromRGB(20, 19, 27)
-local PAPER = Color3.fromRGB(240, 234, 216)
+local TITLE = Style.FONT.heading
+local BODY = Style.FONT.body
+local COVER = Style.COLOUR.panel
+local PAPER = Style.COLOUR.paper
 local PAPER_DEEP = Color3.fromRGB(226, 218, 196)
-local INK = Color3.fromRGB(44, 38, 32)
+local INK = Style.COLOUR.paperInk
 local INK_SOFT = Color3.fromRGB(110, 98, 80)
-local ACCENT = Color3.fromRGB(246, 206, 148)
+local ACCENT = Style.COLOUR.accent
 local UNREAD = Color3.fromRGB(214, 96, 84)
 local TOAST_SECONDS = 4.5
 
@@ -54,6 +58,7 @@ local KINDS = {
 	{ key = "note", name = "Notes", empty = "Nothing yet. Notice boards and letters you take are kept here." },
 	{ key = "keepsake", name = "Keepsakes", empty = "Nothing yet. The things the Hold kept are lying about off the route: pick one up." },
 	{ key = "secret", name = "Secrets", empty = "Nothing yet. Some things here only open to a pry bar." },
+	{ key = "material", name = "Materials", empty = "Nothing yet. Every material you stand on in a level is kept here." },
 }
 
 local keepsakeTotal = (function(): number
@@ -62,9 +67,13 @@ local keepsakeTotal = (function(): number
 	if module and module:IsA("ModuleScript") then
 		local ok, data = pcall(require, module)
 		if ok and typeof(data) == "table" then
+			-- THE KEEPSAKES, not everything in the module: its STAMP was counted too, so the journal said "27 of 28"
+			-- with every keepsake found.
 			local count = 0
-			for _ in pairs(data) do
-				count += 1
+			for _, entry in pairs(data) do
+				if typeof(entry) == "table" and typeof(entry.thing) == "string" then
+					count += 1
+				end
 			end
 			return count
 		end
@@ -85,7 +94,7 @@ end)()
 
 local entries: { Entry } = {}
 local byId: { [string]: Entry } = {}
-local counts: { [string]: number } = { note = 0, keepsake = 0, secret = 0 }
+local counts: { [string]: number } = { note = 0, keepsake = 0, secret = 0, material = 0 }
 local ui: { [string]: any } = {}
 local isOpen = false
 local shownKind = "note"
@@ -108,7 +117,7 @@ local function pad(parent: Instance, x: number, y: number)
 	padding.Parent = parent
 end
 
-local function text(parent: Instance, name: string, value: string, font: Font | Enum.Font, size: number, colour: Color3): TextLabel
+local function text(parent: Instance, name: string, value: string, font: Font, size: number, colour: Color3): TextLabel
 	local label = Instance.new("TextLabel")
 	label.Name = name
 	label.BackgroundTransparency = 1
@@ -117,11 +126,7 @@ local function text(parent: Instance, name: string, value: string, font: Font | 
 	label.TextWrapped = true
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.TextYAlignment = Enum.TextYAlignment.Top
-	if typeof(font) == "Font" then
-		label.FontFace = font
-	else
-		label.Font = font
-	end
+	label.FontFace = font
 	label.TextSize = size
 	label.TextColor3 = colour
 	label.Text = value
@@ -227,7 +232,7 @@ local function showEntry(entry: Entry?)
 				kind = k
 			end
 		end
-		local hint = text(page, "Empty", kind.empty, Enum.Font.Garamond, 20, INK_SOFT)
+		local hint = text(page, "Empty", kind.empty, Style.FONT.paper, 20, INK_SOFT)
 		hint.LayoutOrder = 1
 		return
 	end
@@ -241,7 +246,7 @@ local function showEntry(entry: Entry?)
 	local title = text(page, "Title", entry.title, TITLE, 24, INK)
 	title.LayoutOrder = 2
 	if entry.from then
-		local from = text(page, "From", entry.from, Enum.Font.Garamond, 18, INK_SOFT)
+		local from = text(page, "From", entry.from, Style.FONT.paper, 18, INK_SOFT)
 		from.LayoutOrder = 3
 	end
 	local rule = Instance.new("Frame")
@@ -252,7 +257,7 @@ local function showEntry(entry: Entry?)
 	rule.Size = UDim2.new(0, 120, 0, 1)
 	rule.LayoutOrder = 4
 	rule.Parent = page
-	local body = text(page, "Body", entry.body, Enum.Font.Garamond, 22, INK)
+	local body = text(page, "Body", entry.body, Style.FONT.paper, 22, INK)
 	body.LineHeight = 1.12
 	body.LayoutOrder = 5
 	refreshList()
@@ -309,7 +314,7 @@ refreshList = function()
 			dot.Visible = not entry.read
 			dot.Parent = row
 			round(dot, 4)
-			local name = text(row, "Name", entry.title, Enum.Font.Garamond, 20, INK)
+			local name = text(row, "Name", entry.title, Style.FONT.paper, 20, INK)
 			name.Position = UDim2.fromOffset(24, 8)
 			name.Size = UDim2.new(1, -30, 0, 22)
 			name.AutomaticSize = Enum.AutomaticSize.None
@@ -381,9 +386,17 @@ local function setOpen(on: boolean)
 			end
 			return Enum.ContextActionResult.Sink
 		end, false, Enum.ContextActionPriority.High.Value + 10, Enum.KeyCode.Escape, Enum.KeyCode.ButtonB)
+		-- A CONTROLLER starts on the kind being shown, and moves from there.
+		if UserInputService:GetLastInputType().Name:sub(1, 7) == "Gamepad" and ui.tabs and ui.tabs[shownKind] then
+			game:GetService("GuiService").SelectedObject = ui.tabs[shownKind]
+		end
 		chime()
 	else
 		ContextActionService:UnbindAction("JournalClose")
+		local selected = game:GetService("GuiService").SelectedObject
+		if selected and selected:IsDescendantOf(book) then
+			game:GetService("GuiService").SelectedObject = nil
+		end
 		local away = TweenService:Create(dim, TweenInfo.new(0.2), { BackgroundTransparency = 1 })
 		away:Play()
 		TweenService:Create(ui.scale, TweenInfo.new(0.2), { Scale = 0.96 }):Play()
@@ -404,12 +417,21 @@ function JournalService.isOpen(): boolean
 	return isOpen
 end
 
+-- OPENED AT A KIND (the keepsake shelf in the squish room opens it at the keepsakes).
+function JournalService.open(kind: string?)
+	setOpen(true)
+	if kind then
+		pickKind(kind)
+	end
+end
+
 local function build()
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "Journal"
 	screen.ResetOnSpawn = false
-	screen.IgnoreGuiInset = true
+	-- INSIDE THE SAFE AREA, clear of a phone's notch.
+	screen.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 	screen.DisplayOrder = 45
 	screen.Parent = playerGui
 	ui.screen = screen
@@ -495,7 +517,7 @@ local function build()
 	toastList.Parent = toast
 	ui.toastEyebrow = text(toast, "Eyebrow", "", TITLE, 12, ACCENT)
 	ui.toastEyebrow.LayoutOrder = 1
-	ui.toastTitle = text(toast, "Title", "", Enum.Font.Garamond, 20, PAPER)
+	ui.toastTitle = text(toast, "Title", "", Style.FONT.heading, 20, PAPER)
 	ui.toastTitle.LayoutOrder = 2
 	ui.toastHint = text(toast, "Hint", "", BODY, 13, Color3.fromRGB(190, 184, 170))
 	ui.toastHint.LayoutOrder = 3
@@ -559,7 +581,8 @@ local function build()
 	tabsRow.Name = "Kinds"
 	tabsRow.BackgroundTransparency = 1
 	tabsRow.Position = UDim2.fromOffset(0, 26)
-	tabsRow.Size = UDim2.new(1, 0, 0, 30)
+	-- A THUMB'S HEIGHT: 30 was a target for a mouse.
+	tabsRow.Size = UDim2.new(1, 0, 0, 44)
 	tabsRow.Parent = left
 	local tabsLayout = Instance.new("UIListLayout")
 	tabsLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -570,7 +593,13 @@ local function build()
 	for index, kind in ipairs(KINDS) do
 		local button = Instance.new("TextButton")
 		button.Name = kind.name
-		button.Size = UDim2.new(1 / 3, -4, 1, 0)
+		-- As many to a row as there are kinds; a name that does not fit on a phone gets smaller, never cut off.
+		button.Size = UDim2.new(1 / #KINDS, -5, 1, 0)
+		button.TextWrapped = true
+		button.TextScaled = true
+		local most = Instance.new("UITextSizeConstraint")
+		most.MaxTextSize = 13
+		most.Parent = button
 		button.BackgroundColor3 = PAPER_DEEP
 		button.BorderSizePixel = 0
 		button.FontFace = TITLE
@@ -589,8 +618,8 @@ local function build()
 	list.Name = "List"
 	list.BackgroundTransparency = 1
 	list.BorderSizePixel = 0
-	list.Position = UDim2.fromOffset(0, 66)
-	list.Size = UDim2.new(1, 0, 1, -66)
+	list.Position = UDim2.fromOffset(0, 80)
+	list.Size = UDim2.new(1, 0, 1, -80)
 	list.CanvasSize = UDim2.new()
 	list.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	list.ScrollBarThickness = 4
@@ -638,7 +667,7 @@ local function build()
 	close.Name = "Close"
 	close.AnchorPoint = Vector2.new(1, 0)
 	close.Position = UDim2.new(1, -10, 0, 10)
-	close.Size = UDim2.fromOffset(30, 30)
+	close.Size = UDim2.fromOffset(44, 44)
 	close.BackgroundColor3 = PAPER_DEEP
 	close.BorderSizePixel = 0
 	close.FontFace = TITLE
@@ -646,7 +675,7 @@ local function build()
 	close.TextColor3 = INK
 	close.Text = "X"
 	close.Parent = right
-	round(close, 15)
+	round(close, 22)
 	close.Activated:Connect(function()
 		setOpen(false)
 	end)
@@ -676,8 +705,14 @@ local function pumpToasts()
 			local toast: Frame = ui.toast
 			ui.toastEyebrow.Text = item.eyebrow
 			ui.toastTitle.Text = item.title
-			ui.toastHint.Text = if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-				then "Tap the book to read it." else "Press J to read it."
+			-- How to open it, on the device in hand.
+			local hint = "Press J to read it."
+			if UserInputService:GetLastInputType().Name:sub(1, 7) == "Gamepad" then
+				hint = "Press D-pad up to read it."
+			elseif UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+				hint = "Tap the book to read it."
+			end
+			ui.toastHint.Text = hint
 			toast.Visible = true
 			toast.Position = UDim2.new(1, 340, 0, 132)
 			chime()
@@ -697,6 +732,53 @@ local function pumpToasts()
 		end
 		toasting = false
 	end)
+end
+
+-- ===== THE KEEPSAKE SHELF (in the squish room) =====
+--
+-- The same shelf for everyone; what is on it is yours: the toys you have found (ShelfToy) and a card for each
+-- one you have not (ShelfEmpty), by journal id, and how many on the board on top (ShelfCount). On your
+-- screen only.
+local function shown(item: Instance, show: boolean)
+	local function one(piece: Instance)
+		if piece:IsA("BasePart") then
+			piece.LocalTransparencyModifier = if show then 0 else 1
+		elseif piece:IsA("SurfaceGui") then
+			piece.Enabled = show
+		end
+	end
+	one(item)
+	for _, piece in ipairs(item:GetDescendants()) do
+		one(piece)
+	end
+end
+
+local function shelfItem(item: Instance)
+	local id = item:GetAttribute("JournalId")
+	if typeof(id) ~= "string" then
+		return
+	end
+	local have = byId[id] ~= nil
+	shown(item, if CollectionService:HasTag(item, "ShelfToy") then have else not have)
+end
+
+local function shelfCount(board: Instance)
+	local gui = board:FindFirstChildWhichIsA("SurfaceGui")
+	local label = gui and gui:FindFirstChildWhichIsA("TextLabel")
+	if label then
+		label.Text = ("KEEPSAKES  %d of %d"):format(counts.keepsake or 0, keepsakeTotal)
+	end
+end
+
+local function refreshShelf()
+	for _, tag in ipairs({ "ShelfToy", "ShelfEmpty" }) do
+		for _, item in ipairs(CollectionService:GetTagged(tag)) do
+			shelfItem(item)
+		end
+	end
+	for _, board in ipairs(CollectionService:GetTagged("ShelfCount")) do
+		shelfCount(board)
+	end
 end
 
 -- ===== WHAT THE SERVER SAYS YOU TOOK =====
@@ -721,6 +803,9 @@ function JournalService.add(data: { [string]: any })
 		if typeof(data.from) == "string" then
 			from = "From " .. data.from .. "."
 		end
+	elseif kind == "material" then
+		-- One keepsake for every material (check_story holds them to it), so their count is the materials'.
+		eyebrow = ("Material %d of %d"):format(counts[kind], keepsakeTotal)
 	elseif kind == "secret" then
 		eyebrow = ("Secret %d of %d"):format(counts[kind], tonumber(data.total) or 5)
 		if typeof(data.secret) == "string" and data.secret ~= data.title then
@@ -729,11 +814,15 @@ function JournalService.add(data: { [string]: any })
 	elseif typeof(data.from) == "string" then
 		from = data.from
 	end
+	-- READ BACK FROM AN EARLIER SESSION (data.restored): already read, so joining does not light the badge up.
 	local entry: Entry = { id = id, kind = kind, title = tostring(data.title), body = tostring(data.body or ""), from = from,
-		eyebrow = eyebrow, order = #entries + 1, read = false }
+		eyebrow = eyebrow, order = #entries + 1, read = data.restored == true }
 	table.insert(entries, entry)
 	byId[id] = entry
 	refreshBadge()
+	if kind == "keepsake" then
+		refreshShelf()
+	end
 	if isOpen then
 		refreshList()
 	end
@@ -742,6 +831,135 @@ function JournalService.add(data: { [string]: any })
 			title = entry.title })
 		pumpToasts()
 	end
+end
+
+-- THINGS ALREADY IN YOUR JOURNAL, out in the world (marked JournalThing by the server with their id): shown
+-- as taken, so what is left to find is what is still there.
+local function hideIfKept(object: Instance)
+	local id = object:GetAttribute("JournalId")
+	if typeof(id) == "string" and byId[id] then
+		hide(object)
+	end
+end
+
+-- WHAT YOU HAD (the journal kept between sessions, EconomyService): asked for once the save is ready, added
+-- quietly and already read, in the order it was picked up.
+local function readBack()
+	local functions = ReplicatedStorage:WaitForChild("RemoteFunctions", 20)
+	local ask = functions and functions:WaitForChild("JournalState", 20)
+	if not (ask and ask:IsA("RemoteFunction")) then
+		return
+	end
+	for _ = 1, 30 do
+		local ok, state = pcall(function()
+			return (ask :: RemoteFunction):InvokeServer()
+		end)
+		if ok and type(state) == "table" and state.ready then
+			for _, data in ipairs(if type(state.entries) == "table" then state.entries else {}) do
+				if type(data) == "table" then
+					data.quiet = true
+					data.restored = true
+					data.object = nil
+					local added, err = pcall(JournalService.add, data)
+					if not added then
+						warn("JournalService: could not read back an entry: " .. tostring(err))
+					end
+				end
+			end
+			for _, object in ipairs(CollectionService:GetTagged("JournalThing")) do
+				hideIfKept(object)
+			end
+			refreshShelf()
+			return
+		end
+		task.wait(1)
+	end
+end
+
+-- THE MATERIALS (EconomyService.foundMaterial): every material you have stood on in a level, a page each: what it
+-- does underfoot (the hint you were shown, OnboardingService) and what the Hold kept it from (Keepsakes). Read from
+-- your Materials attribute: the ones you had on joining come already read; each new one is unread, with no word in
+-- the corner (a chime has said it). THE TAB IS YOUR SAVE: a page for a material no longer in it (the test panel's
+-- "none", or the self-test's own, put back) is taken out, rather than staying until you rejoin.
+local function sharedModule(name: string): any
+	local shared = ReplicatedStorage:FindFirstChild("Shared")
+	local module = shared and shared:FindFirstChild(name)
+	if module and module:IsA("ModuleScript") then
+		local ok, loaded = pcall(require, module)
+		if ok then
+			return loaded
+		end
+	end
+	return nil
+end
+
+local function materialPage(key: string): (string, string)
+	local shop = sharedModule("ShopCatalog")
+	local material = if shop and shop.material then shop.material(key) else nil
+	local title = if material then material.name else key
+	local lines = {}
+	local onboarding = script.Parent and script.Parent:FindFirstChild("OnboardingService")
+	if onboarding and onboarding:IsA("ModuleScript") then
+		local ok, loaded = pcall(require, onboarding)
+		local hints = if ok and type(loaded) == "table" then loaded.HINTS else nil
+		if type(hints) == "table" and type(hints[key]) == "string" then
+			table.insert(lines, hints[key])
+		end
+	end
+	local keepsakes = sharedModule("Keepsakes")
+	local kept = if type(keepsakes) == "table" then keepsakes[key] else nil
+	if type(kept) == "table" and kept.thing and kept.from then
+		table.insert(lines, ("Kept by the Hold: %s, from %s."):format(kept.thing, kept.from))
+	end
+	return title, table.concat(lines, "\n\n")
+end
+
+local function watchMaterials()
+	local me = Players.LocalPlayer
+	local first = true
+	local function look()
+		local have = me:GetAttribute("Materials")
+		if typeof(have) ~= "string" then
+			return
+		end
+		local keep: { [string]: boolean } = {}
+		for key in string.gmatch(have, "[^,]+") do
+			keep["material:" .. key] = true
+		end
+		local gone = false
+		for index = #entries, 1, -1 do
+			local entry = entries[index]
+			if entry.kind == "material" and not keep[entry.id] then
+				table.remove(entries, index)
+				byId[entry.id] = nil
+				counts.material = math.max(0, (counts.material or 0) - 1)
+				if shownId == entry.id then
+					shownId = nil
+				end
+				gone = true
+			end
+		end
+		if gone then
+			refreshBadge()
+			if isOpen then
+				refreshList()
+			end
+		end
+		for key in string.gmatch(have, "[^,]+") do
+			local id = "material:" .. key
+			if not byId[id] then
+				local title, body = materialPage(key)
+				local ok, err = pcall(JournalService.add, { id = id, kind = "material", title = title, body = body,
+					quiet = true, restored = first })
+				if not ok then
+					warn("JournalService: could not keep a material: " .. tostring(err))
+				end
+			end
+		end
+		first = false
+	end
+	me:GetAttributeChangedSignal("Materials"):Connect(look)
+	look()
 end
 
 function JournalService.entries(): { Entry }
@@ -754,7 +972,9 @@ function JournalService.start()
 		if processed then
 			return
 		end
-		if input.KeyCode == Enum.KeyCode.J or input.KeyCode == Enum.KeyCode.ButtonY then
+		-- J, or D-PAD UP on a controller. It was Y, which is also Talk (Townsfolk): talking to anyone
+		-- with a controller opened the journal over them.
+		if input.KeyCode == Enum.KeyCode.J or input.KeyCode == Enum.KeyCode.DPadUp then
 			JournalService.toggle()
 		end
 	end)
@@ -775,7 +995,21 @@ function JournalService.start()
 			hide(data)
 		end
 	end)
+	CollectionService:GetInstanceAddedSignal("JournalThing"):Connect(hideIfKept)
+	-- The shelf, as it comes into view (the squish room streams in when you go there), and its prompt.
+	CollectionService:GetInstanceAddedSignal("ShelfToy"):Connect(shelfItem)
+	CollectionService:GetInstanceAddedSignal("ShelfEmpty"):Connect(shelfItem)
+	CollectionService:GetInstanceAddedSignal("ShelfCount"):Connect(shelfCount)
+	refreshShelf()
+	ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt, who: Player)
+		if prompt.Name == "KeepsakeShelfPrompt" and who == Players.LocalPlayer then
+			JournalService.open("keepsake")
+		end
+	end)
+	task.spawn(readBack)
+	task.spawn(watchMaterials)
 	print("JournalService: running, " .. JournalService.VERSION)
 end
 
+JournalService.STAMP = "a9e90c21"
 return JournalService

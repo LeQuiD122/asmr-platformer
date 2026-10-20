@@ -57,6 +57,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HallRoute = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("HallRoute"))
 
 local Players = game:GetService("Players")
+-- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
+local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Style"))
 
 local FloodedHallsService = {}
 
@@ -1204,6 +1206,9 @@ local function buildLeg(halls: Model, leg: HallRoute.Leg, legIndex: number, isLa
 		local roof = lightPanel(halls, legFrame(leg, along, 0, HEIGHT - SCALE * 0.5),
 			Vector3.new(BAY * 0.2, SCALE, BAY * 0.66), 3.4, true)
 		roof.Name = "RoofLight"
+		-- How far along the route it hangs, so each client can tell which lamps are behind its player
+		-- (FloodedHallsClient: the lamps behind you fail).
+		roof:SetAttribute("Along", leg.startAt + along)
 
 		-- ARCH BAYS GET NEITHER OF THE NEXT TWO. The transverse arch already spans the
 		-- ceiling at the bay's centre and already runs piers down both walls, so a beam and a
@@ -1681,6 +1686,7 @@ local FLUME_LIP = SLIDE_WALL + 0.9
 local FLUME_FLANGE_EVERY = 8
 local FLUME_COLOUR = Color3.fromRGB(32, 122, 146)
 local FLUME_TRIM = Color3.fromRGB(232, 229, 214)
+local FLUME_WATER = Color3.fromRGB(110, 196, 214)
 local STEEL_COLOUR = Color3.fromRGB(58, 70, 72)
 -- How far above the walkway the mast stands, with its lamp on top.
 local MAST_TOP = 30
@@ -1792,6 +1798,59 @@ local function buildFlume(halls: Model, slideFrame: CFrame)
 				Vector3.new(chord * (1 + SLIDE_WALL / a.radius) + 0.15, SLIDE_WALL, run + 0.7),
 				cf * CFrame.new(0, SLIDE_WALL / 2, 0), FLUME_COLOUR)
 		end
+	end
+
+	-- THE WATER RUNNING DOWN IT. A flume is a slide with water in it, and this one was a dry plastic chute. A sheet
+	-- of water across the bottom of the trough, as wide as its lowest staves and lying level across them the way
+	-- water does (half a stud deep in the middle), which each client runs downhill (FloodedHallsClient slides its
+	-- texture along it). The rider lies in it, and their legs go under it.
+	for index = 1, FLUME_SEGMENTS do
+		local a, b = stations[index], stations[index + 1]
+		local bottom = math.floor(#a.points / 2) + 1 -- the floor's lowest point, between the two staves either side
+		local function level(station: Station): (Vector3, number)
+			local left, right = station.points[bottom - 1], station.points[bottom + 1]
+			return (left + right) / 2, (right - left).Magnitude
+		end
+		local from, wideFrom = level(a)
+		local to, wideTo = level(b)
+		local cf, run = spanFrame(from, to, (a.up + b.up).Unit)
+		local water = flumePart(halls, "FlumeWater", Vector3.new((wideFrom + wideTo) / 2, 0.2, run + 0.12),
+			cf * CFrame.new(0, -0.1, 0), FLUME_WATER)
+		water.Transparency = 0.38
+		water.Reflectance = 0.2
+		water.CastShadow = false
+		local flow = Instance.new("Texture")
+		flow.Name = "Flow"
+		flow.Face = Enum.NormalId.Top
+		flow.Texture = "rbxasset://textures/water/normal_1.dds"
+		flow.StudsPerTileU = 6
+		flow.StudsPerTileV = 6
+		flow.Transparency = 0.5
+		flow.Color3 = Color3.fromRGB(230, 248, 250)
+		flow.Parent = water
+		game:GetService("CollectionService"):AddTag(water, "FlumeWater")
+	end
+	-- AND IT POURS OFF THE END, into the shaft: where the water goes is where you are going.
+	do
+		local last = stations[#stations]
+		local spout = flumePart(halls, "FlumePour", Vector3.new(1, 1, 1),
+			CFrame.lookAt(last.centre - last.up * (last.radius - 0.6), last.centre - last.up * (last.radius - 0.6) + last.tangent),
+			FLUME_WATER)
+		spout.Transparency = 1
+		local pour = Instance.new("ParticleEmitter")
+		pour.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		pour.Color = ColorSequence.new(Color3.fromRGB(196, 232, 240))
+		pour.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.6), NumberSequenceKeypoint.new(1, 3.2) })
+		pour.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 1) })
+		-- Short: a spill off the lip that breaks up into spray, not a column all the way down to what is down there.
+		pour.Lifetime = NumberRange.new(0.6, 0.9)
+		pour.Speed = NumberRange.new(14, 20)
+		pour.SpreadAngle = Vector2.new(10, 10)
+		pour.Acceleration = Vector3.new(0, -60, 0)
+		pour.Orientation = Enum.ParticleOrientation.VelocityParallel
+		pour.EmissionDirection = Enum.NormalId.Front
+		pour.Rate = 30
+		pour.Parent = spout
 	end
 
 	-- THE LIP, rolled over the top of both sides.
@@ -2991,7 +3050,7 @@ local function buildGates(halls: Model, endFrame: CFrame, pitAt: Vector3)
 		text.Size = UDim2.fromScale(1, 1)
 		text.BackgroundTransparency = 1
 		text.TextScaled = true
-		text.Font = Enum.Font.GothamBlack
+		text.FontFace = Style.WORLD.signHeavy
 		text.TextColor3 = ink
 		text.Text = words
 		text.Parent = gui
@@ -4236,6 +4295,21 @@ end
 --
 -- Swap it for a proper recording when there is one. Until then the room has water in it.
 local DRIP_SOUND_ID = "rbxasset://sounds/impact_water.mp3"
+-- THE WATER'S OWN SOUNDS (WaterSounds, the ninety-eighth pass): if the module is not pasted yet, the old splash. ONE
+-- local here, the rest inside: a main chunk has room for only so many (Luau's 200).
+local WaterSounds: any = (function(): any
+	local waterModule = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("WaterSounds", 5)
+	if waterModule and waterModule:IsA("ModuleScript") then
+		return require(waterModule)
+	end
+	local function oldSplash(s: Sound, _kind: string): boolean
+		s.SoundId = "rbxasset://sounds/impact_water.mp3"
+		return false
+	end
+	local splashOnly: any = {}
+	splashOnly.dress = oldSplash
+	return splashOnly
+end)()
 -- How many drip sources. Sparse and irregular: a drip you can predict is a metronome, and a
 -- metronome is the opposite of unsettling.
 local DRIP_SOURCES = 6
@@ -4274,7 +4348,11 @@ function FloodedHallsService.applySound(halls: Model): () -> ()
 					-- Irregular by design. The wait is randomised every time rather than set
 					-- once, so no two drips settle into a rhythm with each other.
 					task.wait(rng:NextNumber(4, 14))
-					drip.PlaybackSpeed = rng:NextNumber(0.92, 1.12)
+					-- Another drip each time (another take of the water's own), the old one's pitch varied without them.
+					if not WaterSounds.dress(drip, "drip") then
+						drip.SoundId = DRIP_SOUND_ID
+						drip.PlaybackSpeed = rng:NextNumber(0.92, 1.12)
+					end
 					drip:Play()
 				end
 			end)
@@ -4470,4 +4548,5 @@ function FloodedHallsService.applyAtmosphere(): () -> ()
 	end
 end
 
+FloodedHallsService.STAMP = "ce0c84fb"
 return FloodedHallsService
