@@ -10,7 +10,7 @@ sea came in, a little later each time, and the pumping station's key holder neve
 The people there live it as an ordinary day. At the end the time card on the wall has your name
 on it.
 
-**Status:** in development, not yet published. 27 materials across 67 chunk templates, 4 levels
+**Status:** in development, not yet published. 28 materials across 68 chunk templates, 4 levels
 and a Sandbox chosen from a lobby, 11 people with lines, 27 keepsakes, 5 secrets, an ending
 for every level shot as a scene with its own sounds, and a shop: tokens earned by finishing levels,
 cosmetics, passes and token packs. Every material has a sound (generated
@@ -50,7 +50,9 @@ is waiting for a test, and what is not built yet.
 ### The lobby
 
 A promenade on piers over the sea, built once and kept while runs are built and torn down. You arrive on the plaza,
-by the fountain under the canopy, and four boardwalks lead off it:
+by the fountain under the canopy, and four boardwalks lead off it, each under festoons of warm bulbs and pastel
+bunting. Every place has its own floor colours. Soap bubbles drift up off the fountain (walk into one or tap it and it
+pops), gulls wheel round the promenade and fireflies blink over the garden:
 
 - **The level gates (north):** a pad for each level in an arc round the Start, each with a window in its own sky
   (boarded up until the level before it is finished), the Story pad and the Sandbox; on the way in, the Chill and
@@ -117,6 +119,13 @@ longer runs, Hardcore and a new best); tokens buy trails, auras, footprints, ste
 the leaderboard). Saves are session-locked
 (ProfileStore), so nothing can be duplicated, and every purchase is granted exactly once.
 
+The shop stands on one of the game's materials, drawn behind it: cookie, soap or ice at random, or a background you
+own. Press its background and it answers in its material (ice cracks, lava sparks, soap crumbles), with that
+material's own sound; with a mouse the cursor is a cookie that loses a bite every click. Every tab has its own colour
+and sound, and the shop opens and closes with its own squash and sound. Backgrounds come out of crates bought with
+tokens (always one you do not have yet, its odds shown before you pay, and never offered where Roblox's rules keep paid
+random items out), and the mythic one, the Hold, is a Robux pass.
+
 ### Controls
 
 | Key | What it does |
@@ -155,6 +164,7 @@ Later materials go beyond denting under your feet. Each one changes how you have
 | Oobleck | Players slowly wade in unless they keep moving; a hard landing hardens the whole pool for everyone |
 | Lava | A crust over glowing lava that breathes light, throws off embers and heat haze, and bubbles and spits; it spurts where you stand and erupts in a fountain when a cell bursts |
 | Jellyfish | A glowing bell you bounce across (the Sunken City's own chunks) |
+| Cookie | A giant round biscuit with a bite out of it, built of crumbs with chocolate chips in its top: it cracks under your first step, the cracks run on as you go, and then it crumbles away a crumb at a time and drops you through |
 
 The rest: ice, jello soda, lamb's ear, foam, light switches, lego, chocolate (soft
 and solid), cloud, snow, a creamy keyboard, lava keys and a butter stick. Cracks on soap and
@@ -163,8 +173,10 @@ and every hole fills itself back in within 30 seconds.
 
 ## Status
 
-Last updated: 2026-10-18. **Everything up to and including the ninety-second pass has been played in Studio (you).**
-Twelve passes since (93 to 104) wait for a test (below). `ROADMAP.md` has the detail on everything not built yet and the order it
+Last updated: 2026-10-23. **Everything up to and including the ninety-second pass has been played in Studio (you) and
+works;** 93 to 129 have been played too (your tests of 2026-10-21 to 2026-10-23, pasted and marked), and what those
+tests found is answered by the passes after them. Seven passes (130 to 136) wait for a test (below); they answer your
+test of 2026-10-23, 123 to 129 your test of 2026-10-22, and 117 to 122 your test of 2026-10-21. `ROADMAP.md` has the detail on everything not built yet and the order it
 comes in, and `HANDOFF.md` on everything built, pass by pass.
 
 ### Tested in Studio and working (through the ninety-second pass)
@@ -238,7 +250,115 @@ comes in, and `HANDOFF.md` on everything built, pass by pass.
 - **Hundred-and-fourth pass (2026-10-20), what you say to them:** talk to anyone and choose what to say (walk away and
   the choices go); and the story underneath it, which you chose: you are Edwin Marsh's child, learned a piece at a
   time from what people answer, each piece in your journal.
-- `HANDOFF.md` has the checklists for passes 93 to 104.
+- **Hundred-and-fifth pass (2026-10-20), the shop's look:** a material behind the shop (cookie, soap or ice at random),
+  answering a press on it in its own way and sound; a cookie for a cursor that crumbles as you click; every tab its own
+  colour and sound; its own opening and closing.
+- **Hundred-and-sixth pass (2026-10-20), backgrounds and their crate:** nine backgrounds in five rarities, from honey
+  to the back rooms out of a 250-token crate (always one you lack, the odds said first, rolled by the server, never
+  where Roblox's policy keeps paid random items out), and the Hold, a mythic Robux pass; the crate shakes, throws its
+  lid and shows what came out in its rarity's colours, with a sound for each rarity.
+- **Hundred-and-seventh pass (2026-10-21), trails and auras:** every trail thin strands now, each moving its own way
+  (soap suds twisting round each other, honey sagging, slime wobbling, the key's ribbon fluttering, lava crackling,
+  jelly hopping, sprinkles a candy stripe, the swatch a rippling band of every colour); and five auras with a ring
+  round your feet or a halo over your head (bubbles, coals, frost, a gold crown, little stars).
+- **Hundred-and-eighth pass (2026-10-21), Sky Pools' arches:** each arch over the slide glows up as you come down to it,
+  flares and sparkles as you pass under, with a soft rush of air and a little shake.
+- **Hundred-and-ninth pass (2026-10-21), the lobby's look and feel:** each place its own floor colours, festoons over
+  every walk, and on your screen soap bubbles off the fountain to pop, gulls and fireflies.
+- **Hundred-and-tenth pass (2026-10-21), the cookie (you: "add a cookie chunk"):** a twenty-eighth material, a giant
+  round biscuit with a bite out of it, built of crumbs like the soap bar so it really breaks up under you, chocolate
+  chips in its top; it cracks first and then crumbles, with its own crunch. In City Shore, Sky Pools and first in the
+  sandbox, with its keepsake on the squish room's shelf (ten cubbies across now).
+- **Hundred-and-eleventh pass (2026-10-21), Hill House (you chose it):** a fifth level, played first: your father's
+  house on the hill over Harrow Bay at eight in the morning. The route climbs out of the morning mist; at its end a
+  footbridge crosses to the top of a crag, and his garden (a picket fence, lamb's ear along the path, an apple tree, a
+  bench looking out to sea, the milk on the step) and his house (white render, slate roof, his green front door).
+  "Go in" at the door ends the level. Its own morning light, its own sound (a breeze, the sea under the mist, a wood
+  pigeon), its words and four things to read. City Shore opens once it is finished (saves that have City Shore keep
+  it). An eighteenth checker, `check_hillhouse.py`, and `blender/plan_hillhouse.png` from above.
+- **Hundred-and-twelfth pass (2026-10-21), Hill House's hall:** "Go in" opens his door now, and the level ends inside.
+  The hall: floorboards and a rug, a dado rail, the lamp lit on the hall table by a photograph, the morning sun
+  slanting through the side window with dust turning in it, his coat and cap on the hooks, his longcase clock stopped at
+  four minutes to midnight, and by the door, on its own hook, the key on its green ribbon. "Take the key" plays a scene
+  of three shots (the key coming off its hook; his clock, whose pendulum starts and ticks again; you by the open door
+  from the back of the hall) with two new sounds of its own, and then the banner. Checked shot by shot like the other
+  levels' scenes (`blender/shots_hill.png`).
+- **Hundred-and-thirteenth pass (2026-10-21), Hill House's people:** Mr Gale the milkman meets you at the top of the
+  climb (his crate at his feet, two pints on the step every morning since 1979), and Mrs Dunn the postwoman is inside
+  the garden gate with her bag (your name is on the front of the paper). Both know about the key; each has things you
+  can ask, one that gives a new note for your journal (his clock), and one more each that only opens once you know
+  whose child you are. Both in `blender/plan_hillhouse.png`.
+- **Hundred-and-fourteenth to sixteenth passes (2026-10-21), the true ending (you chose it on 2026-10-20: clocking in,
+  and the Watcher given his face back):** a time clock beside Mr Barlow on the gangway to the flume, your card in its
+  rack, NOT CLOCKED IN. It takes your card only once you know what it cost your father (ask Mr Wick on the pier, then
+  Mr Barlow); before that Mr Barlow tells you who to ask. Clock in, and at the gates, after midnight, someone walks up
+  Outfall 3 out of the daylight: Edwin Marsh, with his face. He stops at the gate and waves, as he waved to you the
+  night he went down; you wave back; he goes back into the morning, and it is 15 August. Its own chord, carried home.
+  Once a save it pays 300 tokens, puts the KEY HOLDER plaque over your head in the lobby for everyone to see, and gives
+  its badge; and from then on his ledge on the Deco tower is empty on your screen. A nineteenth checker,
+  `check_trueending.py`, and storyboards `blender/shots_clock.png` and `blender/shots_true.png`.
+- **Hundred-and-seventeenth pass (2026-10-22), from your Studio log:** Style named a font weight Roblox does not have
+  (Black), so Style and everything that needs it failed to load; it is Heavy now, and the syntax check holds every Enum
+  the Luau names to the list Roblox has (`blender/roblox_enums.py`).
+- **Hundred-and-eighteenth pass (2026-10-22), from your test:** the see-through chunks (honey, slime, soda) seen from
+  every side in Sky Pools and Hill House (the big see-through clouds and mist were drawn over them; they are solid now,
+  and honey and slime are no longer Glass, which vanished against a bright sky); no grass up through the house's floor or
+  the path; the lobby's soap bubbles silent unless you tap one; and Hill House beside the fourth level in the lobby (its
+  pad opening after the Flooded Halls'), though it still comes first in the story.
+- **Hundred-and-nineteenth pass (2026-10-22), one speech bubble:** what you can say is drawn in the same cream bubble as
+  what people say to you (the same letters, ink and rim, yours with a gold rim), with a tail; and everyone, you too,
+  tells a line with their body: a nod, a shrug, a point, their hands as they talk.
+- **Hundred-and-twentieth pass (2026-10-22), your character alive:** your head turns to where you look (never twisting
+  round behind you), and standing still you fidget now and then (looking round, shifting your weight, thinking), never
+  over a scene, a line, an emote, a seat, a ride or the water. In Hill House's hall you walk to the key, take it into
+  your hand and walk out of the door with it, the last shot following you.
+- **Hundred-and-twenty-first pass (2026-10-22), the thing in the back rooms:** every limb on a joint now, and walking on
+  every screen: long slow strides on legs like poles, the knees bending the wrong way, a heavy soft thud at each step,
+  arms hanging past his knees and swinging late, reaching out at you when he rushes; his head bowed and lolling,
+  snapping to another angle now and then, turning to look at you further round than a neck goes, and tipping slowly
+  over, too far, when he stops. His seam stays on his face.
+- **Hundred-and-twenty-second pass (2026-10-22), the shop made over again:** the tabs no longer cut off at their edges
+  (room all round inside their strip, measured against how far the widest grows); each tab a chunky key in its own
+  colour with its own little drawing, on a lip it presses into; a tab's colour through every tile in it (the words on
+  them measured for contrast); the tiles cards on lips over a pale tray, lifting under the pointer, sinking when
+  pressed, popping in one after another; a gleam running round the rare backgrounds and what is sold for Robux; "Best
+  value" on the pack with the most tokens for each Robux; your tokens counting up and down; how many of a tab are yours
+  beside them; and a puff of the background's material when you choose a tab or buy something.
+- **Hundred-and-twenty-third pass (2026-10-22), from your test of 2026-10-22:** the honey prints toes first; the
+  fountain's bubbles a soap film with a glint, not Glass; what you said to people comes back every run (what you
+  learned stays), new topics marked; the speech bubbles dressed (the speaker's name on a tag, a light and a shadow,
+  written out a letter at a time) and your choices with the person's disc and an arrow; the shop's icons swelling clear
+  of their names; the arrow keys change the shop's tab.
+- **Hundred-and-twenty-fourth pass (2026-10-22):** of lockers side by side only the one in front of you offers itself;
+  Locker 3's coat seen whole, buttoned, the note in its pocket; the mouth in the Flooded Halls understood: you see it is
+  a mouth, it bites, you go down its throat and it spits you out into the sump.
+- **Hundred-and-twenty-fifth pass (2026-10-22):** the back rooms' catch: he folds down over you, arms round you; his
+  face in front of you, bigger, fanged and lit, splits open; he lunges; black.
+- **Hundred-and-twenty-sixth pass (2026-10-22):** under the Sunken City's whirlpool the picture swims, soft, sea green,
+  with shafts of daylight, silt and bubbles; oobleck has its own sheet of four takes.
+- **Hundred-and-twenty-seventh pass (2026-10-22):** the party's song in full over the Sky Pools slide, its last chord
+  landing with you; you on screen through the cloud (the camera riding with you, the cloud thinned round you), and the
+  landing close.
+- **Hundred-and-twenty-eighth pass (2026-10-22):** Hill House: no grass in the hall, your camera kept inside the hall
+  (never up through the ceiling or out of a window), the key's scene shot from in front of you and over your shoulder
+  at the clock, and acted.
+- **Hundred-and-twenty-ninth pass (2026-10-22):** the bar swung into the Siren Room's bricks, three blows that land,
+  chips flying, the patch bursting out; Maren's shot her reaction (it was the deck's floor); the dive's hit held at the
+  surface, spray and foam, then under into bubbles; the butter's wrapper paper, not glass.
+- **Hundred-and-thirtieth pass (2026-10-23), from your test of 2026-10-23:** the lobby's sounds only in the lobby,
+  falling off with distance; the hardcore clock never up in Chill, and folded away on a press; scenes hold you still,
+  put the prompts away and stop entirely when the lobby takes you; you step out of a scene's way; the bricks' hole
+  looked into from above; thought bubbles that pop.
+- **Hundred-and-thirty-first pass (2026-10-23):** the Sunken City's fall hit like the dive, the water answering every
+  impact, nothing through the culvert's walls or the station's pillars.
+- **Hundred-and-thirty-second pass (2026-10-23):** the mouth longer, its jaws creaking shut, slamming and crunching; down
+  its throat with its heart squeezing the walls; the fall out of the flume hit.
+- **Hundred-and-thirty-third pass (2026-10-23):** the back rooms' catch you can follow: him over you side on, his round
+  head splitting open over your shoulder, the lunge.
+- **Hundred-and-thirty-fourth pass (2026-10-23):** the Flooded Halls' galleries, enamel signs, lifebuoys and hanging lamps.
+- **Hundred-and-thirty-fifth pass (2026-10-23):** the shop's sunbursts, sheens and breathing prices.
+- **Hundred-and-thirty-sixth pass (2026-10-23):** the lobby's level windows painted as postcards of their places.
+- `HANDOFF.md` has the checklists for passes 93 to 136 (130 to 136 the ones to test next).
 
 ### Pass by pass, newest first
 
@@ -544,15 +664,7 @@ them, Luau's limit of 200 locals in one function, fixed since).
 
 In the order they come (`ROADMAP.md`, sections 8 and 9):
 
-- **The shop made over (you):** themed with the game's chunks and the back rooms, a cookie cursor that crumbles,
-  effects and sounds for every press, tab and the background itself, open and close animations, and backgrounds to
-  collect from token crates (common to legendary) with a few Robux mythics (you chose).
-- **Trails and auras (you):** thinner trails with effects of their own, auras more pronounced.
-- **Sky Pools' arches (you):** glowing and sparkling as you slide under them, with a little shake.
-- **The lobby's look and feel (you):** much more vibe.
 - **Your own sounds, sampled (you):** put your recordings in `audio/yours/` and each sound's takes are built from them.
-- **A cookie chunk (you).**
-- **Hill House (you chose it):** a fifth level before them all, at eight in the morning, suggested in `LORE.md`.
 - **More worlds:** a kids' playground, office floors, a parking lot, a museum, a tiny world of
   bugs, and more.
 

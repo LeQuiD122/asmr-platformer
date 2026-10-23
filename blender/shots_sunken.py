@@ -50,7 +50,7 @@ SHOT_LINES = (
     "local blend = math.clamp((u - 0.44) / 0.1, 0, 1)",
     "Cinema.point(circling:Lerp(down, blend), cutscene.FOV - 14 * blend * u)",
     "Cinema.point(CFrame.lookAt(clearOf(head + run * 10 + Vector3.new(0, 1.8, 0), head), head), 58)",
-    "Cinema.point(CFrame.lookAt(clearOf(head + side * 3.6 - run * 1 + Vector3.new(0, 1.6, 0), head), head), 52)",
+    "Cinema.point(CFrame.lookAt(clearOf(head + side * 2.4 - run * 1.5 + Vector3.new(0, 2.6, 0), head), head), 56)",
     "local eye = clearOf(head - run * 9 + Vector3.new(0, 4, 0), head)",
     "Cinema.point(CFrame.lookAt(eye, head + run * 10 - Vector3.new(0, 1, 0)), 64)",
     "Cinema.point(CFrame.lookAt(reveal.eye, head), 70)",
@@ -149,7 +149,7 @@ def ride(fps=60, start=v(18, 1.5, 4)):
         if w < 0.3:
             frames.append(Frame(t, "outfall: from ahead", head + run * 10 + v(0, 1.8, 0), head, 58, subject=body))
         elif w < 0.62:
-            frames.append(Frame(t, "outfall: alongside", head + side * 3.6 - run * 1 + v(0, 1.6, 0), head, 52,
+            frames.append(Frame(t, "outfall: alongside", head + side * 2.4 - run * 1.5 + v(0, 2.6, 0), head, 56,
                                 subject={"head": here + up * 2.1, "feet": here + up * 0.3}))
         elif w < 0.9:
             frames.append(Frame(t, "outfall: to the light", head - run * 9 + v(0, 4, 0), head + run * 10 - v(0, 1, 0), 64,

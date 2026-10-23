@@ -148,9 +148,10 @@ for needle, why in (
 # The two places tokens go up, and only those.
 adds = re.findall(r"[Dd]ata\.Tokens \+= ([\w.]+)", ECONOMY)
 # (A run's "amount" twice: a run's pay in runFinished, and the story's bonus in finishStory, which only Bootstrap
-# calls, after a story's last level, for someone whose own walking got there.)
-if sorted(adds) != sorted(["STUDIO_TOKENS", "item.tokens", "amount", "amount", "amount", "amount", "amount", "prize", "starterTokens", "codeTokens",
-                           "DEV_TOKENS"]):
+# calls, after a story's last level, for someone whose own walking got there. And since the hundred-and-sixteenth pass
+# the true ending's, once a save, in trueEnding, which only Bootstrap calls, for a rider who clocked in.)
+if sorted(adds) != sorted(["STUDIO_TOKENS", "item.tokens", "amount", "amount", "amount", "amount", "amount", "amount", "prize",
+                           "starterTokens", "codeTokens", "DEV_TOKENS"]):
     fail("EconomyService adds tokens somewhere other than a run, a token pack, the Studio gift and the Studio "
          "test panel: %s" % adds)
 # THE TEST PANEL is Studio's alone: listened to only there, and checking again when it is.
@@ -700,7 +701,7 @@ if '{ action = "selftest", text = "Self-test" }' not in DEV_CLIENT:
 # THE VIP TAG: over a VIP player's head (the server's BillboardGui, so everyone sees it), only for VIP, taken off
 # when they are not, put on with their clothes, and put away on a level; the shop says so; the test panel can turn
 # VIP on and off in Studio to see it.
-vip = ECONOMY[ECONOMY.find("local function vipTag("):ECONOMY.find("local function dress(")]
+vip = ECONOMY[ECONOMY.find("local function vipTag("):ECONOMY.find('local KEY_TAG = "KeyTag"')]
 for needle, why in (
     ("local isVip = passes[player] ~= nil and passes[player].VIP == true", "the VIP tag is given to players without VIP"),
     ("\t\tif existing then\n\t\t\texisting:Destroy()\n\t\tend\n\t\treturn", "a VIP tag stays on someone without VIP"),
@@ -712,7 +713,7 @@ for needle, why in (
     if needle not in vip:
         fail("EconomyService: " + why)
 for needle, why in (
-    ('"Cosmetic")\n\tvipTag(player)\nend', "the VIP tag is not put on with the rest (dress)"),
+    ('"Cosmetic")\n\tvipTag(player)\n', "the VIP tag is not put on with the rest (dress)"),
     ('player:GetAttributeChangedSignal("InLevel"):Connect(function()\n\t\t\tvipTag(player)',
      "the VIP tag does not come off on a level and back in the lobby"),
     ('elseif action == "vip" then', "the test panel cannot turn VIP on to see the tag"),
@@ -831,7 +832,7 @@ if 'check("the Story pad, open", hub == nil or (storyPad ~= nil and storyPad:Get
 # ROBLOX BADGES (ShopCatalog.BADGES, 0 until made): a level's for a run really played, the story's at its end (on
 # foot), and a whole story in Hardcore; nothing asked for an id of 0; each asked once a session; the paste check lists
 # the ones still to make.
-if "ShopCatalog.BADGES = {" not in CATALOG or "level = { [1] = 0, [2] = 0, [3] = 0, [4] = 0 }," not in CATALOG:
+if "ShopCatalog.BADGES = {" not in CATALOG or "level = { [1] = 0, [2] = 0, [3] = 0, [4] = 0, [5] = 0 }," not in CATALOG:
     fail("ShopCatalog: there are no badges to set (or one starts set)")
 award = ECONOMY[ECONOMY.find("function EconomyService.awardBadge("):ECONOMY.find("function EconomyService.awardStoryBadges(")]
 for needle, why in (
@@ -1461,7 +1462,7 @@ for maker in ("def salt_crunch(", "def clay_squish(", "def cloud_hush(", "def le
 # its kind does, for every kind and every way of earning one; put away when the grid changes or the shop closes.
 tile_fn = SHOP[SHOP.find("local function makeTile("):SHOP.find("-- ===== THE GRID AND THE TABS =====")]
 for needle, why in (
-    ('local blurb = label(tile, "Blurb", item.blurb, CHUNKY,', "a tile's description is not in the shop's own letters"),
+    ('local blurb = label(card, "Blurb", item.blurb, CHUNKY,', "a tile's description is not in the shop's own letters"),
     ("blurb.TextScaled = true", "a tile's description is cut off rather than fitted"),
     ("fit.MinTextSize = 10", "a tile's description can shrink past reading"),
     ("more.Size = UDim2.fromOffset(MIN_TOUCH, MIN_TOUCH)", "a tile's \"i\" is smaller than a thumb"),
@@ -1620,7 +1621,7 @@ if embers.count("texture = TEX.") < 5 or "streak = true" not in embers:
     fail("ShopCatalog: the embers are back to a few plain streams (no sparks spitting up, no heat)")
 if "m.Orientation = Enum.ParticleOrientation.VelocityParallel" not in CATALOG:
     fail("ShopCatalog: a streak is drawn as a dot")
-vip_fn = ECONOMY[ECONOMY.find("local function vipTag("):ECONOMY.find("local function dress(")]
+vip_fn = ECONOMY[ECONOMY.find("local function vipTag("):ECONOMY.find('local KEY_TAG = "KeyTag"')]
 for needle, why in (
     ("local fill = Instance.new(\"UIGradient\")", "the VIP badge is one flat colour again"),
     ('crown.Name = "Crown"', "the VIP badge has no crown"),
@@ -1760,9 +1761,83 @@ else:
     ):
         if needle not in COSMETICS:
             fail("CosmeticsClient: " + why)
+# THE TRAILS AS STRANDS (the hundred-and-seventh pass: "the trail should be less wide ... more creative"): every trail
+# a set of thin strands, each moved by a motion CosmeticsClient knows; the whole of one no taller than a stud and a half
+# (it was two); and every aura's ring or halo within its limit and drawn.
+MOTIONS = set(re.findall(r'(?:if|elseif) s\.motion == "(\w+)" then', COSMETICS)) | {"still"}
+ribbon_ids = []
+for m in re.finditer(r"^\t(\w+) = \{\n\t\tribbon = \{(.*?)\n\t\tmotes = \{", looks_block, re.M | re.S):
+    look_id, body = m.group(1), m.group(2)
+    ribbon_ids.append(look_id)
+    width = re.search(r"\bwidth = ([\d.]+),\s*life", body)
+    strands = re.findall(r"\{ at = Vector3\.new\((-?[\d.]+), (-?[\d.]+), (-?[\d.]+)\), motion = \"(\w+)\"(.*?)\}", body, re.S)
+    if not width or not strands:
+        fail("ShopCatalog: the %s trail has no strands, so it is the old wide sheet" % look_id)
+        continue
+    if float(width.group(1)) > 0.45:
+        fail("ShopCatalog: the %s trail is %s studs wide; a strand is thin (0.45 at the most)" % (look_id, width.group(1)))
+    low, high = 99.0, -99.0
+    for x, y, z, motion, rest in strands:
+        own = re.search(r"\bwidth = ([\d.]+)", rest)
+        radius = re.search(r"\bradius = ([\d.]+)", rest)
+        fade = re.search(r"\bfade = ([\d.]+)", rest)
+        half = float(own.group(1) if own else width.group(1)) / 2
+        reach = float(radius.group(1)) if radius and motion in ("bob", "bounce", "zigzag", "flutter") else 0
+        if motion not in MOTIONS:
+            fail("ShopCatalog: a strand of the %s trail moves by %s, which CosmeticsClient does not know" % (look_id, motion))
+        if own and float(own.group(1)) > 0.45 and not (fade and float(fade.group(1)) >= 0.5):
+            fail("ShopCatalog: a strand of the %s trail is %s studs wide and not faint" % (look_id, own.group(1)))
+        low, high = min(low, float(y) - half - (reach if motion != "bounce" else 0)), max(high, float(y) + half + reach)
+    if high - low > 1.5 + 1e-6 and look_id != "CloudPuff":
+        fail("ShopCatalog: the %s trail stands %.2f studs tall, wider than before it was thinned" % (look_id, high - low))
+for item_id, tab, kind, rest in items:
+    if kind == "trail" and item_id not in ribbon_ids:
+        fail("ShopCatalog: the %s trail has no ribbon of strands" % item_id)
+ring_max = re.search(r"^local RING_MAX = (\d+)", COSMETICS, re.M)
+pieces_block = CATALOG[CATALOG.find("local PIECES: { [string]: Pieces } = {"):CATALOG.find("function ShopCatalog.pieces(")]
+starts = [(m.start(), m.group(1)) for m in re.finditer(r"^\t(\w+) = \{ motion = ", pieces_block, re.M)]
+ring_counts = []
+for k, (at, look_id) in enumerate(starts):
+    entry = pieces_block[at:starts[k + 1][0] if k + 1 < len(starts) else len(pieces_block)]
+    found_ring = re.search(r"ring = \{ count = (\d+),", entry)
+    if found_ring:
+        ring_counts.append((look_id, found_ring.group(1)))
+if len(ring_counts) < 5:
+    fail("ShopCatalog: this check finds %d auras with a ring or halo; there are five" % len(ring_counts))
+for look_id, count in ring_counts:
+    if not ring_max or int(count) > int(ring_max.group(1)):
+        fail("ShopCatalog: the %s aura's ring has %s, more than CosmeticsClient keeps (RING_MAX)" % (look_id, count))
+if not ring_max or int(ring_max.group(1)) > 16:
+    fail("CosmeticsClient: an aura's ring has no limit, or too loose a one, for a busy lobby")
+for needle, why in (
+    ('if child:IsA("Attachment") and typeof(motion) == "string" then', "a trail's strands are never found"),
+    ("s.top.Position = centre + Vector3.new(0, s.half, 0)\n\t\t\ts.bottom.Position = centre - Vector3.new(0, s.half, 0)",
+     "a trail's strands are found and never moved"),
+    ("moveStrands(w, root, now)", "a trail's strands are never moved"),
+    ('if motion == "ring" or motion == "halo" then', "an aura's ring and halo are never placed"),
+    ("local ringLook = ringOf(w.aura)", "an aura's ring is never made"),
+    ("for _, one in ipairs(w.ringSet) do\n\t\t\t\t\tone.life = 0", "an old aura's ring stays when it is changed"),
+    ("for _, one in ipairs(w.ringSet) do\n\t\t\t\tone.life = 0", "a ring stays round someone gone out of sight"),
+    ("local at, u = auraPlace(one, look, (root :: BasePart).Position, now, (w :: Wearer).drop)",
+     "a ring is not at the feet of the one wearing it"),
+):
+    if needle not in COSMETICS:
+        fail("CosmeticsClient: " + why)
+for needle, why in (
+    ('top:SetAttribute("StrandMotion", strand.motion)', "a strand's motion is never told to the screens"),
+    ("band.WidthScale = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0) })",
+     "a strand is not full width where it leaves you, tapering to nothing"),
+    ('top:SetAttribute("PieceTrail", trail.id)', "the trail's pieces are never drawn"),
+):
+    if needle not in CATALOG:
+        fail("ShopCatalog: " + why)
 if "local function meshPrint(id: string, frame: CFrame, life: number): BasePart?" not in STEPS_SRC \
-        or "local made = meshPrint(id, CFrame.fromMatrix(at, right, up), life)" not in STEPS_SRC:
+        or "local made = meshPrint(id, CFrame.fromMatrix(at, right, up) * MESH_TURN, life)" not in STEPS_SRC:
     fail("StepService: the steps are flat prints only (no pieces pressed in)")
+# THE MODELLED PRINTS TURNED ROUND (the hundred-and-twenty-third pass, from your test: "the honey steps are reversed 180
+# degrees"): Blender's pieces face back along the way you walk, so each is turned a half turn about the ground's up.
+if "local MESH_TURN = CFrame.Angles(0, math.pi, 0)" not in STEPS_SRC:
+    fail("StepService: the modelled prints are laid backwards (the paw's toes behind its pad)")
 if "drawPrint(canvas, id, item.colour, item.accent)" not in STEPS_SRC:
     fail("StepService: no flat print for a place without the meshes")
 started = re.search(r'for _, name in ipairs\(\{(.*?)\}\) do', read("Client", "Bootstrap.client.lua"), re.S)
@@ -1989,6 +2064,9 @@ for needle, why in (
 ):
     if needle not in SHOP_LOOK:
         fail("ShopLook: " + why)
+puff_fn = SHOP_LOOK[SHOP_LOOK.find("function ShopLook.puff("):SHOP_LOOK.find("function ShopLook.tab(")]
+if "if not look.open or look.crating then" not in puff_fn or "playSound" in puff_fn:
+    fail("ShopLook: a puff of the material comes under a crate, or with a sound of its own over the press's")
 if "Neon" in SHOP_LOOK or "Image" in re.sub(r"--[^\n]*", "", SHOP_LOOK):
     fail("ShopLook: its backgrounds use images or Neon; they are drawn from frames alone")
 for needle, why in (
@@ -1998,11 +2076,171 @@ for needle, why in (
     ("\t\tShopLook.closed()\n", "the shop closes without its look"),
     ("ShopLook.tab(tab)", "a tab pressed has no sound of its own"),
     ("ShopLook.tab(nextTab)", "a tab changed with a controller has no sound of its own"),
-    ("ShopLook.TAB_COLOURS[button.Name]", "the tabs are all the one colour"),
+    ("local fam = family(button.Name)", "the tabs are all the one colour"),
+    ("ShopLook.TAB_COLOURS[tab]", "the tabs' colours are not ShopLook's"),
+    # (The hundred-and-twenty-third pass, from your test: "I wanna be able to switch tabs by using arrow keys".)
+    ("Enum.KeyCode.ButtonR1, Enum.KeyCode.Left,\n\t\tEnum.KeyCode.Right)", "the arrow keys do not change tab"),
+    ("local back = input.KeyCode == Enum.KeyCode.ButtonL1 or input.KeyCode == Enum.KeyCode.Left",
+     "the left arrow goes the wrong way"),
     ("ui.title.BackgroundColor3 = theme.title", "the title is not in the background's colours"),
 ):
     if needle not in SHOP:
         fail("ShopService: " + why)
+# MADE OVER (the hundred-and-twenty-second pass, from your test: "resize the UI appropriately so that the edges of the
+# categories are not cut off, and work on the colours a bit more, and improve those animations ... and the layout, and
+# make it fancier"). The tabs sit inside their strip with room all round, measured here against how far the widest one
+# grows when chosen and its outline; the tiles likewise inside the grid. A tab's colours run through its tiles, its deep
+# shades kept in its own hue, and the words on them are measured for contrast. Tiles are cards on lips over a tray,
+# popping in only when a tab has just opened (an answer about tokens alone draws nothing again); the gleams turn only
+# while the shop is open; your tokens are counted; the best pack is worked out from the catalogue, never written in.
+layout_fn = SHOP[SHOP.find("local function layout()"):SHOP.find("-- ===== BUILDING IT =====")]
+build_fn = SHOP[SHOP.find("local function build()"):SHOP.find("-- ===== OPEN AND CLOSE =====")]
+open_fn = SHOP[SHOP.find("function ShopService.open("):SHOP.find("function ShopService.close()")]
+close_fn = SHOP[SHOP.find("function ShopService.close()"):SHOP.find("function ShopService.isOpen()")]
+tile_fn = SHOP[SHOP.find("local function makeTile("):SHOP.find("-- ===== THE GRID AND THE TABS =====")]
+render_fn = SHOP[SHOP.find("render = function()"):SHOP.find("function ShopService.showTab(")]
+family_fn = SHOP[SHOP.find("local function family(tab: string): Family"):SHOP.find("local function tabGlyph(")]
+for needle, why, where in (
+    ("ui.tabs.Size = UDim2.new(1, -(28 - 2 * TAB_ROOM), 0, tabsH + 2 * TAB_ROOM)",
+     "the tabs' strip is no bigger than its tabs, so their edges are cut off", layout_fn),
+    ("ui.tabs.Position = UDim2.new(0, 14 - TAB_ROOM, 0, stripTop)", "the tabs' strip is not widened out round them", layout_fn),
+    ("tabRoom.PaddingLeft = UDim.new(0, TAB_ROOM)", "the first tab's left edge is cut off", build_fn),
+    ("tabRoom.PaddingTop = UDim.new(0, TAB_ROOM)", "the tabs' top edges are cut off", build_fn),
+    ("tabRoom.PaddingBottom = UDim.new(0, TAB_ROOM)", "the tabs' lips are cut off along the bottom", build_fn),
+    ("tail.Size = UDim2.fromOffset(TAB_ROOM, 1)", "the last tab's right edge can be cut off", build_fn),
+    ("gridPad.PaddingLeft = UDim.new(0, TILE_ROOM)", "a tile's outline is cut off at the grid's left", build_fn),
+    ("gridPad.PaddingRight = UDim.new(0, TILE_ROOM)", "a tile's outline is cut off at the grid's right", build_fn),
+    ("gridPad.PaddingTop = UDim.new(0, TILE_ROOM + 3)", "a lifted tile's outline is cut off along the grid's top", build_fn),
+    ("local inner = (w - 36) - 16 - 2 * TILE_ROOM",
+     "the tiles are sized without the room round them, so the last column is squeezed", layout_fn),
+    ("tabGlyph(disc, tab, fam.edge)", "the tabs have no drawings of their own", build_fn),
+    ("top.Size = UDim2.new(1, 0, 1, -TAB_LIP)", "the tabs stand on no lip", build_fn),
+    ("TweenService:Create(top, how, { Position = to }):Play()", "a tab pressed does not sink onto its lip", build_fn),
+    ("ShopLook.puff(button, 0.5)", "a tab chosen puffs none of the background's material", build_fn),
+    ("ui.tray = tray", "the tiles sit straight on the moving background", build_fn),
+    ("tray.ZIndex = 2", "the tray is drawn over the tiles, or under the background", build_fn),
+    ("grid.ZIndex = 3", "the tiles are drawn under their tray", build_fn),
+    ("modal.ZIndex = 10", "the confirm card is drawn under the tiles", build_fn),
+    ("card.Size = UDim2.new(1, 0, 1, -TILE_LIP)", "a tile stands on no lip", tile_fn),
+    ("TweenService:Create(card, TweenInfo.new(0.06, Enum.EasingStyle.Quad), { Position = sunk }):Play()",
+     "a tile pressed does not sink onto its lip", tile_fn),
+    ("light.Color = ColorSequence.new(LOOK.white, fam.pale)", "a tile is not washed in its tab's colour", tile_fn),
+    ("local outline = stroke(card, fam.edge, 3)", "a tile is not outlined in its tab's colour", tile_fn),
+    ("if shop.fresh then\n\t\tlift.Scale = 0", "the tiles never pop in", tile_fn),
+    ("table.insert(shop.gleams, run)", "the rare tiles have no gleam", tile_fn),
+    ('elseif item.kind == "tokens" and item.id == bestPack() then "Best value"', "the best pack does not say so", tile_fn),
+    ("shop.fresh = false", "every redraw pops the tiles in again", render_fn),
+    ("paintTabs()", "the tabs are never painted for the one chosen", render_fn),
+    ('ui.progressWords.Text = ("%d of %d yours"):format(have, of)', "a tab never says how many of it are yours", render_fn),
+    ("if shop.open and drawnFrom(data) ~= shop.drawn then\n\t\trender()", "every answer from the server draws the grid again",
+     SHOP),
+    ("showTokens(data.tokens)", "your tokens jump rather than count", SHOP),
+    ("shop.fresh = true", "the tiles do not pop in when the shop opens", open_fn),
+    ("ui.spin = RunService.RenderStepped:Connect(function()", "the gleams never turn", open_fn),
+    ("run.Rotation = turn", "the gleams stand still", open_fn),
+    ("ui.spin:Disconnect()\n\t\tui.spin = nil", "the gleams keep turning every frame once the shop is shut", close_fn),
+    ("{ BackgroundTransparency = 1 }):Play()", "the dark behind the shop does not fade as it closes", close_fn),
+):
+    if needle not in where:
+        fail("ShopService: " + why)
+# THE ICON SWELLS CLEAR OF THE WORDS (the hundred-and-twenty-third pass, from your test: "when I hover over the icons
+# in the shop, they get bigger which is cool but the text gets covered"): held by its middle, so it grows evenly, and
+# its growth downward (half the swell past its size) stays inside the gap over the name.
+if "icon.AnchorPoint = Vector2.new(0.5, 0.5)" not in tile_fn or "icon.Position = UDim2.new(0.5, 0, 0, top + iconD / 2)" not in tile_fn:
+    fail("ShopService: a tile's icon swells from its top, down over its name")
+swell_to = re.search(r"TweenService:Create\(swell, spring, \{ Scale = ([\d.]+) \}\)", tile_fn)
+icon_d = re.search(r"local iconD = math\.floor\(math\.min\(cellW \* ([\d.]+), cellH \* ([\d.]+)\)\)", tile_fn)
+gap = re.search(r"local nameY = top \+ iconD \+ math\.floor\((\d+) \* t\)", tile_fn)
+if not (swell_to and icon_d and gap):
+    fail("ShopService: this check can no longer read a tile's icon and its gap")
+else:
+    widest_icon = min(300 * float(icon_d.group(2)), 300 * float(icon_d.group(1)))  # a tall tile's icon at its largest
+    if widest_icon * (float(swell_to.group(1)) - 1) / 2 >= int(gap.group(1)) * 0.8:
+        fail("ShopService: a swollen icon (%.0f pixels at most, to %s) covers the name under it" % (widest_icon, swell_to.group(1)))
+# LIVELIER TILES (the hundred-and-thirty-fifth pass, from your test: "improve the shop looks even more"): a sunburst
+# turning behind every item, a sheen across every card now and then, a price you can pay breathing; all of them made
+# afresh with every redraw (never piling up), and moved by the one frame loop that turns the gleams.
+for needle, why in (
+    ('rays.Name = "Rays"', "no sunburst behind the items"),
+    ("table.insert(shop.rays, rays)", "the sunbursts never turn"),
+    ('sheen.Name = "Sheen"', "no sheen across the cards"),
+    ("sheen.grad.Offset = Vector2.new(if p < 1 then -1 + 2 * p else -2, 0)", "the sheens never sweep"),
+    ("if not item.soon and tokens() >= item.price then", "a price you can pay does not say so"),
+    ("table.clear(shop.rays)\n\ttable.clear(shop.sheens)\n\ttable.clear(shop.breathe)", "the old tiles' animations pile up"),
+):
+    if needle not in (SHOP or ""):
+        fail("ShopService: " + why)
+if "Best value" in CATALOG:
+    fail("ShopCatalog names the best value itself; the shop works it out from the packs' tokens and Robux")
+# THE ROOM, MEASURED: the widest tab chosen grows by half its lift each side, plus its outline; it must stay inside the
+# strip's room and short of its neighbour's outline. Likewise a lifted tile, with the gleam's thicker outline, inside the
+# grid's room.
+def numbers(pattern, text, what):
+    m = re.search(pattern, text)
+    if not m:
+        fail("ShopService: this check can no longer read %s" % what)
+        return None
+    return [float(g) for g in m.groups()]
+
+
+room = numbers(r"local TAB_ROOM, TAB_LIP = (\d+), (\d+)", SHOP, "TAB_ROOM")
+tile_room = numbers(r"local TILE_ROOM, TILE_LIP = (\d+), (\d+)", SHOP, "TILE_ROOM")
+lifts = numbers(r"then (\d\.\d+) elseif part\.hovered then (\d\.\d+) else 1", SHOP, "the tabs' lifts")
+tab_line = numbers(r"local edge = stroke\(top, fam\.edge, ([\d.]+)\)", build_fn, "the tabs' outline")
+gap = numbers(r"tabRow\.Padding = UDim\.new\(0, (\d+)\)", build_fn, "the gap between tabs")
+scale_top = numbers(r"local t = math\.clamp\(math\.min\(view\.X, view\.Y\) / 720, ([\d.]+), ([\d.]+)\)", SHOP, "the text scale")
+if room and tile_room and lifts and tab_line and gap and scale_top:
+    t_max = scale_top[1]
+    tabs_h = max(44, int(46 * t_max))
+    disc = int((tabs_h - room[1]) * 0.62)
+    widest = max(len(tab) for tab in tabs) * 0.6 * int(17 * t_max) + 10 + disc + 8 + 18
+    grow = (lifts[0] - 1) / 2
+    if grow * widest + tab_line[0] > room[0]:
+        fail("ShopService: the widest tab chosen (%d pixels) reaches %.1f pixels past its edge, beyond the strip's room of %d"
+             % (widest, grow * widest + tab_line[0], room[0]))
+    if grow * tabs_h + tab_line[0] > room[0]:
+        fail("ShopService: a chosen tab's top is cut off along the strip")
+    if grow * widest + 2 * tab_line[0] >= gap[0]:
+        fail("ShopService: a chosen tab grows into its neighbour's outline")
+    cell_w = ((960 - 36) - 16 - 2 * tile_room[0] - int(12 * t_max) * 3) / 4
+    cell_h = min(300, cell_w * 1.2) + tile_room[1]
+    if 0.015 * cell_w + 4 > tile_room[0]:
+        fail("ShopService: a lifted tile's outline is cut off at the grid's sides")
+    if 0.015 * cell_h + 4 + 2 > tile_room[0] + 3:
+        fail("ShopService: a lifted tile's outline is cut off along the grid's top")
+# THE COLOURS, MEASURED: every tab's deep shades are its own hue (from HSV, not a mix toward grey), and the words on its
+# tiles and keys can be read: the name on the pale wash, the description, a key's words, the chosen key's white words.
+for needle in ("edge = Color3.fromHSV(h, math.min(1, s * 1.25 + 0.15), v * 0.42)",
+               "ink = Color3.fromHSV(h, math.min(1, s + 0.2), v * 0.26)", "pale = own:Lerp(LOOK.white, 0.72)",
+               "ShopLook.TAB_COLOURS[tab]"):
+    if needle not in family_fn:
+        fail("ShopService: a tab's colours are not worked out from its own (%s)" % needle)
+import colorsys
+
+
+def luminance(c):
+    def channel(v):
+        v /= 255
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    return 0.2126 * channel(c[0]) + 0.7152 * channel(c[1]) + 0.0722 * channel(c[2])
+
+
+def contrast(a, b):
+    hi, lo = sorted((luminance(a), luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+for m in re.finditer(r"(\w+) = rgb\((\d+), (\d+), (\d+)\)", colours.group(1) if colours else ""):
+    tab, own = m.group(1), tuple(int(v) for v in m.group(2, 3, 4))
+    h, s, v = colorsys.rgb_to_hsv(*(x / 255 for x in own))
+    edge = tuple(x * 255 for x in colorsys.hsv_to_rgb(h, min(1, s * 1.25 + 0.15), v * 0.42))
+    ink = tuple(x * 255 for x in colorsys.hsv_to_rgb(h, min(1, s + 0.2), v * 0.26))
+    pale = tuple(x + (255 - x) * 0.72 for x in own)
+    for what, a, b, least in (("name on its tiles' wash", ink, pale, 7), ("descriptions", edge, pale, 4.5),
+                              ("key's words", ink, own, 4.5), ("chosen key's white words", (255, 255, 255), edge, 4.5)):
+        if contrast(a, b) < least:
+            fail("ShopService: the %s tab's %s are hard to read (contrast %.1f, under %s)" % (tab, what, contrast(a, b), least))
+
 started = re.search(r"CLIENT_MODULES = \{(.*?)\}", BOOT, re.S)
 if not started or '"ShopLook"' not in started.group(1):
     fail("Bootstrap: ShopLook is not among the client's modules")

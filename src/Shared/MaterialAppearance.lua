@@ -347,12 +347,13 @@ local Appearances: { [string]: Appearance } = {
 		-- through it. Transparency is kept low rather than removed so the drips and
 		-- the thin rim still glow at the edges where the material is genuinely thin.
 		color = Color3.fromRGB(238, 148, 24),
-		material = Enum.Material.Glass,
-		transparency = 0.10,
-		-- Not raised past this: above roughly 0.45 a Glass surface starts mirroring
-		-- the skybox and washes out again regardless of Color, which is the same trap
-		-- that turned the old footfall marks pink.
-		reflectance = 0.38,
+		-- NOT GLASS (the hundred-and-eighteenth pass), for the reason soda and soap are not: under this
+		-- lighting a Glass part shows the sky behind it more than its own colour, and against Sky Pools'
+		-- and Hill House's open sky the honey went the colour of the sky and vanished. SmoothPlastic with a
+		-- little transparency keeps its amber from every side; the sheen is reflectance.
+		material = Enum.Material.SmoothPlastic,
+		transparency = 0.08,
+		reflectance = 0.24,
 		baseColor = Color3.fromRGB(122, 74, 12),
 		baseMaterial = Enum.Material.Concrete,
 	},
@@ -383,14 +384,23 @@ local Appearances: { [string]: Appearance } = {
 	},
 	Slime = {
 		color = Color3.fromRGB(126, 220, 116),
-		material = Enum.Material.Glass,
-		transparency = 0.3,
-		-- Reflectance kept low on purpose: above ~0.2 a Glass part mirrors the
-		-- skybox and washes out to pale blue-white, which is what turned the
-		-- honey smears pink. Wetness comes from transparency here, not mirroring.
+		-- NOT GLASS (the hundred-and-eighteenth pass), as honey is not: against open sky a Glass slime went
+		-- the sky's colour and vanished. SmoothPlastic, see-through enough to read as wet.
+		material = Enum.Material.SmoothPlastic,
+		transparency = 0.22,
 		reflectance = 0.12,
 		baseColor = Color3.fromRGB(64, 128, 60),
 		baseMaterial = Enum.Material.Concrete,
+	},
+	-- A BAKED BISCUIT: golden and matte, its crumbs a grain (Sand) that catches the light unevenly, the way a cookie's
+	-- top does; darker underneath, where it was on the tray. The chips are ChunkBuilder's (CHIPS), not a colour here.
+	Cookie = {
+		color = Color3.fromRGB(212, 156, 92),
+		material = Enum.Material.Sand,
+		transparency = 0,
+		reflectance = 0,
+		baseColor = Color3.fromRGB(150, 100, 54),
+		baseMaterial = Enum.Material.Sand,
 	},
 	Soap = {
 		-- Soft rose. Near-white before, which put it within a few values of the pale
@@ -463,6 +473,13 @@ local TweenProfiles: { [string]: TweenProfile } = {
 		easingDirection = Enum.EasingDirection.Out,
 		sinkY = -0.85, -- stretch-down before launch reads as anticipation
 		squashScale = 0.8,
+	},
+	Cookie = {
+		duration = 0.45,
+		easingStyle = Enum.EasingStyle.Quad,
+		easingDirection = Enum.EasingDirection.In,
+		sinkY = -1.0, -- it cracks, then crumbles toward the hole
+		squashScale = 0.9,
 	},
 	Soap = {
 		duration = 0.5,
@@ -701,4 +718,5 @@ function MaterialAppearance.getTweenProfile(materialName: string?): TweenProfile
 	return TweenProfiles[materialName]
 end
 
+MaterialAppearance.STAMP = "b1cbae82"
 return MaterialAppearance

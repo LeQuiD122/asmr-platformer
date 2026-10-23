@@ -53,7 +53,7 @@ MUTATIONS = [
     ('the dark fading on', HC, HALLS, '\t\tmade:Cancel()\n', '\t\tlocal _ = made\n'),
     ('falling in on your back', HC, HALLS, 'CFrame.Angles(math.pi / 2 + tumble - math.pi * over, 0, tumble * 0.4)', 'CFrame.Angles(math.pi / 2 + tumble, 0, tumble * 0.4)'),
     ('your face never seen', HC, HALLS, 'Cinema.point(CFrame.lookAt(eye, face, root.CFrame.UpVector), 54 - 6 * k)', 'Cinema.point(CFrame.lookAt(eye, pos), 54)'),
-    ('your face too brief', HC, HALLS, '\tface = 1.8,', '\tface = 2.4,'),
+    ('your face too brief', HC, HALLS, '\tface = 1.8,', '\tface = 2.8,'),
     ('the wide shot cut short', HC, HALLS, '\tface = 1.8,', '\tface = 1.2,'),
     ("another's code unnoticed (server)", BOOT, STAMPS, '\t\t\t\tif whose and whose ~= name then\n', '\t\t\t\tif false then\n'),
     ('only the stamped looked at', BOOT, STAMPS, 'for _, side in ipairs({ { names = SERVER_MODULES, folder = serverServices,', 'for _, side in ipairs({ { names = {}, folder = serverServices,'),

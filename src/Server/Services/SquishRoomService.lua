@@ -273,13 +273,13 @@ end
 
 -- ===== THE KEEPSAKE SHELF =====
 --
--- Against the front wall, left of the lift home: a cubby for every keepsake in Harrow Bay (nine across, three
--- high), in the order of their materials' names, each with its toy and a card. The shelf is the same for
+-- Against the front wall, left of the lift home: a cubby for every keepsake in Harrow Bay (ten across, three
+-- high: twenty-eight keepsakes since the cookie, and room for two more), in the order of their materials' names, each with its toy and a card. The shelf is the same for
 -- everyone; what is ON it is each player's own: JournalService shows the toys you have found (tag ShelfToy)
 -- and a card for the ones you have not (ShelfEmpty), by journal id, and counts them on the board on top
 -- (ShelfCount). Its prompt opens your journal at the keepsakes. Everything stands on something: the plinth
 -- on the floor, the frame on the plinth, the toys and cards on its boards, the board on its top.
-local SHELF_COLUMNS, SHELF_ROWS = 9, 3
+local SHELF_COLUMNS, SHELF_ROWS = 10, 3
 local CUBBY = Vector3.new(3.2, 3, 2.2) -- inside each: wide, tall, deep
 local SHELF_BOARD = 0.3
 local SHELF_PLINTH = 0.8
@@ -659,5 +659,5 @@ function SquishRoomService.build(hubOrigin: Vector3)
 	print(("SquishRoomService: the squish room is open, %d materials."):format(#pads))
 end
 
-SquishRoomService.STAMP = "560d0f12"
+SquishRoomService.STAMP = "87302c64"
 return SquishRoomService

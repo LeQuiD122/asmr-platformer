@@ -61,7 +61,7 @@ MUTATIONS = [
     ("no StoryMoment remote", BOOT, STORY, 'ensureRemoteEvent(remoteEventsFolder, "StoryMoment")', 'local _ = "StoryMoment"'),
     # The mouth.
     ("the mouth's meshes refused", MAW, STORY, "Maw_UpperJaw = Vector3.new(55.0, 27.56, 105.0)", "Maw_UpperJaw = Vector3.new(55.0, 27.56, 93.0)"),
-    ("the mouth too quick to see", HALLS, STORY, "\tMAW = 8.5,", "\tMAW = 2,"),
+    ("the mouth too quick to see", HALLS, STORY, "\tMAW = 13.5,", "\tMAW = 2,"),
     ("the chamber before the mouth has shut", HALLS, STORY, "\t\t\t\ttask.wait(GATES.MAW)\n", "\t\t\t\tlocal _ = GATES.MAW\n"),
     ("the mouth never played", HALLSC, HALLCHECK, "mawStep(current, root, humanoid, t - current.slide)",
      "chamberStep(current, root, humanoid, t - current.slide)"),

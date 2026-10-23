@@ -42,6 +42,8 @@ DIVE = read("Server", "Services", "DiveFinaleService.lua")
 SKY = read("Server", "Services", "SkyPoolsService.lua")
 SKY_CLIENT = read("Client", "Services", "SkyPoolsClient.lua")
 SUNKEN = read("Server", "Services", "SunkenCityService.lua")
+HOUSE = read("Server", "Services", "HillHouseService.lua") or ""
+HILL_CLIENT = read("Client", "Services", "HillHouseClient.lua") or ""
 SUNKEN_CLIENT = read("Client", "Services", "SunkenCityClient.lua")
 BOOT = read("Server", "Bootstrap.server.lua")
 CLIENT_BOOT = read("Client", "Bootstrap.client.lua")
@@ -111,10 +113,10 @@ if not (lines_block and shouts_block and reactions_block and openings_block):
 LINES = by_person(lines_block)
 SHOUTS = by_person(shouts_block)
 
-SILENT = {"Watcher"}  # faceless, far off, and says nothing: that is the point of him
+SILENT = {"Watcher", "Marsh"}  # faceless, far off, and says nothing: that is the point of him (and, his face back, he waves)
 spawned = {}
 for label, text in (("DiveFinaleService", DIVE), ("SkyPoolsService", SKY), ("StoryService", STORY),
-                    ("SunkenCityService", SUNKEN)):
+                    ("SunkenCityService", SUNKEN), ("HillHouseService", HOUSE)):
     for name in re.findall(r'Townsfolk\.spawn\([^,]+, "([A-Za-z]+)"', text):
         spawned.setdefault(name, label)
 for name, where in sorted(spawned.items()):
@@ -124,7 +126,8 @@ for name, where in sorted(spawned.items()):
         fail("%s stands %s up, and Townsfolk has nothing for them to say" % (where, name))
     elif len(LINES[name]) < 3:
         fail("%s has %d line(s); a person you can talk to needs at least three" % (name, len(LINES[name])))
-for name in ("Sal", "Pip", "Maren", "Dev", "Okafor", "Rudy", "Attendant", "Fisherman", "Venn", "Tobi", "Barlow"):
+for name in ("Sal", "Pip", "Maren", "Dev", "Okafor", "Rudy", "Attendant", "Fisherman", "Venn", "Tobi", "Barlow", "Gale",
+             "Dunn"):
     if name not in spawned:
         fail("nobody stands %s up any more, and the story has a hole where they were" % name)
 for name in ("Maren", "Rudy"):
@@ -136,7 +139,8 @@ for name in ("Maren", "Rudy"):
 # THE THREAD: at least two people on every level know about the key holder, so it is heard whoever
 # you happen to talk to.
 for level, names in (("City Shore", ("Sal", "Pip", "Maren")), ("the Sky Pools", ("Dev", "Okafor", "Rudy")),
-                     ("the Sunken City", ("Attendant", "Fisherman")), ("the Corporation Baths", ("Venn", "Tobi", "Barlow"))):
+                     ("the Sunken City", ("Attendant", "Fisherman")), ("the Corporation Baths", ("Venn", "Tobi", "Barlow")),
+                     ("Hill House", ("Gale", "Dunn"))):
     knowing = [name for name in names
                if re.search(r"\bkeys?\b|pump man|key holder", " ".join(LINES.get(name, [])).lower())]
     if len(knowing) < 2:
@@ -157,7 +161,7 @@ for text in (SUNKEN, SKY, DIVE):
     for call in re.findall(r'label\([^,\n]+, Enum\.NormalId\.\w+, ("[^"\n]*")', text):
         readable.extend(strings(call))
 HALLS_CLIENT = read("Client", "Services", "FloodedHallsClient.lua") or ""
-for text in (SHORE, SKY_CLIENT, SUNKEN_CLIENT, HALLS_CLIENT):
+for text in (SHORE, SKY_CLIENT, SUNKEN_CLIENT, HALLS_CLIENT, HILL_CLIENT):
     for call in re.findall(r"Cinema\.caption\(([^)]*)\)", text):
         readable.extend(strings(call))
 
@@ -487,8 +491,8 @@ for needle, why in (
         fail(why)
 # THINGS TO READ on every level, and one with the reader's own name on it.
 note_levels = dict((int(k), v) for k, v in re.findall(r"\[(\d)\] = \{(.*?)\n\t\},", notes_block, re.S))
-for level in (1, 2, 3, 4):
-    # Four since the sixteenth pass: one of them the Hold's own (LORE.md).
+for level in (1, 2, 3, 4, 5):
+    # Four since the sixteenth pass: one of them the Hold's own (LORE.md). Hill House's since the hundred-and-eleventh.
     if len(re.findall(r"title = ", note_levels.get(level, ""))) < 4:
         fail("level %d has fewer than four things to read" % level)
 if "%s" not in note_levels.get(4, ""):
@@ -582,7 +586,7 @@ for label, text, needle in (
     if needle not in text:
         fail("%s no longer does its part in silencing a level for its ending (%s)" % (label, needle))
 beds = re.findall(r'\{ name = "(\w+)", volume', AMBIENCE)
-for backdrop in ("cityShore", "skyPools", "sunkenCity", "floodedHalls"):
+for backdrop in ("hillHouse", "cityShore", "skyPools", "sunkenCity", "floodedHalls"):
     if "\t%s = {" % backdrop not in AMBIENCE:
         fail("the %s level has no ambience of its own" % backdrop)
 for name in set(beds):
@@ -745,7 +749,7 @@ for needle, why in (
 SKY_CLIENT = read("Client", "Services", "SkyPoolsClient.lua") or ""
 scored = {
     "City Shore": (SHORE or "", ("DiveBoard", "DiveWind", "DiveSplash", "UnderwaterHum", "ShoreChord")),
-    "the Sky Pools": (SKY_CLIENT, ("SlideRush", "CloudWhoosh", "SkimSlap", "PoolPlunge", "PoolsChord")),
+    "the Sky Pools": (SKY_CLIENT, ("SlideRush", "CloudWhoosh", "SkimSlap", "PoolPlunge", "PoolsChord", "PoolsSong")),
     "the Sunken City": (SUNKEN_CLIENT, ("WhirlRoar", "DrainFall", "CulvertWash", "SunkenChord")),
     "the Flooded Halls": (HALLS_CLIENT, ("FlumeRush", "PlungeWind", "HallsChord")),
 }
@@ -755,6 +759,31 @@ for level, (text, names) in scored.items():
             fail("the ending of %s never plays %s" % (level, name))
         if not (AUDIO_DIR / "endings" / ("%s.wav" % name)).exists():
             fail("audio/endings/%s.wav is missing, and the ending of %s plays it" % (name, level))
+# THE SKY POOLS' SONG IN FULL (the hundred-and-twenty-seventh pass, from your test: "the full song at the end of sky
+# pools is not playing"): the party's song, heard through the wall all the way up, plays over the slide, started so far
+# in that its last chord lands with you; a kept sound plays out (it was cut at twenty seconds), and the pool's chord
+# only stands in when there is no song.
+for needle, why, where in (
+    ('scene.song = Cinema.sound("PoolsSong", 0.5, { keep = true, fadeIn = 1.5 })', "the slide has no song", SKY_CLIENT),
+    ("song.TimePosition = math.max(0, SONG_LANDS - landsIn)", "the song's last chord does not land with you", SKY_CLIENT),
+    ("if not (scene.song and scene.song.Parent) then", "the pool's chord plays over the song's own", SKY_CLIENT),
+    ("Cinema.fade(scene.song, 1.5)", "the song plays on when the slide is gone", SKY_CLIENT),
+    ("made.Ended:Once(function()\n\t\t\tlocal index = table.find(kept, made)", "a kept sound is not cleared when it ends",
+     CINEMA or ""),
+    ("\tmade:Destroy()\n\t\tend)\n\t\tgame:GetService(\"Debris\"):AddItem(made, 120)", "a kept sound is not cleared when it ends",
+     CINEMA or ""),
+):
+    if needle not in where:
+        fail(why)
+if 'game:GetService("Debris"):AddItem(made, 20)' in (CINEMA or ""):
+    fail("a kept sound is cut off at twenty seconds (the Sky Pools' song halfway)")
+lands = re.search(r"^local SONG_LANDS = ([\d.]+)", SKY_CLIENT, re.M)
+gen_end = (AUDIO_DIR / "gen_ending_sfx.py").read_text(encoding="utf-8")
+song_bars = re.search(r"^SONG_BEAT = ([\d.]+).*\n^SONG_BARS = (\d+)", gen_end, re.M)
+if not (lands and song_bars) or abs(float(lands.group(1)) - float(song_bars.group(1)) * 4 * int(song_bars.group(2))) > 0.01:
+    fail("SkyPoolsClient's SONG_LANDS is not where the song's last chord falls (audio/gen_ending_sfx.py)")
+elif float(lands.group(1)) < 30 + 2.8:
+    fail("the song is shorter than the longest slide: its last chord would come before you land")
 if "Cinema.fade(current.wind, 0.3)" not in (SHORE or ""):
     fail("the wind of the dive goes on after the water has closed over them")
 if "Cinema.fade(current.roar, 2.5)" not in SUNKEN_CLIENT:
@@ -898,7 +927,7 @@ if not flash or float(flash.group(1)) < 0.4:
     fail("Cinema: an impact frame's flash is too near full white (a strobe, not a beat)")
 for needle, why in (
     ("\tdrawLines(current, dt)\n", "the speed lines are never drawn"),
-    ("camera.FieldOfView = math.max(8, fov - kick)", "an impact frame's punch in is never seen"),
+    ("camera.FieldOfView = math.max(8, fov - kick + math.sin(now * 2.1) * 2.4 * w)", "an impact frame's punch in is never seen"),
     ("\tif current.impactFx then\n\t\tcurrent.impactFx:Destroy()", "an impact frame's colour is left on after the scene"),
     ("TweenService:Create(words, TweenInfo.new(length / 30, Enum.EasingStyle.Linear), { MaxVisibleGraphemes = length }):Play()",
      "a thought is not written out as it is thought"),
@@ -907,7 +936,7 @@ for needle, why in (
         fail("Cinema: " + why)
 
 # A BODY THAT ACTS (Poses): the dive pushes off and is buffeted; prying, pondering, startled, peering.
-for pose in ("pry", "ponder", "startle", "peer"):
+for pose in ("pry", "ponder", "startle", "peer", "strike"):
     if "function Poses.%s(name: string, t: number, w: number, r6: boolean): CFrame?" % pose not in POSES:
         fail("Poses: there is no %s for a secret's scene" % pose)
 dive_fn = POSES[POSES.find("function Poses.dive("):POSES.find("function Poses.sled(")]
@@ -918,12 +947,294 @@ for needle, why in (
     if needle not in dive_fn:
         fail("Poses: " + why)
 
+# THE BAR SWUNG INTO THE BRICKS (the hundred-and-twenty-ninth pass, from your test: "I should actually hit the bricks and
+# there should be some pieces flying out"): you step up to the wall, three blows land on it (the bar drawn from your hand
+# each frame, its tip on the bricks as each lands), chips and dust out of each and the bar's knock, and on the last the
+# patch bursts out together, tumbling; its prompt stays at the hole (it went out on the first brick and lay on the floor).
+INTERACT = read("Server", "Services", "Interactables.lua") or ""
+POSES_SRC = read("Shared", "Poses.lua") or ""
+for needle, why, where in (
+    ("strike = on.strike == true, out = host.CFrame.LookVector", "the scene is never told the thing is to be struck", INTERACT),
+    ('openable(patch, "Prise out", "Loose bricks", true,', "the bricks' prompt rides out on the first brick", INTERACT),
+    ("\t\tstrike = true,\n", "the bricks are levered, not struck", INTERACT),
+    ("b.AssemblyAngularVelocity = Vector3.new(math.random(-8, 8), math.random(-8, 8), math.random(-8, 8))",
+     "the bricks slide out flat, not tumbling", INTERACT),
+    ('if data.strike == true and typeof(data.out) == "Vector3" and Poses and Poses.STRIKES then', "the bricks are never struck", STORY_CLIENT),
+    ("bar.CFrame = CFrame.lookAt(grip, grip + dir) * CFrame.new(0, 0, -(BAR_LONG / 2 - 0.25))", "the bar never meets the wall", STORY_CLIENT),
+    ("root.CFrame = from:Lerp(goal, u * u * (3 - 2 * u))", "you strike from wherever you stood, out of reach", STORY_CLIENT),
+    ("chips(at, flatOut, 6, 1)", "no pieces fly out of a blow", STORY_CLIENT),
+    ("chips(at, flatOut, 16, 1.5)", "no pieces fly out as the patch bursts", STORY_CLIENT),
+    ('Cinema.sound("BarStrike", 0.7,', "the blows are silent", STORY_CLIENT),
+    ('Cinema.sound("BrickBurst", 0.75,', "the bricks come out in silence", STORY_CLIENT),
+    ("function Poses.strike(name: string, t: number, w: number, r6: boolean): CFrame?", "there is no blow to act", POSES_SRC),
+):
+    if needle not in where:
+        fail(why)
+strikes = re.search(r"^Poses\.STRIKES = \{ ([\d.]+), ([\d.]+), ([\d.]+) \}", POSES_SRC, re.M)
+pry_s = re.search(r"^local PRY_SECONDS = ([\d.]+)", STORY_CLIENT, re.M)
+pry_server = re.search(r"^local PRY_SECONDS = ([\d.]+)", INTERACT, re.M)
+if not (strikes and pry_s and pry_server):
+    fail("this check can no longer read when the blows land and when the bricks give")
+else:
+    lands = [float(g) for g in strikes.groups()]
+    if pry_s.group(1) != pry_server.group(1):
+        fail("the scene and the server disagree on when the bricks give")
+    elif lands[-1] >= float(pry_s.group(1)) - 0.15 or any(b - a < 0.4 for a, b in zip(lands, lands[1:])):
+        fail("the blows crowd each other, or the last lands after the bricks have gone")
+reach = re.search(r"^local BAR_LONG = ([\d.]+)\n^local STRIKE_STAND = ([\d.]+)", STORY_CLIENT, re.M)
+# The hand is about a stud and a half out from you at the blow: the bar's tip should just reach the wall from there.
+if not reach or not (float(reach.group(1)) - 0.9 <= float(reach.group(2)) - 1.5 <= float(reach.group(1)) + 0.2):
+    fail("you strike the wall from where the bar cannot reach it, or from inside it")
+
+# ONE OF A ROW, A COAT THAT READS AS ONE, AND THE MOUTH UNDERSTOOD (the hundred-and-twenty-fourth pass, from your test:
+# "locker 3 is hard to open and the animation inside looks weird, and so does the moment where there is the monster
+# scene, I don't understand what is going on"): of lockers side by side only the nearest's prompt shows on your screen,
+# measured from where its door stands shut; the close look backs off a locker's own width, so the coat is seen whole,
+# with its buttons, a pocket and the note; and the mouth: you see it is one, it bites, you go down its throat turning
+# over, and it spits you out into the sump, wondering just that.
+for needle, why, where in (
+    ('p:SetAttribute("RowAt", door.Position)', "a locker's prompt does not say where it stands shut", INTERACT),
+    ('game:GetService("CollectionService"):AddTag(p, "OneOfARow")', "every locker in a row offers itself at once", INTERACT),
+    ("item.Enabled = item == best", "every prompt in a row shows, and Roblox picks among them", STORY_CLIENT),
+    ("\toneOfARow()\n", "nothing picks one of a row", STORY_CLIENT),
+    ("local back = if span then span + 1.4 - 1.2 * u else reach - 0.7 * u", "the close look in a locker is inside the coat",
+     STORY_CLIENT),
+    ('bit("CoatButton"', "the coat in Locker 3 is a blank block of cloth", INTERACT),
+    ('"Is that... a MOUTH?!"', "you never see that it is a mouth", HALLS_CLIENT),
+    ('"It... spat me out?"', "you come up not knowing what happened", HALLS_CLIENT),
+    ("local function buildThroat(at: Vector3): Throat", "you never go down its throat", HALLS_CLIENT),
+    ("current.swallowed = true", "the throat is blacked out by the dip after the bite", HALLS_CLIENT),
+):
+    if needle not in where:
+        fail(why)
+
+# HE HAS YOU (the hundred-and-twenty-fifth pass, from your test: "the animation of the backrooms monster kill is weird"):
+# caught, he stops and folds down over you on every screen, his arms round you; your screen goes from beside you to his
+# face in front of you, bigger, its fangs a hand long and lit, and he lunges; then black, and the server waits for the
+# black before it takes you to the lobby.
+ROOMS_SV = read("Server", "Services", "BackRoomsService.lua") or ""
+STALK = read("Client", "Services", "StalkerClient.lua") or ""
+BOOT_SV = (ROOT / "src" / "Server" / "Bootstrap.server.lua").read_text(encoding="utf-8")
+for needle, why, where in (
+    ('model:SetAttribute("Caught", true)', "his catch is never told to the screens", ROOMS_SV),
+    ('model:SetAttribute("Paused", true)', "he walks on while he has you", ROOMS_SV),
+    ('if real:GetAttribute("Caught") == true then', "he never takes hold of you", STALK),
+    ('drive(one, "Shoulder" .. side, CFrame.Angles(1.65 * g, 0, -0.32 * sign * g))', "his arms never come round you", STALK),
+):
+    if needle not in where:
+        fail(why)
+scream = re.search(r"^local SCREAM = ([\d.]+)", STORY_CLIENT, re.M)
+if not scream or float(scream.group(1)) < 1.4:
+    fail("his face is two flat slabs again, too near and too small to be a face")
+beats = re.search(r"^local CAUGHT = \{ loom = ([\d.]+), face = ([\d.]+), black = ([\d.]+) \}", STORY_CLIENT, re.M)
+waits = re.search(r"local function caughtInBackRooms\(player: Player, at: Vector3\)[\s\S]{0,800}?task\.wait\(([\d.]+)\)", BOOT_SV)
+if not (beats and waits):
+    fail("this check can no longer read the catch's beats, or how long the server waits on them")
+else:
+    loom, face, black = (float(g) for g in beats.groups())
+    if not (0 < loom and face - loom >= 0.6 and black - face >= 0.8):
+        fail("the catch's beats are flashes (his hold %.2f s, his face %.2f s)" % (face - loom, black - face))
+    elif float(waits.group(1)) <= black:
+        fail("the server takes you to the lobby before the catch goes black")
+
+# UNDER THE WHIRLPOOL'S WATER (the hundred-and-twenty-sixth pass, from your test: "it should seem as though there is
+# light distortion because of the water"): the picture swims (Cinema.waver: a slow roll, the lens breathing), soft, with
+# shafts of daylight slanting down round the throat and silt and bubbles going by; and put right after.
+for needle, why, where in (
+    ("function Cinema.waver(amount: number)", "nothing can make the picture swim", CINEMA or ""),
+    ("math.sin(now * 2.1) * 2.4 * w", "the lens never breathes under water", CINEMA or ""),
+    ("Cinema.waver(1)", "the picture does not swim under the whirlpool", SUNKEN_CLIENT or ""),
+    ("Cinema.waver(0)", "the picture swims on after the water", SUNKEN_CLIENT or ""),
+    ("local function waterLife(on: boolean)", "the water under the whirlpool is empty", SUNKEN_CLIENT or ""),
+    ("deep.spec = current.spec", "the shafts of light are never placed round the throat", SUNKEN_CLIENT or ""),
+):
+    if needle not in where:
+        fail(why)
+
+# THE DIVE'S FINALE (the same pass, from your test: "there is a bit where the camera is covered by a plane, and the final
+# dive in should have more impact on hit"): Maren's shot is her reaction, turned to the board and startled, framed from
+# the board's side (from behind her, looking down at you, it was the deck's floor); and the hit is held from the surface a
+# moment, spray, foam racing out, flash and jolt, before the camera goes under after you into a burst of bubbles, the
+# under-water look coming on only then.
+for needle, why in (
+    ("pcall(marenReacts, current, toward, t - 1.6)", "Maren does not react as you go"),
+    ("figure:PivotTo(CFrame.lookAt(pivot.Position, pivot.Position + toward))", "Maren never turns to the board"),
+    ("local toward = Vector3.new(current.tip.X - head.X, 0, current.tip.Z - head.Z)", "Maren's shot looks past her into the deck"),
+    ("^local SPLASH_HOLD = ", "the hit is not held at the surface"),
+    ('current.shot = "splash"', "the hit is not seen from the surface"),
+    ("for _, fx in ipairs(current.underFx) do\n\t\t\t\tfx.Enabled = true", "the under-water look is on over the hit"),
+    ('"SplashFoam"', "no foam races out from where they went in"),
+    ("burst:Emit(140)", "no air goes in with them"),
+):
+    if not re.search(needle, SHORE or "", re.M) if needle.startswith("^") else needle not in (SHORE or ""):
+        fail("CityShoreClient: " + why)
+if "Cinema.cut()\n\t\tCinema.impact(1.6)" in (SHORE or ""):
+    fail("CityShoreClient: the hit cuts straight under, and is never seen")
+
+# THE BUTTER'S WRAPPER IS PAPER (the same pass, from your test: "you can see what's wrong exactly with butter stick"): at
+# 0.3 it read as a glass case, the water through its edges and a yellow block standing inside; the butter shows where
+# the wrapper cracks.
+BUILDER = (ROOT / "src" / "Server" / "ChunkBuilder.server.lua").read_text(encoding="utf-8").replace("\r\n", "\n")
+for name in ("ButterWax", "ButterStick"):
+    finish = re.search(r"^\t%s = \{ whiten = ([\d.]+), transparency = ([\d.]+), reflectance = ([\d.]+) \}," % name, BUILDER, re.M)
+    if not finish:
+        fail("ChunkBuilder: %s's wrapper has no finish of its own" % name)
+    elif float(finish.group(2)) > 0.12:
+        fail("ChunkBuilder: %s's wrapper is see-through (%s), a glass case with a block of butter in it" % (name, finish.group(2)))
+
+# ===================================================================== your test of 2026-10-23
+
+# SCENES HOLD YOU, AND STOP WHEN THE LOBBY TAKES YOU (the hundred-and-thirtieth pass, from your test: "I can walk around
+# during animations", "when I leave to lobby every animation should stop even if it is playing", "move me out the way
+# if I'm in the way and do the same for every animation where it makes sense"): moving and jumping sunk while a scene has
+# the camera, the prompts put away; leaving a level ends whatever scene is on and every scene's own things with it (and
+# the sounds it kept); you stepped aside when you stand in a shot's way; thought bubbles that pop, never a fade through an
+# empty bubble; the bricks' hole looked into from above.
+C = CINEMA or ""
+for needle, why in (
+    ("ContextActionService:BindActionAtPriority(STILL, function()\n\t\t\treturn Enum.ContextActionResult.Sink",
+     "a scene can be walked out of"),
+    ("\tholdStill(true)\n", "a scene does not hold you still"),
+    ("\tholdStill(false)\n", "you are held still after a scene"),
+    ("ProximityPromptService.Enabled = false", "the prompts hang over a scene"),
+    ("ProximityPromptService.Enabled = true", "the prompts never come back after a scene"),
+    ("function Cinema.onLeave(fn: () -> ())", "a scene cannot be put away when the lobby takes you"),
+    ('if wasIn ~= nil and now ~= wasIn and now ~= "backRooms" then', "leaving a level does not end its scene"),
+    ("\tif live then\n\t\tCinema.finish(true)\n\tend", "the scene's camera is kept over the lobby"),
+    ("table.insert(kept, made)", "a kept sound plays on over the lobby"),
+    ("function Cinema.stepAside(eye: Vector3, at: Vector3, clearance: number?)", "nothing steps you out of a shot's way"),
+    ("TweenService:Create(pop, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()",
+     "a thought bubble fades in empty"),
+    ("TweenService:Create(pop, TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.In), { Scale = 0 }):Play()",
+     "a thought bubble fades out through an empty bubble"),
+):
+    if needle not in C:
+        fail("Cinema: " + why)
+if "TweenService:Create(words, gone" in C:
+    fail("Cinema: a thought's words fade before its bubble does (an empty bubble over your head)")
+for where, text, needle in (
+    ("CityShoreClient", SHORE or "", "Cinema.onLeave(function()\n\t\t\tendScene(true)"),
+    ("FloodedHallsClient", HALLS_CLIENT, "Cinema.onLeave(endScene)"),
+    ("SunkenCityClient", SUNKEN_CLIENT or "", "Cinema.onLeave(function()\n\t\t\tlocal current = drain"),
+    ("SkyPoolsClient", SKY_CLIENT, "Cinema.onLeave(function()\n\t\t\tride = nil"),
+    ("StoryClient", STORY_CLIENT, "Cinema.onLeave(function()\n\t\t\tscene.token += 1"),
+    ("HillHouseClient", read("Client", "Services", "HillHouseClient.lua") or "", "Cinema.onLeave(function()\n\t\t\tendScene(true)"),
+):
+    if needle not in text:
+        fail("%s: its scene goes on when the lobby takes you" % where)
+for needle, why, where in (
+    ("Cinema.stepAside(focus + out * ((span or reach) + 1.4), focus, 2.4)", "you stand in front of what a secret's scene shows",
+     STORY_CLIENT),
+    ("want = focus + out * (back + 0.4) + Vector3.new(0, rise * (1 - 0.25 * u) + 0.3, 0)", "the bricks' hole is shot from its sill",
+     STORY_CLIENT),
+    ("Interactables.reveal(player, secret, eye, paper.Position, paper, nil, nil, 1.3)", "the bricks' hole is shot from its sill",
+     INTERACT),
+):
+    if needle not in where:
+        fail(why)
+# THE LOBBY'S SOUNDS IN THE LOBBY (the same pass, from your test: "I have lobby sounds in my level games ... they should
+# only be in the lobby and get less and less loud the farther I am from them"): every sound under the lobby hushed in any
+# level, and the server's stand-ins played from the lobby itself, falling off with distance.
+AMB_SRC = read("Client", "Services", "AmbienceService.lua") or ""
+HUB_SRC = read("Server", "Services", "HubService.lua") or ""
+if 'if item:IsA("Sound") then\n\t\titem.SoundGroup = lobbyGroup()' not in AMB_SRC:
+    fail("AmbienceService: a lobby sound played from a place is still heard in the levels")
+for needle in ("fromLobby(swell, 60, 320)", "fromLobby(wind, 60, 320)", "fromLobby(crest, 40, 260)"):
+    if needle not in HUB_SRC:
+        fail("HubService: a stand-in for the lobby's sound is heard everywhere at once, as loud far off as near")
+UI_SERVICE = read("Client", "Services", "UIService.lua") or ""
+for needle, why in (
+    ("if not hardcore then\n\t\tUIService.setTimerVisible(false)", "the hardcore clock stays up in Chill"),
+    ("timerFold.Activated:Connect(function()\n\ttimerFolded = true", "the hardcore clock cannot be folded away"),
+    ("timerPill.Activated:Connect(function()\n\ttimerFolded = false", "the folded clock cannot be opened again"),
+    ("timerPanel.Visible = timerShown and not timerFolded", "the clock shows folded and open at once"),
+):
+    if needle not in UI_SERVICE:
+        fail("UIService: " + why)
+
+# THE SUNKEN CITY'S FALL, HIT LIKE THE DIVE (the hundred-and-thirty-first pass, from your test: "as much impact when
+# falling down in level 3 and 4 as in level 1", "the water animation and reactiveness to improve on impact", "not push me
+# through textures"): a jolt and a burst of water as it takes you, a flash and a burst as it pulls you under, the shaking
+# and the lines down the shaft, a hard landing in white water, a wake down the culvert and a splash where it sets you
+# down; the alongside shot off the ribs, the station's camera never through a pillar, you never turned into the wall.
+SUNK = SUNKEN_CLIENT or ""
+for needle, why in (
+    ("local function impactWater(at: Vector3, size: number, surfaceY: number?)", "the water does not answer an impact"),
+    ("current.grabbed = true\n\t\t\t\tCinema.impact(1)", "the whirlpool takes you without a jolt"),
+    ("current.wentUnder = true\n\t\t\t\tCinema.impact(1.2)", "going under is not hit"),
+    ("Cinema.speedLines(if below then 0.85 else 0.25 + 0.45 * math.clamp(u / 0.45, 0, 1))", "no speed on the way down"),
+    ("current.hitBottom = true\n\t\tCinema.impact(1.5)", "the bottom of the shaft is not hit"),
+    ("current.wake = makeWake()", "nothing answers you down the culvert"),
+    ("impactWater(frame.Position, 0.8, o.waterY)", "you are set down without a splash"),
+    ("clearOf(head + side * 2.4 - run * 1.5 + Vector3.new(0, 2.6, 0), head)", "the alongside shot is out by the ribs"),
+    ("local eye = clearOf(reveal.eye:Lerp(reveal.cardEye, e), look:Lerp(reveal.card, e))", "the station's camera goes through a pillar"),
+):
+    if needle not in SUNK:
+        fail("SunkenCityClient: " + why)
+SUNKEN_PATH = read("Shared", "SunkenPath.lua") or ""
+yaw = re.search(r"CFrame\.Angles\(0, math\.sin\(t \* 0\.7\) \* ([\d.]+) \* lift, 0\)", SUNKEN_PATH)
+if not yaw or float(yaw.group(1)) > 0.3:
+    fail("SunkenPath: the culvert turns you so far round that your head goes into its wall")
+
+# THE MOUTH, LONGER AND HARDER, AND DOWN ITS THROAT WITH DRAMA (the hundred-and-thirty-second pass, from your test: "the
+# monster scene in level 4 should be longer, and the jaws need to snap longer, and create lots of impact", "when I'm inside
+# its throat it should be more dramatic"): the jaws creak shut, slam and crunch twice more; down its throat its heart
+# squeezes the walls and flares its light, wet streaks rush past, the picture rolls; a panicked thought; a violent heave.
+for needle, why in (
+    ("local CREAK = 0.9", "the jaws do not creak shut before the slam"),
+    ("for index, at in ipairs(CRUNCHES) do", "the jaws do not crunch after the slam"),
+    ("keep(current, sound(\"MawRoar\", BASS, 0.8, 0.26, false))\n\t\t\tCinema.impact(2)", "the slam is not everything at once"),
+    ("wall.part.CFrame = wall.rest - wall.out * squeeze", "its walls never squeeze"),
+    ("throat.pulse.Brightness = 1 + 2.4 * math.exp(-beat * 6)", "its light does not flare with its heart"),
+    ('wet.Name = "Wet"', "nothing rushes past you in its throat"),
+    ("Cinema.waver(0.9)", "the picture does not roll in its throat"),
+    ('"Let me OUT!"', "you do not panic in its throat"),
+    ("local function dropThroat(current: Scene)", "its red stays over everything after the throat"),
+    ("Cinema.impact(1)\n\t\tCinema.shake(1.2)", "the fall out of the flume is not hit"),
+):
+    if needle not in HALLS_CLIENT:
+        fail("FloodedHallsClient: " + why)
+jaws = dict(re.findall(r"^\t(\w+) = ([\d.]+), --", HALLS_CLIENT[HALLS_CLIENT.find("local JAWS = {"):HALLS_CLIENT.find("local CREAK")], re.M))
+crunches = re.search(r"^local CRUNCHES = \{ ([\d.]+), ([\d.]+) \}", HALLS_CLIENT, re.M)
+throat_from = re.search(r"^local THROAT = \{ from = ([\d.]+),.*spit = ([\d.]+) \}", HALLS_CLIENT, re.M)
+maw_secs = re.search(r"\n\tMAW = ([\d.]+),", HALLS_SERVER)
+if not (jaws.get("snap") and jaws.get("crunch") and crunches and throat_from and maw_secs):
+    fail("this check can no longer read the mouth's beats, its crunches, the throat or the server's time for it")
+else:
+    snap, crunch = float(jaws["snap"]), float(jaws["crunch"])
+    if snap + float(crunches.group(2)) + 0.1 > crunch:
+        fail("the last crunch comes after the dark")
+    throat = float(maw_secs.group(1)) - float(throat_from.group(2)) - (crunch + float(throat_from.group(1)))
+    if throat < 4:
+        fail("down its throat for %.1f seconds: too short for anything to happen" % throat)
+    if crunch - snap < 1:
+        fail("the jaws' snap is over at once")
+
+# HIS CATCH, FOLLOWABLE (the hundred-and-thirty-third pass, from your test: "it's so weird, I don't understand what's
+# going on, it should be longer and I should understand what I'm looking at"): longer, side on to begin with, a thought
+# that says what you are seeing, his head round (it was two flat slabs), his own head put out of the way while the face
+# is in its place, and his model kept until the black.
+for needle, why in (
+    ("local from = mid + across * (8 - 1.5 * k) - toward * 1 + Vector3.new(0, 1.8, 0)", "the catch does not show you and him, side on"),
+    ('Cinema.think(character, "What IS that?!", 1.2)', "the catch never says what you see"),
+    ("round.MeshType = Enum.MeshType.Sphere", "his head is flat slabs"),
+    ("item.LocalTransparencyModifier = 1\n\t\t\t\t\t\ttable.insert(current.hidden, item)", "his own head shows through the face"),
+):
+    if needle not in STORY_CLIENT:
+        fail("StoryClient: " + why)
+caught_beats = re.search(r"^local CAUGHT = \{ loom = [\d.]+, face = [\d.]+, black = ([\d.]+) \}", STORY_CLIENT, re.M)
+gone_after = re.search(r"pcall\(hunt\.onCaught, player, head\.Position\)[\s\S]{0,200}?task\.delay\(([\d.]+), function\(\)", ROOMS_SV)
+if not caught_beats or float(caught_beats.group(1)) < 3:
+    fail("his catch is over in under three seconds")
+elif not gone_after or float(gone_after.group(1)) <= float(caught_beats.group(1)):
+    fail("he is taken away before his catch goes black")
+
 # CITY SHORE'S DIVE, HIT LIKE AN ACTION GAME: an impact frame leaving the board, through the gulls and into the
 # water; speed lines down the drop; wind streaks and air trails; the body rolled and yawed by the wind.
 for needle, why in (
     ("\t\t\t\tCinema.impact(1)\n", "leaving the board is not hit"),
     ("\t\t\t\tCinema.impact(0.8)\n", "bursting through the gulls is not hit"),
-    ("\t\tCinema.impact(1.4)\n", "hitting the water is not hit"),
+    ("\t\tCinema.impact(1.6)\n", "hitting the water is not hit"),
     ("Cinema.speedLines(0.75)", "the drop has no speed lines"),
     ('trail.Name = "DiveAirTrail"', "no air trails off the hands and feet"),
     ("streaks.Rate = if not splash and t > 1.5 then 90 else 0", "no wind streaking past in the fall"),
@@ -1075,7 +1386,7 @@ for needle, why in (
     ('piece(parent, "LockerSide"', "a locker is a solid block again, with nothing inside to see"),
     ('piece(parent, "LockerLid"', "a locker has no lid over its inside"),
     ("lockerHolds(parent, base, door, opts.secret)", "a locker holds nothing"),
-    ("TweenService:Create(lamp, TweenInfo.new(0.5), { Brightness = 0.9 }):Play()", "a locker's lamp never comes on"),
+    ("TweenService:Create(lamp, TweenInfo.new(0.5), { Brightness = 1.6 }):Play()", "a locker's lamp never comes on"),
 ):
     if needle not in locker_fn:
         fail("Interactables: " + why)
@@ -1107,12 +1418,15 @@ for needle, why in (
 ):
     if needle not in two_fn:
         fail("StoryClient: " + why)
-if STORY_CLIENT.count("twoShotSide = nil") < 4:
+# Every scene that shoots a two-shot starts afresh, and the end of one forgets its side (the strike, since the
+# hundred-and-twenty-ninth pass, is one more of them, so a count alone no longer tells).
+if STORY_CLIENT.count("twoShotSide = nil") < 5 or "\tbarInHands(false)\n\ttwoShotSide = nil\n" not in STORY_CLIENT:
     fail("StoryClient: a scene keeps the last scene's side for its two-shot")
 moment_fn = STORY_CLIENT[STORY_CLIENT.find("local function moment("):STORY_CLIENT.find("local function peek(")]
 for needle, why in (
     ("local reach = math.clamp((eye.Position - focus).Magnitude * 0.5, 1.9, 3.4)", "the close look is not close"),
-    ("local want = focus + out * (reach - 0.7 * u)", "the close look is not in front of what was found"),
+    ("local want = focus + out * back + Vector3.new(0, 0.45 - 0.15 * u, 0)", "the close look is not in front of what was found"),
+    ("local back = if span then span + 1.4 - 1.2 * u else reach - 0.7 * u", "a locker's inside is closed in on till one thing fills the picture"),
     ("local closing = if again then 3 else MOMENT.close", "a second look is as long as the first"),
     ("if not again then\n\t\tsound(\"SecretSting\"", "a second look stings again"),
     ("if not again then\n\t\t\t\tcard(", "a second look puts its card up again"),
@@ -1287,10 +1601,11 @@ else:
     for needle, why in (
         ("function Townsfolk.offer(player: Player, npc: Person)", "your choices are never offered"),
         ("function Townsfolk.answer(player: Player, name: string, id: string)", "a choice is never answered"),
-        ("for _, offered in ipairs(Conversations.offered(name, knownBy(player))) do", "a choice not offered can be said"),
+        ("for _, offered in ipairs(Conversations.offered(name, knownBy(player), saidBy(npc, player))) do",
+         "a choice not offered can be said"),
         ("> Conversations.REACH + 6 then", "you can talk to someone from across the level"),
         ("Townsfolk.speakAs(player, said)", "you never say your line"),
-        ('pcall(book.take, player, { title = note.title, body = note.body }, nil, "note", { from = note.from })',
+        ('\t\t\t\tpcall(book.take, player, { title = note.title, body = note.body }, nil, "note", { from = note.from })',
          "what you learn is not written in your journal"),
         ('pcall(save.markHeard, player, key)', "what you said is forgotten between sessions"),
     ):
@@ -1306,6 +1621,122 @@ else:
             fail("TalkClient: " + why)
     if 'ensureRemoteEvent(remoteEventsFolder, "Talk")' not in BOOT:
         fail("Bootstrap never makes the Talk remote")
+    # ONE SPEECH BUBBLE (the hundred-and-nineteenth pass, from your test: "you see the stylistic difference between the
+    # script and my options of what to say? They should have the same style"): what they say, what you say over your
+    # head, and your choices on the screen, all Style.BUBBLE; and you tell your line with your body, as they do.
+    STYLE_SRC = read("Shared", "Style.lua") or ""
+    STORY_CLIENT_SRC = read("Client", "Services", "StoryClient.lua") or ""
+    if not re.search(r"^Style\.BUBBLE = \{", STYLE_SRC, re.M):
+        fail("Style has no speech bubble (Style.BUBBLE) for everyone to speak in")
+    for needle, why in (
+        ("\telse\n\t\tasBubble(gui, label, Style.BUBBLE.rim)\n\tend", "what the people say is not in the one bubble"),
+        ("asBubble(gui, label, Style.BUBBLE.rimMine)", "what you say over your head is not in the one bubble"),
+        ('tail.Name = "Tail"', "the bubble has no tail pointing at whoever said it"),
+        ('character:SetAttribute("Gesture", gestureForText(text))', "you say your line standing still"),
+        ('CollectionService:AddTag(character, "Teller")', "nobody's screen plays your gesture"),
+    ):
+        if needle not in TOWNS:
+            fail("Townsfolk: " + why)
+    # WHAT YOU SAID COMES BACK EACH RUN (the hundred-and-twenty-third pass, from your test: "after the second time
+    # logging back into the level, the talk with characters does not reset, which should happen"): what you have said
+    # is held by the person you said it to, made afresh with each level; what you learned stays in your save.
+    CONV = read("Shared", "Conversations.lua") or ""
+    for needle, why, where in (
+        ("function Conversations.offered(name: string, known: { [string]: boolean }, saidNow: { [string]: boolean }?)",
+         "nothing can be offered again in a new run", CONV),
+        ("local said = saidNow or known\n", "what was said in an earlier run still keeps a topic away", CONV),
+        ("local ready = not said[topic.id]", "what was said in this run is offered again at once", CONV),
+        ("talking = 0, said = {} }", "a person keeps what was said to them from one level to the next", TOWNS),
+        ("for _, topic in ipairs(Conversations.offered(npc.name, known, saidBy(npc, player))) do",
+         "what you can say is still what you never said in any run", TOWNS),
+        ("saidBy(npc, player)[topic.id] = true", "a topic said is offered again straight away", TOWNS),
+        ("fresh = not known[topic.id]", "a topic you have never said is not marked new", TOWNS),
+        ('pcall(save.markHeard, player, key)', "what you learned is forgotten between sessions", TOWNS),
+    ):
+        if needle not in where:
+            fail("Conversations: " + why)
+    # THE BUBBLES DRESSED (the same pass, from your test: "the text between character and the player could be styled
+    # better"): the speaker's name on a tag on the rim, in their colour, a light across and a shadow under; written out a
+    # letter at a time on every screen; your choices with the person's disc, cards lifting off their shadows, an arrow on
+    # the one you are on, and New on what you have never said.
+    for needle, why in (
+        ("local function dressBubble(gui: BillboardGui, label: TextLabel, name: string, tint: Color3)",
+         "the bubbles are not dressed"),
+        ("dressBubble(gui, label, if look and look.title then look.title else npc.name,", "their bubble does not say who speaks"),
+        ("dressBubble(gui, label, player.DisplayName, Style.BUBBLE.rimMine)", "your bubble does not say it is you"),
+        ('CollectionService:AddTag(gui, "SpeechBubble")', "no screen writes the bubbles out"),
+        ('tag.Name = "Speaker"', "the speaker has no name tag"),
+        ('shade.Name = "Shade"', "a bubble has no shadow"),
+        ("pad.PaddingTop, pad.PaddingBottom = UDim.new(0, BUBBLE_TOP), UDim.new(0, 9)", "the name tag covers the words"),
+    ):
+        if needle not in TOWNS:
+            fail("Townsfolk: " + why)
+    for needle, why in (
+        ('CollectionService:GetInstanceAddedSignal("SpeechBubble"):Connect(writeOut)', "the bubbles are not written out"),
+        ("words.MaxVisibleGraphemes = shown", "a bubble comes up all at once"),
+        ("words.MaxVisibleGraphemes = -1", "a bubble is left half written"),
+        ('portrait.Name = "Portrait"', "who you talk to has no disc"),
+        ('shade.Name = "Shade"', "a choice has no shadow"),
+        ("{ Position = if on then UDim2.fromOffset(6, -2) else UDim2.fromOffset(0, 0) }", "the choice you are on does not lift"),
+        ('arrow.Name = "Arrow"', "the choice you are on has no arrow"),
+        ('if entry.fresh then', "what you have never said is not marked new"),
+    ):
+        if needle not in TALK_CLIENT:
+            fail("TalkClient: " + why)
+    rate = re.search(r"^local WRITE_RATE = (\d+)", TALK_CLIENT, re.M)
+    if not rate or int(rate.group(1)) < 30:
+        fail("TalkClient: the bubbles are written out slower than they can be read")
+    if "Style.COLOUR.panel" in TALK_CLIENT:
+        fail("TalkClient: your choices are on the dark panel again, not in the bubble they speak in")
+    for needle, why in (
+        ("button.BackgroundColor3 = bubble.fill", "your choices are not the bubble's cream"),
+        ("button.TextColor3 = bubble.ink", "your choices are not in the bubble's ink"),
+        ("button.FontFace = bubble.font", "your choices are not in the bubble's face"),
+        ("edge.Color = bubble.rim", "your choices have no rim like the bubble's"),
+        ("eyebrow.BackgroundColor3 = Style.BUBBLE.fill", "who you are talking to is not in a bubble too"),
+    ):
+        if needle not in TALK_CLIENT:
+            fail("TalkClient: " + why)
+    for needle, why in (
+        ('for _, tag in ipairs({ "Townsperson", "Teller" }) do', "a player's line is never told with their body"),
+        ("if by or not own then\n\t\t\t\t\tPoses.drive(joint, by or CFrame.identity)",
+         "a player's gesture stiffens the legs they are walking on"),
+    ):
+        if needle not in STORY_CLIENT_SRC:
+            fail("StoryClient: " + why)
+    # YOUR CHARACTER ALIVE (the hundred-and-twentieth pass, from your test: "the player should have animations, not
+    # just stand still"): your head after your view, and fidgets standing about, for everyone; never over a scene, an
+    # emote, a line being told, a seat, the water or a ride; never one of the shop's emotes given away as a fidget.
+    LIFE_SRC = read("Client", "Services", "PlayerLife.lua") or ""
+    POSES_SRC = read("Shared", "Poses.lua") or ""
+    EMOTE_SRC = read("Client", "Services", "EmoteService.lua") or ""
+    CLIENT_BOOT_SRC = read("Client", "Bootstrap.client.lua") or ""
+    if not LIFE_SRC:
+        fail("there is no PlayerLife: your character stands still")
+    for needle, why in (
+        ("Poses.drive(neck, CFrame.Angles(life.pitch, life.yaw * (1 - share), 0))", "your head never follows where you look"),
+        ("if math.abs(yaw) > HEAD.behind then\n\t\tyaw, pitch = 0, 0", "looking back over your shoulder twists your neck round"),
+        ("if (mine and inScene) or busy(player, model, humanoid) then", "a fidget or your head plays over a scene or something else"),
+        ('model:GetAttribute("GestureAt"), model:GetAttribute("GestureFor")', "a fidget plays over a line being told"),
+        ("emotes.isPlaying(player)", "a fidget plays over an emote"),
+        ("humanoid.Sit or humanoid.PlatformStand or state == Enum.HumanoidStateType.Swimming", "a fidget plays on a seat, a ride or in the water"),
+        ("if not standing or t >= fidget.seconds then\n\t\t\t\tletGo(life, fidget.pose)", "a fidget goes on when they walk off"),
+        ("RunService.Stepped:Connect(function(_, dt: number)", "your body is turned before the animations, which undo it"),
+    ):
+        if needle not in LIFE_SRC:
+            fail("PlayerLife: " + why)
+    fidgets = re.findall(r'\{ pose = "(\w+)", seconds = [\d.]+ \}', LIFE_SRC)
+    if len(fidgets) < 3:
+        fail("PlayerLife: fewer than three ways of standing about")
+    for pose in fidgets:
+        if "function Poses.%s(" % pose not in POSES_SRC:
+            fail("PlayerLife stands people about with %s, which Poses does not make" % pose)
+        if pose in ("wave", "stretch", "spin", "sitSquish"):
+            fail("PlayerLife gives away the shop's %s emote as a fidget" % pose)
+    if "function EmoteService.isPlaying(player: Player): boolean" not in EMOTE_SRC:
+        fail("EmoteService cannot say who is in an emote, so a fidget plays over one")
+    if '"LobbyLife", "PlayerLife"' not in CLIENT_BOOT_SRC or '"PlayerLife",' not in BOOT:
+        fail("PlayerLife is never started, or not in the paste check")
 
 if problems:
     for problem in problems:

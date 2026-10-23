@@ -201,6 +201,40 @@ Conversations.TOPICS = {
 			"But the bay can't go out without you. And neither can he.",
 		} },
 	},
+	-- LEVEL 5, HILL HOUSE, eight in the morning (first in the story's clock). Asked again on a later visit, once you
+	-- know whose child you are, each of them has one more thing to say.
+	Gale = {
+		{ id = "gale_order", say = "You still bring his milk?", reply = {
+			"Every morning since '79. The order never got stopped, and I never asked anyone to stop it.",
+			"Two pints. One for him and one for the little one.",
+		} },
+		{ id = "gale_station", say = "What does the station want me for?", reply = {
+			"Outfall 3. The tide's held up behind the gates and only the key opens them.",
+			"Barlow can start the engines. He can't do your bit.",
+		} },
+		{ id = "gale_clock", say = "Why did the big clock stop?", after = "gale_order", clue = "clock", reply = {
+			"The night he went down. Four minutes to midnight, and nobody's had it going since.",
+			"Some mornings I'd swear I hear it ticking from the step. Then I listen, and it isn't.",
+		} },
+		{ id = "gale_little", say = "The second pint was for me, wasn't it.", needs = "father", reply = {
+			"It was, love. Thirty years. I never could stop leaving it.",
+			"Go and do what he did. Then come back up, and drink it.",
+		} },
+	},
+	Dunn = {
+		{ id = "dunn_paper", say = "What does the paper say about me?", reply = {
+			"Key holder this week, Outfall 3, and the house. Your name in big letters.",
+			"They put his name in the same place, once. Same letters.",
+		} },
+		{ id = "dunn_door", say = "Why is the door green?", reply = {
+			"He painted it the week he got the key. Said a key holder's door ought to be found in the dark.",
+			"The same green as the ribbon he kept it on. Nobody remembers that but me.",
+		} },
+		{ id = "dunn_wall", say = "Did you ever see me on the sea wall?", needs = "father", reply = {
+			"Every evening, on my way home. A little one in a big coat, looking out.",
+			"I'd say goodnight and you'd never look round. You were watching the water for him.",
+		} },
+	},
 }
 
 -- WHAT EACH CLUE PUTS IN YOUR JOURNAL (a note), the first time you learn it.
@@ -218,14 +252,24 @@ Conversations.NOTES = {
 		body = "The faceless one on the Deco tower is my father. He has been waiting a long time for me to come down." },
 	price = { title = "What it cost him", from = "Mr Barlow, at the flume",
 		body = "He got the gates open, and the bay went out on time. The Hold kept him for it. That is why I never came in." },
+	-- Written by the time clock at the flume, not by anyone's answer (Townsfolk.write).
+	clocked = { title = "Clocked in", from = "The time clock, at the flume",
+		body = "14 August, three minutes to midnight. My card in the clock, and its mark on it. On shift." },
+	clock = { title = "His clock", from = "Mr Gale, at the top of the hill",
+		body = "The big clock in the hall at Hill House stopped at four minutes to midnight the night he went down, in "
+			.. "1979. Nobody has had it going since." },
 }
 
 -- What `name` can be asked now, by someone who has said and learned what is in `known` (topic ids, and "clue:" ids),
--- in the order written, MOST at the most (SMALLTALK is added after these by the caller).
-function Conversations.offered(name: string, known: { [string]: boolean }): { Topic }
+-- in the order written, MOST at the most (SMALLTALK is added after these by the caller). With `saidNow`, what has been
+-- said to them in this run of the level (the hundred-and-twenty-third pass, from your test: "the talk with characters
+-- does not reset, which should happen"), a topic said only in an earlier run comes back; what was learned stays in
+-- `known`, so a topic waiting on another said in any run is offered at once.
+function Conversations.offered(name: string, known: { [string]: boolean }, saidNow: { [string]: boolean }?): { Topic }
 	local out = {}
+	local said = saidNow or known
 	for _, topic in ipairs((Conversations.TOPICS :: any)[name] or {}) do
-		local ready = not known[topic.id]
+		local ready = not said[topic.id]
 			and (topic.after == nil or known[topic.after] == true)
 			and (topic.needs == nil or known["clue:" .. topic.needs] == true)
 		if ready then
@@ -248,5 +292,5 @@ function Conversations.topic(name: string, id: string): Topic?
 	return nil
 end
 
-Conversations.STAMP = "4f4c4cb5"
+Conversations.STAMP = "3ea9ed08"
 return Conversations

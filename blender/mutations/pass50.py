@@ -25,13 +25,16 @@ for checker in (SHOP, PARSE):
         sys.exit("%s fails before anything is mutated; fix that first" % checker)
 
 MUTATIONS = [
-    ("shown on a level", ECON, SHOP, 'shown.Enabled = player:GetAttribute("InLevel") == nil', "shown.Enabled = true"),
+    ("shown on a level", ECON, SHOP, 'local shown = tag :: BillboardGui\n\tshown.Enabled = player:GetAttribute("InLevel") == nil',
+     "local shown = tag :: BillboardGui\n\tshown.Enabled = true"),
     ("given to everyone", ECON, SHOP, "local isVip = passes[player] ~= nil and passes[player].VIP == true", "local isVip = true"),
-    ("left on without VIP", ECON, SHOP, "\t\tif existing then\n\t\t\texisting:Destroy()\n\t\tend\n\t\treturn", "\t\treturn"),
-    ("not put on with the rest", ECON, SHOP, '"Cosmetic")\n\tvipTag(player)\nend', '"Cosmetic")\nend'),
+    ("left on without VIP", ECON, SHOP, "\tif not isVip then\n\t\tif existing then\n\t\t\texisting:Destroy()\n\t\tend\n\t\treturn",
+     "\tif not isVip then\n\t\treturn"),
+    ("not put on with the rest", ECON, SHOP, '"Cosmetic")\n\tvipTag(player)\n\tkeyTag(player)\nend', '"Cosmetic")\n\tkeyTag(player)\nend'),
     ("not off on a level", ECON, SHOP,
-     '\t\tplayer:GetAttributeChangedSignal("InLevel"):Connect(function()\n\t\t\tvipTag(player)\n\t\tend)\n', ""),
-    ("drawn from any distance", ECON, SHOP, "\t\tgui.MaxDistance = 80\n", ""),
+     '\t\tplayer:GetAttributeChangedSignal("InLevel"):Connect(function()\n\t\t\tvipTag(player)\n\t\t\tkeyTag(player)\n\t\tend)\n',
+     '\t\tplayer:GetAttributeChangedSignal("InLevel"):Connect(function()\n\t\t\tkeyTag(player)\n\t\tend)\n'),
+    ("drawn from any distance", ECON, SHOP, "-- over the name Roblox shows\n\t\tgui.MaxDistance = 80\n", "-- over the name Roblox shows\n"),
     ("the shop not saying so", CAT, SHOP, "A VIP tag over your head and in chat", "A VIP tag in chat"),
     ("no way to see it in Studio", DEV, SHOP, '\t{ action = "vip", text = "VIP on/off" },\n', ""),
     ("a name never declared", ECON, PARSE, "local isVip = passes[player] ~= nil and passes[player].VIP == true",

@@ -169,6 +169,7 @@ local NO_MARK: { [string]: boolean } = {
 	LightSwitch = true,     -- plastic plates.
 	ChocolateSolid = true,  -- cold and tempered; it snaps, it does not spatter.
 	Soap = true,            -- a bar. It is the wet version people picture, and it is not.
+	Cookie = true,          -- dry crumbs. They fall; they do not spatter.
 	Buttons = true,         -- moulded caps. Same reasoning as the keyboard beside them.
 }
 
@@ -508,5 +509,5 @@ end
 
 print("[ScreenEffects] loaded, 16 material lens looks (7 materials leave no mark)")
 
-ScreenEffects.STAMP = "1aad43c7"
+ScreenEffects.STAMP = "1aab395f"
 return ScreenEffects

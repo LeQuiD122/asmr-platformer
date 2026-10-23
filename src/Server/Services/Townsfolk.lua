@@ -55,6 +55,9 @@
 --   CORPORATION BATHS MRS VENN, the baths attendant, at the first checkpoint with her ticket desk.
 --                     TOBI OKAFOR, Pip's dad, in his trunks with his red towel, halfway, still
 --                     looking. MR BARLOW, the night engineer, with his lamp at the flume.
+--   HILL HOUSE        (level 5, eight in the morning, first in the story's clock; HillHouseService stands them)
+--                     MR GALE the milkman at the top of the climb, his crate at his feet. MRS DUNN the
+--                     postwoman inside the garden gate with her bag.
 --
 -- Each GREETS you with their first line the first time you come near, and after that says the next
 -- line each time you talk to them (F). While you are near, they turn their head to you, and they TELL IT
@@ -102,7 +105,7 @@ export type Person = { name: string, model: Model, head: BasePart, root: BasePar
 	lines: { string }, next: number, bubble: BillboardGui?, post: CFrame, lift: number, route: { Vector3 }?,
 	busy: boolean, worn: { [string]: { part: BasePart, to: BasePart, offset: CFrame } },
 	greeted: { [Player]: boolean }, watch: number, yaw: number, pitch: number, relax: { [string]: CFrame },
-	holding: { right: boolean, left: boolean }, talking: number }
+	holding: { right: boolean, left: boolean }, talking: number, said: { [Player]: { [string]: boolean } } }
 
 local living: { [string]: Person } = {}
 
@@ -205,6 +208,23 @@ local LINES: { [string]: { string } } = {
 		"The flume takes you all the way down. Mind what's at the bottom. It's not the water.",
 		"When they open, the whole bay goes out through them. Then it's morning. Then it's always morning.",
 	},
+	-- LEVEL 5, HILL HOUSE, eight in the morning (first in the story's clock: before any of it).
+	Gale = {
+		"Morning! Two pints on the step, same as every morning. Same as when he was here.",
+		"Tide's still in. Third day. Mr Barlow's had the station lit all night, I saw it from the top road.",
+		"Big day, the paper says. Key holder for Outfall 3. They'll want you at the station by nine.",
+		"The key's on its hook where it always was. He used to say a key wants a place, so nobody has to look for it.",
+		"Mind the bridge, it bounces. Always has. He was always going to fix it.",
+		"Go on up, then. I'll not keep you.",
+	},
+	Dunn = {
+		"Morning, love. Nothing for you today but the paper, and that's on the mat.",
+		"You're on the front page. Key holder, Outfall 3. Half the town's read it before you have.",
+		"Thirty years I've walked this hill. Same door, same green. He'd have it no other colour.",
+		"Sal's card came yesterday. She'll be on the sea wall at nine with a cone. She always did look out for you.",
+		"Nobody writes to Hill House now. The council, the dairy and Sal. That's the lot.",
+		"Off you go. The day won't wait. Though round here, you never know.",
+	},
 }
 
 -- HOW EACH LINE IS TOLD: the gesture that goes with it, line for line with LINES, chosen the way a director
@@ -224,13 +244,15 @@ local TOLD: { [string]: { string } } = {
 	Venn = { "greet", "point", "shrug", "lean", "explain", "warn", "remember", "shrug" },
 	Tobi = { "greet", "worry", "sad", "point", "explain" },
 	Barlow = { "greet", "explain", "point", "lean", "sad", "warn", "explain" },
+	Gale = { "greet", "worry", "point", "remember", "warn", "shrug" },
+	Dunn = { "greet", "explain", "remember", "lean", "sad", "shrug" },
 }
 
 -- THEIR VOICES' PITCH: each says their lines with the same nine sounds (no words: audio/gen_voice_sfx.py, played by
 -- StoryClient with each gesture), at their own pitch, so nobody sounds like anybody else. 1 is a grown-up's middle.
 local VOICES: { [string]: number } = {
 	Sal = 1.12, Pip = 1.45, Maren = 1.15, Dev = 1.0, Okafor = 1.1, Rudy = 0.95, Attendant = 1.04, Fisherman = 0.78,
-	Venn = 1.08, Tobi = 0.9, Barlow = 0.8, Watcher = 0.7,
+	Venn = 1.08, Tobi = 0.9, Barlow = 0.8, Watcher = 0.7, Gale = 0.86, Dunn = 1.06,
 }
 
 -- HOW LONG anything said stays up: twice what a line was first given, so there is time to read it
@@ -309,6 +331,11 @@ local LOOKS: { [string]: Look } = {
 		shoes = Color3.fromRGB(30, 34, 30), scale = { 1.02, 1.1, 1.06, 1 }, holds = "both", title = "Mr Wick" },
 	Watcher = { skin = Color3.fromRGB(200, 196, 190), top = Color3.fromRGB(40, 40, 44), sleeves = "long",
 		bottom = Color3.fromRGB(40, 40, 44), legs = "long", shoes = Color3.fromRGB(24, 24, 26) },
+	-- THE WATCHER WITH HIS FACE BACK (the true ending, the hundred-and-fifteenth pass): the same dark clothes, and his
+	-- own face, hair and colour. He says nothing; he waves.
+	Marsh = { skin = Color3.fromRGB(214, 176, 146), hair = Color3.fromRGB(70, 56, 46), hairStyle = "short",
+		top = Color3.fromRGB(40, 40, 44), sleeves = "long", bottom = Color3.fromRGB(40, 40, 44), legs = "long",
+		shoes = Color3.fromRGB(24, 24, 26), scale = { 1.02, 1, 1, 1 }, title = "Edwin Marsh" },
 	Venn = { skin = Color3.fromRGB(232, 202, 178), hair = Color3.fromRGB(200, 200, 204), hairStyle = "bun",
 		top = Color3.fromRGB(116, 138, 108), sleeves = "long", bottom = Color3.fromRGB(70, 70, 82), legs = "skirt",
 		shoes = Color3.fromRGB(44, 32, 30), scale = { 0.94, 1.02, 1, 1 }, glasses = true, title = "Mrs Venn" },
@@ -319,6 +346,13 @@ local LOOKS: { [string]: Look } = {
 		moustache = Color3.fromRGB(150, 150, 152), top = Color3.fromRGB(62, 82, 112), sleeves = "long",
 		bottom = Color3.fromRGB(62, 82, 112), legs = "long", shoes = Color3.fromRGB(42, 34, 30),
 		scale = { 1.02, 1.12, 1.08, 1 }, title = "Mr Barlow" },
+	-- The milkman in his white coat; the postwoman in her navy, with her glasses on a chain.
+	Gale = { skin = Color3.fromRGB(222, 182, 150), hair = Color3.fromRGB(170, 166, 160), hairStyle = "short",
+		top = Color3.fromRGB(242, 240, 234), sleeves = "long", bottom = Color3.fromRGB(46, 52, 70), legs = "long",
+		shoes = Color3.fromRGB(30, 28, 28), scale = { 1, 1.04, 1.02, 1 }, title = "Mr Gale" },
+	Dunn = { skin = Color3.fromRGB(176, 128, 96), hair = Color3.fromRGB(70, 56, 50), hairStyle = "bob",
+		top = Color3.fromRGB(40, 54, 92), sleeves = "long", bottom = Color3.fromRGB(40, 54, 92), legs = "skirt",
+		shoes = Color3.fromRGB(26, 24, 24), scale = { 0.98, 1, 1, 1 }, glasses = true, title = "Mrs Dunn" },
 }
 
 local function quiet(model: Model)
@@ -536,12 +570,9 @@ local GESTURE_WORDS: { { any } } = {
 	{ "worry", { "water", "tide", "the sea", "flood", "rain", "storm", "midnight" } },
 }
 
-local function gestureFor(npc: Person, text: string): string
-	local told = TOLD[npc.name]
-	local index = table.find(npc.lines, text)
-	if told and index and told[index] then
-		return told[index]
-	end
+-- The gesture its words call for (GESTURE_WORDS), for anything said that TOLD has nothing for: an answer to what you
+-- said, the attendant's reactions, and your own lines.
+local function gestureForText(text: string): string
 	local lower = string.lower(text)
 	for _, group in ipairs(GESTURE_WORDS) do
 		for _, word in ipairs(group[2] :: { string }) do
@@ -553,6 +584,15 @@ local function gestureFor(npc: Person, text: string): string
 	return if string.find(text, "?", 1, true) then "shrug" else "explain"
 end
 
+local function gestureFor(npc: Person, text: string): string
+	local told = TOLD[npc.name]
+	local index = table.find(npc.lines, text)
+	if told and index and told[index] then
+		return told[index]
+	end
+	return gestureForText(text)
+end
+
 -- Which of their hands are free, for the gesture: "both", "right", "left" or "none".
 local function handsFree(npc: Person): string
 	local right, left = not npc.holding.right, not npc.holding.left
@@ -561,6 +601,116 @@ end
 
 -- The arms a habit or a gesture moves, set back to how they rest before a gesture starts.
 local ARMS = { "RightShoulder", "RightElbow", "RightWrist", "LeftShoulder", "LeftElbow", "LeftWrist" }
+
+-- Room inside a bubble's top for the speaker's name tag on its rim (dressBubble).
+local BUBBLE_TOP = 14
+
+-- THE ONE SPEECH BUBBLE (Style.BUBBLE, the hundred-and-nineteenth pass): `label`, over a head in `gui`, made the bubble
+-- everyone speaks in, its rim `rim`, with a tail under it pointing down at whoever said it.
+local function asBubble(gui: BillboardGui, label: TextLabel, rim: Color3)
+	label.BackgroundColor3 = Style.BUBBLE.fill
+	label.BackgroundTransparency = 0
+	label.TextColor3 = Style.BUBBLE.ink
+	label.FontFace = Style.BUBBLE.font
+	label.LineHeight = 1.05
+	label.ZIndex = 2
+	local edge = Instance.new("UIStroke")
+	edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	edge.Color = rim
+	edge.Thickness = Style.BUBBLE.stroke
+	edge.Parent = label
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = Style.BUBBLE.radius
+	corner.Parent = label
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 12), UDim.new(0, 12)
+	pad.PaddingTop, pad.PaddingBottom = UDim.new(0, BUBBLE_TOP), UDim.new(0, 9)
+	pad.Parent = label
+	-- THE TAIL: a square turned to a diamond at the bubble's bottom middle, behind it, so its lower point and its two
+	-- lower edges show under the bubble; and a cream patch over the bubble's rim where the two meet, so they are one.
+	local tail = Instance.new("Frame")
+	tail.Name = "Tail"
+	tail.AnchorPoint = Vector2.new(0.5, 0.5)
+	tail.Position = UDim2.new(0.5, 0, 1, 0)
+	tail.Size = UDim2.fromOffset(14, 14)
+	tail.Rotation = 45
+	tail.BackgroundColor3 = Style.BUBBLE.fill
+	tail.BorderSizePixel = 0
+	tail.ZIndex = 1
+	local tailEdge = Instance.new("UIStroke")
+	tailEdge.Color = rim
+	tailEdge.Thickness = Style.BUBBLE.stroke
+	tailEdge.Parent = tail
+	tail.Parent = gui
+	local join = Instance.new("Frame")
+	join.Name = "TailJoin"
+	join.AnchorPoint = Vector2.new(0.5, 0)
+	join.Position = UDim2.new(0.5, 0, 1, -1)
+	join.Size = UDim2.fromOffset(13, Style.BUBBLE.stroke + 2)
+	join.BackgroundColor3 = Style.BUBBLE.fill
+	join.BorderSizePixel = 0
+	join.ZIndex = 3
+	join.Parent = gui
+end
+
+-- WHO IS SPEAKING, AND A LITTLE DEPTH (the hundred-and-twenty-third pass, from your test: "the text between character and
+-- the player could be styled better"): a light from above across the bubble, a soft shadow under it so it stands off
+-- whatever is behind, and the speaker's name on a tag on its top rim in their own colour (what they wear; yours in the
+-- gold of your own rim). Tagged for every screen to write it out a letter at a time (TalkClient).
+local function dressBubble(gui: BillboardGui, label: TextLabel, name: string, tint: Color3)
+	local light = Instance.new("UIGradient")
+	light.Rotation = 90
+	light.Color = ColorSequence.new(Style.BUBBLE.top, Style.BUBBLE.fill)
+	light.Parent = label
+	-- The shadow: the same words, unseen, in a dark box the bubble's own size, a little lower.
+	local shade = Instance.new("TextLabel")
+	shade.Name = "Shade"
+	shade.AnchorPoint = label.AnchorPoint
+	shade.Position = label.Position + UDim2.fromOffset(0, 4)
+	shade.Size = label.Size
+	shade.AutomaticSize = label.AutomaticSize
+	shade.TextWrapped = true
+	shade.TextSize = label.TextSize
+	shade.FontFace = label.FontFace
+	shade.LineHeight = label.LineHeight
+	shade.Text = label.Text
+	shade.TextTransparency = 1
+	shade.BackgroundColor3 = Style.BUBBLE.ink
+	shade.BackgroundTransparency = Style.BUBBLE.shade
+	shade.ZIndex = 0
+	for _, kind in ipairs({ "UISizeConstraint", "UICorner", "UIPadding" }) do
+		local found = label:FindFirstChildOfClass(kind)
+		if found then
+			found:Clone().Parent = shade
+		end
+	end
+	shade.Parent = gui
+	local tag = Instance.new("TextLabel")
+	tag.Name = "Speaker"
+	tag.AnchorPoint = Vector2.new(0, 0.5)
+	tag.Position = UDim2.new(0, -2, 0, -BUBBLE_TOP)
+	tag.Size = UDim2.fromOffset(0, 22)
+	tag.AutomaticSize = Enum.AutomaticSize.X
+	tag.BackgroundColor3 = tint
+	tag.TextColor3 = if 0.299 * tint.R + 0.587 * tint.G + 0.114 * tint.B > 0.6 then Style.BUBBLE.ink else Color3.new(1, 1, 1)
+	tag.FontFace = Style.FONT.display
+	tag.TextSize = Style.BUBBLE.tag
+	tag.Text = name
+	tag.ZIndex = 4
+	local round = Instance.new("UICorner")
+	round.CornerRadius = UDim.new(0.5, 0)
+	round.Parent = tag
+	local rim = Instance.new("UIStroke")
+	rim.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	rim.Color = Style.BUBBLE.rim
+	rim.Thickness = Style.BUBBLE.stroke
+	rim.Parent = tag
+	local room = Instance.new("UIPadding")
+	room.PaddingLeft, room.PaddingRight = UDim.new(0, 9), UDim.new(0, 9)
+	room.Parent = tag
+	tag.Parent = label
+	CollectionService:AddTag(gui, "SpeechBubble")
+end
 
 -- Says `text` over their head for `seconds`. A shout is bigger, redder and has no bubble round it.
 function Townsfolk.say(npc: Person, text: string, seconds: number?, shout: boolean?)
@@ -586,6 +736,7 @@ function Townsfolk.say(npc: Person, text: string, seconds: number?, shout: boole
 	gui.MaxDistance = if shout then 90 else 48
 	gui.LightInfluence = 0
 	local label = Instance.new("TextLabel")
+	label.Name = "Words"
 	label.AnchorPoint = Vector2.new(0.5, 1)
 	label.Position = UDim2.fromScale(0.5, 1)
 	label.Size = UDim2.new()
@@ -604,27 +755,12 @@ function Townsfolk.say(npc: Person, text: string, seconds: number?, shout: boole
 		label.TextStrokeTransparency = 0
 		label.Rotation = math.random(-7, 7)
 	else
-		label.BackgroundColor3 = Color3.fromRGB(250, 248, 242)
-		label.BackgroundTransparency = 0
-		label.TextColor3 = Color3.fromRGB(34, 38, 44)
-		label.FontFace = Style.FONT.heading
-		local edge = Instance.new("UIStroke")
-		edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		edge.Color = Color3.fromRGB(34, 38, 44)
-		edge.Thickness = 2
-		edge.Parent = label
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 10)
-		corner.Parent = label
-		local pad = Instance.new("UIPadding")
-		for _, side in ipairs({ "PaddingLeft", "PaddingRight" }) do
-			(pad :: any)[side] = UDim.new(0, 12)
-		end
-		for _, side in ipairs({ "PaddingTop", "PaddingBottom" }) do
-			(pad :: any)[side] = UDim.new(0, 8)
-		end
-		pad.Parent = label
-		label.LineHeight = 1.05
+		asBubble(gui, label, Style.BUBBLE.rim)
+	end
+	if not shout then
+		local look = LOOKS[npc.name]
+		dressBubble(gui, label, if look and look.title then look.title else npc.name,
+			if look then (look.top or look.bottom) else Style.BUBBLE.rim)
 	end
 	label.Parent = gui
 	gui.Adornee = npc.head
@@ -706,8 +842,30 @@ local function learn(player: Player, key: string)
 	end
 end
 
--- YOUR LINE, over your own head, for anyone near to see: on the screen's dark panel with its warm edge, so it is never
--- taken for one of theirs (theirs are pale), and the same size of text as theirs.
+-- WHAT YOU KNOW, asked by the rest of the story (the time clock at the flume, the hundred-and-fourteenth pass): true once
+-- `player` has said or learned `key` (a topic's id, or "clue:" and a clue's).
+function Townsfolk.knows(player: Player, key: string): boolean
+	return knownBy(player)[key] == true
+end
+
+-- A NOTE IN YOUR JOURNAL that nobody's answer gives (the time clock's): Conversations.NOTES[key], learned and written
+-- once, as a clue from an answer is.
+function Townsfolk.write(player: Player, key: string)
+	if not Conversations or knownBy(player)["clue:" .. key] then
+		return
+	end
+	learn(player, "clue:" .. key)
+	local note = Conversations.NOTES[key]
+	local book = sibling("Interactables")
+	if note and book and book.take then
+		pcall(book.take, player, { title = note.title, body = note.body }, nil, "note", { from = note.from })
+	end
+end
+
+-- YOUR LINE, over your own head, for anyone near to see: in the one speech bubble everyone speaks in (since the
+-- hundred-and-nineteenth pass; it was the screen's dark panel), its rim the warm accent so it is still told from
+-- theirs, and the same size of text. And you TELL IT WITH YOUR BODY, as they do: the gesture its words call for and
+-- your voice saying it, on every client (StoryClient plays it on your joints over how you stand or walk).
 function Townsfolk.speakAs(player: Player, text: string)
 	local character = player.Character
 	local head = character and character:FindFirstChild("Head")
@@ -727,6 +885,7 @@ function Townsfolk.speakAs(player: Player, text: string)
 	gui.MaxDistance = 48
 	gui.LightInfluence = 0
 	local label = Instance.new("TextLabel")
+	label.Name = "Words"
 	label.AnchorPoint = Vector2.new(0.5, 1)
 	label.Position = UDim2.fromScale(0.5, 1)
 	label.Size = UDim2.new()
@@ -734,29 +893,23 @@ function Townsfolk.speakAs(player: Player, text: string)
 	label.TextWrapped = true
 	label.TextSize = SPEECH_TEXT
 	label.Text = text
-	label.BackgroundColor3 = Style.COLOUR.panel
-	label.TextColor3 = Style.COLOUR.ink
-	label.FontFace = Style.FONT.heading
-	label.LineHeight = 1.05
 	local widest = Instance.new("UISizeConstraint")
 	widest.MaxSize = Vector2.new(SPEECH_WIDE, math.huge)
 	widest.Parent = label
-	local edge = Instance.new("UIStroke")
-	edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	edge.Color = Style.COLOUR.accent
-	edge.Thickness = 2
-	edge.Parent = label
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = label
-	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 12), UDim.new(0, 12)
-	pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 8), UDim.new(0, 8)
-	pad.Parent = label
+	asBubble(gui, label, Style.BUBBLE.rimMine)
+	dressBubble(gui, label, player.DisplayName, Style.BUBBLE.rimMine)
 	label.Parent = gui
 	gui.Adornee = head
 	gui.Parent = head
-	task.delay(math.clamp(#text / 14, 2.4, 6) * READ * 0.6, function()
+	local seconds = math.clamp(#text / 14, 2.4, 6)
+	character:SetAttribute("Hands", "both")
+	-- Your own voice: the people's nine sounds, at a pitch of your own (the same each time for you).
+	character:SetAttribute("Voice", 0.9 + (player.UserId % 21) / 100)
+	character:SetAttribute("Gesture", gestureForText(text))
+	character:SetAttribute("GestureFor", seconds)
+	character:SetAttribute("GestureAt", workspace:GetServerTimeNow())
+	CollectionService:AddTag(character, "Teller")
+	task.delay(seconds * READ * 0.6, function()
 		gui:Destroy()
 	end)
 end
@@ -786,22 +939,38 @@ local function talkRemote(): RemoteEvent?
 	return found
 end
 
--- WHAT `player` CAN SAY TO `npc` NOW, to their screen: the topics ready for them, then smalltalk.
+-- WHAT `player` HAS SAID TO `npc` IN THIS RUN of the level (the hundred-and-twenty-third pass, from your test: "after
+-- the second time logging back into the level, the talk with characters does not reset, which should happen"). Each
+-- level's people are made afresh, and with them what you have said to them, so every topic comes back each run. What
+-- you LEARNED stays (the clues, your journal's notes, the story's place): a topic said before is offered as said
+-- before (not `fresh`), and one waiting on another said in any run is offered at once.
+local function saidBy(npc: Person, player: Player): { [string]: boolean }
+	local mine = npc.said[player]
+	if not mine then
+		mine = {}
+		npc.said[player] = mine
+	end
+	return mine
+end
+
+-- WHAT `player` CAN SAY TO `npc` NOW, to their screen: the topics ready for them (each marked `fresh` if never said in any
+-- run), then smalltalk; and their colour, for the disc by their name.
 function Townsfolk.offer(player: Player, npc: Person)
 	local remote = talkRemote()
 	if not (remote and Conversations) then
 		return
 	end
 	local options = {}
-	for _, topic in ipairs(Conversations.offered(npc.name, knownBy(player))) do
-		table.insert(options, { id = topic.id, say = topic.say })
+	local known = knownBy(player)
+	for _, topic in ipairs(Conversations.offered(npc.name, known, saidBy(npc, player))) do
+		table.insert(options, { id = topic.id, say = topic.say, fresh = not known[topic.id] })
 	end
 	if #npc.lines > 0 then
 		table.insert(options, { id = "smalltalk", say = Conversations.SMALLTALK })
 	end
 	local look = LOOKS[npc.name]
 	remote:FireClient(player, "offer", { person = npc.name, title = if look and look.title then look.title else npc.name,
-		head = npc.head, options = options })
+		head = npc.head, tint = if look then (look.top or look.bottom) else nil, options = options })
 end
 
 -- `player` CHOSE `id` to say to `name`: if it was theirs to say (offered, and they are near), said, and answered.
@@ -825,7 +994,7 @@ function Townsfolk.answer(player: Player, name: string, id: string)
 		npc.next = npc.next % #npc.lines + 1
 	else
 		local ready = false
-		for _, offered in ipairs(Conversations.offered(name, knownBy(player))) do
+		for _, offered in ipairs(Conversations.offered(name, knownBy(player), saidBy(npc, player))) do
 			if offered.id == id then
 				ready, topic = true, offered
 			end
@@ -850,6 +1019,7 @@ function Townsfolk.answer(player: Player, name: string, id: string)
 	if topic then
 		local fresh = topic.clue ~= nil and not knownBy(player)["clue:" .. topic.clue]
 		learn(player, topic.id)
+		saidBy(npc, player)[topic.id] = true
 		if fresh then
 			learn(player, "clue:" .. topic.clue)
 			local note = Conversations.NOTES[topic.clue]
@@ -872,6 +1042,9 @@ end
 Players.PlayerRemoving:Connect(function(player: Player)
 	TALK.session[player] = nil
 	TALK.busy[player] = nil
+	for _, npc in pairs(living) do
+		npc.said[player] = nil
+	end
 end)
 
 -- Stands one up. `feet` is where they stand and which way they face; `pose` is "stand" or "sit".
@@ -911,7 +1084,7 @@ function Townsfolk.spawn(parent: Instance, name: string, feet: CFrame, stance: s
 		lines = LINES[name] or {}, next = 1, post = root.CFrame, lift = lift, busy = false, worn = {},
 		greeted = {}, watch = watch or 22, yaw = 0, pitch = 0, relax = {},
 		holding = { right = look ~= nil and (look.holds == "both" or look.holds == "right"),
-			left = look ~= nil and (look.holds == "both" or look.holds == "left") }, talking = 0 }
+			left = look ~= nil and (look.holds == "both" or look.holds == "left") }, talking = 0, said = {} }
 	if Poses then
 		for jointName, joint in pairs(Poses.joints(model)) do
 			if table.find(JOINTS, jointName) then
@@ -1468,5 +1641,5 @@ function Townsfolk.find(name: string): Person?
 	return if npc and npc.model.Parent then npc else nil
 end
 
-Townsfolk.STAMP = "eb96a0f8"
+Townsfolk.STAMP = "0d6b3e76"
 return Townsfolk

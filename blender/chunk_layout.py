@@ -45,6 +45,8 @@ CHUNK_ORDER = [
     # keypad arrangements. All ten cost one word each in the chunk table.
     "R18_SoapRing", "R19_SoapWave", "R20_SoapBone", "R21_SoapCrescent",
     "R31_SoapLeaf",
+    # The cookie (the hundred-and-tenth pass): crumbs like the soaps, cut round with a bite out of it.
+    "R22_Cookie",
     "R23_LegoCross", "R24_LegoRing", "R29_LegoBone", "R30_LegoCrescent",
     "P14_ButtonDense", "P15_ButtonDome",
     # The sculpted rigs: a shape in the mesh rather than in the plan.

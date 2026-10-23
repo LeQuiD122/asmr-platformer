@@ -38,6 +38,8 @@ JAWS = {k: float(x) for k, x in re.findall(r"^\t(\w+) = ([\d.]+), --", CLIENT[CL
 MAW_DEEP, MAW_RISE, LUNGE = (float(x) for x in re.search(r"^local MAW_DEEP, MAW_RISE, LUNGE = ([\d.]+), ([\d.]+), ([\d.]+)", CLIENT, re.M).groups())
 TURN_AT, TURN = (float(x) for x in re.search(r"^local TURN_AT, TURN = ([\d.]+), ([\d.]+)", CLIENT, re.M).groups())
 HANG = num(CLIENT, r"^local HANG = ([\d.]+)")
+THROAT_FROM = num(CLIENT, r"^local THROAT = \{ from = ([\d.]+),")
+THROAT_SPIT = num(CLIENT, r"^local THROAT = \{.*spit = ([\d.]+) \}")
 BEAT = {k: float(x) for k, x in re.findall(r"^\t(\w+) = ([\d.]+),", CLIENT[CLIENT.find("local BEAT = {"):CLIENT.find("-- THE GATE CHAMBER, `b` seconds")], re.M)}
 G_HALF_W = num(SERVER, r"^\tHALF_W = ([\d.]+),")
 G_HALF_L = num(SERVER, r"^\tHALF_L = ([\d.]+),")
@@ -68,8 +70,9 @@ SHOT_LINES = (
     "Cinema.point(CFrame.lookAt(current.fallEye :: Vector3, here), 58)",
     "Cinema.point(CFrame.lookAt(here + up * 15 + flat * 3, here - up * 12), 74)",
     "Cinema.point(CFrame.lookAt(pos + Vector3.new(0, 9, 0) + inward * 3 + side * 1.5, pos - Vector3.new(0, 30, 0), side), 66)",
-    "local eye = pos + Vector3.new(0, 14 - 1 * k, 0) + inward * (20 - 2 * k) + side * 8",
-    "local target = (hinge.Position + opens * 16):Lerp(pos, 0.76)",
+    "local eye = pos + Vector3.new(0, 18 - 1 * k, 0) + inward * (20 - 2 * k) + side * 8",
+    "local target = (hinge.Position + opens * 16):Lerp(pos, 0.62)",
+    "Cinema.point(CFrame.lookAt(held + Vector3.new(0, 9, 0) + side * 2.5, held - Vector3.new(0, 6, 0), side), 72)",
     "Cinema.point(CFrame.lookAt(eye, target, Vector3.yAxis), 74 - 4 * k)",
     "local eye = face - Vector3.new(0, 4.4 - 0.8 * k, 0) + crown * 1.8 + side * 0.8",
     "Cinema.point(CFrame.lookAt(eye, face, root.CFrame.UpVector), 54 - 6 * k)",
@@ -200,7 +203,7 @@ def maw(fps=60, t0=0.0):
     side = v(radial[2], 0, -radial[0])  # Vector3.yAxis:Cross(radial)
     d, tumble = 0.0, 0.0
     last = 0.0
-    end = JAWS["snap"] + 0.1
+    end = JAWS["crunch"]
     for i in range(int(end * fps)):
         m = i / fps
         s = last
@@ -228,8 +231,8 @@ def maw(fps=60, t0=0.0):
                                 up=side, subject=body))
         elif m < JAWS["face"]:
             k = ease((m - JAWS["reveal"]) / (JAWS["face"] - JAWS["reveal"]))
-            eye = pos + v(0, 14 - 1 * k, 0) + inward * (20 - 2 * k) + side * 8
-            target = (hinge + opens * 16) * 0.24 + pos * 0.76
+            eye = pos + v(0, 18 - 1 * k, 0) + inward * (20 - 2 * k) + side * 8
+            target = (hinge + opens * 16) * 0.38 + pos * 0.62
             frames.append(Frame(t, "maw: past you into it", eye, target, 74 - 4 * k,
                                 subject=dict(body, mouth=hinge + opens * 16)))
         elif m < JAWS["into"]:
@@ -245,6 +248,16 @@ def maw(fps=60, t0=0.0):
             eye = hinge + opens * 55 + inward * 24 + side * 14
             frames.append(Frame(t, "maw: the bite, wide", eye, hinge + opens * 22, 70,
                                 subject=dict(body, mouth=hinge + opens * 22)))
+            held = pos
+    # DOWN ITS THROAT (the hundred-and-twenty-fourth pass): held where the jaws shut, turning over, from over you.
+    begin = JAWS["crunch"] + THROAT_FROM
+    for i in range(int(begin * fps), int((MAW_SECONDS - THROAT_SPIT) * fps)):
+        m = i / fps
+        spin = (m - begin) * 0.9
+        across = v(math.cos(spin), 0, -math.sin(spin))
+        body = {"head": held + across * 1.6, "feet": held - across * 2.6}
+        frames.append(Frame(t0 + m, "maw: down its throat", held + v(0, 9, 0) + side * 2.5, held - v(0, 6, 0), 72, up=side,
+                            subject=body))
     return mark_cuts(frames, {f.shot for f in frames}), rest
 
 

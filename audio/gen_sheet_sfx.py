@@ -13,6 +13,8 @@ slot (Sound.PlaybackRegion), so a material gets four takes for ONE upload instea
   slimeBoing_x4          more slime: four wet boings to go with the one you uploaded
   jellyBounce_x4         the jellyfish, now its own: a round, soft gel bounce with a wobble and a little fizz
   soapCrumble_x4         more soap: a waxy press with fine dry crumbs, to go with the one you uploaded
+  cookieCrunch_x4        the cookie (the hundred-and-tenth pass): a crisp break in two, a dry thud under it, and crumbs
+                         skittering off, drier and crisper than the soap
   foamCompress_x4        the memory foam remade: a slow soft sink of air, nothing sharp
   switchClack_x4         the light switches remade: a toggle's two-stage click with a plastic body under it
   kineticSandImprint_x4  the sand remade: a dense hush of fine grains pressed together, and a soft thump
@@ -20,6 +22,10 @@ slot (Sound.PlaybackRegion), so a material gets four takes for ONE upload instea
   jelloWobble_x4         the jelly soda remade: a wet wobble with a carbonated fizz on its tail
   bubblePop_x4           the bubble wrap remade: a crisp pop that starts on its first sample (no lead-in), so it is
                          heard the moment your foot lands
+  ooblSquelch_x4         the oobleck remade (the hundred-and-twenty-sixth pass, from your test: "I want oobleck to have
+                         a better sound"): it goes firm under the blow, a thick muffled thup; then the foot sinks in,
+                         a dense creamy squeeze with thick slow bubbles coming up; and it holds on as the foot comes
+                         away, a soft sticky suck. No splash, nothing bright
 
 AND SINCE THE NINETY-SIXTH PASS, the keypad's four short sounds (gen_keypad_sfx.py, made of sfx_kit.py's parts):
 
@@ -42,7 +48,7 @@ from scipy.io import wavfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from gen_button_sfx import SR, axis, envelope, filt, finish, mix, peak, phase, punch, taper  # noqa: E402
-from gen_chunk_sfx import band, brown, grains, noise  # noqa: E402
+from gen_chunk_sfx import band, brown, grains, noise, swell  # noqa: E402
 from gen_keypad_sfx import SHEETS as KEYPAD  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -144,6 +150,20 @@ def soap_crumble(take, rng):
     return finish(mix(d, layers), -3.0, lowpass=5500)
 
 
+def cookie_crunch(take, rng):
+    """A cookie giving way under a foot: a crisp break, often in two (the top, then the middle), a dry thud under it,
+    and crumbs skittering off, crisper and drier than the soap's."""
+    d = 0.6
+    layers = [(0.0, 0.5, punch(0.1, 140, 80, 0.015, 0.03, drive=1.2))]
+    breaks = {1: [0.0, 0.035], 2: [0.0], 3: [0.0, 0.05, 0.09], 4: [0.01, 0.04]}[take]
+    for k, at in enumerate(breaks):
+        level = 1.0 if k == 0 else 0.7 - 0.1 * k
+        layers.append((at, level, burst(0.03, 900, 3600, 0.0004, 0.006, rng)))
+    crumbs = {1: 22, 2: 30, 3: 18, 4: 34}[take]
+    layers.append((0.015, 0.42, grains(0.5, crumbs, rng, 1200, 4200, length=(0.0008, 0.0025), where=(1.2, 3.2))))
+    return finish(mix(d, layers), -2.0, lowpass=5200)
+
+
 def foam_compress(take, rng):
     """Memory foam: a slow soft sink of air, a deeper push under it, a whisper of fabric; nothing sharp."""
     d = 0.8
@@ -232,10 +252,52 @@ def bubble_pop(take, rng):
     return taper(peak(x) * (10 ** (-2.0 / 20)), 0.6)
 
 
+def oobleck(take, rng):
+    """Oobleck: cornflour and water. Struck, it goes firm for a moment: a thick, muffled thup, like patting a full bag
+    of cream; then it lets go and the foot sinks into it slowly, a dense creamy squeeze; thick slow blorps come up
+    through it; and it holds on as the foot comes away, a soft sticky suck. No splash, nothing bright, low and soft.
+    Four takes that differ in what happens: a quick firm step; one that sinks a long way; a stamp, where it stays firm
+    and shudders; and one that holds on as you pull away."""
+    d = 0.9
+    firm = {1: 0.9, 2: 0.7, 3: 1.0, 4: 0.8}[take]
+    # THE THUP: the surface going firm under the blow, muffled and dense, a quickly damped body under it.
+    thup = filt(brown(0.12, rng), "low", 420) * envelope(axis(0.12), 0.004, 0.03)
+    body = damped([rng.uniform(88, 104), rng.uniform(150, 175), rng.uniform(230, 260)], [0.035, 0.022, 0.012], 0.2, rng)
+    layers = [(0.0, firm, taper(peak(thup))), (0.0, 0.5 * firm, peak(body))]
+    # THE SINK: a thick creamy squeeze, its weight moving lower as the foot goes in.
+    sink = {1: 0.28, 2: 0.55, 3: 0.18, 4: 0.4}[take]
+    st = axis(sink)
+    high = band(noise(sink, rng), 380, 1100) * swell(st, 0.05, 0.03, sink * 0.25)
+    low = filt(brown(sink, rng), "low", 360) * swell(st, sink * 0.4, 0.04, sink * 0.3)
+    squeeze = peak(high) * np.linspace(1, 0.3, len(st)) + peak(low) * np.linspace(0.4, 1, len(st))
+    layers.append((0.03, 0.6, taper(peak(squeeze))))
+    # THE BLORPS: thick, slow bubbles coming up through it, low, each a pitch rising as it closes, quickly damped.
+    for _ in range({1: 1, 2: 3, 3: 0, 4: 2}[take]):
+        size = rng.uniform(0.04, 0.07)
+        bt = axis(size)
+        f0 = rng.uniform(170, 260)
+        blorp = np.sin(phase(f0 * (1 + 0.9 * bt / size))) * envelope(bt, 0.006, size * 0.35)
+        layers.append((rng.uniform(0.08, 0.08 + sink), 0.3, filt(blorp, "low", 900)))
+    # A STAMP shudders: it stays firm, a dense rubbery quiver for a moment.
+    if take == 3:
+        q = axis(0.16)
+        quiver = filt(noise(0.16, rng), "band", [90, 300], 2) * (0.6 + 0.4 * np.sin(2 * np.pi * 22 * q)) * envelope(q, 0.004, 0.05)
+        layers.append((0.02, 0.5, peak(quiver)))
+    # THE PULL: it holds on as the foot comes away: a soft sticky suck, then the last of it letting go.
+    pull_at = {1: 0.42, 2: 0.66, 3: 0.3, 4: 0.5}[take]
+    hold = {1: 0.06, 2: 0.08, 3: 0.04, 4: 0.16}[take]
+    pt = axis(hold + 0.08)
+    suck = band(noise(hold + 0.08, rng), 160, 620) * swell(pt, hold, 0.0, 0.03)
+    smack = band(noise(0.05, rng), 500, 1600) * envelope(axis(0.05), 0.003, 0.01)
+    layers += [(pull_at, 0.38, taper(peak(suck))), (pull_at + hold, 0.28, peak(smack))]
+    return finish(mix(d, layers), -3.0, lowpass=3200)
+
+
 EVENTS = [("chocolateSnap", chocolate_snap), ("chocolateChunk", chocolate_chunk), ("slimeBoing", slime_boing),
-          ("jellyBounce", jelly_bounce), ("soapCrumble", soap_crumble), ("foamCompress", foam_compress),
+          ("jellyBounce", jelly_bounce), ("soapCrumble", soap_crumble), ("cookieCrunch", cookie_crunch),
+          ("foamCompress", foam_compress),
           ("switchClack", switch_clack), ("kineticSandImprint", kinetic_sand), ("iceCrack", ice_crack),
-          ("jelloWobble", jello_wobble), ("bubblePop", bubble_pop)]
+          ("jelloWobble", jello_wobble), ("bubblePop", bubble_pop), ("ooblSquelch", oobleck)]
 # The ninety-sixth pass's: the keypad's four short sounds (some three takes). (Not the lava crust and the Needoh: you
 # liked them as they are, gen_needoh_lava_sfx.py's.)
 EVENTS += [(stem, make) for stem, make, _ in KEYPAD]

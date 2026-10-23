@@ -26,7 +26,7 @@ for checker in (DEVICES, STYLECHECK):
         sys.exit("%s fails before anything is mutated; fix that first" % checker)
 
 MUTATIONS = [
-    ('a face that is not Nunito', STYLE, STYLECHECK, 'display = nunito(Enum.FontWeight.Black),', 'display = Font.fromEnum(Enum.Font.FredokaOne),'),
+    ('a face that is not Nunito', STYLE, STYLECHECK, 'display = nunito(Enum.FontWeight.Heavy),', 'display = Font.fromEnum(Enum.Font.FredokaOne),'),
     ('another family', STYLE, STYLECHECK, 'local NUNITO = "rbxasset://fonts/families/Nunito.json"', 'local NUNITO = "rbxasset://fonts/families/GothamSSm.json"'),
     ('a panel larger than the screen', STYLE, DEVICES, 'local fits = math.min(room.X / design.X, room.Y / design.Y)', 'local fits = 2'),
     ('the pause menu not fitted', PAUSE, DEVICES, '\tStyle.fit(card, Vector2.new(380, 304))\n', '\n'),

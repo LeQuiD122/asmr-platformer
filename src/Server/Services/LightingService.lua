@@ -132,6 +132,31 @@ LightingService.palettes = {
 		saturation = 0.09,
 		contrast = 0.09,
 	},
+	-- ===== HILL HOUSE: eight in the morning, over the mist (the hundred-and-eleventh pass) =====
+	--
+	-- The sun low in the east and warm, the mist below catching it, the sky clearing from a pale gold at the horizon to
+	-- a clean blue overhead. Softer than City Shore's afternoon a step at a time: less light, less glare, a little more
+	-- haze in the air for the morning, and a warm grade.
+	hillHouse = {
+		sky = Color3.fromRGB(176, 206, 236),
+		horizon = Color3.fromRGB(255, 222, 186),
+		density = 0.26,
+		haze = 0.8,
+		offset = 0.2,
+		clock = 7.9,
+		brightness = 1.8,
+		exposure = -0.04,
+		ambient = Color3.fromRGB(44, 40, 44),
+		outdoor = Color3.fromRGB(132, 124, 126),
+		glare = 0.4,
+		sunSize = 16,
+		bloom = 0.45,
+		bloomThreshold = 1.05,
+		rays = 0.08,
+		tint = Color3.fromRGB(255, 244, 228),
+		saturation = 0.04,
+		contrast = 0.07,
+	},
 	-- ===== SKY POOLS: late morning above the clouds =====
 	--
 	-- The calm level, so the plainest light: the sun high and a little behind the morning, a clear
@@ -367,5 +392,5 @@ function LightingService.apply(region: string?)
 	-- to deliver a reminder. It stays documented in the header instead.
 end
 
-LightingService.STAMP = "913e4c54"
+LightingService.STAMP = "e8009ba0"
 return LightingService

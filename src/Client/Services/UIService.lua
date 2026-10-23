@@ -207,6 +207,11 @@ function UIService.setMode(mode: string)
 	local hardcore = mode == "hardcore"
 	local accent = if hardcore then COLOUR.hardcore else COLOUR.chill
 	modeText.Text = if hardcore then "Hardcore" else "Chill"
+	-- NEVER A CLOCK IN CHILL (the hundred-and-thirtieth pass, from your test): it was put up by a hardcore run and left
+	-- up when the lobby voted Chill, still showing that run's time.
+	if not hardcore then
+		UIService.setTimerVisible(false)
+	end
 	TweenService:Create(modeStroke, tweenIn(), { Color = accent }):Play()
 	TweenService:Create(modeDot, tweenIn(), { BackgroundColor3 = accent }):Play()
 	UIService.applyLeaderboardMode(mode)
@@ -240,8 +245,91 @@ local timerText = newLabel(timerPanel, TEXT.mono, COLOUR.textPrimary, Style.FONT
 timerText.Size = UDim2.new(1, 0, 1, 0)
 timerText.Text = "0:00.00"
 
+-- FOLDED AWAY ON A PRESS (the hundred-and-thirtieth pass, from your test: "I want to be able to minimise it when I'm in
+-- hardcore"): pressing the clock folds it down to a small round stopwatch in its corner, and pressing that opens it
+-- again; it stays as you left it for the rest of the session. A small mark at its right says it folds.
+local timerShown, timerFolded = false, false
+local timerFold = Instance.new("TextButton")
+timerFold.Name = "Fold"
+timerFold.Size = UDim2.new(1, 0, 1, 0)
+timerFold.BackgroundTransparency = 1
+timerFold.Text = ""
+timerFold.AutoButtonColor = false
+timerFold.Parent = timerPanel
+local foldMark = Instance.new("Frame")
+foldMark.Name = "FoldMark"
+foldMark.AnchorPoint = Vector2.new(1, 0.5)
+foldMark.Position = UDim2.new(1, -12, 0.5, 0)
+foldMark.Size = UDim2.new(0, 10, 0, 2)
+foldMark.BackgroundColor3 = COLOUR.textMuted
+foldMark.BorderSizePixel = 0
+foldMark.Parent = timerPanel
+local timerPill = Instance.new("TextButton")
+timerPill.Name = "HardcoreTimerFolded"
+timerPill.Size = UDim2.new(0, 44, 0, 44)
+timerPill.AnchorPoint = Vector2.new(1, 1)
+timerPill.Position = timerPanel.Position
+timerPill.BackgroundColor3 = COLOUR.surface
+timerPill.BackgroundTransparency = 0.08
+timerPill.BorderSizePixel = 0
+timerPill.Text = ""
+timerPill.AutoButtonColor = false
+timerPill.Visible = false
+timerPill.Parent = screenGui
+local pillRound = Instance.new("UICorner")
+pillRound.CornerRadius = UDim.new(1, 0)
+pillRound.Parent = timerPill
+local pillRim = Instance.new("UIStroke")
+pillRim.Color = COLOUR.hardcore
+pillRim.Thickness = Style.STROKE.hair
+pillRim.Transparency = 0.35
+pillRim.Parent = timerPill
+-- The stopwatch: its ring, the button on its crown, and a hand.
+local watchRing = Instance.new("Frame")
+watchRing.AnchorPoint = Vector2.new(0.5, 0.5)
+watchRing.Position = UDim2.new(0.5, 0, 0.5, 2)
+watchRing.Size = UDim2.new(0, 20, 0, 20)
+watchRing.BackgroundTransparency = 1
+watchRing.Parent = timerPill
+local watchRound = Instance.new("UICorner")
+watchRound.CornerRadius = UDim.new(1, 0)
+watchRound.Parent = watchRing
+local watchRim = Instance.new("UIStroke")
+watchRim.Color = COLOUR.textPrimary
+watchRim.Thickness = 2
+watchRim.Parent = watchRing
+local watchCrown = Instance.new("Frame")
+watchCrown.AnchorPoint = Vector2.new(0.5, 1)
+watchCrown.Position = UDim2.new(0.5, 0, 0, -1)
+watchCrown.Size = UDim2.new(0, 6, 0, 3)
+watchCrown.BackgroundColor3 = COLOUR.textPrimary
+watchCrown.BorderSizePixel = 0
+watchCrown.Parent = watchRing
+local watchHand = Instance.new("Frame")
+watchHand.AnchorPoint = Vector2.new(0.5, 1)
+watchHand.Position = UDim2.new(0.5, 0, 0.5, 0)
+watchHand.Size = UDim2.new(0, 2, 0, 7)
+watchHand.Rotation = 40
+watchHand.BackgroundColor3 = COLOUR.hardcore
+watchHand.BorderSizePixel = 0
+watchHand.Parent = watchRing
+
+local function showTimer()
+	timerPanel.Visible = timerShown and not timerFolded
+	timerPill.Visible = timerShown and timerFolded
+end
+timerFold.Activated:Connect(function()
+	timerFolded = true
+	showTimer()
+end)
+timerPill.Activated:Connect(function()
+	timerFolded = false
+	showTimer()
+end)
+
 function UIService.setTimerVisible(visible: boolean)
-	timerPanel.Visible = visible
+	timerShown = visible
+	showTimer()
 end
 
 -- MONOSPACED, AND THAT IS FUNCTIONAL. A running clock in a proportional face re-flows on
@@ -385,6 +473,11 @@ local COMPLETION_LOOKS: { [number]: any } = {
 		accent = Color3.fromRGB(142, 214, 200), tint = Color3.fromRGB(22, 41, 45),
 		top = Color3.fromRGB(30, 52, 54), bottom = Color3.fromRGB(58, 84, 82),
 		vignette = Color3.fromRGB(8, 18, 18), motif = "tiles" },
+	-- HILL HOUSE (the hundred-and-eleventh pass): the morning, and his door.
+	[5] = { name = "Hill House", line = "You stood at his door",
+		accent = Color3.fromRGB(255, 214, 150), tint = Color3.fromRGB(36, 44, 38),
+		top = Color3.fromRGB(64, 84, 70), bottom = Color3.fromRGB(176, 150, 120),
+		vignette = Color3.fromRGB(18, 16, 12), motif = "door" },
 }
 local COMPLETION_FALLBACK: any = { line = "Route cleared", accent = COLOUR.gold,
 	tint = COLOUR.surfaceRaised }
@@ -570,6 +663,12 @@ local function buildMotif(look: any): (Instance?, { [string]: any }?)
 			soft.Parent = band
 		end
 		return holder, { Position = UDim2.fromScale(0.12, 0) }
+	elseif look.motif == "door" then
+		-- A door opening onto the morning: its frame, and a warm slit of light in it that widens as the banner arrives.
+		motifFrame("Doorway", look.top or accent, UDim2.fromOffset(64, 100), UDim2.new(0.78, 0, 1, -100), 0.2)
+		local light = motifFrame("Light", accent, UDim2.fromOffset(4, 92), UDim2.new(0.78, 4, 1, -96), 0.1)
+		light.ZIndex = BLACKOUT_ZINDEX + 1
+		return light, { Size = UDim2.fromOffset(56, 92) }
 	elseif look.motif == "tiles" then
 		-- Tile: a grid of hairlines and the dado stripe that runs round every wall in the building.
 		for index = 1, 7 do
@@ -1137,5 +1236,5 @@ do
 	end
 end
 
-UIService.STAMP = "f88bd7c7"
+UIService.STAMP = "75a6c86e"
 return UIService

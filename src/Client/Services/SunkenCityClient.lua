@@ -756,7 +756,8 @@ end
 -- `who`: the character that went in, so a reset part-way down does not drag the next one after it.
 -- `outfall` and `reveal`: where the culvert runs and what the station shows (SunkenCityService).
 type Drain = { spec: any, startAt: number, seconds: number, who: Instance?, outfall: any?, reveal: any?,
-	landed: boolean?, roar: Sound?, dropped: boolean?, wash: Sound? }
+	landed: boolean?, roar: Sound?, dropped: boolean?, wash: Sound?, grabbed: boolean?, wentUnder: boolean?,
+	hitBottom: boolean?, setDown: boolean?, wake: BasePart? }
 local drain: Drain? = nil
 local drainRemote: RemoteEvent? = nil
 
@@ -866,8 +867,9 @@ function cutscene.outfallShot(o: any, reveal: any, v: number, at: Vector3)
 		-- From ahead, low, leading them: they come at the camera past the lamps.
 		Cinema.point(CFrame.lookAt(clearOf(head + run * 10 + Vector3.new(0, 1.8, 0), head), head), 58)
 	elseif v < 0.62 then
-		-- Alongside: carried, turning, flailing weakly.
-		Cinema.point(CFrame.lookAt(clearOf(head + side * 3.6 - run * 1 + Vector3.new(0, 1.6, 0), head), head), 52)
+		-- Alongside: carried, turning, flailing weakly. Kept in from the culvert's ribs and over you (it was out by the
+		-- wall, and every rib that passed pulled it into your hair with the bricks behind: your test of 2026-10-23).
+		Cinema.point(CFrame.lookAt(clearOf(head + side * 2.4 - run * 1.5 + Vector3.new(0, 2.6, 0), head), head), 56)
 	elseif v < 0.9 then
 		-- Over the shoulder, down the culvert to the light at the end of it: they in the lower half, the culvert running
 		-- on ahead. (Closer and lower, looking thirty studs on, it had them under the bottom bar: check_shots.py.)
@@ -885,8 +887,9 @@ function cutscene.revealShot(reveal: any, r: number)
 		return
 	end
 	local e = r * r * (3 - 2 * r)
-	local eye = reveal.eye:Lerp(reveal.cardEye, e)
 	local look = reveal.eye:Lerp(reveal.card, math.min(1, e * 1.6))
+	-- Never through a pump or a pillar on its way in (it went through one: your test of 2026-10-23).
+	local eye = clearOf(reveal.eye:Lerp(reveal.cardEye, e), look:Lerp(reveal.card, e))
 	Cinema.point(CFrame.lookAt(eye, look:Lerp(reveal.card, e)), 70 - 30 * e, true)
 end
 
@@ -985,9 +988,135 @@ end
 -- tint over everything, eased in; and eased back out as the culvert carries you on. Put back exactly as it was.
 type Under = { atmosphere: Atmosphere, made: boolean, density: number, offset: number, colour: Color3, decay: Color3,
 	haze: number, glare: number, grade: ColorCorrectionEffect, tweens: { Tween } }
-local UNDER = { density = 0.62, colour = Color3.fromRGB(34, 82, 86), decay = Color3.fromRGB(14, 40, 46), haze = 1.6,
-	tint = Color3.fromRGB(176, 224, 222), into = 0.5, out = 0.8 }
+local UNDER = { density = 0.68, colour = Color3.fromRGB(26, 72, 82), decay = Color3.fromRGB(8, 32, 42), haze = 1.6,
+	tint = Color3.fromRGB(160, 214, 216), into = 0.5, out = 0.8 }
 local under: Under? = nil
+
+-- AND IT LOOKS LIKE WATER, NOT SKY (the hundred-and-twenty-sixth pass, from your test: "the sunken city water
+-- tornado/sinkhole at the end when falling down still looks like it's just floating in the sky, it should seem as
+-- though there is light distortion because of the water"). Under the water on your screen, besides the sea's colour
+-- (above, a little deeper now): the picture swims (Cinema.waver: a slow roll and the lens breathing, as a view through
+-- moving water does) and is a little soft (a blur); the light ripples (the tint brightening and dimming in a shimmer);
+-- shafts of daylight slant down from the surface round the whirlpool's throat, swaying and shimmering; and bubbles
+-- stream up past you, with silt hanging in the water round you. All of it on this screen, and all of it taken away
+-- with the water.
+local DEEP = { blur = 3, shafts = 9, reach = 46, long = 130 }
+local deep = { blur = nil :: BlurEffect?, shafts = nil :: Model?, silt = nil :: BasePart?,
+	beams = {} :: { { part: BasePart, rest: CFrame, phase: number } }, spec = nil :: any }
+
+local function waterLife(on: boolean)
+	if on then
+		local blur = Instance.new("BlurEffect")
+		blur.Name = "DrainBlur"
+		blur.Size = 0
+		blur.Parent = Lighting
+		TweenService:Create(blur, TweenInfo.new(UNDER.into, Enum.EasingStyle.Sine), { Size = DEEP.blur }):Play()
+		deep.blur = blur
+		if Cinema and Cinema.waver then
+			Cinema.waver(1)
+		end
+		-- The shafts of daylight, down from the surface round the throat of the whirlpool.
+		local spec = deep.spec
+		if spec and spec.vortex then
+			local model = Instance.new("Model")
+			model.Name = "DrainLight"
+			table.clear(deep.beams)
+			for k = 1, DEEP.shafts do
+				local a = k / DEEP.shafts * math.pi * 2 + 0.4
+				local r = 10 + (k % 3) * 12
+				local top = Vector3.new(spec.vortex.X + math.cos(a) * r, spec.funnelY + 4, spec.vortex.Z + math.sin(a) * r)
+				local beam = Instance.new("Part")
+				beam.Name = "Shaft"
+				beam.Anchored, beam.CanCollide, beam.CanTouch, beam.CanQuery, beam.CastShadow = true, false, false, false, false
+				beam.Material = Enum.Material.SmoothPlastic
+				beam.Color = Color3.fromRGB(214, 240, 236)
+				beam.Transparency = 0.88
+				beam.Size = Vector3.new(1.6 + (k % 2) * 1.4, DEEP.long, 0.3)
+				local rest = CFrame.new(top) * CFrame.Angles(0.16, a, 0) * CFrame.new(0, -DEEP.long / 2, 0)
+				beam.CFrame = rest
+				beam.Parent = model
+				table.insert(deep.beams, { part = beam, rest = rest, phase = k * 1.7 })
+			end
+			model.Parent = workspace
+			deep.shafts = model
+		end
+		-- The bubbles and the silt: a box of water round you that they hang in and stream up through.
+		local silt = Instance.new("Part")
+		silt.Name = "DrainWater"
+		silt.Anchored, silt.CanCollide, silt.CanTouch, silt.CanQuery, silt.CastShadow = true, false, false, false, false
+		silt.Transparency = 1
+		silt.Size = Vector3.new(30, 30, 30)
+		local specks = Instance.new("ParticleEmitter")
+		specks.Name = "Silt"
+		specks.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		specks.Color = ColorSequence.new(Color3.fromRGB(196, 226, 214))
+		specks.Size = NumberSequence.new(0.08)
+		specks.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, 0.55),
+			NumberSequenceKeypoint.new(1, 1) })
+		specks.Lifetime = NumberRange.new(2, 3.5)
+		specks.Rate = 40
+		specks.Speed = NumberRange.new(0.2, 0.8)
+		specks.SpreadAngle = Vector2.new(180, 180)
+		specks.Shape = Enum.ParticleEmitterShape.Box
+		specks.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+		specks.Parent = silt
+		local rising = Instance.new("ParticleEmitter")
+		rising.Name = "Bubbles"
+		rising.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		rising.Color = ColorSequence.new(Color3.fromRGB(236, 250, 250))
+		rising.LightEmission = 0.3
+		rising.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.18), NumberSequenceKeypoint.new(1, 0.42) })
+		rising.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 1) })
+		rising.Lifetime = NumberRange.new(1.4, 2.4)
+		rising.Rate = 24
+		rising.Speed = NumberRange.new(6, 12)
+		rising.Acceleration = Vector3.new(0, 14, 0)
+		rising.EmissionDirection = Enum.NormalId.Top
+		rising.SpreadAngle = Vector2.new(40, 40)
+		rising.Shape = Enum.ParticleEmitterShape.Box
+		rising.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+		rising.Parent = silt
+		silt.Parent = workspace
+		deep.silt = silt
+		return
+	end
+	if deep.blur then
+		local blur = deep.blur
+		deep.blur = nil
+		TweenService:Create(blur, TweenInfo.new(UNDER.out, Enum.EasingStyle.Sine), { Size = 0 }):Play()
+		game:GetService("Debris"):AddItem(blur, UNDER.out + 0.2)
+	end
+	if Cinema and Cinema.waver then
+		Cinema.waver(0)
+	end
+	if deep.shafts then
+		deep.shafts:Destroy()
+		deep.shafts = nil
+	end
+	table.clear(deep.beams)
+	if deep.silt then
+		deep.silt:Destroy()
+		deep.silt = nil
+	end
+end
+
+-- The water moving, every frame you are under it: the shafts swaying and shimmering, the light rippling, the bubbles
+-- and the silt round you.
+local function stirWater(clock: number, rider: BasePart)
+	local now = under
+	if not now then
+		return
+	end
+	now.grade.Brightness = 0.035 * math.sin(clock * 3.1) + 0.02 * math.sin(clock * 5.3 + 1)
+	for _, beam in ipairs(deep.beams) do
+		beam.part.CFrame = beam.rest * CFrame.Angles(math.sin(clock * 0.5 + beam.phase) * 0.04, 0,
+			math.sin(clock * 0.37 + beam.phase) * 0.05)
+		beam.part.Transparency = 0.86 + 0.06 * math.sin(clock * 2.3 + beam.phase * 2)
+	end
+	if deep.silt then
+		deep.silt.CFrame = CFrame.new(rider.Position)
+	end
+end
 local function submerge(on: boolean)
 	if on == (under ~= nil) then
 		return
@@ -1006,6 +1135,7 @@ local function submerge(on: boolean)
 			atmosphere.Parent = Lighting
 		end
 		under = was
+		waterLife(true)
 		local ease = TweenInfo.new(UNDER.into, Enum.EasingStyle.Sine)
 		for _, pair in ipairs({
 			{ atmosphere, { Density = UNDER.density, Offset = 0, Color = UNDER.colour, Decay = UNDER.decay, Haze = UNDER.haze,
@@ -1020,6 +1150,7 @@ local function submerge(on: boolean)
 	end
 	local was = under :: Under
 	under = nil
+	waterLife(false)
 	for _, made in ipairs(was.tweens) do
 		made:Cancel()
 	end
@@ -1033,6 +1164,87 @@ local function submerge(on: boolean)
 			game:GetService("Debris"):AddItem(was.atmosphere, UNDER.out + 0.2)
 		end
 	end
+end
+
+-- THE WATER, ANSWERING (the hundred-and-thirty-first pass, from your test: "I want the water animation and reactiveness
+-- to improve on impact"): a burst of white water at `at` (spray thrown up and out, droplets, a sheet of foam spreading
+-- on the surface at `surfaceY` if there is one), on this screen, gone in a few seconds.
+local function impactWater(at: Vector3, size: number, surfaceY: number?)
+	local host = Instance.new("Part")
+	host.Name = "ImpactWater"
+	host.Anchored, host.CanCollide, host.CanTouch, host.CanQuery = true, false, false, false
+	host.Transparency = 1
+	host.Size = Vector3.new(1, 1, 1)
+	host.Position = at
+	host.Parent = workspace
+	local spray = Instance.new("ParticleEmitter")
+	spray.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	spray.Color = ColorSequence.new(Color3.fromRGB(236, 248, 246))
+	spray.LightEmission = 0.25
+	spray.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2 * size), NumberSequenceKeypoint.new(1, 3.6 * size) })
+	spray.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) })
+	spray.Lifetime = NumberRange.new(0.6, 1.3)
+	spray.Speed = NumberRange.new(10 * size, 24 * size)
+	spray.SpreadAngle = Vector2.new(55, 55)
+	spray.EmissionDirection = Enum.NormalId.Top
+	spray.Acceleration = Vector3.new(0, -60, 0)
+	spray.Drag = 1.2
+	spray.Rate = 0
+	spray.Parent = host
+	spray:Emit(math.floor(70 * size))
+	local drops = Instance.new("ParticleEmitter")
+	drops.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	drops.Color = ColorSequence.new(Color3.fromRGB(220, 244, 240))
+	drops.Size = NumberSequence.new(0.25 * size)
+	drops.Lifetime = NumberRange.new(0.6, 1.1)
+	drops.Speed = NumberRange.new(14 * size, 30 * size)
+	drops.SpreadAngle = Vector2.new(70, 70)
+	drops.EmissionDirection = Enum.NormalId.Top
+	drops.Acceleration = Vector3.new(0, -90, 0)
+	drops.Rate = 0
+	drops.Parent = host
+	drops:Emit(math.floor(50 * size))
+	if surfaceY then
+		local foam = Instance.new("Part")
+		foam.Name = "ImpactFoam"
+		foam.Shape = Enum.PartType.Cylinder
+		foam.Anchored, foam.CanCollide, foam.CanTouch, foam.CanQuery, foam.CastShadow = true, false, false, false, false
+		foam.Material = Enum.Material.SmoothPlastic
+		foam.Color = Color3.fromRGB(236, 248, 246)
+		foam.Transparency = 0.15
+		foam.Size = Vector3.new(0.2, 2, 2)
+		foam.CFrame = CFrame.new(Vector3.new(at.X, surfaceY + 0.12, at.Z)) * CFrame.Angles(0, 0, math.pi / 2)
+		foam.Parent = host
+		TweenService:Create(foam, TweenInfo.new(1.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ Size = Vector3.new(0.2, 9 * size, 9 * size), Transparency = 1 }):Play()
+	end
+	game:GetService("Debris"):AddItem(host, 3)
+end
+
+-- AND A WAKE off you as the water carries you down the culvert: spray kicked up round your feet, on this screen.
+local function makeWake(): BasePart
+	local host = Instance.new("Part")
+	host.Name = "RiderWake"
+	host.Anchored, host.CanCollide, host.CanTouch, host.CanQuery = true, false, false, false
+	host.Transparency = 1
+	host.Size = Vector3.new(3, 0.4, 3)
+	host.Parent = workspace
+	local wake = Instance.new("ParticleEmitter")
+	wake.Name = "Wake"
+	wake.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	wake.Color = ColorSequence.new(Color3.fromRGB(232, 246, 244))
+	wake.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.8), NumberSequenceKeypoint.new(1, 2.4) })
+	wake.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 1) })
+	wake.Lifetime = NumberRange.new(0.5, 0.9)
+	wake.Speed = NumberRange.new(2, 6)
+	wake.SpreadAngle = Vector2.new(60, 60)
+	wake.EmissionDirection = Enum.NormalId.Top
+	wake.Acceleration = Vector3.new(0, -14, 0)
+	wake.Shape = Enum.ParticleEmitterShape.Box
+	wake.Rate = 45
+	wake.Parent = host
+	game:GetService("Debris"):AddItem(host, SunkenPath.OUTFALL_SECONDS + 4)
+	return host
 end
 
 local function moveRider(serverNow: number)
@@ -1061,7 +1273,30 @@ local function moveRider(serverNow: number)
 		local frame = SunkenPath.drainFrame(current.spec, u) * SunkenPath.tumble(u, clock)
 		rider.CFrame = frame
 		-- UNDER THE WATER from the bottom of the funnel down (above): never sky round the whirlpool.
+		deep.spec = current.spec
 		submerge(frame.Position.Y < current.spec.funnelY)
+		stirWater(clock, rider)
+		-- HIT LIKE THE DIVE (the hundred-and-thirty-first pass, from your test: "I want as much impact when falling down
+		-- in level 3 and 4 as in level 1, that same intense, dramatic effect"): taken with a jolt and a burst of the
+		-- whirlpool's water; the speed coming on as it drags you round; a flash and a burst of water as it pulls you
+		-- under; and all the way down the shaft the picture shaking and the lines streaming past.
+		if Cinema and Cinema.active() then
+			local below = frame.Position.Y < current.spec.funnelY
+			if not current.grabbed then
+				current.grabbed = true
+				Cinema.impact(1)
+				Cinema.shake(1.4)
+				impactWater(frame.Position, 1.4, frame.Position.Y)
+			end
+			if below and not current.wentUnder then
+				current.wentUnder = true
+				Cinema.impact(1.2)
+				Cinema.shake(1.8)
+				impactWater(frame.Position + Vector3.new(0, 2, 0), 1.8, nil)
+			end
+			Cinema.speedLines(if below then 0.85 else 0.25 + 0.45 * math.clamp(u / 0.45, 0, 1))
+			Cinema.shake(if below then 0.55 else 0.3)
+		end
 		-- DOWN THE SHAFT: the rush of the drop, once.
 		if Cinema and not current.dropped and frame.Position.Y < current.spec.funnelY - 8 then
 			current.dropped = true
@@ -1079,9 +1314,35 @@ local function moveRider(serverNow: number)
 		return
 	end
 	local v = (t - current.seconds) / SunkenPath.OUTFALL_SECONDS
+	-- THE BOTTOM, HARD: out of the shaft into the sluice in a burst of white water, the picture knocked.
+	if Cinema and Cinema.active() and not current.hitBottom then
+		current.hitBottom = true
+		Cinema.impact(1.5)
+		Cinema.shake(2.6)
+		Cinema.speedLines(0)
+		impactWater(SunkenPath.outfallFrame(o, 0, clock).Position, 2.4, o.waterY)
+	end
 	if v < 1 then
 		local frame = SunkenPath.outfallFrame(o, v, clock)
 		rider.CFrame = frame
+		-- The water answering you all the way down the culvert, and a splash where it sets you down.
+		if not current.wake then
+			current.wake = makeWake()
+		end
+		local wake = current.wake :: BasePart
+		local _, run = SunkenPath.outfallAt(o, v)
+		wake.CFrame = CFrame.new(Vector3.new(frame.Position.X, o.waterY + 0.2, frame.Position.Z) + run * 1.2)
+		local spray = wake:FindFirstChild("Wake")
+		if spray and spray:IsA("ParticleEmitter") then
+			spray.Enabled = v < 0.88
+		end
+		if v >= 0.88 and not current.setDown then
+			current.setDown = true
+			impactWater(frame.Position, 0.8, o.waterY)
+			if Cinema then
+				Cinema.shake(0.5)
+			end
+		end
 		-- THE CULVERT: its wash carrying them, the whirlpool's roar falling away behind.
 		if Cinema and not current.wash then
 			Cinema.fade(current.roar, 2.5)
@@ -2742,6 +3003,17 @@ local function reportLater(model: Instance)
 end
 
 function SunkenCityClient.start()
+	-- Taken to the lobby mid-ride: the ride is over here (it went on setting you along the culvert), the water put away.
+	if Cinema and Cinema.onLeave then
+		Cinema.onLeave(function()
+			local current = drain
+			if current and current.wake then
+				current.wake:Destroy()
+			end
+			drain = nil
+			submerge(false)
+		end)
+	end
 	print("SunkenCityClient: running, " .. SunkenCityClient.VERSION)
 	task.spawn(function()
 		guard("the Studio panel", panel.start)
@@ -3189,5 +3461,5 @@ if (script :: any):IsA("LocalScript") then
 	task.spawn(SunkenCityClient.start)
 end
 
-SunkenCityClient.STAMP = "3f209060"
+SunkenCityClient.STAMP = "655616d7"
 return SunkenCityClient

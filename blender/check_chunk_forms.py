@@ -456,6 +456,86 @@ def check_no_bypass_shelves():
         failures.append("C1_SlimeToPace's honey landing has a shelf again, for the reason above.")
 
 
+def check_cookie():
+    """THE COOKIE (the hundred-and-tenth pass, "add a cookie chunk"): built of crumbs like the soap bar, chips in its top
+    layer only; round with a bite, as a shape the plan check walks; cracking first, then crumbling at its own pace with
+    its own crumbs and dust (soap's code made the material's, not soap's); its own crunch; and in the levels, the
+    sandbox's front, the shelf and the collection."""
+    src = ROOT_DIR / "src"
+    read = lambda *parts: (src.joinpath(*parts)).read_text(encoding="utf-8")
+    builder = read("Server", "ChunkBuilder.server.lua")
+    renderer = read("Client", "Services", "DeformationRenderer.lua")
+    config = read("Shared", "MaterialConfig.lua")
+    shapes = read("Shared", "PlanShapes.lua")
+    levels = read("Shared", "LevelDefinitions.lua")
+    boot = read("Server", "Bootstrap.server.lua")
+    for needle, why in (
+        ("local GRANULAR: { [string]: boolean } = { Soap = true, Cookie = true }", "the cookie is not built of crumbs"),
+        ("if chips and layer == 1 and (seed * 3 + seed2) % chips.every == 0 then", "the chips are not in the top layer only"),
+        ('R22_Cookie = {\n\t\t{ name = "Platform", material = "Cookie", width = 20, length = 20, form = "cookie" },',
+         "the cookie chunk is not one round cookie"),
+    ):
+        if needle not in builder:
+            fail("Cookie", "ChunkBuilder: " + why)
+    chips = re.search(r"Cookie = \{ colour = Color3\.fromRGB\((\d+), (\d+), (\d+)\), every = (\d+), proud = ([\d.]+) \}", builder)
+    if not chips:
+        fail("Cookie", "ChunkBuilder: the cookie has no chocolate chips")
+    else:
+        every, proud = int(chips.group(4)), float(chips.group(5))
+        if not 4 <= every <= 12:
+            fail("Cookie", "ChunkBuilder: a chip in every %d crumbs is %s" % (every, "a chocolate bar" if every < 4 else "no chips"))
+        if proud > 0.25:
+            fail("Cookie", "ChunkBuilder: the chips stand %.2f proud, enough to trip on" % proud)
+        if max(int(chips.group(i)) for i in (1, 2, 3)) > 110:
+            fail("Cookie", "ChunkBuilder: the chips are not chocolate dark")
+    if "cookie = cookie," not in shapes or "local function cookie(u: number, v: number): boolean" not in shapes:
+        fail("Cookie", "PlanShapes: the cookie's outline is not one of the shapes (so the plan check never walks it)")
+    entry = re.search(r"\tCookie = \{(.*?)\n\t\},", config, re.S)
+    if not entry:
+        fail("Cookie", "MaterialConfig has no Cookie")
+    else:
+        body = entry.group(1)
+        dissolve = re.search(r"dissolveTime = ([\d.]+)", body)
+        soap = re.search(r"\tSoap = \{.*?dissolveTime = ([\d.]+)", config, re.S)
+        if not dissolve:
+            fail("Cookie", "MaterialConfig: the cookie never gives way")
+        elif soap and float(dissolve.group(1)) >= float(soap.group(1)):
+            fail("Cookie", "MaterialConfig: the cookie lasts as long as soap; it is meant to give way a little sooner")
+        if "frictionOverride" in body:
+            fail("Cookie", "MaterialConfig: the cookie is slippery; a biscuit has grip")
+        if 'sfxEvent = "cookieCrunch"' not in body:
+            fail("Cookie", "MaterialConfig: the cookie has no crunch of its own")
+    sheet = ROOT_DIR / "audio" / "sheets" / "cookieCrunch_x4.wav"
+    if not sheet.exists():
+        fail("Cookie", "there is no audio/sheets/cookieCrunch_x4.wav")
+    if '"cookieCrunch_x4"' not in boot:
+        fail("Cookie", "Bootstrap's paste check does not look for the cookie's crunch")
+    cookie_fx = renderer[renderer.find("Effects.Cookie = function(ctx: Ctx)"):]
+    cookie_fx = cookie_fx[:cookie_fx.find("\nend\n")]
+    for needle, why in (
+        ("Fissure.grow(tile, { from = Fissure.footOf(tile, ctx.who), arms = SOAP.CRACK_ARMS",
+         "a cookie does not crack under your first step"),
+        ("Fissure.extend(tile, SOAP.CRACK_STEP, SOAP.CRACK_SPEED)", "a cookie's cracks do not run on as you step"),
+        ("Effects.Soap(ctx)", "a cookie does not crumble"),
+    ):
+        if needle not in cookie_fx:
+            fail("Cookie", "DeformationRenderer: " + why)
+    for needle, why in (
+        ("SOAP.OF[tile] = ctx.material", "a crumbling cell does not know which material it is"),
+        ('local own = Materials[SOAP.OF[tile] or "Soap"] or Materials.Soap', "a cookie crumbles at soap's pace"),
+        ('local made = MaterialAppearance.Appearances[SOAP.OF[tile] or "Soap"] or MaterialAppearance.Appearances.Soap',
+         "a cookie's crumbs trail soap-pink dust"),
+        ('frag.Name = (SOAP.OF[tile] or "Soap") .. "Crumb"', "a cookie's crumbs are called soap"),
+        ("puff(tile, own.color, 0.16, 4, SOAP.RISE[ctx.material] or 3, 7)", "a cookie's flakes drift up like soap's"),
+    ):
+        if needle not in renderer:
+            fail("Cookie", "DeformationRenderer: " + why)
+    for level, needle in (("City Shore", '"R18_SoapRing", "R22_Cookie",'), ("Sky Pools", '\t\t"R18_SoapRing",\n\t\t"R22_Cookie",'),
+                          ("the sandbox's front", '"R22_Cookie",\n\t\t"S1_Straight",\n\t\t-- Then the Sunken City')):
+        if needle not in levels:
+            fail("Cookie", "LevelDefinitions: the cookie is not in %s" % level)
+
+
 def main():
     CL.check_order_covers_definitions()
     layouts, contracts, consts = CL.layout_all()
@@ -475,6 +555,7 @@ def main():
     check_levels()
     check_rigged_forms()
     check_floor_drops()
+    check_cookie()
 
     print("chunk layout, as parsed from ChunkBuilder.server.lua:")
     print("\n".join(notes))

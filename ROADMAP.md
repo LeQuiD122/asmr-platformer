@@ -4,9 +4,9 @@ What we are going to build, roughly in order. `HANDOFF.md` describes what exists
 what does not exist yet. Every idea is tagged with where it came from: **(you)** for your ideas
 and decisions, **(suggested)** for mine.
 
-Last updated: 2026-10-20. Everything built up to and including the ninety-second pass has been played in Studio
-**(you)**; the ninety-third to the hundred-and-fourth wait for a test. Section 9 is your list of 2026-10-20 and where
-each item stands.
+Last updated: 2026-10-22. Everything built up to and including the ninety-second pass has been played in Studio
+**(you)**; the ninety-third to the hundred-and-twenty-second wait for a test. Section 9 is your list of 2026-10-20 and
+where each item stands; section 10 is your test of 2026-10-21.
 The short version is the Status section of `README.md`. What comes next, in order, is section 8.
 
 ## Where the levels stand
@@ -17,7 +17,7 @@ The short version is the Status section of `README.md`. What comes next, in orde
 | 2 | Sky Pools | pool terraces down a meander over a drifting cloud sea, round a fountain tower | built and tested: the slide round the tower and the skim across the final pool, a scored scene; the landing shot reworked in the ninety-third pass |
 | 3 | The Sunken City | a drowned city either side of a boulevard, with something patrolling under it | built and tested: the swirling drain and Outfall 3 to the pumping station, a scored scene; two drain shots reworked in the ninety-third pass |
 | 4 | Flooded Halls | the Corporation Baths: the flume ends in the mouth in the dark and then the Gate Chamber, where the story ends | built and tested; the flume's end, the mouth's beats and the chamber's shots reworked in the ninety-third pass |
-| 5 | Hill House | the key holder's house on the hill at eight in the morning (`LORE.md`) | chosen as the next level **(you, 2026-10-17)**, next now the lobby is built (section 8) |
+| 5 | Hill House | the key holder's house on the hill at eight in the morning (`LORE.md`) | BUILT: the outside, the hall and its people (passes 111 to 113) |
 
 ---
 
@@ -653,7 +653,8 @@ generated sounds made "way better". How each is done is mine **(suggested)** unl
    its own), the hall of fame (the leaderboard and the statue) and the garden (a lawn, seats facing the sea, the
    seaside viewer and the lift to the squish room). Every place from `LobbyLayout.lua`; `check_hub.py` measures it.
    HANDOFF, **The lobby as a promenade (hundredth pass)**.
-7. **Hill House (you chose it): after section 9.** Level 5 in the story's order of play, first in its clock: the key holder's house on
+7. **Hill House (you chose it): BUILT, the outside (hundred-and-eleventh pass) and the hall with his key and his clock
+   (hundred-and-twelfth), and its people, Mr Gale and Mrs Dunn (hundred-and-thirteenth).** Level 5 in the story's order of play, first in its clock: the key holder's house on
    the hill at eight in the morning, the big clock, the key on its green ribbon by the door, and why you did not go in.
 
 ## 9. From your notes of 2026-10-20 **(you)**
@@ -674,16 +675,99 @@ are being built:
 4. **What you say, and a deeper story: BUILT (hundred-and-fourth pass).** "I want to say the lines to them myself ...
    walking away ... the options ... disappear by themselves"; "I also want the plot to be deeper": you are Marsh's
    child (you chose it).
-5. **The shop made over.** "Stylistically connect the shop UI and its vibe with the rest of the level"; colour; the
+5. **The shop made over: BUILT (hundred-and-fifth and hundred-and-sixth passes).** "Stylistically connect the shop UI and its vibe with the rest of the level"; colour; the
    mouse cursor as a chunk, a cookie that crumbles; effects splashing and splattering, with sounds; a different sound
    for each tab; the background cracking if it is ice, sparkling if lava, crumbling if soap; a random background of
    defaults; backgrounds to buy, detailed, in rarities (token crates and Robux mythics, you chose); open and close with
    their own animation and sound.
-6. **Trails and auras.** "Even cooler and even slicker and even more pronounced", the trail "less wide ... more
+6. **Trails and auras: BUILT (hundred-and-seventh pass).** "Even cooler and even slicker and even more pronounced", the trail "less wide ... more
    specific effects, not just a line that fades out".
-7. **Sky Pools' arches.** "Glowing or making these cool sparkling effects and kind of like shake my camera a little".
-8. **The lobby's look and feel.** "Greatly improve the vibe and aesthetics of the lobby."
+7. **Sky Pools' arches: BUILT (hundred-and-eighth pass).** "Glowing or making these cool sparkling effects and kind of like shake my camera a little".
+8. **The lobby's look and feel: BUILT (hundred-and-ninth pass).** "Greatly improve the vibe and aesthetics of the lobby."
 9. **Your sounds, sampled.** "Take a sample of my sounds and improve them": with your files in `audio/yours/`, each
    sound's takes built from your recording (librosa and pedalboard, installed with your OK).
-10. **A cookie chunk.** "Add a cookie chunk yk."
+10. **A cookie chunk: BUILT (hundred-and-tenth pass).** "Add a cookie chunk yk."
 11. **Hill House** (section 8, item 7).
+12. **The true ending: BUILT (hundred-and-fourteenth to sixteenth passes).** You chose it with the plot ("You are Marsh's
+    child"): clocking in, and the Watcher given his face back. The time clock by Mr Barlow, earned by knowing what it
+    cost him; Edwin Marsh at the gates with his face, the wave, 15 August; once a save, 300 tokens, the key holder's
+    plaque and a badge, and his ledge empty after. How it is done is mine **(suggested)**.
+
+## 10. From your test of 2026-10-21 **(you)**
+
+In your words, with where each stands. How each is done is mine **(suggested)**.
+
+1. **The Studio error: BUILT (hundred-and-seventeenth pass).** "Black is not a valid member of Enum.FontWeight": Heavy
+   now, and every Enum the Luau names checked against Roblox's own list.
+2. **"Random sounds playing when I'm walking in the lobby": BUILT (hundred-and-eighteenth pass).** The soap bubbles off
+   the fountain popped aloud as you walked through them; only a bubble you tap is heard now. (A step sound pack from
+   the shop also plays in the lobby while you have it on: take it off in the shop's Sounds tab.)
+3. **"The translucent chunks such as honey, slime, soda ... stay invisible" in Sky Pools and Hill House: BUILT
+   (hundred-and-eighteenth pass).** The clouds and the mist are solid, and honey and slime are no longer Glass.
+4. **"Hill House stands next to level 1 ... it should be near level 4": BUILT (hundred-and-eighteenth pass).** The
+   lobby's pads in the levels' own order; the story still starts at Hill House. **"Grass inside my house": BUILT** (the
+   ground under the house and the path is bare).
+5. **"The stylistic difference between the script and my options ... they should have the same style": BUILT
+   (hundred-and-nineteenth pass).** One speech bubble for everyone.
+6. **"The player should have animations, not just stand still" (in the scenes, when talking, all the time): BUILT
+   (hundred-and-nineteenth and twentieth passes).**
+7. **"The animation for the monster in the backrooms is messed up and should be scarier": BUILT (hundred-and-twenty-first
+   pass).**
+8. **The shop, "the edges of the categories are not cut off ... the colours ... those animations ... the layout ... make
+   it fancier": BUILT (hundred-and-twenty-second pass).**
+
+## 11. From your test of 2026-10-22 **(you)**
+
+Everything in your message and the video with it, in your words, with where each stands. How each is done is mine
+**(suggested)**.
+
+1. **"The honey steps are reversed 180 degrees": BUILT (hundred-and-twenty-third pass).**
+2. **"Bubbles look weird in the fountain": BUILT (hundred-and-twenty-third pass).** A soap film with a glint, not Glass.
+3. **"The talk with characters does not reset, which should happen": BUILT (hundred-and-twenty-third pass).**
+4. **"The text between character and the player could be styled better": BUILT (hundred-and-twenty-third pass).**
+5. **"When I hover over the icons in the shop ... the text gets covered", and "switch tabs by using arrow keys": BUILT
+   (hundred-and-twenty-third pass).**
+6. **"Locker 3 is hard to open and the animation inside looks weird": BUILT (hundred-and-twenty-fourth pass).**
+7. **"The moment where there is the monster scene, I don't understand what is going on": BUILT (hundred-and-twenty-fourth
+   pass).** You see it is a mouth, go down its throat, and are spat out.
+8. **"The animation of the backrooms monster kill is weird": BUILT (hundred-and-twenty-fifth pass).**
+9. **"The sunken city water tornado ... looks like it's just floating in the sky, it should seem as though there is light
+   distortion because of the water": BUILT (hundred-and-twenty-sixth pass).**
+10. **"I want oobleck to have a better sound": BUILT (hundred-and-twenty-sixth pass).**
+11. **"The full song at the end of sky pools is not playing": BUILT (hundred-and-twenty-seventh pass).**
+12. **"Level 2 during the final animation I wanna see the player more often": BUILT (hundred-and-twenty-seventh pass).**
+13. **"The animation and the camera positioning should be fixed in level 5, and I should not be able to go through the
+    floor, my camera I mean": BUILT (hundred-and-twenty-eighth pass).** And the grass in the hall, again.
+14. **"When I break the bricks with the crowbar, I should actually hit the bricks and there should be some pieces flying
+    out": BUILT (hundred-and-twenty-ninth pass).**
+15. **"The animation for level 1 finale should be improved, there is a bit where the camera is covered by a plane, and
+    the final dive in should have more impact on hit": BUILT (hundred-and-twenty-ninth pass).**
+16. **"You can see what's wrong exactly with butter stick": BUILT (hundred-and-twenty-ninth pass).** The wrapper was
+    see-through; it is paper now.
+
+## 12. From your test of 2026-10-23 **(you)**
+
+In your words, with where each stands. How each is done is mine **(suggested)**.
+
+1. **"I have lobby sounds in my level games ... they should only be in the lobby and get less and less loud the farther
+   I am from them": BUILT (hundred-and-thirtieth pass).**
+2. **"This timer ... does not go away when it is chill mode ... I want to be able to minimise it when I'm in hardcore":
+   BUILT (hundred-and-thirtieth pass).**
+3. **"I wanna further improve the lobby": BUILT (hundred-and-thirty-sixth pass).** The level windows as postcards.
+4. **"As much impact when falling down in level 3 and 4 as in level 1": BUILT (hundred-and-thirty-first and second
+   passes).**
+5. **"See the red screenshot? This is the animation with the crowbar at the end, fix the camera": BUILT
+   (hundred-and-thirtieth pass).**
+6. **"The water animation and reactiveness to improve on impact in the level 3 animation, and ... not push me through
+   textures": BUILT (hundred-and-thirty-first pass).**
+7. **"When I leave to lobby every animation should stop even if it is playing": BUILT (hundred-and-thirtieth pass).**
+8. **"The monster scene in level 4 should be longer, and the jaws need to snap longer, and create lots of impact":
+   BUILT (hundred-and-thirty-second pass).** **"When I'm inside its throat it should be more dramatic": BUILT.**
+9. **"Improve the quality of level 4's level models and layout": BUILT (hundred-and-thirty-fourth pass).** Galleries,
+   signs, lifebuoys, hanging lamps.
+10. **"The locker animation, it just gets covered if I stand in front of it, move me out the way ... for every animation
+    where it makes sense": BUILT (hundred-and-thirtieth pass).**
+11. **"I can walk around during animations": BUILT (hundred-and-thirtieth pass).**
+12. **"Improve the shop looks even more": BUILT (hundred-and-thirty-fifth pass).**
+13. **"The backrooms animation ... I don't understand what's going on, it should be longer and I should understand what
+    I'm looking at": BUILT (hundred-and-thirty-third pass).**

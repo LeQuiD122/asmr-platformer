@@ -467,6 +467,50 @@ end
 -- too tall for the rooms, so he goes stooped, his head bowed under the ceiling; too thin, legs like poles; arms that
 -- hang past his knees and end in long fingers; a pale head a size too big with no face on it at all, only a seam
 -- down the middle of where a face would be (it is not a seam: StoryClient's screamer opens it).
+--
+-- JOINTED (the hundred-and-twenty-first pass, from your test: "the animation for the monster in the backrooms is
+-- messed up and should be scarier"). He was one stiff block of parts, jumped along a few times a second, and the seam
+-- was left behind when his head twitched: it read as broken, not frightening. Now every limb hangs on a joint off his
+-- hips, thighs and shins, upper arms and forearms, a neck and the head, each with its rest (stooped, bowed) in the
+-- joint, and the seam is welded to the head. This only carries him (an anchored, invisible root, moved smoothly each
+-- frame); every screen draws him walking (StalkerClient: the stride with the knees the wrong way, the arms dragging,
+-- the head that turns to look at you).
+local function rigPart(model: Model, name: string, size: Vector3, colour: Color3, material: Enum.Material?): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.Color = colour
+	p.Material = material or Enum.Material.SmoothPlastic
+	p.Anchored = false
+	p.Massless = true
+	p.CanCollide, p.CanQuery, p.CanTouch = false, false, false
+	p.TopSurface, p.BottomSurface = Enum.SurfaceType.Smooth, Enum.SurfaceType.Smooth
+	p.Parent = model
+	return p
+end
+
+-- `child` hung off `parent` on a joint named `name`: `c0` where the joint is in the parent's frame (and its rest turn),
+-- `c1` where it is in the child's.
+local function joint(name: string, parent: BasePart, child: BasePart, c0: CFrame, c1: CFrame)
+	local motor = Instance.new("Motor6D")
+	motor.Name = name
+	motor.Part0 = parent
+	motor.Part1 = child
+	motor.C0 = c0
+	motor.C1 = c1
+	motor.Parent = parent
+	child.CFrame = parent.CFrame * c0 * c1:Inverse()
+end
+
+local function welded(parent: BasePart, child: BasePart, at: CFrame)
+	local weld = Instance.new("Weld")
+	weld.Part0 = parent
+	weld.Part1 = child
+	weld.C0 = at
+	weld.Parent = parent
+	child.CFrame = parent.CFrame * at
+end
+
 local function marsh(at: Vector3): (Model, BasePart, CFrame)
 	local model = Instance.new("Model")
 	model.Name = "Marsh"
@@ -474,33 +518,45 @@ local function marsh(at: Vector3): (Model, BasePart, CFrame)
 	local base = CFrame.new(at)
 	local root = decor(model, "Root", Vector3.new(1, 1, 1), base, suit)
 	root.Transparency = 1
-	for _, x in ipairs({ -0.34, 0.34 }) do
-		decor(model, "Leg", Vector3.new(0.34, 5.2, 0.34), base * CFrame.new(x, 2.6, 0), suit, Enum.Material.Fabric)
-		decor(model, "Foot", Vector3.new(0.42, 0.24, 0.9), base * CFrame.new(x, 0.12, -0.2), suit, Enum.Material.Fabric)
-	end
-	decor(model, "Hips", Vector3.new(1.0, 0.5, 0.45), base * CFrame.new(0, 5.3, 0), suit, Enum.Material.Fabric)
-	-- STOOPED: the torso pitched forward over his hips, the neck further, the head bowed furthest.
-	local spine = base * CFrame.new(0, 5.5, 0) * CFrame.Angles(math.rad(-16), 0, 0)
-	decor(model, "Torso", Vector3.new(1.15, 2.3, 0.55), spine * CFrame.new(0, 1.15, 0), suit, Enum.Material.Fabric)
-	local shoulders = spine * CFrame.new(0, 2.25, 0)
+	model.PrimaryPart = root
+	local hips = rigPart(model, "Hips", Vector3.new(1.0, 0.5, 0.45), suit, Enum.Material.Fabric)
+	joint("Hip", root, hips, CFrame.new(0, 5.3, 0), CFrame.identity)
+	-- LEGS LIKE POLES: a thigh and a shin each, the foot welded on.
 	for _, side in ipairs({ -1, 1 }) do
-		local shoulder = shoulders * CFrame.new(side * 0.72, 0, 0)
-		local hangs = CFrame.new(shoulder.Position)
-		decor(model, "Arm", Vector3.new(0.28, 4.6, 0.28), hangs * CFrame.new(side * 0.08, -2.3, -0.1), suit, Enum.Material.Fabric)
-		local hand = hangs * CFrame.new(side * 0.1, -4.85, -0.12)
-		decor(model, "Hand", Vector3.new(0.26, 0.55, 0.18), hand, skin)
+		local tag = if side < 0 then "L" else "R"
+		local thigh = rigPart(model, "Thigh" .. tag, Vector3.new(0.34, 2.6, 0.34), suit, Enum.Material.Fabric)
+		joint("Hip" .. tag, hips, thigh, CFrame.new(side * 0.34, -0.1, 0), CFrame.new(0, 1.3, 0))
+		local shin = rigPart(model, "Shin" .. tag, Vector3.new(0.32, 2.5, 0.32), suit, Enum.Material.Fabric)
+		joint("Knee" .. tag, thigh, shin, CFrame.new(0, -1.3, 0), CFrame.new(0, 1.25, 0))
+		welded(shin, rigPart(model, "Foot", Vector3.new(0.42, 0.24, 0.9), suit, Enum.Material.Fabric), CFrame.new(0, -1.3, -0.22))
+	end
+	-- STOOPED: the torso pitched forward over his hips (the rest of the waist's joint).
+	local torso = rigPart(model, "Torso", Vector3.new(1.15, 2.3, 0.55), suit, Enum.Material.Fabric)
+	joint("Spine", hips, torso, CFrame.new(0, 0.2, 0) * CFrame.Angles(math.rad(-16), 0, 0), CFrame.new(0, -1.15, 0))
+	-- ARMS PAST HIS KNEES: upper arm and forearm, hanging straight down whatever his stoop, long fingers off the hand.
+	for _, side in ipairs({ -1, 1 }) do
+		local tag = if side < 0 then "L" else "R"
+		local upper = rigPart(model, "ArmUpper" .. tag, Vector3.new(0.28, 2.3, 0.28), suit, Enum.Material.Fabric)
+		joint("Shoulder" .. tag, torso, upper, CFrame.new(side * 0.72, 1.05, 0) * CFrame.Angles(math.rad(16), 0, 0),
+			CFrame.new(0, 1.15, 0))
+		local lower = rigPart(model, "ArmLower" .. tag, Vector3.new(0.26, 2.3, 0.26), suit, Enum.Material.Fabric)
+		joint("Elbow" .. tag, upper, lower, CFrame.new(0, -1.15, 0), CFrame.new(0, 1.15, 0))
+		local hand = rigPart(model, "Hand", Vector3.new(0.26, 0.55, 0.18), skin)
+		welded(lower, hand, CFrame.new(0, -1.4, -0.02))
 		for k = -1, 1 do
-			decor(model, "Finger", Vector3.new(0.07, 0.95, 0.07), hand * CFrame.new(k * 0.08, -0.72, 0) * CFrame.Angles(0, 0, k * 0.08), skin)
+			welded(hand, rigPart(model, "Finger", Vector3.new(0.07, 0.95, 0.07), skin), CFrame.new(k * 0.08, -0.72, 0)
+				* CFrame.Angles(0, 0, k * 0.08))
 		end
 	end
-	local neck = shoulders * CFrame.Angles(math.rad(-22), 0, 0)
-	decor(model, "Neck", Vector3.new(0.3, 0.9, 0.3), neck * CFrame.new(0, 0.42, 0), skin)
-	local headAt = neck * CFrame.new(0, 0.85, 0) * CFrame.Angles(math.rad(-18), 0, 0) * CFrame.new(0, 0.72, 0)
-	local head = decor(model, "Head", Vector3.new(1.15, 1.45, 1.1), headAt, skin)
-	-- The seam, down the middle of where his face is not: a hair of dark on the front of the head.
-	local seam = decor(model, "Seam", Vector3.new(0.05, 1.0, 0.02), headAt * CFrame.new(0, -0.08, -0.56), Color3.fromRGB(70, 40, 40))
-	seam.Name = "Seam"
-	model.PrimaryPart = root
+	-- THE NECK further forward, the head bowed furthest.
+	local neck = rigPart(model, "Neck", Vector3.new(0.3, 0.9, 0.3), skin)
+	joint("NeckJ", torso, neck, CFrame.new(0, 1.15, 0) * CFrame.Angles(math.rad(-22), 0, 0), CFrame.new(0, -0.42, 0))
+	local head = rigPart(model, "Head", Vector3.new(1.15, 1.45, 1.1), skin)
+	joint("HeadJ", neck, head, CFrame.new(0, 0.45, 0) * CFrame.Angles(math.rad(-18), 0, 0), CFrame.new(0, -0.72, 0))
+	-- The seam, down the middle of where his face is not: a hair of dark on the front of the head, welded to it.
+	local seam = rigPart(model, "Seam", Vector3.new(0.05, 1.0, 0.02), Color3.fromRGB(70, 40, 40))
+	welded(head, seam, CFrame.new(0, -0.08, -0.56))
+	local headAt = head.CFrame
 	-- His breath, heard before he is seen: the growl from the bottom of the flume, slowed, round him.
 	local stories = game:GetService("SoundService"):FindFirstChild("StorySounds")
 	local growl = stories and (stories:FindFirstChild("MawGrowl") or stories:FindFirstChild("MawRumble"))
@@ -574,7 +630,7 @@ local function chase(player: Player, hunt: Hunt)
 			end
 		end)
 	end
-	local model, head, headRest = marsh(tileAt(sx, sy, 0))
+	local model, head = marsh(tileAt(sx, sy, 0))
 	model.Parent = folder
 	hunt.model = model
 	local remote = storyRemote()
@@ -587,10 +643,10 @@ local function chase(player: Player, hunt: Hunt)
 	local path: { Vector3 }? = nil
 	local nextPath, pauseUntil, flicker = 0, 0, 0
 	local facing = Vector3.new(0, 0, 1)
-	-- SEEN IN STOP-MOTION (the hundred-and-third pass): he goes on at his pace, but is only ever shown in jerks, a
-	-- few times a second and never evenly, so he is never seen moving, only somewhere nearer; his head snaps to
-	-- another angle now and then; and when he is a long way off down a straight he rushes.
-	local nextFrame, twitchUntil, twitch, rushUntil = 0, 0, 0, 0
+	-- MOVED SMOOTHLY (since the hundred-and-twenty-first pass; he was shown in jerks, and it read as broken): his root
+	-- each frame. When he stops to tilt his head, and when a long way off down a straight he rushes, is written on him
+	-- (Paused, Rushing) for every screen to draw (StalkerClient).
+	local rushUntil = 0
 	while hunts[player] == hunt and hunt.token == token and player.Parent and player:GetAttribute("InLevel") == "backRooms" do
 		local dt = RunService.Heartbeat:Wait()
 		local character = player.Character
@@ -631,16 +687,9 @@ local function chase(player: Player, hunt: Hunt)
 				table.remove(path, 1)
 			end
 		end
-		if now >= twitchUntil then
-			twitchUntil = now + 0.5 + math.random() * 1.2
-			twitch = if math.random() < 0.5 then 0 else (math.random() - 0.5) * 1.3
-		end
-		if now >= nextFrame then
-			nextFrame = now + 0.14 + math.random() * 0.18
-			local frame = CFrame.lookAt(here, here + Vector3.new(facing.X, 0, facing.Z))
-			model:PivotTo(frame)
-			head.CFrame = frame * headRest * CFrame.Angles(0, 0, twitch)
-		end
+		model:PivotTo(CFrame.lookAt(here, here + Vector3.new(facing.X, 0, facing.Z)))
+		model:SetAttribute("Paused", not walking)
+		model:SetAttribute("Rushing", now < rushUntil)
 		if now >= flicker then
 			flicker = now + 0.15
 			lightsNear(here)
@@ -650,8 +699,13 @@ local function chase(player: Player, hunt: Hunt)
 		if gap < CATCH and math.abs(target.Position.Y - here.Y - 3) < 6 then
 			hunts[player] = nil
 			lightsNear(nil)
+			-- HE HAS YOU: every screen draws him bent over you, his arms round you (StalkerClient), while yours plays the
+			-- rest (the hundred-and-twenty-fifth pass).
+			model:SetAttribute("Paused", true)
+			model:SetAttribute("Caught", true)
 			pcall(hunt.onCaught, player, head.Position)
-			task.delay(2, function()
+			-- (Kept through the whole of the catch on their screen, the hundred-and-thirty-third pass: to the black.)
+			task.delay(4.5, function()
 				model:Destroy()
 			end)
 			return
@@ -972,5 +1026,5 @@ function BackRoomsService.build(onExit: (Player) -> ())
 	print(("BackRoomsService: built, %d lights, %d parts."):format(#lights, #made:GetDescendants()))
 end
 
-BackRoomsService.STAMP = "f8c9249f"
+BackRoomsService.STAMP = "ca6fa480"
 return BackRoomsService

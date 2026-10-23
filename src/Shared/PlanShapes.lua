@@ -287,6 +287,20 @@ local function bone(u: number, v: number): boolean
 		or (math.abs(u) <= 0.20 and math.abs(v) <= 0.70)
 end
 
+-- A COOKIE (the hundred-and-tenth pass): round, its edge a little scalloped the way a biscuit spreads in the oven,
+-- and a bite out of one side, well away from the way in and the way out (a subtraction, like the ring's, so it can
+-- only take floor away from the side).
+--
+-- A LITTLE BIGGER THAN THE SLAB, so its round edge runs off the way in and the way out and is cut flat there. A circle
+-- that only touched them came down to a point where it met its neighbours (check_plan_shapes measured 3.3 studs on
+-- the 20-wide chunk); cut flat, it meets them eight studs wide and is still a round cookie everywhere else.
+local function cookie(u: number, v: number): boolean
+	local radius = math.sqrt(u * u + v * v)
+	local angle = math.atan2(v, u)
+	local rim = 1.06 + 0.03 * math.cos(11 * angle)
+	return radius <= rim and not ellipse(u, v, 0.98, 0.18, 0.36, 0.36)
+end
+
 -- Declared as a LOCAL and then assigned, not annotated in place.
 --
 -- `PlanShapes.shapes: {...} = {...}` is a syntax error in Luau: a type annotation is only
@@ -308,6 +322,7 @@ local shapes: { [string]: Shape } = {
 	leaf = leaf,
 	cog = cog,
 	bone = bone,
+	cookie = cookie,
 }
 PlanShapes.shapes = shapes
 
@@ -334,4 +349,5 @@ function PlanShapes.get(name: string?): Shape
 	return roundedRect
 end
 
+PlanShapes.STAMP = "c4c2dee5"
 return PlanShapes

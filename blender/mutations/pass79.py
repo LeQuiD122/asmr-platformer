@@ -25,8 +25,8 @@ for checker in (SHOP, DEVICES, PARSE):
         sys.exit("%s fails before anything is mutated; fix that first" % checker)
 
 MUTATIONS = [
-    ("a description in other letters", SHOPC, SHOP, 'local blurb = label(tile, "Blurb", item.blurb, CHUNKY,',
-     'local blurb = label(tile, "Blurb", item.blurb, BODY,'),
+    ("a description in other letters", SHOPC, SHOP, 'local blurb = label(card, "Blurb", item.blurb, CHUNKY,',
+     'local blurb = label(card, "Blurb", item.blurb, BODY,'),
     ("a description cut off", SHOPC, SHOP, "\tblurb.TextScaled = true\n", ""),
     ("shrunk past reading", SHOPC, SHOP, "fit.MinTextSize = 10", "fit.MinTextSize = 4"),
     ("an \"i\" smaller than a thumb", SHOPC, SHOP, "\tmore.Position = UDim2.fromOffset(2, 2)\n\tmore.Size = UDim2.fromOffset(MIN_TOUCH, MIN_TOUCH)",

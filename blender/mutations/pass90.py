@@ -47,7 +47,7 @@ MUTATIONS = [
     ('leaving does nothing', BOOT, ROOMSCHECK, 'backRoomsLeave = leaveBackRooms\n', ''),
     ('no scene for being caught', STORYC, ROOMSCHECK, 'elseif kind == "caught" and typeof(data) == "table" then\n\t\t\t\tcaught(data)', 'elseif kind == "caught" and typeof(data) == "table" then\n\t\t\t\tlocal _ = data'),
     ('no word he is out', STORYC, ROOMSCHECK, 'elseif kind == "stalk" and typeof(data) == "table" then\n\t\t\t\tstalked(data)', 'elseif kind == "stalk" and typeof(data) == "table" then\n\t\t\t\tlocal _ = data'),
-    ("the lobby's sea down here", AMB, ROOMSCHECK, '\t\thushLobby(wanted == "backRooms")\n', ''),
+    ("the lobby's sea down here", AMB, ROOMSCHECK, '\t\thushLobby(wanted ~= nil)\n', ''),
     ("the wind's volume set again", AMB, ROOMSCHECK, '\t\titem.SoundGroup = lobbyGroup()\n', '\t\titem.Volume = 0\n'),
     ('a new breaker heard', AMB, ROOMSCHECK, '\ttable.insert(hushWatch, hub.DescendantAdded:Connect(intoHush))\n', ''),
     ('the lobby back after a run heard', AMB, ROOMSCHECK, 'if child.Name == "Hub" then\n\t\t\t\twatchHub(child)', 'if child.Name == "Hub" then\n\t\t\t\tlocal _ = child'),

@@ -26,7 +26,7 @@ MUTATIONS = [
     ("the data stores never told", BOOT, HUBCHECK, "\tif not storesOk then\n", "\tif false then\n"),
     ("the data stores asked unguarded", BOOT, HUBCHECK, "local storesOk = pcall(function()\n\t\tgame:GetService",
      "local storesOk = true\n\tdo (function()\n\t\tgame:GetService"),
-    ("a pass with no id taken as on sale", BOOT, HUBCHECK, "(item.passId or 0) == 0 else", "(item.passId or 1) == 0 else"),
+    ("a pass with no id taken as on sale", BOOT, HUBCHECK, "then item.passId == 0 else", "then item.passId == 1 else"),
     ("a token item listed", BOOT, HUBCHECK, "if item.robux and unset then", "if unset then"),
     ("the list never said", BOOT, HUBCHECK, 'print("PASTE CHECK: not on sale yet', 'print("PASTE CHECK: unsold'),
     ("a name never declared", BOOT, PARSE, 'local catalogModule = shared and shared:FindFirstChild("ShopCatalog")',

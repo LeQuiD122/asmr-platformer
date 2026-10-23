@@ -30,6 +30,7 @@ HANG_SECONDS, HANG_SPEED = (float(x) for x in re.search(r"^local HANG_SECONDS, H
 CARRY_SPEED = num(CLIENT, "CARRY_SPEED")
 SPLASH_SINK = num(CLIENT, "SPLASH_SINK")
 WATER_SHOT = num(CLIENT, "WATER_SHOT")
+SPLASH_HOLD = num(CLIENT, "SPLASH_HOLD")
 DECK_WIDE = num(SERVER, "DECK_WIDE")
 DECK_DEEP = num(SERVER, "DECK_DEEP")
 BOARD_TO = num(SERVER, "BOARD_TO")
@@ -43,8 +44,9 @@ WATER = FALLBACK_WATER - 53  # the log: the deck at y 53, the water 753 under it
 SHOT_LINES = (
     "local eye = current.tip + side * 7 - current.facing * 3 + Vector3.new(0, -4, 0)",
     "Cinema.point(CFrame.lookAt(eye, here + Vector3.new(0, -0.5, 0)) * CFrame.Angles(0, 0, tip), 60 - 10 * math.min(1, t / 1.6))",
-    "local eye = head - toward * 3.2 + Vector3.new(0, 1.3, 0) + Vector3.new(-toward.Z, 0, toward.X) * 1.4",
-    "Cinema.point(CFrame.lookAt(eye, here), 44)",
+    "local toward = Vector3.new(current.tip.X - head.X, 0, current.tip.Z - head.Z)",
+    "local eye = Cinema.clear(head + toward * 6 + Vector3.new(-toward.Z, 0, toward.X) * 1.5 - Vector3.new(0, 0.5, 0),",
+    "Cinema.point(CFrame.lookAt(eye, head - Vector3.new(0, 1, 0)), 50)",
     "local round = side * math.cos(a) + current.facing * math.sin(a)",
     "Cinema.point(CFrame.lookAt(here + round * 12 + Vector3.new(0, -3, 0), here) * CFrame.Angles(0, 0, -0.1), 64)",
     "if down >= 0.5 then",
@@ -53,6 +55,7 @@ SHOT_LINES = (
     "local eye = Cinema.clear(here + Vector3.new(0, 9, 0) - current.facing * 4 + side * 2.5, here, { character })",
     "Cinema.point(CFrame.lookAt(eye, here - Vector3.new(0, 22, 0), current.facing) * CFrame.Angles(0, 0, lean), 78)",
     "Cinema.point(CFrame.lookAt(below + current.facing * 22 + side * 6 + Vector3.new(0, 2.5, 0), here - Vector3.new(0, 14, 0)), 50)",
+    "Cinema.point(CFrame.lookAt(below + current.facing * 22 + side * 6 + Vector3.new(0, 2.5, 0), below + Vector3.new(0, 6, 0)), 52)",
     "local eye = here - current.facing * 7 + side * 1.5 + Vector3.new(0, 3 - math.min(since, 10) * 0.2, 0)",
     "eye = Vector3.new(eye.X, math.min(eye.Y, current.water - 1.5), eye.Z)",
     "Cinema.point(CFrame.lookAt(eye, here:Lerp(lamp, math.clamp((since - 2) / 3.5, 0, 0.7))), 66)",
@@ -81,6 +84,7 @@ def dive(fps=60, under_for=5.0):
     vel = v(DRIFT, -math.sqrt(2 * GRAVITY * (ZONE_TOP + 0.5)), 0)
     frames = []
     carry_from = None
+    splash_point = None
     turned = None
     drop_top = None
     splash_at = None
@@ -90,6 +94,7 @@ def dive(fps=60, under_for=5.0):
         height = here[1] - WATER
         if splash_at is None and here[1] <= WATER - SPLASH_SINK + 1e-6:
             splash_at = t
+            splash_point = here.copy()
         if splash_at is not None and t - splash_at > under_for:
             break
         # the fall: the client's caps, then the server's carry from COMMIT_ABOVE over the water
@@ -115,9 +120,11 @@ def dive(fps=60, under_for=5.0):
                 eye = tip + side * 7 - facing * 3 + v(0, -4, 0)
                 frames.append(Frame(t, "dive: the leap", eye, here + v(0, -0.5, 0), 60 - 10 * min(1, t / 1.6), subject=pose))
             elif t < 2.7:
-                toward = flat(here - maren_head)
-                eye = maren_head - toward * 3.2 + v(0, 1.3, 0) + v(-toward[2], 0, toward[0]) * 1.4
-                frames.append(Frame(t, "dive: Maren", eye, here, 44, subject=pose))
+                # her reaction, from the board's side: head to waist
+                toward = flat(tip - maren_head)
+                eye = maren_head + toward * 6 + v(-toward[2], 0, toward[0]) * 1.5 - v(0, 0.5, 0)
+                frames.append(Frame(t, "dive: Maren", eye, maren_head - v(0, 1, 0), 50,
+                                    subject={"head": maren_head + v(0, 0.6, 0), "feet": maren_head - v(0, 2.6, 0)}))
             elif t < 4.2:
                 a = (t - 2.7) * 0.9
                 rnd = side * math.cos(a) + facing * math.sin(a)
@@ -138,6 +145,11 @@ def dive(fps=60, under_for=5.0):
                 below = v(here[0], WATER, here[2])
                 frames.append(Frame(t, "dive: the water", below + facing * 22 + side * 6 + v(0, 2.5, 0), here - v(0, 14, 0), 50,
                                     subject=pose))
+        elif t - splash_at < SPLASH_HOLD:
+            # the hit, held from the surface: the spray going up where they went in
+            below = v(splash_point[0], WATER, splash_point[2])
+            frames.append(Frame(t, "dive: the splash", below + facing * 22 + side * 6 + v(0, 2.5, 0), below + v(0, 6, 0), 52,
+                                subject={"spray": below + v(0, 4, 0)}))
         else:
             since = t - splash_at
             lamp = v(here[0], WATER - 120 + 14.4, here[2]) + facing * 22
@@ -147,7 +159,8 @@ def dive(fps=60, under_for=5.0):
             frames.append(Frame(t, "dive: under the water", eye, target, 66, subject=pose,
                                 looks_at="subject" if since < 2.05 else "away"))
         t += dt
-    return mark_cuts(frames, {f.shot for f in frames}), tip
+    # (The splash is the water shot's own eye turning up to the spray: no cut.)
+    return mark_cuts(frames, {f.shot for f in frames} - {"dive: the splash"}), tip
 
 
 def scenery(tip):

@@ -66,14 +66,15 @@ local Cinema: any = (function()
 end)()
 
 local CityShoreClient = {}
-CityShoreClient.VERSION = "ninety-third pass, 2026-10-17"
+CityShoreClient.VERSION = "the hundred-and-twenty-ninth pass, 2026-10-22"
 
 type Gull = { body: BasePart, left: BasePart, right: BasePart, home: Vector3, out: Vector3, flap: number, fled: number? }
 type Scene = { began: number, water: number, tip: Vector3, from: Vector3, facing: Vector3, splash: Vector3?,
 	splashAt: number?, lamp: Vector3?, held: { Instance }, carryFrom: Vector3?, carryAt: number?, told: boolean,
 	shot: string?, maren: BasePart?, gulls: { Gull }, rush: BasePart?, wind: Sound?, sunWas: number?,
 	shafts: { { part: BasePart, rest: CFrame, phase: number } }, fish: { { part: BasePart, from: Vector3, to: Vector3, speed: number } },
-	hit: { [string]: boolean }, streaks: ParticleEmitter?, dropTop: number? }
+	hit: { [string]: boolean }, streaks: ParticleEmitter?, dropTop: number?, marenFigure: Model?,
+	marenJoints: { [string]: any }?, underFx: { PostEffect } }
 local scene: Scene? = nil
 -- The fastest the diver falls and drifts while the scene is on (studs a second).
 local FALL_SPEED = 110
@@ -86,6 +87,8 @@ local CARRY_SPEED = 120
 local SPLASH_SINK = 1.5
 -- When the camera goes down to the water to watch them come in: this high over it.
 local WATER_SHOT = 120
+-- THE HIT, held: seconds the camera stays at the surface on the splash before it goes under after them.
+local SPLASH_HOLD = 0.6
 local divers: { [Player]: { began: number, ends: number, model: Instance?, joints: { [string]: any }? } } = {}
 local stepped: RBXScriptConnection? = nil
 
@@ -135,6 +138,11 @@ local function endScene(now: boolean?)
 	for _, thing in ipairs(current.held) do
 		thing:Destroy()
 	end
+	if Poses and current.marenJoints then
+		for _, joint in pairs(current.marenJoints) do
+			Poses.drive(joint, CFrame.identity)
+		end
+	end
 	local rays = Lighting:FindFirstChildOfClass("SunRaysEffect")
 	if rays and current.sunWas then
 		rays.Intensity = current.sunWas
@@ -168,7 +176,8 @@ local function beginScene(water: number, tip: Vector3)
 	end
 	local current: Scene = { began = os.clock(), water = water, tip = tip, from = root.Position, facing = facing,
 		held = {}, carryFrom = nil, carryAt = nil, told = false, shot = nil, maren = maren, gulls = {}, rush = nil,
-		wind = nil, sunWas = nil, shafts = {}, fish = {}, hit = {}, streaks = nil, dropTop = nil }
+		wind = nil, sunWas = nil, shafts = {}, fish = {}, hit = {}, streaks = nil, dropTop = nil,
+		marenFigure = if figure and figure:IsA("Model") then figure else nil, marenJoints = nil, underFx = {} }
 	scene = current
 	humanoid.PlatformStand = true
 	-- THE GULLS, circling halfway down the fall out from the board, which you drop straight through.
@@ -323,6 +332,28 @@ local function moveGulls(current: Scene, here: Vector3, now: number)
 	end
 end
 
+-- MAREN, ON YOUR SCREEN, as you go off the board: turned to it, and startled (Poses.startle), her hands coming up.
+local function marenReacts(current: Scene, toward: Vector3, since: number)
+	local figure = current.marenFigure
+	if not (figure and figure.Parent and Poses) then
+		return
+	end
+	if not current.marenJoints then
+		current.marenJoints = Poses.joints(figure)
+		local pivot = figure:GetPivot()
+		figure:PivotTo(CFrame.lookAt(pivot.Position, pivot.Position + toward))
+	end
+	local joints = current.marenJoints :: { [string]: any }
+	local r6 = Poses.isR6(joints)
+	local w = math.clamp(since / 0.2, 0, 1)
+	for name, joint in pairs(joints) do
+		local turn = Poses.startle(name, since, w, r6)
+		if turn then
+			Poses.drive(joint, turn)
+		end
+	end
+end
+
 -- A part of the scene under the water, this client's alone.
 local function under(current: Scene, name: string, size: Vector3, cf: CFrame, colour: Color3): Part
 	local part = Instance.new("Part")
@@ -393,13 +424,17 @@ local function splashed(at: Vector3)
 	tint.TintColor = Color3.fromRGB(150, 206, 204)
 	tint.Brightness = -0.08
 	tint.Saturation = -0.2
+	tint.Enabled = false
 	tint.Parent = Lighting
 	table.insert(current.held, tint)
 	local blur = Instance.new("BlurEffect")
 	blur.Name = "UnderCityShore"
 	blur.Size = 5
+	blur.Enabled = false
 	blur.Parent = Lighting
 	table.insert(current.held, blur)
+	-- (On when the camera goes under after them, not over the moment of the hit, which is seen from the surface.)
+	current.underFx = { tint, blur }
 	-- UNDER THE WATER: shafts of light slanting down round them from the surface, swaying, and a few fish
 	-- going by at the edge of the light.
 	for k = 1, 7 do
@@ -448,6 +483,29 @@ local function splashed(at: Vector3)
 	spray.Rate = 0
 	spray.Parent = crown
 	spray:Emit(160)
+	-- FOAM racing out over the water from where they went in.
+	local foam = under(current, "SplashFoam", Vector3.new(0.2, 2, 2), CFrame.new(Vector3.new(at.X, current.water + 0.15, at.Z))
+		* CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(240, 250, 255))
+	foam.Shape = Enum.PartType.Cylinder
+	foam.Transparency = 0.2
+	game:GetService("TweenService"):Create(foam, TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ Size = Vector3.new(0.2, 30, 30), Transparency = 1 }):Play()
+	-- AND UNDER, the air they took in with them: a burst of bubbles round them, going up.
+	local gulp = under(current, "EntryBubbles", Vector3.new(3, 3, 3), CFrame.new(at - Vector3.new(0, 4, 0)), Color3.new(1, 1, 1))
+	gulp.Transparency = 1
+	local burst = Instance.new("ParticleEmitter")
+	burst.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	burst.Color = ColorSequence.new(Color3.fromRGB(226, 246, 244))
+	burst.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 0.7) })
+	burst.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) })
+	burst.Lifetime = NumberRange.new(1, 2.2)
+	burst.Speed = NumberRange.new(4, 11)
+	burst.SpreadAngle = Vector2.new(70, 70)
+	burst.Acceleration = Vector3.new(0, 6, 0)
+	burst.Drag = 1.5
+	burst.Rate = 0
+	burst.Parent = gulp
+	burst:Emit(140)
 	local flash = Instance.new("ColorCorrectionEffect")
 	flash.Name = "SplashFlash"
 	flash.Brightness = 0.55
@@ -456,10 +514,11 @@ local function splashed(at: Vector3)
 	game:GetService("TweenService"):Create(flash, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 		{ Brightness = 0 }):Play()
 	if Cinema then
-		Cinema.cut()
-		Cinema.impact(1.4)
+		-- THE HIT, held at the surface a moment (SPLASH_HOLD) before the camera goes under: it cut straight under, and
+		-- the hit itself was never seen (your test of 2026-10-22: "the final dive in should have more impact on hit").
+		Cinema.impact(1.6)
 		Cinema.speedLines(0)
-		Cinema.shake(2.4)
+		Cinema.shake(2.8)
 		Cinema.caption("Harrow Bay", "Somewhere under the water, a street lamp is still on.", 9)
 		-- THE STORY IS TOLD once that has been read: the banner may come up, the lobby may take them. The
 		-- shot under the water holds until it does.
@@ -551,6 +610,12 @@ local function stepScene()
 	local side = Vector3.new(-current.facing.Z, 0, current.facing.X)
 	local function shot(name: string)
 		if current.shot ~= name then
+			-- Maren let go once the camera has left her.
+			if current.shot == "maren" and current.marenJoints and Poses then
+				for _, joint in pairs(current.marenJoints) do
+					Poses.drive(joint, CFrame.identity)
+				end
+			end
 			current.shot = name
 			Cinema.cut()
 		end
@@ -581,13 +646,21 @@ local function stepScene()
 			local tip = 0.12 * math.clamp((t - 0.6) / 1.0, 0, 1)
 			Cinema.point(CFrame.lookAt(eye, here + Vector3.new(0, -0.5, 0)) * CFrame.Angles(0, 0, tip), 60 - 10 * math.min(1, t / 1.6))
 		elseif t < 2.7 and current.maren and current.maren.Parent then
-			-- MAREN: over her shoulder on the deck, looking down past her at them dropping away.
+			-- MAREN, as you go: she turns to the board and starts, her hands coming up, seen from the board's side. (It
+			-- was over her shoulder looking down past her at you, and she stands thirty studs back from the tip: the
+			-- deck's own floor filled the picture. Your test of 2026-10-22, "the camera is covered by a plane".)
 			shot("maren")
 			local head = (current.maren :: BasePart).Position
-			local toward = Vector3.new(here.X - head.X, 0, here.Z - head.Z)
+			local toward = Vector3.new(current.tip.X - head.X, 0, current.tip.Z - head.Z)
 			toward = if toward.Magnitude > 0.1 then toward.Unit else current.facing
-			local eye = head - toward * 3.2 + Vector3.new(0, 1.3, 0) + Vector3.new(-toward.Z, 0, toward.X) * 1.4
-			Cinema.point(CFrame.lookAt(eye, here), 44)
+			pcall(marenReacts, current, toward, t - 1.6)
+			local ignore: { Instance } = { character :: Instance }
+			if current.marenFigure then
+				table.insert(ignore, current.marenFigure :: Instance)
+			end
+			local eye = Cinema.clear(head + toward * 6 + Vector3.new(-toward.Z, 0, toward.X) * 1.5 - Vector3.new(0, 0.5, 0),
+				head, ignore)
+			Cinema.point(CFrame.lookAt(eye, head - Vector3.new(0, 1, 0)), 50)
 		elseif t < 4.2 then
 			-- THE TURN: close, going round them as they turn head down, the speed starting to show.
 			shot("turn")
@@ -636,10 +709,22 @@ local function stepScene()
 			local below = Vector3.new(here.X, current.water, here.Z)
 			Cinema.point(CFrame.lookAt(below + current.facing * 22 + side * 6 + Vector3.new(0, 2.5, 0), here - Vector3.new(0, 14, 0)), 50)
 		end
+	elseif os.clock() - (current.splashAt :: number) < SPLASH_HOLD then
+		-- THE HIT, from the surface where the camera watched them come in, turning up to the spray going up out of
+		-- the water, the foam racing out, the flash and the jolt. (No cut: the same eye, looking up at it.)
+		current.shot = "splash"
+		local below = Vector3.new(splash.X, current.water, splash.Z)
+		Cinema.point(CFrame.lookAt(below + current.facing * 22 + side * 6 + Vector3.new(0, 2.5, 0), below + Vector3.new(0, 6, 0)), 52)
 	else
 		-- UNDER: behind them and a little over them (never above the surface), on them as they sink for two seconds,
 		-- then tilting down past them to the lamp on the drowned street. It was in front of them and turned toward
 		-- the lamp at once, and they were behind the camera within a second.
+		if current.shot ~= "under" then
+			shot("under")
+			for _, fx in ipairs(current.underFx) do
+				fx.Enabled = true
+			end
+		end
 		local since = os.clock() - (current.splashAt :: number)
 		local eye = here - current.facing * 7 + side * 1.5 + Vector3.new(0, 3 - math.min(since, 10) * 0.2, 0)
 		eye = Vector3.new(eye.X, math.min(eye.Y, current.water - 1.5), eye.Z)
@@ -649,6 +734,11 @@ local function stepScene()
 end
 
 function CityShoreClient.start()
+	if Cinema and Cinema.onLeave then
+		Cinema.onLeave(function()
+			endScene(true)
+		end)
+	end
 	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents", 20)
 	local event = remotes and remotes:WaitForChild("DiveCinema", 20)
 	if not (event and event:IsA("RemoteEvent")) then
@@ -692,5 +782,5 @@ function CityShoreClient.start()
 	print("CityShoreClient: running, " .. CityShoreClient.VERSION)
 end
 
-CityShoreClient.STAMP = "a1d9908a"
+CityShoreClient.STAMP = "bf8a0666"
 return CityShoreClient

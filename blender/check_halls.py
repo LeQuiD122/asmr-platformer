@@ -1198,7 +1198,7 @@ def main():
         ("\t\t\t\tCinema.impact(0.8)\n", "shooting out of the end of the tube is not hit"),
         ('keep(current, sound("MawRoar", BASS, 1, 0.32, false))', "it opens without a sound"),
         ("\t\tCinema.impact(1.4)\n", "it opening is not hit"),
-        ("\t\t\tCinema.impact(1.5)\n", "it shutting is not hit"),
+        ("\t\t\tCinema.impact(2)\n\t\t\tCinema.shake(3.8)\n", "it shutting is not hit"),
         ("\tif m < JAWS.reveal then\n\t\tMaw.light(mouth, 0)\n", "the mouth is lit before it opens"),
         ("\tMaw.breathe(mouth, 10)\n", "it opens without breathing"),
         ("\telseif m < JAWS.into then\n\t\treturn HANG\n", "time does not all but stop over it"),
@@ -1380,6 +1380,31 @@ def main():
             fail("Maw: " + why + ".")
     if "pour.Lifetime = NumberRange.new(0.6, 0.9)" not in text:
         fail("THE FLUME: the water off its end falls all the way down the shaft.")
+    # THE GALLERIES (the hundred-and-thirty-fourth pass, from your test: "improve the quality of level 4's level models
+    # and layout"): down both walls between the dado and the windows, every one carried on brackets into the wall, a
+    # railing with balusters, stopped either side of the arches; the baths' signs in the town's print; lamps hung over the
+    # walkway with real light, failing behind you with the roof lights.
+    for needle, why in (
+        ("local function buildGallery(halls: Model, leg: HallRoute.Leg, along: number, length: number, side: number)",
+         "the halls have no galleries"),
+        ('fitting(halls, "GalleryStrut", Vector3.new(0.6, 0.6, long), cf, IRON, Enum.Material.Metal)',
+         "a gallery hangs in the air (no brackets into the wall)"),
+        ('fitting(halls, "GalleryBaluster"', "a gallery has no railing"),
+        ("buildGallery(halls, leg, along - (bayHalf + gap) / 2, bayHalf - gap, side)", "a gallery runs through an arch"),
+        ("text.FontFace = Style.WORLD.sign\n\ttext.TextColor3 = ENAMEL_INK", "the baths' signs are not in the town's print"),
+        ('bulb:SetAttribute("Along", at)', "a hanging lamp does not say where it is (so it never fails behind you)"),
+    ):
+        if needle not in text:
+            fail("FloodedHallsService: " + why)
+    if '(item.Name == "RoofLight" or item.Name == "PendantLight")' not in client_text:
+        fail("FloodedHallsClient: the hanging lamps stay lit behind you")
+    gallery_y = number(text, r"^local GALLERY_Y = ([\d.]+)", "GALLERY_Y")
+    height_n = number(text, r"^local HEIGHT = ([\d.]+) \* SCALE", "HEIGHT")
+    scale_n = number(text, r"^local SCALE = ([\d.]+)", "SCALE")
+    if None not in (gallery_y, height_n, scale_n):
+        tall = height_n * scale_n
+        if not (tall * 0.42 < gallery_y and gallery_y + 4.5 < tall * (0.74 - 0.21)):
+            fail("FloodedHallsService: the galleries are below the dado or up across the windows")
     # THE MOUTH ITSELF: uncanny light that is never steady, red down its throat, breath, and saliva that snaps.
     for needle, why in (
         ('gullet.Color = Color3.fromRGB(255, 56, 40)', "no red down its throat"),

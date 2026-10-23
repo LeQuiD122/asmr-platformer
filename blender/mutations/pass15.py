@@ -96,7 +96,8 @@ MUTATIONS = [
      "size + Vector3.new(8, 8, 8),\n\t\t\t\t\tEnum.Material.Air)", "size + Vector3.new(8, 8, 8),\n\t\t\t\t\tEnum.Material.Water)"),
     # The code still reads.
     ("an if with no then", HALLSC, PARSE, "\tif b < BEAT.climb then\n", "\tif b < BEAT.climb\n"),
-    ("a name never declared", HALLSC, PARSE, "local ahead = frame.LookVector", "local ahead = frameLook"),
+    ("a name never declared", HALLSC, PARSE, "local ahead = frame.LookVector\n\t-- Wait for the server's move",
+     "local ahead = frameLook\n\t-- Wait for the server's move"),
     ("a name never declared in dress", TOWNS, PARSE, 'local sleeves = look.sleeves or "short"', "local sleeves = look.sleeves or shortSleeves"),
     ("the slide's clamp out of bounds", SKYPATH, SKYCHECK, "SkyPath.MIN_SECONDS, SkyPath.MAX_SECONDS = 16, 30",
      "SkyPath.MIN_SECONDS, SkyPath.MAX_SECONDS = 16, 60"),

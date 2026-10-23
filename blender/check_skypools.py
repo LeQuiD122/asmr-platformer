@@ -555,7 +555,7 @@ for needle, why in (
 ):
     if needle not in SKY:
         fail(why)
-face = re.search(r"here \+ run \* ([\d.]+) \+ Vector3\.new\(0, ([\d.]+), 0\)", CLIENT)
+face = re.search(r"Cinema\.clear\(here \+ run \* ([\d.]+) \+ Vector3\.new\(0, ([\d.]+), 0\)", CLIENT)
 if not face or float(face.group(1)) < 12:
     fail("the slide's face shot is back too close to the rider to see them")
 if S["TOWER_ASIDE"] <= S["FINAL_RADIUS"] + S["WALK_W"]:
@@ -709,11 +709,25 @@ for index_, line_ in enumerate(SKY_SOURCE):
         context_ = "\n".join(SKY_SOURCE[max(0, index_ - 3):index_ + 1])
         if not any(name_ in context_ for name_ in ("PoolLight", "FallMist", "FallBoil")):
             fail("SkyPoolsService line %d makes see-through water of Glass, which hides the chunks behind it" % (index_ + 1))
-# AND THE SODA IS NOT GLASS, or it mirrors the open sky at a low angle and washes out to nothing.
+# AND NO TRANSLUCENT CHUNK IS GLASS (honey, slime, soda), or against the open sky it goes the sky's colour and vanishes;
+# nor their drips and gobs (DeformationRenderer).
 APPEAR = (SRC / "Shared" / "MaterialAppearance.lua").read_text(encoding="utf-8")
-soda_ = re.search(r"\tJelloSoda = \{(.*?)\n\t\}", APPEAR, re.S)
-if not soda_ or "Enum.Material.Glass" in soda_.group(1):
-    fail("JelloSoda is Glass again, so against Sky Pools' sky it vanishes from a low angle")
+for name_ in ("JelloSoda", "Honey", "Slime"):
+    found_ = re.search(r"\t%s = \{(.*?)\n\t\}" % name_, APPEAR, re.S)
+    if not found_ or "Enum.Material.Glass" in found_.group(1):
+        fail("%s is Glass again, so against Sky Pools' sky it vanishes" % name_)
+RENDER_ = (SRC / "Client" / "Services" / "DeformationRenderer.lua").read_text(encoding="utf-8")
+for name_ in ("HoneyString", "SlimeGob", "JelloBit"):
+    found_ = re.search(r"\t%s = \{ colour = [^\n]*material = Enum\.Material\.(\w+)," % name_, RENDER_)
+    if not found_ or found_.group(1) == "Glass":
+        fail("DeformationRenderer's %s is Glass, and vanishes against open sky" % name_)
+# THE CLOUD SEA IS SOLID (the hundred-and-eighteenth pass, from your test: honey, slime and soda "stay invisible most
+# of the time"). Roblox draws see-through parts after one another by how far each one's middle is from the camera; a
+# see-through cloud a hundred studs across was drawn after the chunk in front of it and painted over it.
+sky_text_ = "\n".join(SKY_SOURCE)
+cloud_fn_ = sky_text_[sky_text_.find("local function cloudSea("):sky_text_.find("-- ===== AND IT MOVES =====")]
+if not cloud_fn_ or "puff.Transparency = 0\n" not in cloud_fn_ or "under.Transparency = 0\n" not in cloud_fn_:
+    fail("SkyPoolsService: the clouds are see-through again, and they paint over the translucent chunks")
 
 # THE STORM BY THE SLIDE (SkyPoolsClient): near the mouth the clouds round the tower darken and the light drops a
 # little, eased over seconds and written in small steps, never dark; it clears under the clouds and is gone at
@@ -795,6 +809,8 @@ shot_nums = {
                      "the eye that waits under the cloud"),
     "path": lua_num(SKYPATH, r"^SkyPath\.SPEED = ([\d.]+)\n^SkyPath\.MIN_SECONDS, SkyPath\.MAX_SECONDS = ([\d.]+), ([\d.]+)\n"
                              r"^SkyPath\.RAMP = ([\d.]+)", "the ride's speed and bounds"),
+    "mist": lua_num(CLIENT, r"^local BELOW_HOLD = ([\d.]+).*\n^local MIST_LEAST = ([\d.]+)",
+                    "how long the wide shot under the cloud and the ride in it are held"),
 }
 for needle, why in (
     ("pcall(scene.markClouds, ride :: Ride)", "when the ride goes into the cloud and comes out is never worked out"),
@@ -808,9 +824,27 @@ for needle, why in (
     ("\t\t\tCinema.impact(0.7)\n", "bursting out of the cloud is not hit"),
     ("\t\t\tscene.puff(here)\n", "no puff where they come out of the cloud"),
     ("CFrame.lookAt(eye, here:Lerp(far, 0.3)", "the track looks only at the rider, never at where they are going"),
+    # IN THE CLOUD WITH THEM (the hundred-and-twenty-seventh pass, from your test: "I wanna see the player more
+    # often"): the ride through the cloud was four seconds of empty sky; the camera rides in it with them now, close
+    # behind and over, the cloud round them thinned on this screen and wisps streaming past, whole again at the cut.
+    ('\t\telseif left > BURST_LEAD + BELOW_HOLD and (scene.shot == "mist" or left > BURST_LEAD + BELOW_HOLD + MIST_LEAST) then\n',
+     "the ride through the cloud is not shown with them in it"),
+    ("scene.thin({ here, here:Lerp(marks.outAt, 0.5), marks.outAt })", "the cloud is not thinned round the way through it"),
+    ("item.LocalTransparencyModifier = MIST_THIN", "the cloud is not thinned on this screen"),
+    ("part.LocalTransparencyModifier = 0", "the cloud is left thin"),
+    ('\t\tif scene.shot == "mist" then\n\t\t\tscene.thin(nil)\n\t\t\tscene.drift(nil)', "the cloud stays thin after the cut"),
+    ("scene.drift(here, run)", "nothing streams past them in the cloud"),
+    ('wisps.Texture = "rbxasset://textures/particles/smoke_main.dds"', "the wisps in the cloud are not cloud"),
 ):
     if needle not in CLIENT:
         fail("SkyPoolsClient: " + why)
+mist_thin = re.search(r"^local MIST_THIN = ([\d.]+)", CLIENT, re.M)
+if not mist_thin or not 0.5 <= float(mist_thin.group(1)) <= 0.85:
+    fail("SkyPoolsClient: the cloud round them is thinned so far it is gone, or so little they are lost in white")
+mist_eye = re.search(r"local eye = Cinema\.clear\(here - flat \* ([\d.]+) \+ out \* ([\d.]+) \+ Vector3\.new\(0, ([\d.]+), 0\), here, ignore\)\n"
+                     r"\t\t\tCinema\.point\(CFrame\.lookAt\(eye, here \+ run", CLIENT)
+if not mist_eye or math.sqrt(sum(float(g) ** 2 for g in mist_eye.groups())) > 12:
+    fail("SkyPoolsClient: the camera in the cloud is too far off them to see them through it")
 if 'scene.cutTo("under")' in CLIENT:
     fail("SkyPoolsClient: the old shot of the bottom of the slide, waiting from the push off, is back")
 if all(shot_nums.values()):
@@ -822,6 +856,7 @@ if all(shot_nums.values()):
     b_aim, b_fov = shot_nums["aim"]
     w_run, w_away, w_down = shot_nums["burst"]
     speed, min_s, max_s, ramp = shot_nums["path"]
+    below_hold, mist_least = shot_nums["mist"]
     samples = 200
 
     def ride_share(u):
@@ -888,6 +923,8 @@ if all(shot_nums.values()):
                         name = "plunge"
                         if shot != "plunge" and here[1] + p_up < ctop + 4:
                             fail("%s seed %d: the plunge is watched from inside the cloud" % (label, seed))
+                    elif left > burst_lead + below_hold and (shot == "mist" or left > burst_lead + below_hold + mist_least):
+                        name = "mist"
                     elif left > burst_lead and (shot == "below" or left > burst_lead + 1):
                         name = "below"
                     else:
@@ -917,6 +954,15 @@ if all(shot_nums.values()):
                 fail("%s seed %d: the camera waits %.1f s under the cloud on an empty slide" % (label, seed, waited))
             if [name for name, _ in shots][:2] != ["push", "track"] or "below" not in [name for name, _ in shots]:
                 fail("%s seed %d: the shots run %s" % (label, seed, [name for name, _ in shots]))
+            # The ride in the cloud with them, whenever there is time for it; and the shots with nobody in them (the
+            # wide one and the wait under the exit) together a few seconds at most.
+            in_cloud = (u_out - u_in) * seconds
+            if in_cloud > plunge_hold + burst_lead + below_hold + mist_least + 0.2 and "mist" not in [n for n, _ in shots]:
+                fail("%s seed %d: %.1f s in the cloud and never with them" % (label, seed, in_cloud))
+            empty = sum(length for name, length in shots if name in ("below", "wait"))
+            shot_worst["empty"] = max(shot_worst.get("empty", 0.0), empty)
+            if empty > below_hold + burst_lead + 1.3:
+                fail("%s seed %d: %.1f s of the slide with nobody on screen" % (label, seed, empty))
             # The eyes under the cloud are under it.
             out_at = ride_at(u_out)
             onward = ride_at(min(1, u_out + 0.02))
@@ -948,8 +994,9 @@ if all(shot_nums.values()):
                     y = rel[0] * upx + rel[1] * upy + rel[2] * upz
                     if z <= 0 or abs(y / z) > tv * 0.97 or abs(x / z) > tv * 16 / 9 * 0.97:
                         fail("%s seed %d: the wide shot under the cloud does not frame %s" % (label, seed, what))
-    print("slide shots: the camera waits under the cloud %.1f s at most, the shortest shot is the %s (%.1f s)"
-          % (shot_worst["wait"], shot_worst["short"][1], shot_worst["short"][0]))
+    print("slide shots: the camera waits under the cloud %.1f s at most, nobody on screen %.1f s at most, the shortest"
+          " shot is the %s (%.1f s)" % (shot_worst["wait"], shot_worst.get("empty", 0.0), shot_worst["short"][1],
+                                         shot_worst["short"][0]))
 
 # ===================================================================== report
 
@@ -972,6 +1019,38 @@ for needle, why in (
 ):
     if needle not in SKY_TEXT:
         fail("SkyPoolsService: " + why)
+# THE ARCHES ON THE WAY DOWN (the hundred-and-eighth pass): each hoop a tagged model with its middle; on the rider's
+# screen, glowing up ahead, flaring under, sparkling, its air and a small shake; lit in small steps; all of it taken
+# off again (a ride's lights left burning would pile up ride after ride).
+for needle, why in (
+    ('CollectionService:AddTag(arch, "SlideArch")', "the slide's arches are not told to the rider's screen"),
+    ('arch:SetAttribute("Centre", (frame * CFrame.new(0, 2.4, 0)).Position)', "an arch does not say where its middle is"),
+    ('block(arch, "SlideHoop"', "an arch's hoop is not in its model"),
+):
+    if needle not in SKY_TEXT:
+        fail("SkyPoolsService: " + why)
+for needle, why in (
+    ('for _, model in ipairs(CollectionService:GetTagged("SlideArch")) do', "the arches are never found on the way down"),
+    ("pcall(archesOn)", "the arches are never lit for a ride"),
+    ("moveArches(current.seat.Position)", "the arches never glow up ahead of the rider"),
+    ("if d < ARCH_PASS then\n\t\t\t\tarchPassed(a)", "passing under an arch does nothing"),
+    ("emitter:Emit(4)", "an arch passed does not sparkle"),
+    ('Cinema.sound("ArchPass", 0.45, { pitch = 0.97 + math.random() * 0.06, keep = true })', "an arch passed is silent"),
+    ("Cinema.shake(0.2)", "an arch passed does not shake the picture a little"),
+    ("\t\tride = nil\n\t\tarchesOff()", "the arches' lights stay on when a ride is cut short"),
+    ("\t\tsplashFlash()\n\t\tarchesFade()", "the arches' lights stay on after the ride"),
+):
+    if needle not in CLIENT:
+        fail("SkyPoolsClient: " + why)
+arches_ = CLIENT[CLIENT.find("-- ===== THE ARCHES ON THE WAY DOWN"):CLIENT.find("-- ===== WHAT THE RIDE LOOKS LIKE FROM INSIDE IT")]
+if "light.Shadows = false" not in arches_:
+    fail("SkyPoolsClient: an arch's light casts shadows (too dear, a dozen of them)")
+if "Neon" in arches_:
+    fail("SkyPoolsClient: the arches fake their glow with Neon")
+for name_ in ("ARCH_GLOW", "ARCH_FLARE", "ARCH_AFTER"):
+    found_ = re.search(r"^local %s = ([\d.]+)" % name_, CLIENT, re.M)
+    if not found_ or float(found_.group(1)) > 2:
+        fail("SkyPoolsClient: an arch's light (%s) is brighter than a small step allows" % name_)
 if problems:
     print("\nPROBLEMS:")
     for p in dict.fromkeys(problems):

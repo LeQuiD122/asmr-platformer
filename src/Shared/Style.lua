@@ -9,7 +9,7 @@
 -- style!!!", and you chose Nunito): the menus, the shop, the story's captions and cries, the journal's pages, the
 -- signs in the world, letters and notices alike, all Nunito, rounded, because this is a game about soft things. What
 -- tells one kind of word from another is its weight and its slant, never another face:
---   Black       the few big words (a level finished, the shop's titles, the lobby's big signs), and a shout
+--   Heavy       the few big words (a level finished, the shop's titles, the lobby's big signs), and a shout
 --   ExtraBold   signs painted in the world
 --   Bold        what is named and pressed: titles, buttons, names, labels, and the clocks
 --   Medium      what is read: captions, thoughts, speech, descriptions
@@ -19,6 +19,10 @@
 --
 -- WORLD names the same family for words printed on the world (SurfaceGuis on parts), so a sign can be told from a menu
 -- by what it says and where it is, and never by a face of its own.
+--
+-- (Heavy is Roblox's 900, the heaviest it has. It was written "Black" here, which Roblox has no such weight as, and in
+-- Studio this module failed to load, and every screen and the chunks with it: blender/roblox_enums.py holds every enum
+-- the game names to Roblox's own lists now.)
 
 local Style = {}
 
@@ -29,21 +33,21 @@ local function nunito(weight: Enum.FontWeight, italic: boolean?): Font
 end
 
 Style.FONT = {
-	display = nunito(Enum.FontWeight.Black), -- the few big words
+	display = nunito(Enum.FontWeight.Heavy), -- the few big words
 	heading = nunito(Enum.FontWeight.Bold), -- titles, buttons, names, labels
 	body = nunito(Enum.FontWeight.Medium), -- what is read: captions, thoughts, speech, descriptions
 	number = nunito(Enum.FontWeight.Bold), -- clocks, times
 	paper = nunito(Enum.FontWeight.Medium, true), -- the journal's pages
-	shout = nunito(Enum.FontWeight.Black, true), -- a voice raised: a shout, a cry for help
+	shout = nunito(Enum.FontWeight.Heavy, true), -- a voice raised: a shout, a cry for help
 	murmur = nunito(Enum.FontWeight.Regular, true), -- a voice lowered: the cry going quiet
 }
 
 Style.WORLD = {
 	sign = nunito(Enum.FontWeight.ExtraBold), -- the town's signs and notices
-	signHeavy = nunito(Enum.FontWeight.Black), -- stencilled, painted large
+	signHeavy = nunito(Enum.FontWeight.Heavy), -- stencilled, painted large
 	letter = nunito(Enum.FontWeight.Medium, true), -- letters, notes, a page
 	hand = nunito(Enum.FontWeight.SemiBold, true), -- written by hand
-	marker = nunito(Enum.FontWeight.Black, true), -- scrawled
+	marker = nunito(Enum.FontWeight.Heavy, true), -- scrawled
 	typed = nunito(Enum.FontWeight.SemiBold), -- typed or stamped: a time card
 	plain = nunito(Enum.FontWeight.Regular), -- the back rooms' notices, as plain as an office's
 }
@@ -66,6 +70,28 @@ Style.COLOUR = {
 	danger = rgb(236, 104, 96),
 	paper = rgb(240, 234, 216), -- the journal's pages
 	paperInk = rgb(44, 38, 32),
+}
+
+-- THE SPEECH BUBBLE (the hundred-and-nineteenth pass, from your test: "you see the stylistic difference between the
+-- script and my options of what to say? They should have the same style"). What anyone says over their head, what you
+-- say over yours, and the choices of what to say on your screen are all this one bubble: cream, dark ink in the bold
+-- face, a dark rim, rounded, and over a head a tail under it. Yours over your head has the warm accent for its rim, so
+-- it is still told from theirs at a glance.
+Style.BUBBLE = {
+	fill = rgb(250, 248, 242),
+	ink = rgb(34, 38, 44),
+	rim = rgb(34, 38, 44),
+	rimMine = Style.COLOUR.accent,
+	stroke = 2,
+	radius = UDim.new(0, 12),
+	text = 19,
+	font = Style.FONT.heading,
+	-- (The hundred-and-twenty-third pass, from your test: "the text between character and the player could be styled
+	-- better".) The light from above across it, its soft shadow's transparency, and the size of the speaker's name on
+	-- the tag on its rim.
+	top = rgb(255, 255, 255),
+	shade = 0.8,
+	tag = 14,
 }
 
 -- SIZES OF TEXT on a screen, in a step of a scale (never a size between two).
@@ -126,5 +152,5 @@ function Style.fit(panel: GuiObject, design: Vector2): UIScale
 	return scale
 end
 
-Style.STAMP = "16cb4e3a"
+Style.STAMP = "34c3e714"
 return Style

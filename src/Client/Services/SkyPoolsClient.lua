@@ -369,21 +369,33 @@ local rideRemote: RemoteEvent? = nil
 --   THE LANDING              held a moment on the pool after they tip out, then the camera is theirs.
 -- And on everyone's, the rider sits with their arms up the whole way down (Poses.sled).
 -- SCORED (Cinema.sound; audio/endings): the rush of the slide under them the whole way down, a whoosh as
--- they go into the cloud, a slap at every skip across the pool, the plunge as they tip out, and the
--- last chord over the pool.
+-- they go into the cloud, a slap at every skip across the pool, the plunge as they tip out, and over all
+-- of it THE PARTY'S SONG (PoolsSong), the one heard through the wall all the way up, in full at last and
+-- started so far in that its last chord lands with them in the pool (the pool's chord only stands in
+-- for it when it is not there).
 local scene = { landedAt = nil :: number?, spec = nil :: any, landing = nil :: Vector3?,
 	riders = {} :: { [Player]: { began: number, seconds: number, model: Instance?, joints: { [string]: any }? } },
 	stepped = nil :: RBXScriptConnection?, shot = nil :: string?, burst = false, hops = 0, told = false,
 	rush = nil :: Sound?, whooshed = false, shotAt = 0, eye = nil :: Vector3?,
-	marks = nil :: { plunge: number, out: number, outAt: Vector3, outRun: Vector3 }? }
+	marks = nil :: { plunge: number, out: number, outAt: Vector3, outRun: Vector3 }?,
+	song = nil :: Sound?, thinned = {} :: { [BasePart]: boolean }, mist = nil :: BasePart? }
 local HOLD = 4.5 -- seconds the pool is held on screen after the splash (and longer if a caption is up)
 local PLUNGE_HOLD = 1.1 -- seconds held over the cloud tops as they go in
 local BURST_LEAD = 1.3 -- seconds before they come out of the cloud that the camera is waiting under it
 local BURST_HOLD = 1.5 -- seconds the camera turns after them once they are out
+local BELOW_HOLD = 1.8 -- seconds of the wide shot under the cloud sea (where it goes), after the ride in it
+local MIST_LEAST = 1 -- the shortest the ride along in the cloud is held (with less, the wide shot comes straight on)
+local MIST_REACH = 150 -- how far round the way through the cloud it is thinned on this screen
+local MIST_THIN = 0.72 -- how thin (each cloud's local transparency) while the camera rides in it with them
+local SONG_LANDS = 36 -- seconds into PoolsSong that its last chord falls
 
--- A new shot is a cut: the camera does not pan from one to the next.
+-- A new shot is a cut: the camera does not pan from one to the next. Out of the cloud the clouds are whole again.
 function scene.cutTo(name: string)
 	if scene.shot ~= name then
+		if scene.shot == "mist" then
+			scene.thin(nil)
+			scene.drift(nil)
+		end
 		scene.shot = name
 		scene.shotAt = os.clock()
 		Cinema.cut()
@@ -419,6 +431,84 @@ function scene.markClouds(current: Ride)
 	local run = Vector3.new(onward.X - outAt.X, 0, onward.Z - outAt.Z)
 	scene.marks = { plunge = plunge, out = out, outAt = outAt,
 		outRun = if run.Magnitude > 0.01 then run.Unit else Vector3.new(0, 0, -1) }
+end
+
+-- IN THE CLOUD WITH THEM, on this screen only: the cloud round the way through it thinned, so they are seen in it
+-- (white all round, the sky and the pool showing through), never lost in solid white; given back on the next cut.
+function scene.thin(through: { Vector3 }?)
+	for part in pairs(scene.thinned) do
+		if part.Parent then
+			part.LocalTransparencyModifier = 0
+		end
+	end
+	scene.thinned = {}
+	if not through then
+		return
+	end
+	local level = stormLevel
+	local sea = (level and level:FindFirstChild("CloudSea")) or workspace:FindFirstChild("CloudSea", true)
+	if not sea then
+		return
+	end
+	for _, item in ipairs(sea:GetChildren()) do
+		if item:IsA("BasePart") and item.Name == "Cloud" then
+			local reach = MIST_REACH + item.Size.Magnitude * 0.5
+			for _, at in ipairs(through) do
+				if (item.Position - at).Magnitude < reach then
+					item.LocalTransparencyModifier = MIST_THIN
+					scene.thinned[item] = true
+					break
+				end
+			end
+		end
+	end
+end
+
+-- AND STREAMING PAST THEM: wisps let go just ahead, so they ride on through them (the wisps stay where they were
+-- let go; the ride does not).
+function scene.drift(at: Vector3?, run: Vector3?)
+	local host = scene.mist
+	if not at then
+		if host then
+			local wisps = host:FindFirstChildOfClass("ParticleEmitter")
+			if wisps then
+				wisps.Enabled = false
+			end
+			game:GetService("Debris"):AddItem(host, 2)
+			scene.mist = nil
+		end
+		return
+	end
+	if not host then
+		local made = Instance.new("Part")
+		made.Name = "CloudWisps"
+		made.Size = Vector3.new(26, 14, 26)
+		made.Anchored = true
+		made.CanCollide = false
+		made.CanTouch = false
+		made.CanQuery = false
+		made.Transparency = 1
+		local wisps = Instance.new("ParticleEmitter")
+		wisps.Name = "Wisps"
+		wisps.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		wisps.Color = ColorSequence.new(Color3.fromRGB(236, 241, 248))
+		wisps.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 5), NumberSequenceKeypoint.new(1, 12) })
+		wisps.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, 0.66),
+			NumberSequenceKeypoint.new(1, 1) })
+		wisps.Lifetime = NumberRange.new(0.8, 1.4)
+		wisps.Speed = NumberRange.new(0, 1.5)
+		wisps.Rate = 45
+		wisps.Shape = Enum.ParticleEmitterShape.Box
+		wisps.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+		wisps.LightInfluence = 0.6
+		wisps.Parent = made
+		made.Parent = workspace
+		scene.mist = made
+		host = made
+	end
+	if host then
+		host.CFrame = CFrame.new(at + (run or Vector3.zero) * 14)
+	end
 end
 
 function scene.shoot(current: Ride, u: number)
@@ -474,6 +564,18 @@ function scene.shoot(current: Ride, u: number)
 			end
 			local held = os.clock() - scene.shotAt
 			Cinema.point(CFrame.lookAt(scene.eye :: Vector3, here), 60 - math.min(held, PLUNGE_HOLD) * 6)
+		elseif left > BURST_LEAD + BELOW_HOLD and (scene.shot == "mist" or left > BURST_LEAD + BELOW_HOLD + MIST_LEAST) then
+			-- RIDING THROUGH IT WITH THEM: close behind and over them, the cloud thinned round the way through it and
+			-- wisps streaming past, so the ride in the cloud is theirs (it was an empty sky for four seconds: your
+			-- test of 2026-10-22, "I wanna see the player more often").
+			if scene.shot ~= "mist" then
+				scene.cutTo("mist")
+				scene.thin({ here, here:Lerp(marks.outAt, 0.5), marks.outAt })
+				Cinema.speedLines(0.6)
+			end
+			scene.drift(here, run)
+			local eye = Cinema.clear(here - flat * 8 + out * 2.5 + Vector3.new(0, 3.5, 0), here, ignore)
+			Cinema.point(CFrame.lookAt(eye, here + run * 4 + Vector3.new(0, 1.2, 0)), 66)
 		elseif left > BURST_LEAD and (scene.shot == "below" or left > BURST_LEAD + 1) then
 			-- WHERE IT GOES: they are in the cloud, out of sight, so this is the way down instead: under the cloud
 			-- sea, wide, the slide coming down out of it and round into the pool it lands in, drifting slowly in.
@@ -627,6 +729,132 @@ function scene.posed(player: any, began: any, seconds: any)
 	end
 end
 
+-- ===== THE ARCHES ON THE WAY DOWN (the hundred-and-eighth pass) =====
+--
+-- From your notes: the arches "glowing or making these cool sparkling effects and kind of like shake my camera a
+-- little" as you slide. On the rider's own screen only: each hoop over the slide (SlideArch, tagged by the server)
+-- begins to glow as you come down toward it, a small real light in its crown; passing under it, it flares and fades
+-- to an afterglow, its hoop flashes pale, sparkles in its own colours burst off it, the air of it goes past
+-- (ArchPass) and the picture gives a small shake. All of it fades away at the bottom.
+local ARCH_LIGHT_FROM = 45 -- studs off, an arch begins to glow
+local ARCH_PASS = 7 -- studs from its middle: as good as under it
+local ARCH_GLOW = 0.9 -- its light as you reach it
+local ARCH_FLARE = 1.6 -- and the moment you pass under it (small steps: never brighter than this)
+local ARCH_AFTER = 0.35 -- what it keeps, behind you
+type Arch = { centre: Vector3, light: PointLight, parts: { BasePart }, colours: { Color3 }, sparks: { ParticleEmitter },
+	passed: boolean }
+local arches: { Arch } = {}
+
+-- Everything the arches had on this screen, taken off and their colours given back.
+local function archesOff()
+	for _, a in ipairs(arches) do
+		a.light:Destroy()
+		for _, emitter in ipairs(a.sparks) do
+			emitter:Destroy()
+		end
+		for k, part in ipairs(a.parts) do
+			if part.Parent then
+				part.Color = a.colours[k]
+			end
+		end
+	end
+	table.clear(arches)
+end
+
+-- At the bottom: their lights faded out over a couple of seconds, and then all of it off.
+local function archesFade()
+	for _, a in ipairs(arches) do
+		TweenService:Create(a.light, TweenInfo.new(2, Enum.EasingStyle.Sine), { Brightness = 0 }):Play()
+	end
+	task.delay(2.2, function()
+		if not ride then
+			archesOff()
+		end
+	end)
+end
+
+-- As a ride starts: a light (dark) in every arch's crown, and a burst of sparkles ready in every piece of its hoop.
+local function archesOn()
+	archesOff()
+	for _, model in ipairs(CollectionService:GetTagged("SlideArch")) do
+		local centre = model:GetAttribute("Centre")
+		if model:IsA("Model") and typeof(centre) == "Vector3" then
+			local parts, colours, sparks = {}, {}, {}
+			local crown: BasePart? = nil
+			for _, part in ipairs(model:GetChildren()) do
+				if part:IsA("BasePart") then
+					table.insert(parts, part)
+					table.insert(colours, part.Color)
+					if not crown or part.Position.Y > (crown :: BasePart).Position.Y then
+						crown = part
+					end
+					local emitter = Instance.new("ParticleEmitter")
+					emitter.Name = "ArchSparkle"
+					emitter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+					emitter.Rate = 0
+					emitter.Lifetime = NumberRange.new(0.5, 1.1)
+					emitter.Speed = NumberRange.new(4, 10)
+					emitter.SpreadAngle = Vector2.new(180, 180)
+					emitter.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 0) })
+					emitter.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0),
+						NumberSequenceKeypoint.new(0.7, 0.3), NumberSequenceKeypoint.new(1, 1) })
+					emitter.Color = ColorSequence.new(Color3.new(1, 1, 1), part.Color)
+					emitter.LightEmission = 1
+					emitter.Drag = 3
+					emitter.Acceleration = Vector3.new(0, -5, 0)
+					emitter.Parent = part
+					table.insert(sparks, emitter)
+				end
+			end
+			if crown then
+				local light = Instance.new("PointLight")
+				light.Name = "ArchGlow"
+				light.Brightness = 0
+				light.Range = 12
+				light.Color = colours[1]:Lerp(Color3.new(1, 1, 1), 0.45)
+				light.Shadows = false
+				light.Parent = crown
+				table.insert(arches, { centre = centre, light = light, parts = parts, colours = colours, sparks = sparks,
+					passed = false })
+			end
+		end
+	end
+end
+
+-- Passing under one: the flare, the flash of its hoop, its sparkles, its air, and a small shake.
+local function archPassed(a: Arch)
+	a.passed = true
+	a.light.Brightness = ARCH_FLARE
+	TweenService:Create(a.light, TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ Brightness = ARCH_AFTER }):Play()
+	for k, part in ipairs(a.parts) do
+		part.Color = a.colours[k]:Lerp(Color3.new(1, 1, 1), 0.6)
+		TweenService:Create(part, TweenInfo.new(0.7, Enum.EasingStyle.Quad), { Color = a.colours[k] }):Play()
+	end
+	for _, emitter in ipairs(a.sparks) do
+		emitter:Emit(4)
+	end
+	if Cinema and Cinema.active() then
+		Cinema.sound("ArchPass", 0.45, { pitch = 0.97 + math.random() * 0.06, keep = true })
+		Cinema.shake(0.2)
+	end
+end
+
+-- Each frame of a ride: the arches ahead glowing up as you come, the one you are under passed.
+local function moveArches(at: Vector3)
+	for _, a in ipairs(arches) do
+		if not a.passed then
+			local d = (a.centre - at).Magnitude
+			if d < ARCH_PASS then
+				archPassed(a)
+			else
+				local near = math.clamp(1 - (d - ARCH_PASS) / (ARCH_LIGHT_FROM - ARCH_PASS), 0, 1)
+				a.light.Brightness = ARCH_GLOW * near * near
+			end
+		end
+	end
+end
+
 -- ===== WHAT THE RIDE LOOKS LIKE FROM INSIDE IT =====
 --
 -- The slide was eight to fifteen seconds with nothing on screen to say it was happening. This is
@@ -772,6 +1000,7 @@ local function rideStarted(sled: Instance)
 	ride = { sled = sled, seat = seat, spec = spec, distances = SkyPath.distances(spec), startAt = startAt,
 		seconds = seconds }
 	showRide(true)
+	pcall(archesOn)
 	scene.landedAt = nil
 	scene.shot = nil
 	scene.burst = false
@@ -784,6 +1013,13 @@ local function rideStarted(sled: Instance)
 		Cinema.begin()
 		Cinema.caption("The Long Way Down", "Everyone takes it in the end.", 7)
 		scene.rush = Cinema.sound("SlideRush", 0.55, { looped = true, fadeIn = 1.2 })
+		-- THE PARTY'S SONG, in full at last: started so far in that its last chord falls as they land in the pool.
+		scene.song = Cinema.sound("PoolsSong", 0.5, { keep = true, fadeIn = 1.5 })
+		local song = scene.song
+		if song then
+			local landsIn = seconds + SkyPath.SKIM_SECONDS - (workspace:GetServerTimeNow() - startAt)
+			song.TimePosition = math.max(0, SONG_LANDS - landsIn)
+		end
 	end
 	-- The one thing this says back: the sled is on screen, so the server may hand it over.
 	if rideRemote then
@@ -798,7 +1034,14 @@ local function moveSled(serverNow: number)
 	end
 	if not current.sled.Parent or not current.seat.Parent then
 		ride = nil
+		archesOff()
 		showRide(false)
+		scene.thin(nil)
+		scene.drift(nil)
+		if Cinema then
+			Cinema.fade(scene.song, 1.5)
+		end
+		scene.song = nil
 		if Cinema and Cinema.active() then
 			Cinema.finish()
 		end
@@ -836,6 +1079,7 @@ local function moveSled(serverNow: number)
 		end
 		ride = nil
 		splashFlash()
+		archesFade()
 		showRide(false)
 		if Cinema and Cinema.active() then
 			Cinema.sound("PoolPlunge", 0.9, { keep = true })
@@ -855,6 +1099,7 @@ local function moveSled(serverNow: number)
 	-- It is unanchored while this client has it, so gravity would pull at it between frames.
 	current.seat.AssemblyLinearVelocity = Vector3.zero
 	current.seat.AssemblyAngularVelocity = Vector3.zero
+	moveArches(current.seat.Position)
 	pcall(scene.shoot, current, u)
 end
 
@@ -880,13 +1125,19 @@ local function holdLanding()
 	if not scene.told then
 		scene.told = true
 		Cinema.caption("The Sky Pools", "Everybody who came up for the party is still up there. You are the only one who came down.", 8)
-		Cinema.sound("PoolsChord", 0.7, { keep = true, fadeIn = 1, alt = "EndChord", altPitch = 1.19 })
+		-- The song's own last chord is ringing already; the pool's chord only when there is no song.
+		if not (scene.song and scene.song.Parent) then
+			Cinema.sound("PoolsChord", 0.7, { keep = true, fadeIn = 1, alt = "EndChord", altPitch = 1.19 })
+		end
+		scene.song = nil
 		Cinema.done()
 	end
-	-- Low over the water and further off, so you are in it (the lower third, in the pool) with the tower going up
-	-- behind you: it looked up at the tower from higher, and you were under the bottom bar the whole time it was held
-	-- (check_shots.py).
-	Cinema.point(CFrame.lookAt(landing + away * 32 + Vector3.new(0, 4, 0), landing + Vector3.new(0, 7, 0)), 70)
+	-- CLOSE, low over the water and a little to one side, easing in: you in the pool, big enough to see (it was
+	-- thirty-two studs off and you were a speck in it: your test of 2026-10-22), the tower going up behind you.
+	local side = Vector3.new(-away.Z, 0, away.X)
+	local k = math.clamp((os.clock() - landedAt) / HOLD, 0, 1)
+	Cinema.point(CFrame.lookAt(landing + away * (14 - 4 * k) + side * 4 + Vector3.new(0, 2.4, 0),
+		landing + Vector3.new(0, 0.6, 0)), 60)
 end
 
 -- ===== THE STORM BY THE SLIDE =====
@@ -1120,6 +1371,19 @@ local function step()
 end
 
 function SkyPoolsClient.start()
+	-- Taken to the lobby mid-slide: the slide is over here, its arches, its cloud and its song put away.
+	if Cinema and Cinema.onLeave then
+		Cinema.onLeave(function()
+			ride = nil
+			scene.landedAt = nil
+			scene.thin(nil)
+			scene.drift(nil)
+			archesOff()
+			showRide(false)
+			Cinema.fade(scene.song, 1)
+			scene.song = nil
+		end)
+	end
 	local function added(item: Instance)
 		if item:IsA("BasePart") and not table.find(pools, item) then
 			table.insert(pools, item)
@@ -1227,5 +1491,5 @@ function SkyPoolsClient.start()
 	RunService.RenderStepped:Connect(step)
 end
 
-SkyPoolsClient.STAMP = "503f7b67"
+SkyPoolsClient.STAMP = "6361e442"
 return SkyPoolsClient

@@ -36,6 +36,8 @@ local BUTTONS = {
 	{ action = "materials", text = "Materials: 26 / none" },
 	{ action = "codesForget", text = "Codes: post again" },
 	{ action = "squish", text = "Squish room / lobby" },
+	{ action = "storyKnown", text = "Know the whole story" },
+	{ action = "trueEnding", text = "True ending on/off" },
 }
 
 local ui: { [string]: any } = {}
@@ -432,5 +434,5 @@ function DevPanelClient.start()
 	print("DevPanelClient: running (Studio only), " .. DevPanelClient.VERSION)
 end
 
-DevPanelClient.STAMP = "3bb09fad"
+DevPanelClient.STAMP = "61fc5413"
 return DevPanelClient

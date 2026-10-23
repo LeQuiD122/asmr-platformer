@@ -137,6 +137,8 @@ local SOUND_IDS_BY_EVENT: { [string]: { string } } = {
 	-- borrowed the chocolate bar's and the slime's). Until their sheets are in, MaterialConfig's sfxFallback stands in.
 	chocolateChunk = {},
 	jellyBounce = {},
+	-- The cookie's crunch (the hundred-and-tenth pass): a crisp break in two and dry crumbs skittering off.
+	cookieCrunch = {},
 	cloudHush = {},
 	-- The Needoh's own (twenty-first pass): it was borrowing clay's. audio/gen_ending_sfx.py writes four
 	-- takes, needohSquish_1 to _4, for SoundService.MaterialSounds.
@@ -624,5 +626,5 @@ function AudioService.playSfx(material: string, region: BasePart, mine: boolean?
 	end)
 end
 
-AudioService.STAMP = "c13317c7"
+AudioService.STAMP = "1096b908"
 return AudioService

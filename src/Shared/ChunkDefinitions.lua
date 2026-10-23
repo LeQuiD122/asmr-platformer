@@ -343,6 +343,12 @@ ChunkDefinitions.R18_SoapRing = {
 	connections = { "south", "north" }, tags = { "straight", "flat", "wide" },
 	containsSlime = false, containsRisk = true,
 }
+ChunkDefinitions.R22_Cookie = {
+	id = "R22_Cookie", name = "Cookie", category = "risk",
+	materials = { Cookie = true }, sizeX = 20, sizeZ = 20,
+	connections = { "south", "north" }, tags = { "straight", "flat", "wide" },
+	containsSlime = false, containsRisk = true,
+}
 ChunkDefinitions.R19_SoapWave = {
 	id = "R19_SoapWave", name = "Soap Wave", category = "risk",
 	materials = { Soap = true }, sizeX = 18, sizeZ = 22,
@@ -502,4 +508,5 @@ end
 table.sort(ids)
 ChunkDefinitions.AllIds = ids
 
+ChunkDefinitions.STAMP = "4210d3cc"
 return ChunkDefinitions

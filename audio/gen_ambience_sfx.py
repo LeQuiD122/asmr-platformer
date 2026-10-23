@@ -34,7 +34,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 AMBIENCE = HERE / "ambience"
 
 LEVELS = {"ShoreSea": -19.0, "RoofWind": -20.5, "PartyFar": -20.0, "HarbourNight": -24.3, "BathsHum": -21.0,
-          "HoldDrone": -19.5}
+          "HoldDrone": -19.5, "HillMorning": -22.0}
 
 
 def add(out, x, at, gain=1.0):
@@ -194,8 +194,49 @@ def hold_drone(seconds, rng):
     return reverb_loop(lp(x, 1400), "cavern", rng, wet=0.35)
 
 
+def pigeon(rng):
+    """A wood pigeon in the garden: hoo, HOO hoo, hoo hoo. A soft, breathy, low note, falling a little through each."""
+    f0 = rng.uniform(430, 490)
+    notes = [(0.32, 1.0, 0.7, 0.1), (0.5, 1.06, 1.0, 0.1), (0.28, 1.0, 0.6, 0.22), (0.28, 0.98, 0.65, 0.1),
+             (0.42, 0.96, 0.75, 0.0)]
+    parts = []
+    for dur, ratio, level, gap in notes:
+        tt = t_(dur)
+        f = f0 * ratio * (1 - 0.05 * tt / dur)
+        voice = np.sin(phase(f)) + 0.22 * np.sin(2 * phase(f)) + 0.06 * np.sin(3 * phase(f))
+        breath = bp(white(dur, rng), 260, 900) * 0.18
+        shape = swell(tt, dur, 0.07, 0.14, power=1.2)
+        parts.append((voice + breath) * shape * level)
+        parts.append(np.zeros(int(gap * SR)))
+    return lp(np.concatenate(parts), 1800)
+
+
+def hill_morning(seconds, rng):
+    """Hill House at eight: a soft breeze through the grass and the apple tree, the sea far below under the mist, and
+    now and then a wood pigeon in the garden, low and slow."""
+    t = t_(seconds)
+    gust = np.clip(0.4 + 0.35 * drift(seconds, rng, rate=0.12) + 0.1 * drift(seconds, rng, rate=0.7), 0.05, 1)
+
+    def shape(times, freqs):
+        g = np.interp(times, t, gust)
+        centre = 240 + 560 * g
+        return (1 / (1 + (freqs / centre) ** 2.4)) * (1 / (1 + (60 / np.maximum(freqs, 1)) ** 2)) * (0.2 + g)
+    air = sculpted(seconds, rng, shape)
+    # The apple tree's leaves, a fine rustle on the stronger gusts.
+    leaves = bp(white(seconds, rng), 900, 2400) * np.clip(gust - 0.45, 0, 1) ** 2
+    # The sea, far below, under the mist: a low hush.
+    sea = lp(pink(seconds, rng), 240)
+    out = peak(air) + 0.05 * peak(leaves) + 0.3 * peak(sea)
+    at = rng.uniform(3, 6)
+    while at < seconds - 4:
+        add(out, peak(pigeon(rng)), at, 0.18)
+        at += rng.uniform(10, 15)
+    return reverb_loop(lp(out, 2200), "open", rng, wet=0.25)
+
+
 BEDS = [("ShoreSea", shore_sea, 26), ("RoofWind", roof_wind, 20), ("PartyFar", party_far, 16),
-        ("HarbourNight", harbour_night, 24), ("BathsHum", baths_hum, 20), ("HoldDrone", hold_drone, 30)]
+        ("HarbourNight", harbour_night, 24), ("BathsHum", baths_hum, 20), ("HoldDrone", hold_drone, 30),
+        ("HillMorning", hill_morning, 28)]
 
 if __name__ == "__main__":
     only = set(sys.argv[1:])

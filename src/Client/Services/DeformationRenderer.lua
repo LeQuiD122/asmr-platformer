@@ -2152,11 +2152,12 @@ local DEBRIS: { [string]: DebrisKind } = {
 	-- Buoyancy near zero for all of them. A drop of anything liquid is dense, and the thing
 	-- that makes it read as liquid is the SIZE and the slowness of the throw, not the fall --
 	-- a gob that floats down looks like polystyrene painted amber.
-	HoneyString = { colour = Color3.fromRGB(228, 158, 40), material = Enum.Material.Glass,
+	-- (SmoothPlastic, not Glass, since the hundred-and-eighteenth pass: Glass went the sky's colour against open sky.)
+	HoneyString = { colour = Color3.fromRGB(228, 158, 40), material = Enum.Material.SmoothPlastic,
 		scale = 0.20, speed = 9, spin = 5, buoyancy = 0.05, glow = 0, life = 4.0 },
-	SlimeGob = { colour = Color3.fromRGB(120, 216, 86), material = Enum.Material.Glass,
+	SlimeGob = { colour = Color3.fromRGB(120, 216, 86), material = Enum.Material.SmoothPlastic,
 		scale = 0.26, speed = 13, spin = 9, buoyancy = 0.08, glow = 0, life = 3.5 },
-	JelloBit = { colour = Color3.fromRGB(246, 158, 92), material = Enum.Material.Glass,
+	JelloBit = { colour = Color3.fromRGB(246, 158, 92), material = Enum.Material.SmoothPlastic,
 		scale = 0.24, speed = 14, spin = 12, buoyancy = 0.06, glow = 0, life = 3.2 },
 	-- Beads of sea water off a bell, clear and light; they hang a moment before they fall.
 	-- SmoothPlastic, not Glass, for the reason Jellyfish's appearance gives.
@@ -3655,6 +3656,12 @@ SOAP.CRUMB_FADE = 1.2
 -- THE CRACKS (see Fissure): how many run out from the first foot on a cell and about how far, how much
 -- further a later step runs them, and each cube falling out, and how fast they run.
 SOAP.CRACK_ARMS, SOAP.CRACK_REACH, SOAP.CRACK_STEP, SOAP.CRACK_CREEP, SOAP.CRACK_SPEED = 3, 1.0, 0.45, 0.25, 5
+-- THE OTHER GRANULAR MATERIAL (the hundred-and-tenth pass): the cookie. Which material each crumbling cell is (so its
+-- crumbs, dust and pace are its own), weak-keyed as tiles come and go; the cookie's crack colour; and which way each
+-- material's flakes go on a step (soap's drift up, a cookie's crumbs fall).
+SOAP.OF = setmetatable({}, { __mode = "k" }) :: any
+SOAP.COOKIE_CRACK = Color3.fromRGB(96, 58, 28)
+SOAP.RISE = { Soap = 3, Cookie = -12 }
 
 local granuleRest: { [BasePart]: CFrame } = {}
 -- Each cube's authored transparency, captured before it is ever hidden, so a cell that
@@ -3724,7 +3731,7 @@ local function dropGranule(tile: BasePart, granule: BasePart)
 	end
 	liveCrumbs += 1
 
-	frag.Name = "SoapCrumb"
+	frag.Name = (SOAP.OF[tile] or "Soap") .. "Crumb"
 	frag.Anchored = false
 	-- COLLIDABLE on purpose, and this is the point of the whole approach: a fallen
 	-- crumb is debris you can kick out of your way. Density well under default so the
@@ -3753,8 +3760,9 @@ local function dropGranule(tile: BasePart, granule: BasePart)
 	-- the air above it. Acceleration is a little stronger than gravity so the dust
 	-- trails behind rather than drifting up.
 	local dust = Instance.new("ParticleEmitter")
+	local made = MaterialAppearance.Appearances[SOAP.OF[tile] or "Soap"] or MaterialAppearance.Appearances.Soap
 	dust.Color = ColorSequence.new(
-		MaterialAppearance.Appearances.Soap.color:Lerp(Color3.new(1, 1, 1), 0.35)
+		made.color:Lerp(Color3.new(1, 1, 1), 0.35)
 	)
 	dust.Size = NumberSequence.new(0.16, 0.5)
 	dust.Transparency = NumberSequence.new(0.45, 1)
@@ -3870,7 +3878,8 @@ local function startCrumbling(tile: BasePart)
 		-- interval happened to line up at 18 cubes and a 2.5s timer, and would have
 		-- quietly stopped lining up the moment either changed.
 		local total = granuleTotal[tile] or 0
-		local interval = total > 0 and (Materials.Soap.dissolveTime / total) or GRANULE_FALL_INTERVAL
+		local own = Materials[SOAP.OF[tile] or "Soap"] or Materials.Soap
+		local interval = total > 0 and ((own.dissolveTime or Materials.Soap.dissolveTime) / total) or GRANULE_FALL_INTERVAL
 
 		while crumbling[tile] and tile.Parent do
 			local left = standingGranules(tile)
@@ -3887,7 +3896,7 @@ end
 
 local function soapDust(tile: BasePart)
 	local rest = restCFrame[tile]
-	local soap = MaterialAppearance.Appearances.Soap
+	local soap = MaterialAppearance.Appearances[SOAP.OF[tile] or "Soap"] or MaterialAppearance.Appearances.Soap
 
 	-- An invisible carrier for the emitter. A ParticleEmitter is not a BasePart and has no
 	-- position of its own, so it needs something in the world to hang off.
@@ -3925,6 +3934,8 @@ end
 -- crumbs leave is a hole you fall through rather than a dent onto solid slab.
 Effects.Soap = function(ctx: Ctx)
 	local tile = ctx.tile
+	-- Which granular material this cell is (soap, or the cookie through Effects.Cookie below).
+	SOAP.OF[tile] = ctx.material
 
 	if ctx.state == "exhausted" then
 		crumbling[tile] = nil
@@ -3943,7 +3954,8 @@ Effects.Soap = function(ctx: Ctx)
 	if ctx.state == "deformed" then
 		-- Soap flakes come off dry and drift: the one granular material here that does not
 		-- throw grit downward.
-		puff(tile, MaterialAppearance.Appearances.Soap.color, 0.16, 4, 3, 7)
+		local own = MaterialAppearance.Appearances[ctx.material] or MaterialAppearance.Appearances.Soap
+		puff(tile, own.color, 0.16, 4, SOAP.RISE[ctx.material] or 3, 7)
 		-- Only the contact press here. The rest of the sink is driven by how much of
 		-- the cell has actually crumbled (settleCrumbling), so the surface gives at the
 		-- rate it is failing rather than dropping one fixed step and then holding.
@@ -5486,6 +5498,22 @@ Effects.ChocolateSolid = function(ctx: Ctx)
 		moveTile(tile, TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 			-NEW_MATS.ChocolateSolid.jolt, 1, 1)
 	end
+end
+
+-- THE COOKIE (the hundred-and-tenth pass): soap's crumbling, a crumb at a time and the hole you fall through, with
+-- what a biscuit does first: it CRACKS, lines running out from your foot, and they run on with every step after. The
+-- top cubes take the cracks drawn over them as they fall out (dropGranule), so the cracks open as it breaks up.
+Effects.Cookie = function(ctx: Ctx)
+	local tile = ctx.tile
+	if ctx.state == "deformed" then
+		if Fissure.has(tile) then
+			Fissure.extend(tile, SOAP.CRACK_STEP, SOAP.CRACK_SPEED)
+		else
+			Fissure.grow(tile, { from = Fissure.footOf(tile, ctx.who), arms = SOAP.CRACK_ARMS, reach = SOAP.CRACK_REACH,
+				speed = SOAP.CRACK_SPEED, color = SOAP.COOKIE_CRACK })
+		end
+	end
+	Effects.Soap(ctx)
 end
 
 -- How far each cell has been compacted, for the two materials that accumulate. Weak-keyed:
@@ -7676,5 +7704,5 @@ local DeformationUpdate = RemoteEvents:WaitForChild("DeformationUpdate")
 DeformationUpdate.OnClientEvent:Connect(DeformationRenderer.onDeformationUpdate)
 lavaLife.start()
 
-DeformationRenderer.STAMP = "e633bde2"
+DeformationRenderer.STAMP = "2c44d45e"
 return DeformationRenderer

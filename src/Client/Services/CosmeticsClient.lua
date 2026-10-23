@@ -15,6 +15,11 @@
 --   bubbles and embers rising, fireflies wandering with their wings beating (two of them lit), mist drifting at your
 --   feet.
 --
+-- THE HUNDRED-AND-SEVENTH PASS ("the trail should be less wide ... more creative", "auras ... more pronounced"): a
+-- trail's ribbon is thin strands now, each moved here every frame about its wearer by its own motion (a helix round
+-- you, a wave, a hop, a crackle, a flutter); and an aura has a ring of its things lying round your feet, or a halo of
+-- them over your head, turning.
+--
 -- WHAT EACH IS, in ShopCatalog (PIECES): its meshes, sizes, colours, material and motion, so the shop and this cannot
 -- disagree. WHAT YOU WEAR is read off your character, where ShopCatalog.wear tags it (PieceTrail, PieceAura) for the
 -- server's look and for the shop's try-on alike: so the preview is the real thing, as the particles are.
@@ -30,19 +35,24 @@ local RunService = game:GetService("RunService")
 local ShopCatalog = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShopCatalog")) :: any
 
 local CosmeticsClient = {}
-CosmeticsClient.VERSION = "ninety-seventh pass, 2026-10-18"
+CosmeticsClient.VERSION = "hundred-and-seventh pass, 2026-10-21"
 
 local NEAR = 120 -- studs: further off, nothing is drawn
 local TRAIL_MAX = 22 -- a trail's pieces alive at once, per player
 local AURA_MAX = 8 -- an aura's, per player
+local RING_MAX = 12 -- an aura's ring or halo, per player
 local PIECES_MAX = 260 -- in all, on this screen
 local GRAVITY = 34
 local FLAP = 22 -- a firefly's wingbeats, a second
 
 type Live = { part: BasePart, wings: BasePart?, born: number, life: number, motion: string, from: Vector3, vel: Vector3,
 	spin: Vector3, angle: Vector3, ground: number, landed: boolean, bounces: number, size: Vector3, colour: Color3,
-	cool: Color3?, alpha: number, phase: number, owner: Player, aura: boolean, slot: number, seed: number, landedAt: number }
-type Wearer = { trail: string?, aura: string?, last: Vector3?, travelled: number, auraSet: { Live } }
+	cool: Color3?, alpha: number, phase: number, owner: Player, aura: boolean, slot: number, seed: number, landedAt: number,
+	ring: boolean }
+type Strand = { top: Attachment, bottom: Attachment, motion: string, at: Vector3, half: number, radius: number,
+	speed: number, phase: number }
+type Wearer = { trail: string?, aura: string?, last: Vector3?, travelled: number, auraSet: { Live }, ringSet: { Live },
+	drop: number, strands: { Strand }, strandsFor: string?, strandsRoot: BasePart?, strandsAt: number }
 
 local live: { Live } = {}
 local wearers: { [Player]: Wearer } = {}
@@ -211,19 +221,101 @@ local function spawn(owner: Player, look: any, at: Vector3, heading: Vector3, au
 		angle = Vector3.new(rng:NextNumber(0, 6.28), rng:NextNumber(0, 6.28), rng:NextNumber(0, 6.28)),
 		ground = if aura then 0 else groundUnder(at), landed = false, bounces = 0, size = part.Size, colour = colour,
 		cool = piece.cool, alpha = piece.alpha or 0, phase = rng:NextNumber(0, 6.28), owner = owner, aura = aura, slot = slot,
-		seed = rng:NextNumber(0, 100), landedAt = 0 }
+		seed = rng:NextNumber(0, 100), landedAt = 0, ring = false }
 	part.CFrame = CFrame.new(at)
 	table.insert(live, one)
 	return one
 end
 
--- Where a thing of an aura is, `t` seconds into its round, about a root at `root`.
-local function auraPlace(one: Live, look: any, root: Vector3, now: number): (Vector3, number)
+-- AN AURA'S RING OR HALO (ShopCatalog's `ring`), as a look of its own, made once an aura.
+local rings: { [string]: any } = {}
+local function ringOf(id: string?): any
+	if not id then
+		return nil
+	end
+	local cached = rings[id]
+	if cached ~= nil then
+		return cached or nil
+	end
+	local look = ShopCatalog.pieces(id)
+	local ring = look and look.ring
+	local made = if ring then { motion = if ring.halo then "halo" else "ring", life = 1, count = ring.count,
+		radius = ring.radius, spin = ring.spin, height = ring.height, pieces = { ring.piece } } else false
+	rings[id] = made
+	return made or nil
+end
+
+-- How far below its root a character's feet are (its hips, and half the root), within reason.
+local function feetDrop(character: Model, root: BasePart): number
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local hip = if humanoid then humanoid.HipHeight else 2
+	return math.clamp(hip + root.Size.Y / 2, 2, 4)
+end
+
+-- WHERE A STRAND OF A TRAIL IS NOW, about the root (its own frame): a helix round you, a wave side to side, a bob, a
+-- hop, a crackle, a figure of eight, or still.
+local function strandPlace(s: Strand, now: number): Vector3
+	local t = now * s.speed + s.phase
+	local r = s.radius
+	if s.motion == "helix" then
+		return s.at + Vector3.new(math.cos(t) * r, 0, math.sin(t) * r)
+	elseif s.motion == "wave" then
+		return s.at + Vector3.new(math.sin(t) * r, 0, 0)
+	elseif s.motion == "bob" then
+		return s.at + Vector3.new(0, math.sin(t) * r, 0)
+	elseif s.motion == "bounce" then
+		return s.at + Vector3.new(0, math.abs(math.sin(t)) * r, 0)
+	elseif s.motion == "zigzag" then
+		local tri = 2 * math.abs(2 * ((t / (2 * math.pi)) % 1) - 1) - 1
+		return s.at + Vector3.new(tri * r, math.noise(t * 0.7, s.phase) * r, 0)
+	elseif s.motion == "flutter" then
+		return s.at + Vector3.new(math.sin(t) * r, math.sin(t * 2) * r * 0.4, math.cos(t) * r * 0.3)
+	end
+	return s.at
+end
+
+-- A WEARER'S STRANDS, found on their root (looked for again when the trail changes, and every two seconds), and moved.
+local function moveStrands(w: Wearer, root: BasePart, now: number)
+	if w.trail ~= w.strandsFor or root ~= w.strandsRoot or now - w.strandsAt > 2 then
+		table.clear(w.strands)
+		for _, child in ipairs(root:GetChildren()) do
+			local motion = child:GetAttribute("StrandMotion")
+			if child:IsA("Attachment") and typeof(motion) == "string" then
+				local bottom = root:FindFirstChild((string.gsub(child.Name, "TrailTop", "TrailBottom")))
+				local at = child:GetAttribute("StrandAt")
+				if bottom and bottom:IsA("Attachment") and typeof(at) == "Vector3" then
+					table.insert(w.strands, { top = child, bottom = bottom, motion = motion, at = at,
+						half = tonumber(child:GetAttribute("StrandHalf")) or 0.15,
+						radius = tonumber(child:GetAttribute("StrandRadius")) or 0,
+						speed = tonumber(child:GetAttribute("StrandSpeed")) or 0,
+						phase = tonumber(child:GetAttribute("StrandPhase")) or 0 })
+				end
+			end
+		end
+		w.strandsFor, w.strandsRoot, w.strandsAt = w.trail, root, now
+	end
+	for _, s in ipairs(w.strands) do
+		if s.top.Parent and s.motion ~= "still" then
+			local centre = strandPlace(s, now)
+			s.top.Position = centre + Vector3.new(0, s.half, 0)
+			s.bottom.Position = centre - Vector3.new(0, s.half, 0)
+		end
+	end
+end
+
+-- Where a thing of an aura is, `t` seconds into its round, about a root at `root` whose feet are `drop` below it.
+local function auraPlace(one: Live, look: any, root: Vector3, now: number, drop: number): (Vector3, number)
 	local count = math.max(1, look.count or 6)
 	local radius = look.radius or 2.4
 	local a = one.slot / count * math.pi * 2 + one.phase
 	local motion = one.motion
-	if motion == "orbit" then
+	if motion == "ring" or motion == "halo" then
+		-- Evenly round, turning together: lying at your feet, or over your head.
+		local turn = now * (look.spin or 0.4) + one.slot / count * math.pi * 2
+		local y = if motion == "halo" then (look.height or 3) + math.sin(now * 1.5) * 0.06
+			else -drop + 0.15 + math.sin(now * 2 + one.slot) * 0.04
+		return root + Vector3.new(math.cos(turn) * radius, y, math.sin(turn) * radius), 0
+	elseif motion == "orbit" then
 		local turn = now * (look.spin or 0.5) + a
 		local height = math.sin(now * 1.3 + one.phase) * 0.6 + 0.4
 		return root + Vector3.new(math.cos(turn) * radius, height, math.sin(turn) * radius), 0
@@ -255,8 +347,10 @@ local function step(dt: number)
 		local root = character and character:FindFirstChild("HumanoidRootPart")
 		if root and root:IsA("BasePart") and (root.Position - eye).Magnitude < NEAR then
 			seen[player] = true
-			local w = wearers[player] or { trail = nil, aura = nil, last = nil, travelled = 0, auraSet = {} }
+			local w = wearers[player] or { trail = nil, aura = nil, last = nil, travelled = 0, auraSet = {}, ringSet = {},
+				drop = 3, strands = {}, strandsFor = nil, strandsRoot = nil, strandsAt = 0 }
 			wearers[player] = w
+			w.drop = feetDrop(character :: Model, root)
 			local trailTag = root:FindFirstChild("ShopPreviewTrailTop") or root:FindFirstChild("CosmeticTrailTop")
 			local auraTag = root:FindFirstChild("ShopPreviewAura") or root:FindFirstChild("CosmeticAura")
 			local trail = trailTag and trailTag:GetAttribute("PieceTrail")
@@ -267,9 +361,15 @@ local function step(dt: number)
 				for _, one in ipairs(w.auraSet) do
 					one.life = 0
 				end
+				for _, one in ipairs(w.ringSet) do
+					one.life = 0
+				end
 				table.clear(w.auraSet)
+				table.clear(w.ringSet)
 				w.aura = wantAura
 			end
+			-- THE TRAIL'S STRANDS, each moved its own way about you.
+			moveStrands(w, root, now)
 			-- THE TRAIL: one let go every `every` studs covered, behind you, a little to one side or the other.
 			local look = w.trail and ShopCatalog.pieces(w.trail)
 			local here = root.Position
@@ -308,11 +408,28 @@ local function step(dt: number)
 					end
 				end
 			end
+			-- ITS RING OR HALO, kept full.
+			local ringLook = ringOf(w.aura)
+			if ringLook and meshes() then
+				local want = math.min(RING_MAX, ringLook.count or 8)
+				for slot = #w.ringSet + 1, want do
+					local one = spawn(player, ringLook, here, Vector3.zAxis, true, slot)
+					if one then
+						one.ring = true
+						table.insert(w.ringSet, one)
+					else
+						break
+					end
+				end
+			end
 		end
 	end
 	for player, w in pairs(wearers) do
 		if not seen[player] then
 			for _, one in ipairs(w.auraSet) do
+				one.life = 0
+			end
+			for _, one in ipairs(w.ringSet) do
 				one.life = 0
 			end
 			wearers[player] = nil
@@ -329,12 +446,13 @@ local function step(dt: number)
 		if one.aura then
 			local w = wearers[one.owner]
 			local root = one.owner.Character and one.owner.Character:FindFirstChild("HumanoidRootPart")
-			local look = w and w.aura and ShopCatalog.pieces(w.aura)
+			local look = w and w.aura and (if one.ring then ringOf(w.aura) else ShopCatalog.pieces(w.aura))
 			if one.life <= 0 or not (w and look and root and root:IsA("BasePart")) then
 				done = true
 			else
-				local at, u = auraPlace(one, look, (root :: BasePart).Position, now)
-				local twinkle = if one.motion == "orbit" then 0.75 + 0.25 * math.sin(now * 5 + one.phase * 3) else 1
+				local at, u = auraPlace(one, look, (root :: BasePart).Position, now, (w :: Wearer).drop)
+				local twinkle = if one.motion == "orbit" or one.motion == "ring" or one.motion == "halo"
+					then 0.75 + 0.25 * math.sin(now * 5 + one.phase * 3) else 1
 				part.Size = one.size * twinkle
 				local fadeIn = math.clamp(age / 0.6, 0, 1)
 				local edge = if one.motion == "rise" or one.motion == "fall" then math.clamp(math.min(u, 1 - u) / 0.15, 0, 1) else 1
@@ -444,5 +562,5 @@ function CosmeticsClient.start()
 	print("CosmeticsClient: running, " .. CosmeticsClient.VERSION)
 end
 
-CosmeticsClient.STAMP = "ec389bcc"
+CosmeticsClient.STAMP = "2e4a024f"
 return CosmeticsClient

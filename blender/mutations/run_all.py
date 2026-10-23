@@ -15,6 +15,11 @@ SRC IS GUARDED HERE AS WELL. A suite puts its own files back, but on Windows a w
 after it refuses to start. So this keeps a copy of every file under src from before the first suite, checks
 src against it after each one, and puts back anything that differs (trying again for a few seconds if the
 write fails), saying so. It ends by checking once more, and says loudly if src could not be put back.
+
+AND WHAT THE SUITES MUTATE OUTSIDE SRC (since the hundred-and-twenty-second pass's run, when pass09's write failed on
+blender/gen_serpent.py and left its planted bug there, so every Sunken City suite after it refused to start): the
+Blender scripts and their measurements (blender/*.py, blender/*.json) and the sound generators (audio/*.py) are kept and
+put back the same way.
 """
 import pathlib
 import re
@@ -23,11 +28,16 @@ import sys
 import time
 
 HERE = pathlib.Path(__file__).resolve().parent
-SRC = HERE.parents[1] / "src"
+ROOT = HERE.parents[1]
+SRC = ROOT / "src"
+OUTSIDE = (ROOT / "blender", "*.py"), (ROOT / "blender", "*.json"), (ROOT / "audio", "*.py")
 
 
 def take_copy():
-    return {path: path.read_bytes() for path in SRC.rglob("*") if path.is_file()}
+    kept = {path: path.read_bytes() for path in SRC.rglob("*") if path.is_file()}
+    for folder, pattern in OUTSIDE:
+        kept.update({path: path.read_bytes() for path in folder.glob(pattern) if path.is_file()})
+    return kept
 
 
 def write_back(path, data):
@@ -91,12 +101,12 @@ def main():
         # SRC AS IT WAS, before the next suite starts on it.
         repaired, stuck = repair(kept)
         for path in repaired:
-            print("           PUT BACK %s (the suite left it changed)" % path.relative_to(SRC))
+            print("           PUT BACK %s (the suite left it changed)" % path.relative_to(ROOT))
         if repaired and suite.stem not in failed:
             failed.append(suite.stem)
         if stuck:
             for path in stuck:
-                print("           COULD NOT PUT BACK %s" % path.relative_to(SRC))
+                print("           COULD NOT PUT BACK %s" % path.relative_to(ROOT))
             print("\nSTOPPED: src is not as it was; put those files back before going on.")
             return 2
     if failed:

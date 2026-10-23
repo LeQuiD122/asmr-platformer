@@ -12,7 +12,8 @@ cavities closing (the splash you go into the sea with is the same physics as a d
 wind is air shaped by how fast you are going, and the tunnels and shafts are rooms with their own echoes.
 
   CITY SHORE     DiveBoard, DiveWind, DiveSplash, UnderwaterHum (loop), ShoreChord
-  SKY POOLS      SlideRush (loop), CloudWhoosh, SkimSlap, PoolPlunge, PoolsChord
+  SKY POOLS      SlideRush (loop), CloudWhoosh, SkimSlap, PoolPlunge, PoolsChord, PoolsSong (the party's song, in
+                 full: the hundred-and-twenty-seventh pass)
   SUNKEN CITY    WhirlRoar (loop), DrainFall, CulvertWash (loop), SunkenChord
   FLOODED HALLS  FlumeRush (loop), PlungeWind, HallsChord
   ALL FOUR       EndChord: the open chord any ending falls back on, at its own pitch
@@ -38,7 +39,7 @@ ENDINGS = HERE / "endings"
 LEVELS = {"DiveBoard": -16.4, "DiveWind": -17.6, "DiveSplash": -19.0, "UnderwaterHum": -25.1, "ShoreChord": -17.0,
           "SlideRush": -18.0, "CloudWhoosh": -16.0, "SkimSlap": -18.1, "PoolPlunge": -20.5, "PoolsChord": -18.5,
           "WhirlRoar": -17.7, "DrainFall": -14.5, "CulvertWash": -19.2, "SunkenChord": -16.5, "FlumeRush": -18.0,
-          "PlungeWind": -15.0, "HallsChord": -16.7, "EndChord": -17.4}
+          "PlungeWind": -15.0, "HallsChord": -16.7, "EndChord": -17.4, "PoolsSong": -20.0}
 
 
 def chord(notes, seconds, rng, roll=0.07, velocity=0.4, pad=0.5, pad_attack=1.6, pad_release=3.0, brightness=0.45,
@@ -226,6 +227,80 @@ def pools_chord(rng):
     return finish(x, LEVELS["PoolsChord"], high_cut=6500, fade_out=2.5)
 
 
+SONG_BEAT = 0.5  # 120 a minute, as the party's bed
+SONG_BARS = 18   # then the last chord, SONG_BARS * 4 beats in (SkyPoolsClient's SONG_LANDS)
+
+
+def pools_song(rng):
+    """THE PARTY'S SONG, the one you heard through the wall all the way up (PartyFar), in full and clear at last over
+    the slide: the same four chords (A, G, F, and the G with its sharp fifth leaning back to A), the felt piano and the
+    strings, a soft kick and a felt bass coming in, then the tune; and on the downbeat after the eighteenth bar a last
+    open A that rings on over the pool. The game starts it so far in that this chord falls as you land, so a short
+    ride hears the end of the song and a long one more of it."""
+    beat = SONG_BEAT
+    bars = [(110.0, 138.6, 164.8), (98.0, 123.5, 146.8), (87.3, 110.0, 130.8), (98.0, 123.5, 155.6)]
+    # (beat in the four-bar cycle, frequency, length in beats): twice round, the second a little fuller.
+    tune = [
+        [(0, 659.3, 1), (1, 554.4, 1), (2, 440.0, 1), (3, 554.4, 1), (4, 587.3, 1), (5, 493.9, 1), (6, 392.0, 1),
+         (7, 493.9, 1), (8, 523.3, 1), (9, 440.0, 1), (10, 349.2, 1), (11, 440.0, 1), (12, 493.9, 1.5), (13.5, 622.3, 2.5)],
+        [(0, 659.3, 1.5), (1.5, 740.0, 0.5), (2, 659.3, 1), (3, 554.4, 1), (4, 587.3, 1.5), (5.5, 659.3, 0.5),
+         (6, 587.3, 1), (7, 493.9, 1), (8, 523.3, 1.5), (9.5, 587.3, 0.5), (10, 523.3, 1), (11, 440.0, 1),
+         (12, 493.9, 1), (13, 587.3, 1), (14, 622.3, 2)],
+    ]
+    last = SONG_BARS * 4 * beat
+    total = last + 7.0
+    # Each part laid on its own and set to its own level (dB against the tune) before they are mixed: a kick's few
+    # loud low cycles otherwise drown the piano by twenty-five dB.
+    parts = {name: [] for name in ("tune", "chords", "strings", "bass", "kick", "brush", "home")}
+    mix = {"tune": 0.0, "chords": -5.0, "strings": -9.0, "bass": -9.0, "kick": -15.0, "brush": -27.0, "home": 1.0}
+
+    def nudge():
+        return rng.uniform(-0.006, 0.006)
+    for bar in range(SONG_BARS):
+        root, third, fifth = bars[bar % 4]
+        start = bar * 4 * beat
+        # The strings under every bar, swelling in over the first four.
+        grow = min(1.0, 0.45 + 0.14 * bar)
+        parts["strings"].append((start, grow, warm_pad([root * 2, third * 2, fifth * 2], 4 * beat + 0.6, rng, attack=0.5,
+                                                       release=0.7, brightness=0.4)))
+        for k in range(4):
+            at = start + k * beat
+            if k in (1, 3):
+                for f, v in ((root * 2, 0.34), (third * 2, 0.3), (fifth * 2, 0.3)):
+                    parts["chords"].append((at + nudge(), 1.0, felt_piano(f, 0.9, rng, v)))
+            if bar >= 4:
+                kick = strike(0.35, [55, 92], [0.18, 0.08], [1, 0.4], rng, hardness=0.25)
+                parts["kick"].append((at, 1.0 if k in (0, 2) else 0.6, peak(kick)))
+                bass = felt_piano(root / 2 if k % 2 == 0 else root, beat * 0.95, rng, 0.45, strings=1)
+                parts["bass"].append((at, 1.0, bass))
+            if bar >= 6:
+                # A brush on the off-beat: soft air, no tick.
+                brush = bp(white(0.14, rng), 1400, 3600) * env(t_(0.14), 0.01, 0.045)
+                parts["brush"].append((at + beat / 2 + nudge(), 1.0, brush))
+    for cycle, notes in enumerate(tune):
+        cycle_start = (8 + 4 * cycle) * 4 * beat
+        for at, f, length in notes:
+            parts["tune"].append((cycle_start + at * beat + nudge(), 1.0 + 0.12 * cycle,
+                                  felt_piano(f, length * beat + 1.2, rng, 0.42 + 0.04 * cycle)))
+    # The tag over the last two bars: up to the third and the fifth, and the lean of the sharp fifth.
+    tag = 16 * 4 * beat
+    for at, f, length in ((0, 554.4, 2), (2, 659.3, 2), (4, 493.9, 2), (6, 622.3, 2)):
+        parts["tune"].append((tag + at * beat + nudge(), 1.0, felt_piano(f, length * beat + 1.4, rng, 0.4)))
+    # HOME: the open A, rolled from the bottom up, the strings swelling under it, the tune's E over the top.
+    parts["home"].append((last, 1.0, chord([110.0, 220.0, 277.2, 329.6, 440.0], 6.8, rng, roll=0.06, velocity=0.44,
+                                           pad=0.5, brightness=0.45, pad_attack=0.8, pad_release=3.5, wet=0.3)))
+    parts["home"].append((last + 0.3, 0.3, felt_piano(659.3, 6.0, rng, 0.36)))
+    x = np.zeros(n_(total))
+    for name, layers in parts.items():
+        y = place(total, layers)
+        sounding = np.abs(y) > 1e-4
+        level = np.sqrt(np.mean(y[sounding] ** 2)) if np.any(sounding) else 0.0
+        if level > 0:
+            x += y / level * 10 ** (mix[name] / 20)
+    x = reverb(x, "hall", rng, wet=0.28)[:n_(total)]
+    return finish(x, LEVELS["PoolsSong"], high_cut=5500, fade_out=2.0)
+
+
 # ================================================================ THE SUNKEN CITY
 def whirl_roar(seconds, rng):
     t = t_(seconds)
@@ -330,7 +405,8 @@ def end_chord(rng):
 ONE_SHOTS = [("DiveBoard", dive_board), ("DiveSplash", dive_splash), ("DiveWind", dive_wind), ("ShoreChord", shore_chord),
              ("CloudWhoosh", cloud_whoosh), ("SkimSlap", skim_slap), ("PoolPlunge", pool_plunge),
              ("PoolsChord", pools_chord), ("DrainFall", drain_fall), ("SunkenChord", sunken_chord),
-             ("PlungeWind", plunge_wind), ("HallsChord", halls_chord), ("EndChord", end_chord)]
+             ("PlungeWind", plunge_wind), ("HallsChord", halls_chord), ("EndChord", end_chord),
+             ("PoolsSong", pools_song)]
 LOOPS = [("UnderwaterHum", underwater_hum, 14), ("SlideRush", slide_rush, 8), ("WhirlRoar", whirl_roar, 10),
          ("CulvertWash", culvert_wash, 10), ("FlumeRush", flume_rush, 8)]
 

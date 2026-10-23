@@ -46,6 +46,7 @@ local HINTS: { [string]: string } = {
 	KineticSand = "Kinetic sand gives way after three steps on the same spot.",
 	Slime = "Slime is springy. It can launch you up.",
 	Soap = "Soap crumbles under your feet. Don't stand still.",
+	Cookie = "A cookie cracks, then crumbles under you. Keep going, and mind the bite.",
 	CreamyKeyboard = "A creamy keyboard. Every key thocks as you step on it.",
 	Salt = "Salt crust. Stand still and the crust around you tilts and sinks.",
 	Lava = "Lava under a crust. Hot, and it bursts if you stay. Keep going.",
@@ -824,5 +825,5 @@ function OnboardingService.start()
 	print("OnboardingService: running, " .. OnboardingService.VERSION)
 end
 
-OnboardingService.STAMP = "9f7e2ef0"
+OnboardingService.STAMP = "5de561e4"
 return OnboardingService

@@ -870,6 +870,22 @@ def check(path):
     Parser(tokenize(text)).chunk()
 
 
+def enums_named(path):
+    """EVERY ENUM IT NAMES IS ONE ROBLOX HAS (blender/roblox_enums.py): Enum.FontWeight.Black parsed, and in Studio
+    stopped Style from loading and everything with it. Comments are left out; what is in them is not run."""
+    import re
+    from roblox_enums import ENUMS
+    wrong = []
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        code = line.split("--", 1)[0]
+        for kind, member in re.findall(r"\bEnum\.(\w+)\.(\w+)", code):
+            if kind not in ENUMS:
+                wrong.append((number, "Enum.%s is not in blender/roblox_enums.py: add its members from Roblox's own list" % kind))
+            elif member not in ENUMS[kind]:
+                wrong.append((number, "Enum.%s has no %s (it has %s)" % (kind, member, ", ".join(sorted(ENUMS[kind])))))
+    return wrong
+
+
 def main():
     problems = []
     files = sorted(SRC.rglob("*.lua"))
@@ -880,13 +896,15 @@ def main():
             problems.append("%s:%d  %s" % (path.relative_to(SRC.parent), error.line, error.message))
         except RecursionError:
             problems.append("%s  nests too deeply for this checker" % path.relative_to(SRC.parent))
+        for number, message in enums_named(path):
+            problems.append("%s:%d  %s" % (path.relative_to(SRC.parent), number, message))
     print("parsed %d Luau sources" % len(files))
     if problems:
         print("\nWOULD NOT COMPILE:")
         for p in problems:
             print("  " + p)
         sys.exit(1)
-    print("every file parses as Luau.")
+    print("every file parses as Luau, and every Enum it names is one Roblox has.")
 
 
 if __name__ == "__main__":

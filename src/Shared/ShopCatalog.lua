@@ -194,6 +194,7 @@ ShopCatalog.REWARD = {
 	HARDCORE = 1.5,
 	BEST_BONUS = 10,
 	STORY = 150, -- finishing the story (all four levels): Hardcore and the 2x pass multiply it as they do a run
+	TRUE = 300, -- the true ending (clocked in, the gates opened, his face seen), once a save: the 2x pass doubles it
 	-- THE DAILY CHEST (EconomyService.claimDaily), by day of the streak; day seven's from then on while it lasts.
 	DAILY = { 20, 30, 40, 50, 60, 80, 120 },
 	CACHE = 25, -- a hidden cache found (one a level, Interactables.cache), once a save
@@ -207,12 +208,13 @@ ShopCatalog.REWARD = {
 -- Engagement, Badges; a few a day are free), then put its id here. With 0 nothing is awarded and nothing errors, and
 -- the paste check lists the ones still to make.
 ShopCatalog.BADGES = {
-	-- A level played to its end: City Shore, Sky Pools, the Sunken City, the Flooded Halls.
-	level = { [1] = 0, [2] = 0, [3] = 0, [4] = 0 },
+	-- A level played to its end, by its level id: City Shore, Sky Pools, the Sunken City, the Flooded Halls, Hill House.
+	level = { [1] = 0, [2] = 0, [3] = 0, [4] = 0, [5] = 0 },
 	story = 0, -- the story played to its end
 	storyHardcore = 0, -- a whole story in Hardcore, from City Shore, every level's time counted
 	backRooms = 0, -- found the back rooms (too many falls in one run): a secret
 	materials = 0, -- every material stood on in a level (EconomyService.foundMaterial)
+	trueEnding = 0, -- the true ending: clocked in, the gates opened, his face seen (EconomyService.trueEnding)
 }
 
 function ShopCatalog.all(): { Item }
@@ -368,7 +370,15 @@ type Motes = { texture: string, colours: { Color3 }, size: { number }, fade: { n
 	speed: { number }, spread: number?, accel: Vector3?, drag: number?, spin: { number }?, light: number?, at: Vector3?,
 	trailing: boolean?, streak: boolean? }
 type Glow = { colour: Color3, brightness: number, range: number }
-type Ribbon = { colours: { Color3 }, width: number, life: number, light: number }
+-- A STRAND of a trail (the hundred-and-seventh pass, from your notes: "the trail should be less wide ... more creative"):
+-- a thin ribbon `width` studs across (the trail's, unless its own), drawn from `at` about your middle and moved there on
+-- every screen by CosmeticsClient: "helix" round you (`radius` out, `speed` a second), "wave" side to side, "bob" up and
+-- down, "bounce" hopping, "zigzag" crackling, "flutter" in a figure of eight, or "still". Its own colours along it, or
+-- the trail's; `fade` how see-through it starts; `texture` one of Roblox's own, repeated along it.
+type Strand = { at: Vector3, motion: string, radius: number?, speed: number?, phase: number?, colours: { Color3 }?,
+	width: number?, fade: number?, texture: string? }
+-- `spread`: each strand one of the trail's colours, spread along the list (the swatch).
+type Ribbon = { colours: { Color3 }, width: number, life: number, light: number, strands: { Strand }, spread: boolean? }
 type Look = { ribbon: Ribbon?, motes: { Motes }, glow: Glow? }
 
 -- The swatch trail: every material's colour along one ribbon (the catalogue's own, filled in below).
@@ -377,7 +387,11 @@ local swatchColours: { Color3 } = {}
 local LOOKS: { [string]: Look } = {
 	-- TRAILS
 	SoapSuds = {
-		ribbon = { colours = { rgb(255, 255, 255), rgb(222, 238, 252), rgb(180, 212, 240) }, width = 1, life = 0.8, light = 0.15 },
+		ribbon = { colours = { rgb(255, 255, 255), rgb(222, 238, 252), rgb(180, 212, 240) }, width = 0.22, life = 0.85, light = 0.15,
+			-- Two threads of suds twisting round each other.
+			strands = { { at = Vector3.new(0, -0.3, 0), motion = "helix", radius = 0.7, speed = 5 },
+				{ at = Vector3.new(0, -0.3, 0), motion = "helix", radius = 0.7, speed = 5, phase = math.pi,
+					colours = { rgb(236, 226, 255), rgb(206, 220, 250) } } } },
 		motes = {
 			{ texture = TEX.smoke, colours = { rgb(255, 255, 255), rgb(214, 234, 252) }, size = { 0.25, 0.45 },
 				fade = { 0.35, 0.6, 1 }, life = { 0.9, 1.5 }, rate = 7, speed = { 0.2, 0.7 }, spread = 180,
@@ -387,7 +401,9 @@ local LOOKS: { [string]: Look } = {
 		},
 	},
 	HoneyDrip = {
-		ribbon = { colours = { rgb(255, 222, 130), rgb(239, 159, 39), rgb(168, 92, 10) }, width = 1.25, life = 1.15, light = 0.3 },
+		ribbon = { colours = { rgb(255, 222, 130), rgb(239, 159, 39), rgb(168, 92, 10) }, width = 0.34, life = 1.3, light = 0.3,
+			-- One thick thread of honey, sagging slowly as it is drawn out.
+			strands = { { at = Vector3.new(0, -0.5, 0), motion = "bob", radius = 0.22, speed = 1.6 } } },
 		motes = {
 			-- Honey dripping off it: round golden drops, falling.
 			{ texture = TEX.smoke, colours = { rgb(255, 206, 90), rgb(214, 128, 20) }, size = { 0.26, 0.2, 0.14 },
@@ -400,7 +416,11 @@ local LOOKS: { [string]: Look } = {
 		glow = { colour = rgb(255, 190, 90), brightness = 0.5, range = 7 },
 	},
 	SlimeGlow = {
-		ribbon = { colours = { rgb(214, 255, 130), rgb(151, 196, 89), rgb(58, 140, 30) }, width = 1.15, life = 0.95, light = 0.85 },
+		ribbon = { colours = { rgb(214, 255, 130), rgb(151, 196, 89), rgb(58, 140, 30) }, width = 0.3, life = 0.95, light = 0.85,
+			-- A wobbling string of slime, and a darker one under it, out of step.
+			strands = { { at = Vector3.new(0, -0.3, 0), motion = "wave", radius = 0.45, speed = 7 },
+				{ at = Vector3.new(0, -0.75, 0), motion = "wave", radius = 0.3, speed = 7, phase = 2.2, width = 0.18,
+					colours = { rgb(120, 200, 60), rgb(58, 140, 30) } } } },
 		motes = {
 			{ texture = TEX.smoke, colours = { rgb(190, 255, 110), rgb(90, 180, 40) }, size = { 0.24, 0.16 },
 				fade = { 0.05, 1 }, life = { 0.6, 0.9 }, rate = 5, speed = { 0, 0.3 }, spread = 25,
@@ -409,7 +429,11 @@ local LOOKS: { [string]: Look } = {
 		glow = { colour = rgb(160, 255, 100), brightness = 0.9, range = 8 },
 	},
 	CloudPuff = {
-		ribbon = { colours = { rgb(255, 255, 255), rgb(232, 230, 252), rgb(206, 203, 246) }, width = 1.45, life = 1.2, light = 0.1 },
+		ribbon = { colours = { rgb(255, 255, 255), rgb(232, 230, 252), rgb(206, 203, 246) }, width = 0.42, life = 1.3, light = 0.1,
+			-- Three faint wisps, drifting apart and together.
+			strands = { { at = Vector3.new(0, 0.6, 0), motion = "wave", radius = 0.35, speed = 1.1, fade = 0.45 },
+				{ at = Vector3.new(0, -0.2, 0), motion = "wave", radius = 0.4, speed = 0.9, phase = 2, fade = 0.4 },
+				{ at = Vector3.new(0, -1, 0), motion = "wave", radius = 0.3, speed = 1.3, phase = 4, fade = 0.5 } } },
 		motes = {
 			{ texture = TEX.smoke, colours = { rgb(255, 255, 255), rgb(228, 226, 252) }, size = { 0.6, 1.5 },
 				fade = { 0.5, 0.7, 1 }, life = { 1.2, 2 }, rate = 6, speed = { 0.1, 0.4 }, spread = 180,
@@ -417,29 +441,45 @@ local LOOKS: { [string]: Look } = {
 		},
 	},
 	GreenRibbon = {
-		ribbon = { colours = { rgb(150, 225, 160), rgb(58, 150, 88), rgb(30, 100, 60) }, width = 0.95, life = 0.95, light = 0.2 },
+		ribbon = { colours = { rgb(150, 225, 160), rgb(58, 150, 88), rgb(30, 100, 60) }, width = 0.3, life = 1.05, light = 0.2,
+			-- The key's ribbon, fluttering in a figure of eight.
+			strands = { { at = Vector3.new(0, 0.2, 0), motion = "flutter", radius = 0.55, speed = 4 } } },
 		motes = {
 			{ texture = TEX.sparkle, colours = { rgb(200, 255, 200) }, size = { 0.2, 0 }, fade = { 0.3, 1 },
 				life = { 0.4, 0.7 }, rate = 3, speed = { 0, 0.2 }, light = 0.6, trailing = true },
 		},
 	},
 	SeaGlass = {
-		ribbon = { colours = { rgb(214, 250, 238), rgb(130, 212, 190), rgb(70, 160, 140) }, width = 1.05, life = 0.95, light = 0.4 },
+		ribbon = { colours = { rgb(214, 250, 238), rgb(130, 212, 190), rgb(70, 160, 140) }, width = 0.24, life = 1, light = 0.4,
+			-- Two glassy threads turning slowly, one of them glinting all along.
+			strands = { { at = Vector3.new(0, -0.2, 0), motion = "helix", radius = 0.55, speed = 2.5 },
+				{ at = Vector3.new(0, -0.2, 0), motion = "helix", radius = 0.55, speed = 2.5, phase = math.pi, width = 0.4,
+					texture = TEX.sparkle, fade = 0.2, colours = { rgb(235, 255, 250), rgb(150, 230, 210) } } } },
 		motes = {
 			{ texture = TEX.sparkle, colours = { rgb(235, 255, 250), rgb(150, 230, 210) }, size = { 0, 0.32, 0 },
 				fade = { 0.1, 1 }, life = { 0.4, 0.8 }, rate = 7, speed = { 0, 0.3 }, light = 1, trailing = true },
 		},
 	},
 	Swatch = {
-		ribbon = { colours = swatchColours, width = 1.2, life = 1.1, light = 0.25 },
+		ribbon = { colours = swatchColours, width = 0.16, life = 1.1, light = 0.25, spread = true,
+			-- Every material's colour, five threads one over another: a band of all of them, rippling.
+			strands = { { at = Vector3.new(0, 0.2, 0), motion = "wave", radius = 0.14, speed = 3 },
+				{ at = Vector3.new(0, 0.02, 0), motion = "wave", radius = 0.14, speed = 3, phase = 0.35 },
+				{ at = Vector3.new(0, -0.16, 0), motion = "wave", radius = 0.14, speed = 3, phase = 0.7 },
+				{ at = Vector3.new(0, -0.34, 0), motion = "wave", radius = 0.14, speed = 3, phase = 1.05 },
+				{ at = Vector3.new(0, -0.52, 0), motion = "wave", radius = 0.14, speed = 3, phase = 1.4 } } },
 		motes = {
 			{ texture = TEX.sparkle, colours = { rgb(255, 255, 255) }, size = { 0.24, 0 }, fade = { 0.2, 1 },
 				life = { 0.4, 0.8 }, rate = 4, speed = { 0, 0.3 }, light = 0.8, trailing = true },
 		},
 	},
 	LavaRibbon = {
-		ribbon = { colours = { rgb(255, 236, 150), rgb(255, 128, 32), rgb(176, 34, 12), rgb(52, 22, 22) }, width = 1.25,
-			life = 1.05, light = 0.95 },
+		ribbon = { colours = { rgb(255, 236, 150), rgb(255, 128, 32), rgb(176, 34, 12), rgb(52, 22, 22) }, width = 0.26,
+			life = 1.05, light = 0.95,
+			-- A white-hot thread crackling, and the heat round it: dull red, wide and faint.
+			strands = { { at = Vector3.new(0, -0.4, 0), motion = "zigzag", radius = 0.22, speed = 9 },
+				{ at = Vector3.new(0, -0.4, 0), motion = "still", width = 0.7, fade = 0.6,
+					colours = { rgb(255, 120, 40), rgb(150, 30, 12), rgb(52, 22, 22) } } } },
 		motes = {
 			{ texture = TEX.spark, colours = { rgb(255, 214, 110), rgb(255, 96, 24) }, size = { 0.2, 0.12, 0 },
 				fade = { 0, 0.2, 1 }, life = { 0.5, 1.1 }, rate = 12, speed = { 1, 3 }, spread = 60,
@@ -450,7 +490,10 @@ local LOOKS: { [string]: Look } = {
 		glow = { colour = rgb(255, 128, 48), brightness = 1.1, range = 9 },
 	},
 	JellyRibbon = {
-		ribbon = { colours = { rgb(255, 196, 214), rgb(236, 96, 120), rgb(186, 50, 84) }, width = 1.15, life = 0.95, light = 0.4 },
+		ribbon = { colours = { rgb(255, 196, 214), rgb(236, 96, 120), rgb(186, 50, 84) }, width = 0.28, life = 1, light = 0.4,
+			-- Two jelly threads hopping, one after the other.
+			strands = { { at = Vector3.new(-0.25, -0.9, 0), motion = "bounce", radius = 0.7, speed = 5 },
+				{ at = Vector3.new(0.25, -0.9, 0), motion = "bounce", radius = 0.7, speed = 5, phase = 1.57 } } },
 		motes = {
 			{ texture = TEX.smoke, colours = { rgb(255, 150, 180), rgb(236, 96, 120) }, size = { 0.3, 0.22 },
 				fade = { 0.15, 0.3, 1 }, life = { 0.6, 1 }, rate = 5, speed = { 0, 0.3 }, spread = 25,
@@ -458,7 +501,13 @@ local LOOKS: { [string]: Look } = {
 		},
 	},
 	Sprinkles = {
-		ribbon = { colours = { rgb(255, 255, 255), rgb(255, 236, 246) }, width = 0.75, life = 0.7, light = 0.1 },
+		ribbon = { colours = { rgb(255, 255, 255), rgb(255, 236, 246) }, width = 0.12, life = 0.8, light = 0.1,
+			-- A candy stripe: three thin threads, pink, blue and yellow, twisting fast.
+			strands = { { at = Vector3.new(0, -0.2, 0), motion = "helix", radius = 0.45, speed = 7, colours = { rgb(255, 120, 170) } },
+				{ at = Vector3.new(0, -0.2, 0), motion = "helix", radius = 0.45, speed = 7, phase = 2.09,
+					colours = { rgb(110, 190, 255) } },
+				{ at = Vector3.new(0, -0.2, 0), motion = "helix", radius = 0.45, speed = 7, phase = 4.19,
+					colours = { rgb(255, 214, 90) } } } },
 		motes = {
 			{ texture = TEX.sparkle, colours = { rgb(255, 120, 170) }, size = { 0.2, 0.2 }, fade = { 0, 1 }, life = { 0.8, 1.2 },
 				rate = 5, speed = { 1, 2.5 }, spread = 70, accel = Vector3.new(0, -16, 0), spin = { -260, 260 }, trailing = true },
@@ -560,8 +609,12 @@ local LOOKS: { [string]: Look } = {
 -- "drift" (low, slow, at your feet); steps' "press" (pressed into the ground).
 export type Piece = { mesh: string, size: number, colours: { Color3 }, material: string?, alpha: number?, shine: number?,
 	cool: Color3?, wings: string?, light: Color3?, lights: number? }
+-- AN AURA'S RING (the hundred-and-seventh pass: "auras ... even cooler, more pronounced"): `count` of `piece` lying in a
+-- circle round your feet, `radius` out, turning `spin` a second; or with `halo`, over your head, `height` above your
+-- middle.
+export type Ring = { count: number, radius: number, spin: number, halo: boolean?, height: number?, piece: Piece }
 export type Pieces = { motion: string, life: number, every: number?, count: number?, radius: number?, spin: number?,
-	pieces: { Piece } }
+	pieces: { Piece }, ring: Ring? }
 local ASH = rgb(70, 62, 60)
 local PIECES: { [string]: Pieces } = {
 	-- TRAILS
@@ -599,24 +652,39 @@ local PIECES: { [string]: Pieces } = {
 	-- AURAS
 	Bubbles = { motion = "rise", count = 6, radius = 2.1, life = 3.2, pieces = {
 		{ mesh = "Ball", size = 0.55, colours = { rgb(244, 250, 255), rgb(206, 230, 255) }, material = "Glass", alpha = 0.6,
-			shine = 0.45 } } },
+			shine = 0.45 } },
+		-- A ring of little bubbles round your feet.
+		ring = { count = 10, radius = 1.7, spin = 0.35, piece = { mesh = "Ball", size = 0.24,
+			colours = { rgb(244, 250, 255), rgb(206, 230, 255), rgb(236, 226, 255) }, material = "Glass", alpha = 0.45, shine = 0.5 } } },
 	Mist = { motion = "drift", count = 4, radius = 2.2, life = 6, pieces = {
 		{ mesh = "Cos_Cloud_1", size = 1.6, colours = { rgb(236, 250, 244) }, alpha = 0.72, shine = 0 },
 		{ mesh = "Cos_Cloud_2", size = 1.4, colours = { rgb(222, 242, 236) }, alpha = 0.75, shine = 0 } } },
 	Embers = { motion = "rise", count = 7, radius = 1.7, life = 2.4, pieces = {
 		{ mesh = "Cos_Ember_1", size = 0.26, colours = { rgb(255, 214, 120), rgb(255, 150, 50) }, cool = ASH, shine = 0.05 },
-		{ mesh = "Cos_Ember_2", size = 0.22, colours = { rgb(255, 236, 160), rgb(255, 170, 60) }, cool = ASH, shine = 0.05 } } },
+		{ mesh = "Cos_Ember_2", size = 0.22, colours = { rgb(255, 236, 160), rgb(255, 170, 60) }, cool = ASH, shine = 0.05 } },
+		-- A smouldering ring of coals round your feet, turning the other way.
+		ring = { count = 12, radius = 1.5, spin = -0.5, piece = { mesh = "Cos_Ember_1", size = 0.18,
+			colours = { rgb(255, 170, 70), rgb(255, 120, 40), rgb(255, 214, 120) }, shine = 0.05 } } },
 	Sparkle = { motion = "orbit", count = 6, radius = 2.3, life = 1, spin = 0.8, pieces = {
 		{ mesh = "Cos_Gem", size = 0.34, colours = { rgb(255, 226, 140), rgb(250, 199, 117) }, material = "Glass", alpha = 0.1,
 			shine = 0.6 },
-		{ mesh = "Cos_Star", size = 0.36, colours = { rgb(255, 230, 150) }, shine = 0.4 } } },
+		{ mesh = "Cos_Star", size = 0.36, colours = { rgb(255, 230, 150) }, shine = 0.4 } },
+		-- A crown of gold over your head.
+		ring = { count = 8, radius = 0.85, spin = 0.9, halo = true, height = 3, piece = { mesh = "Cos_Gem", size = 0.17,
+			colours = { rgb(255, 226, 140), rgb(250, 199, 117) }, material = "Glass", alpha = 0.1, shine = 0.6 } } },
 	Snowfall = { motion = "fall", count = 8, radius = 2.5, life = 3.4, pieces = {
-		{ mesh = "Cos_Snowflake", size = 0.42, colours = { rgb(255, 255, 255), rgb(226, 238, 255) }, shine = 0.3 } } },
+		{ mesh = "Cos_Snowflake", size = 0.42, colours = { rgb(255, 255, 255), rgb(226, 238, 255) }, shine = 0.3 } },
+		-- A circle of frost at your feet.
+		ring = { count = 10, radius = 1.9, spin = 0.2, piece = { mesh = "Cos_Snowflake", size = 0.26,
+			colours = { rgb(255, 255, 255), rgb(226, 238, 255) }, shine = 0.3 } } },
 	Fireflies = { motion = "hover", count = 5, radius = 2.4, life = 1, pieces = {
 		{ mesh = "Cos_Firefly", size = 0.3, colours = { rgb(70, 64, 40) }, wings = "Cos_FireflyWings",
 			light = rgb(220, 255, 140), lights = 2, shine = 0.1 } } },
 	Starlight = { motion = "orbit", count = 6, radius = 2.5, life = 1, spin = 0.45, pieces = {
-		{ mesh = "Cos_Star", size = 0.42, colours = { rgb(255, 255, 255), rgb(214, 204, 255) }, shine = 0.35 } } },
+		{ mesh = "Cos_Star", size = 0.42, colours = { rgb(255, 255, 255), rgb(214, 204, 255) }, shine = 0.35 } },
+		-- A halo of little stars over your head, turning against the ones round you.
+		ring = { count = 7, radius = 1, spin = -0.6, halo = true, height = 3.1, piece = { mesh = "Cos_Star", size = 0.2,
+			colours = { rgb(255, 255, 255), rgb(214, 204, 255) }, shine = 0.35 } } },
 	-- STEPS
 	HeartStep = { motion = "press", life = 6, pieces = { { mesh = "Cos_Heart", size = 1.1, colours = { rgb(240, 150, 182) },
 		shine = 0.2 } } },
@@ -716,33 +784,62 @@ function ShopCatalog.wear(root: BasePart, trail: Item?, aura: Item?, tag: string
 	if trail and trail.kind == "trail" then
 		local look = LOOKS[trail.id]
 		local ribbon = look and look.ribbon
-		local top = Instance.new("Attachment")
-		top.Name = tag .. "TrailTop"
-		top.Position = Vector3.new(0, 0.9, 0)
-		top:SetAttribute(tag, true)
-		-- What it is, for CosmeticsClient to draw its pieces (the server's look and the shop's try-on alike).
-		top:SetAttribute("PieceTrail", trail.id)
-		top.Parent = root
-		local bottom = Instance.new("Attachment")
-		bottom.Name = tag .. "TrailBottom"
-		bottom.Position = Vector3.new(0, -1.1, 0)
-		bottom:SetAttribute(tag, true)
-		bottom.Parent = root
-		local band = Instance.new("Trail")
-		band.Name = tag .. "Trail"
-		band.Attachment0 = top
-		band.Attachment1 = bottom
-		band.Color = if ribbon then colourSequence(ribbon.colours) else ColorSequence.new(trail.colour, trail.colour:Lerp(Color3.new(1, 1, 1), 0.5))
-		band.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(0.6, 0.55),
-			NumberSequenceKeypoint.new(1, 1) })
-		local width = if ribbon then ribbon.width else 1
-		band.WidthScale = NumberSequence.new({ NumberSequenceKeypoint.new(0, width), NumberSequenceKeypoint.new(1, 0.15) })
-		band.Lifetime = if ribbon then ribbon.life else 0.7
-		band.MinLength = 0.05
-		band.LightEmission = if ribbon then ribbon.light else 0.25
-		band.FaceCamera = true
-		band:SetAttribute(tag, true)
-		band.Parent = root
+		-- ITS STRANDS (the hundred-and-seventh pass): each a thin ribbon between two attachments its `width` apart, which
+		-- CosmeticsClient moves about you every frame by the strand's motion (named on the top one: StrandMotion and the
+		-- rest). The first top is the trail's own (PieceTrail, for its pieces). A trail with no look is one still strand.
+		local strands: { Strand } = if ribbon then ribbon.strands else { { at = Vector3.new(0, -0.2, 0), motion = "still" } }
+		for index, strand in ipairs(strands) do
+			local suffix = if index == 1 then "" else tostring(index)
+			local half = (strand.width or (if ribbon then ribbon.width else 0.3)) / 2
+			local top = Instance.new("Attachment")
+			top.Name = tag .. "TrailTop" .. suffix
+			top.Position = strand.at + Vector3.new(0, half, 0)
+			top:SetAttribute(tag, true)
+			if index == 1 then
+				-- What it is, for CosmeticsClient to draw its pieces (the server's look and the shop's try-on alike).
+				top:SetAttribute("PieceTrail", trail.id)
+			end
+			top:SetAttribute("StrandMotion", strand.motion)
+			top:SetAttribute("StrandAt", strand.at)
+			top:SetAttribute("StrandHalf", half)
+			top:SetAttribute("StrandRadius", strand.radius or 0)
+			top:SetAttribute("StrandSpeed", strand.speed or 0)
+			top:SetAttribute("StrandPhase", strand.phase or 0)
+			top.Parent = root
+			local bottom = Instance.new("Attachment")
+			bottom.Name = tag .. "TrailBottom" .. suffix
+			bottom.Position = strand.at - Vector3.new(0, half, 0)
+			bottom:SetAttribute(tag, true)
+			bottom.Parent = root
+			local band = Instance.new("Trail")
+			band.Name = tag .. "Trail" .. suffix
+			band.Attachment0 = top
+			band.Attachment1 = bottom
+			local colours = strand.colours
+			if not colours and ribbon and ribbon.spread and #ribbon.colours > 0 then
+				local pick = math.clamp(math.floor((index - 1) / #strands * #ribbon.colours) + 1, 1, #ribbon.colours)
+				colours = { ribbon.colours[pick] }
+			end
+			colours = colours or (if ribbon then ribbon.colours else nil)
+			band.Color = if colours then colourSequence(colours)
+				else ColorSequence.new(trail.colour, trail.colour:Lerp(Color3.new(1, 1, 1), 0.5))
+			local fade = strand.fade or 0.1
+			band.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, fade),
+				NumberSequenceKeypoint.new(0.55, fade + (1 - fade) * 0.5), NumberSequenceKeypoint.new(1, 1) })
+			-- Full width where it leaves you, to nothing at its end (a scale over 1 is not drawn wider).
+			band.WidthScale = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0) })
+			band.Lifetime = if ribbon then ribbon.life else 0.7
+			band.MinLength = 0.05
+			band.LightEmission = if ribbon then ribbon.light else 0.25
+			band.FaceCamera = true
+			if strand.texture then
+				band.Texture = strand.texture
+				band.TextureMode = Enum.TextureMode.Wrap
+				band.TextureLength = 1.6
+			end
+			band:SetAttribute(tag, true)
+			band.Parent = root
+		end
 		if look then
 			local from = Instance.new("Attachment")
 			from.Name = tag .. "TrailMotes"
@@ -853,6 +950,7 @@ ShopCatalog.MATERIALS = {
 	{ key = "KineticSand", name = "Kinetic sand", colour = rgb(214, 180, 140) },
 	{ key = "Slime", name = "Slime", colour = rgb(130, 214, 90) },
 	{ key = "Soap", name = "Soap", colour = rgb(236, 232, 246) },
+	{ key = "Cookie", name = "Cookie", colour = rgb(212, 156, 92) },
 	{ key = "CreamyKeyboard", name = "Creamy keyboard", colour = rgb(240, 232, 214) },
 	{ key = "Salt", name = "Salt crust", colour = rgb(232, 232, 226) },
 	{ key = "Lava", name = "Lava crust", colour = rgb(214, 80, 40) },
@@ -1000,5 +1098,5 @@ function ShopCatalog.reward(length: string, hardcore: boolean, best: boolean, do
 	return amount
 end
 
-ShopCatalog.STAMP = "2228c0d8"
+ShopCatalog.STAMP = "a893da9c"
 return ShopCatalog

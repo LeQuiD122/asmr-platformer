@@ -35,10 +35,10 @@ for checker in (HUB, SHOP, STORY, PARSE):
 MUTATIONS = [
     ('the embers plain again', CAT, SHOP, 'accel = Vector3.new(0, -6, 0), light = 1, streak = true,', 'accel = Vector3.new(0, -6, 0), light = 1,'),
     ('a streak drawn as a dot', CAT, SHOP, '\t\tm.Orientation = Enum.ParticleOrientation.VelocityParallel\n', ''),
-    ('the badge one flat colour', ECON, SHOP, 'local fill = Instance.new("UIGradient")', 'local fill = Instance.new("Frame")'),
+    ('the badge one flat colour', ECON, SHOP, 'local fill = Instance.new("UIGradient")\n\t\tfill.Color = ColorSequence.new({', 'local fill = Instance.new("Frame")\n\t\tfill.Color = ColorSequence.new({'),
     ('no crown', ECON, SHOP, 'crown.Name = "Crown"', 'crown.Name = "Top"'),
     ('no shine', ECON, SHOP, 'shine.Name = "Shine"', 'shine.Name = "Glint"'),
-    ('no outline', ECON, SHOP, 'word.TextStrokeTransparency = 0\n', 'word.TextStrokeTransparency = 1\n'),
+    ('no outline', ECON, SHOP, 'word.TextStrokeColor3 = VIP_INK\n\t\tword.TextStrokeTransparency = 0\n', 'word.TextStrokeColor3 = VIP_INK\n\t\tword.TextStrokeTransparency = 1\n'),
     ('a crown of one point', ECON, SHOP, 'for k = 0, 2 do', 'for k = 0, 0 do'),
     ('the shine never swept', SHOPC, SHOP, '\tshineVipBadges()\n', ''),
     ('the shine never moving', SHOPC, SHOP, '{ Offset = Vector2.new(1, 0) }):Play()', '{ Offset = Vector2.new(-1, 0) }):Play()'),

@@ -43,6 +43,10 @@ local REACH = 6 -- studs below the root a foot can land
 local PRINT_SIZE = Vector3.new(1.3, 0.05, 1.6)
 
 -- How long each print lasts, and how it goes.
+-- THE MODELLED PRINTS TURNED ROUND (the hundred-and-twenty-third pass, from your test: "the honey steps are reversed
+-- 180 degrees"): the pieces come out of Blender facing back along the way you walk, so a paw's toes and a sole's toe
+-- were behind its pad. Turned, they lead, as the flat prints' tops do.
+local MESH_TURN = CFrame.Angles(0, math.pi, 0)
 local PRINT_LIFE: { [string]: number } = { HeartStep = 6, StarStep = 6, HoneyPaw = 10, BubbleSole = 2.6, SlimeStep = 5,
 	EmberStep = 5 }
 
@@ -222,7 +226,7 @@ local function lay(id: string, at: Vector3, up: Vector3, ahead: Vector3)
 	forward = forward.Unit
 	local right = up:Cross(-forward)
 	local life = PRINT_LIFE[id] or 6
-	local made = meshPrint(id, CFrame.fromMatrix(at, right, up), life)
+	local made = meshPrint(id, CFrame.fromMatrix(at, right, up) * MESH_TURN, life)
 	if made then
 		game:GetService("Debris"):AddItem(made, life + 0.2)
 		keepPrint(made)
@@ -478,5 +482,5 @@ function StepService.start()
 	print("StepService: running, " .. StepService.VERSION)
 end
 
-StepService.STAMP = "4c4558b7"
+StepService.STAMP = "f8fc4255"
 return StepService

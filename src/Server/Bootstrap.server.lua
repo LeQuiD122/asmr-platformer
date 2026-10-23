@@ -143,6 +143,9 @@ ensureRemoteEvent(remoteEventsFolder, "HallsCinema")
 ensureRemoteEvent(remoteEventsFolder, "StoryMoment")
 -- WHAT YOU SAY TO THE TOWNSFOLK (Townsfolk offers your choices, TalkClient shows them and sends back the one chosen).
 ensureRemoteEvent(remoteEventsFolder, "Talk")
+-- HILL HOUSE'S HALL (the hundred-and-twelfth pass): the server says "key" as you take his key off its hook, and
+-- HillHouseClient plays it as a scene on your screen.
+ensureRemoteEvent(remoteEventsFolder, "HillScene")
 -- THE SHOP (EconomyService on the server, ShopService on the client): the client asks to buy or wear
 -- something (ShopRequest) and reads its tokens and what it owns (ShopState); the server says when that
 -- changes (ShopUpdate) and what a finished run paid (TokensEarned).
@@ -223,6 +226,10 @@ local SkyPoolsService = if skyModule then require(skyModule :: ModuleScript) :: 
 local skyTeardown: (() -> ())? = nil
 -- The Sunken City's drowned city, aquarium and drain. Optional in the same way: a place without it
 -- still runs Level 3, as a bare flat ring finishing at the end of its route.
+-- HILL HOUSE (the hundred-and-eleventh pass): the crag, the garden and the house at the end of level 5. Optional in the
+-- same way: a place without it still runs Hill House, as a spiral finishing at the end of its route.
+local hillModule = Services:WaitForChild("HillHouseService", 5)
+local HillHouseService = if hillModule then require(hillModule :: ModuleScript) :: any else nil
 local sunkenModule = Services:WaitForChild("SunkenCityService", 5)
 local SunkenCityService = if sunkenModule then require(sunkenModule :: ModuleScript) :: any else nil
 -- Disconnects the drain's watch and the aquarium glass. The city itself goes with Workspace.Levels.
@@ -498,6 +505,10 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 	if DiveFinaleService then
 		pcall(DiveFinaleService.stop)
 	end
+	-- Hill House's crag is terrain, so it goes first too (its parts go with the level; its ground would not).
+	if HillHouseService then
+		pcall(HillHouseService.stop)
+	end
 	levelInstance = LevelService.startLevel(level, players, origin)
 	runLength = HubService.getRequest().length
 	runBackdrop = level.backdrop
@@ -595,6 +606,11 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 				levelInstance.finishPart.CFrame = landing
 			end
 			local unride = FloodedHallsService.attachSlide(built :: Model, function(player)
+				-- THE TRUE ENDING seen (the hundred-and-sixteenth pass): a rider who clocked in at the time clock by Mr
+				-- Barlow came through the gates to his face; its reward, once a save, before the run's own.
+				if player:GetAttribute("ClockedIn") == true and EconomyService and EconomyService.trueEnding then
+					pcall(EconomyService.trueEnding, player)
+				end
 				if finishRunFor then
 					finishRunFor(player)
 				end
@@ -667,6 +683,8 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 		ending = "with the slide into the clouds"
 	elseif level.finale == "drain" then
 		ending = "down the harbour drain"
+	elseif level.finale == "house" then
+		ending = "at his front door"
 	end
 	print(("Bootstrap: %s (level %s) ends %s."):format(tostring(level.name), tostring(level.levelId), ending))
 	if level.finale == "dive" then
@@ -712,6 +730,39 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 			else
 				warn("Bootstrap: the high dive failed to build, so this level is finishing at the "
 					.. "end of its route instead: " .. tostring(diveErr))
+			end
+		end
+	end
+
+	-- ===== HILL HOUSE (the hundred-and-eleventh pass) =====
+	--
+	-- The crag, the garden and the house, built beside the route's end (HillHouseService). Like the dive, the door IS
+	-- the ending, so the old finish line stands down once it is built; and every way it can fail falls back to it and
+	-- says so.
+	if level.finale == "house" then
+		if not HillHouseService then
+			warn("Bootstrap: this level is Hill House, and there is no ServerScriptService.Services.HillHouseService in "
+				.. "this place, so it is finishing at the end of its route instead, with no house. Paste "
+				.. "src/Server/Services/HillHouseService.lua in as a ModuleScript named exactly HillHouseService.")
+		elseif not (levelInstance.finishFrame and levelInstance.centre and levelInstance.killY) then
+			warn("Bootstrap: this level is Hill House, and LevelService handed back no finish frame, centre or kill "
+				.. "plane, so the house cannot be placed. Re-paste src/Server/Services/LevelService.lua.")
+		else
+			local houseOk, houseErr = pcall(function()
+				HillHouseService.start(levelInstance.finishFrame, workspace:WaitForChild("Levels"), levelInstance.centre,
+					levelInstance.killY, function(player: Player)
+						if finishRunFor then
+							finishRunFor(player)
+						end
+					end)
+			end)
+			if houseOk then
+				if levelInstance.finishPart then
+					levelInstance.finishPart.CanTouch = false
+				end
+			else
+				warn("Bootstrap: Hill House failed to build, so this level is finishing at the end of its route "
+					.. "instead: " .. tostring(houseErr))
 			end
 		end
 	end
@@ -907,6 +958,10 @@ local function endLevelWorld()
 	if DiveFinaleService then
 		pcall(DiveFinaleService.stop)
 	end
+	-- Hill House's ground is terrain, which the level's teardown would not take.
+	if HillHouseService then
+		pcall(HillHouseService.stop)
+	end
 	LevelService.endLevel()
 	levelInstance = nil
 	tearDownLevelWorld()
@@ -917,10 +972,10 @@ local function tellStory(player: Player, what: string, extra: any?)
 	HubVoteState:FireClient(player, "story", { what = what, extra = extra })
 end
 
--- THE STORY'S LEVEL (run.index of LevelDefinitions.All) for everyone still in it, at the length it was voted. Anyone
+-- THE STORY'S LEVEL (run.index of LevelDefinitions.Story) for everyone still in it, at the length it was voted. Anyone
 -- who wandered into the squish room meanwhile is left out of it; with nobody left, the story is over.
 local function storyLevel(run: any, origin: Vector3?)
-	local level = LevelDefinitions.All[run.index]
+	local level = LevelDefinitions.Story[run.index]
 	HubService.setLevel(level.levelId)
 	local going = {}
 	for player in pairs(run.players) do
@@ -941,14 +996,14 @@ local function storyLevel(run: any, origin: Vector3?)
 		return nil
 	end
 	print(("Bootstrap: the story goes on to %s (%d of %d) for %d player(s)."):format(
-		tostring(level.name), run.index, #LevelDefinitions.All, #going))
+		tostring(level.name), run.index, #LevelDefinitions.Story, #going))
 	return startChosenLevel(HubService.scaledLevel(level, run.length), going, origin or HubService.levelOrigin())
 end
 
 -- A STORY BEGUN FROM THE LOBBY, from the level the furthest-behind of its players got to (their saves), so nobody
 -- misses one. Only one begun from City Shore can set a time.
 local function startStory(players: { Player }, origin: Vector3)
-	local from = #LevelDefinitions.All
+	local from = #LevelDefinitions.Story
 	for _, player in ipairs(players) do
 		local at = 1
 		if EconomyService and EconomyService.storyAt then
@@ -959,7 +1014,7 @@ local function startStory(players: { Player }, origin: Vector3)
 		end
 		from = math.min(from, at)
 	end
-	from = math.clamp(from, 1, #LevelDefinitions.All)
+	from = math.clamp(from, 1, #LevelDefinitions.Story)
 	local run = { players = {}, done = {}, index = from, from = from, length = HubService.getRequest().length,
 		total = {}, fair = {}, waiting = false }
 	for _, player in ipairs(players) do
@@ -980,7 +1035,7 @@ local function storyNext(run: any)
 	if storyRun ~= run or run.moving then
 		return
 	end
-	if run.index >= #LevelDefinitions.All then
+	if run.index >= #LevelDefinitions.Story then
 		storyRun = nil
 		for player in pairs(run.players) do
 			if player.Parent == Players and HubService.isInRun(player) then
@@ -1082,7 +1137,7 @@ local function storyStep(player: Player)
 		return
 	end
 	HubService.returnToHub(player)
-	tellStory(player, "waiting", { playing = playing, level = LevelDefinitions.All[run.index].name })
+	tellStory(player, "waiting", { playing = playing, level = LevelDefinitions.Story[run.index].name })
 	if not run.waiting then
 		run.waiting = true
 		local index = run.index
@@ -1714,7 +1769,7 @@ function wireCheckpointing(players: { Player })
 		local story = storyRun
 		local storyInfo: any = nil
 		if story and story.players[player] then
-			local of = #LevelDefinitions.All
+			local of = #LevelDefinitions.Story
 			local last = story.index >= of
 			-- WHERE THEIR OWN WALKING HAD GOT TO before this level (their save): the story's reward is for someone who
 			-- reached its last level themselves, not for someone who joined it there late.
@@ -1735,7 +1790,7 @@ function wireCheckpointing(players: { Player })
 			storyInfo = {
 				step = story.index,
 				of = of,
-				next = if last then nil else LevelDefinitions.All[story.index + 1].name,
+				next = if last then nil else LevelDefinitions.Story[story.index + 1].name,
 				total = if last and fair then story.total[player] else nil,
 			}
 			if last then
@@ -2077,7 +2132,8 @@ local function caughtInBackRooms(player: Player, at: Vector3)
 	if story and story:IsA("RemoteEvent") then
 		story:FireClient(player, "caught", { at = at })
 	end
-	task.wait(1.6)
+	-- (Long enough for the whole of it on their screen: him over you, his face, the lunge; StoryClient's CAUGHT.)
+	task.wait(3.9)
 	if not player.Parent or player:GetAttribute("InLevel") ~= "backRooms" then
 		return
 	end
@@ -2398,61 +2454,71 @@ end)
 -- PASTE STAMPS (written by tools/stamp.py, not by hand): what each module's STAMP says when it is current.
 local PASTE_STAMPS: { [string]: { [string]: string } } = {
 	shared = {
-		Conversations = "4f4c4cb5",
-		Keepsakes = "3c18d973",
-		LobbyLayout = "fa28ae08",
-		MaterialConfig = "dc90b4f4",
-		Poses = "91b97109",
-		ShopCatalog = "2228c0d8",
+		ChunkDefinitions = "4210d3cc",
+		Conversations = "3ea9ed08",
+		Keepsakes = "2213dd3d",
+		LevelDefinitions = "4fc9bd94",
+		LobbyLayout = "d2908861",
+		MaterialAppearance = "b1cbae82",
+		MaterialConfig = "cb2d1920",
+		PlanShapes = "c4c2dee5",
+		Poses = "f120320d",
+		ShopCatalog = "a893da9c",
 		SkyPath = "ee880e00",
-		Style = "16cb4e3a",
+		Style = "34c3e714",
+		SunkenPath = "938bcf38",
 		WaterSounds = "f8d3e842",
 	},
 	server = {
-		BackRoomsService = "f8c9249f",
+		BackRoomsService = "ca6fa480",
 		BestTimeService = "71828c8e",
 		DiveFinaleService = "f9e1544f",
-		EconomyService = "0b849edf",
-		FloodedHallsService = "ce0c84fb",
-		HubService = "d5991690",
-		Interactables = "14cc0d41",
+		EconomyService = "66b1627b",
+		FloodedHallsService = "facf4cb4",
+		HillHouseService = "2b03c327",
+		HubService = "f3c4e0b7",
+		Interactables = "3ee2e4f1",
 		LeaderboardService = "5cb1004e",
-		LightingService = "913e4c54",
-		SkyPoolsService = "3b8f2fe4",
-		SquishRoomService = "560d0f12",
-		StoryService = "618da104",
+		LightingService = "e8009ba0",
+		SkyPoolsService = "d628dbf4",
+		SquishRoomService = "87302c64",
+		StoryService = "527b60fd",
 		SunkenCityService = "1f4fbbe3",
 		TimerService = "4c754864",
-		Townsfolk = "eb96a0f8",
+		Townsfolk = "0d6b3e76",
 	},
 	client = {
-		AmbienceService = "1f86d816",
-		AudioService = "c13317c7",
-		Cinema = "370ca4e7",
-		CityShoreClient = "a1d9908a",
-		CosmeticsClient = "ec389bcc",
+		AmbienceService = "93ae5f36",
+		AudioService = "1096b908",
+		Cinema = "87246380",
+		CityShoreClient = "bf8a0666",
+		CosmeticsClient = "2e4a024f",
 		DeathService = "88f12ebc",
-		DeformationRenderer = "e633bde2",
-		DevPanelClient = "3bb09fad",
-		EmoteService = "148273ad",
-		FloodedHallsClient = "49a6c165",
+		DeformationRenderer = "2c44d45e",
+		DevPanelClient = "61fc5413",
+		EmoteService = "ef8c7244",
+		FloodedHallsClient = "bfede0cc",
+		HillHouseClient = "899d813c",
 		HubLeverService = "cb5ad0b8",
 		HubVoteService = "39a9ce1b",
 		JournalService = "a9e90c21",
-		Maw = "92892b24",
-		OnboardingService = "9f7e2ef0",
+		LobbyLife = "19fe7174",
+		Maw = "17049ea6",
+		OnboardingService = "5de561e4",
 		PauseMenuService = "466ea02d",
-		ScreenEffects = "1aad43c7",
+		PlayerLife = "32becc65",
+		ScreenEffects = "1aab395f",
 		SearchlightClient = "25ab1038",
-		ShopLook = "5dc54558",
-		ShopService = "0e161fe6",
-		SkyPoolsClient = "503f7b67",
+		ShopLook = "b104ab03",
+		ShopService = "9fa2efc2",
+		SkyPoolsClient = "6361e442",
 		SquishRoomClient = "d8a5bf07",
-		StepService = "4c4558b7",
-		StoryClient = "bdfcffa3",
-		SunkenCityClient = "3f209060",
-		TalkClient = "972bf443",
-		UIService = "f88bd7c7",
+		StalkerClient = "54373819",
+		StepService = "f8fc4255",
+		StoryClient = "fb1f02a8",
+		SunkenCityClient = "655616d7",
+		TalkClient = "d2da2c3b",
+		UIService = "75a6c86e",
 		ViewModeService = "fa7b7c02",
 	},
 }
@@ -2470,7 +2536,7 @@ local function pasteCheck()
 	local StarterPlayerScripts = game:GetService("StarterPlayer"):FindFirstChild("StarterPlayerScripts")
 	local SoundService = game:GetService("SoundService")
 	local SERVER_MODULES = { "BackRoomsService", "BackdropService", "BestTimeService", "ChunkService", "DeformationService",
-		"DiveFinaleService", "EconomyService", "FloodedHallsService", "HubService", "Interactables",
+		"DiveFinaleService", "EconomyService", "FloodedHallsService", "HillHouseService", "HubService", "Interactables",
 		"LeaderboardService", "LevelService", "LightingService", "PlayerStateService", "SkyPoolsService",
 		"SquishRoomService", "StoryService", "SunkenCityService", "TimerService", "Townsfolk" }
 	local SHARED_MODULES = { "ChunkDefinitions", "Conversations", "HallRoute", "Keepsakes", "LevelDefinitions",
@@ -2478,9 +2544,10 @@ local function pasteCheck()
 		"Style", "SubRegionGrid", "SunkenPath", "Types", "WaterSounds" }
 	local CLIENT_MODULES = { "AmbienceService", "AudioService", "Cinema", "CityShoreClient", "CloudService", "CosmeticsClient",
 		"DeathService", "DeformationRenderer", "DevPanelClient", "EmoteService", "FloodedHallsClient",
-		"HubLeverService", "HubVoteService", "InputService", "JournalService", "Maw", "OnboardingService",
+		"HillHouseClient", "HubLeverService", "HubVoteService", "InputService", "JournalService", "LobbyLife", "Maw", "OnboardingService",
+		"PlayerLife",
 		"PauseMenuService", "ScreenEffects", "SeaService", "SearchlightClient", "ShopService", "SkyPoolsClient",
-		"ShopLook", "SquishRoomClient", "StepService", "StoryClient", "SunkenCityClient", "TalkClient", "UIService",
+		"ShopLook", "SquishRoomClient", "StalkerClient", "StepService", "StoryClient", "SunkenCityClient", "TalkClient", "UIService",
 		"ViewModeService" }
 	-- Taken out of the game: still there, they would run alongside what replaced them.
 	local GONE = { "KeepsakeService", "PromptStyleService" }
@@ -2488,21 +2555,24 @@ local function pasteCheck()
 	-- audio/sheets/: the chunks' since the eighty-eighth pass, the keypad's and the last two materials' since the
 	-- ninety-sixth). AudioService plays a sheet in place of any single files of its event, so those can go.
 	local MATERIAL_FAMILIES = { "charcoalSnap", "claySquish", "cloudHush", "lavaCrust", "leafBrush", "legoClick", "needohSquish",
-		"ooblSquelch", "saltCrunch", "snowPack" }
+		"saltCrunch", "snowPack" }
 	local SHEET_SOUNDS = { "bubblePop_x4", "button_clicky_x4", "button_linear_x3", "button_release_x3", "button_tactile_x3",
-		"chocolateChunk_x4", "chocolateSnap_x4", "foamCompress_x4", "iceCrack_x4", "jelloWobble_x4",
-		"jellyBounce_x4", "kineticSandImprint_x4", "slimeBoing_x4", "soapCrumble_x4", "switchClack_x4" }
+		"chocolateChunk_x4", "chocolateSnap_x4", "cookieCrunch_x4", "foamCompress_x4", "iceCrack_x4", "jelloWobble_x4",
+		"jellyBounce_x4", "kineticSandImprint_x4", "slimeBoing_x4", "soapCrumble_x4", "switchClack_x4", "ooblSquelch_x4" }
 	local BUTTON_SOUNDS = { "button_circuit_1", "button_circuit_2", "button_combo_1", "button_combo_2" }
 	local STORY_SOUNDS = { "GateGroan", "Heartbeat", "JawsShut", "MawRumble", "SecretSting", "Siren", "WaterRush",
 		"CloudWhoosh", "CulvertWash", "DiveBoard", "DiveSplash", "DiveWind", "DrainFall", "EndChord", "FlumeRush",
 		"HallsChord", "PlungeWind", "PoolPlunge", "PoolsChord", "ShoreChord", "SkimSlap", "SlideRush", "SunkenChord",
 		"UnderwaterHum", "WhirlRoar", "MawGrowl", "MawRoar", "TownsfolkVoice_x9", "CountdownTock_x3", "JournalAdd", "DoorSlam", "TubeDie",
-		"ScreamerStab" }
-	-- Each of these has a stand-in (EndChord for the four chords, a built-in sound for the roars and the growl).
+		"ScreamerStab", "ArchPass", "KeyLift", "ClockStart", "ClockPunch",
+		"MorningChord", "PoolsSong", "BarStrike", "BrickBurst" }
+	-- Each of these has a stand-in (EndChord for the four chords, a built-in sound for the roars and the growl, the
+	-- pool's chord for the Sky Pools' song).
 	local OPTIONAL = { ShoreChord = true, PoolsChord = true, SunkenChord = true, HallsChord = true, WhirlRoar = true,
 		MawGrowl = true, MawRoar = true, TownsfolkVoice_x9 = true, CountdownTock_x3 = true, JournalAdd = true,
-		DoorSlam = true, TubeDie = true, ScreamerStab = true }
-	local AMBIENCE_SOUNDS = { "BathsHum", "HarbourNight", "HoldDrone", "PartyFar", "RoofWind", "ShoreSea" }
+		DoorSlam = true, TubeDie = true, ScreamerStab = true, ArchPass = true, KeyLift = true, ClockStart = true,
+		ClockPunch = true, MorningChord = true, PoolsSong = true, BarStrike = true, BrickBurst = true }
+	local AMBIENCE_SOUNDS = { "BathsHum", "HarbourNight", "HillMorning", "HoldDrone", "PartyFar", "RoofWind", "ShoreSea" }
 	-- The lobby's own (the ninety-sixth pass): optional, as the lobby has the server's stand-ins without them.
 	-- The levels' water (the ninety-eighth pass): optional, as the old splash stands in without them.
 	local WATER_SOUNDS = { "Dip_x8", "Drip_x8", "Lap", "Pour", "Splash_x6", "Stream" }
@@ -2735,8 +2805,8 @@ local function pasteCheck()
 		local badges = if ok and type(catalog) == "table" then catalog.BADGES else nil
 		if type(badges) == "table" then
 			local unmade: { string } = {}
-			for index, level in ipairs(LevelDefinitions.All) do
-				if type(badges.level) ~= "table" or (badges.level[index] or 0) == 0 then
+			for _, level in ipairs(LevelDefinitions.All) do
+				if type(badges.level) ~= "table" or (badges.level[level.levelId] or 0) == 0 then
 					table.insert(unmade, tostring(level.name))
 				end
 			end

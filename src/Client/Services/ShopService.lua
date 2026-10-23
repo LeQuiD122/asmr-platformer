@@ -14,6 +14,17 @@
 -- IT ASKS, IT NEVER TELLS. Every buy and equip goes to the server (EconomyService) as an action and an
 -- item id; what comes back is the truth about your tokens and what you own, and the shop redraws from
 -- that. Robux goes through Roblox's own purchase window.
+--
+-- MADE OVER (the hundred-and-twenty-second pass, from your test: "resize the UI appropriately so that the edges of the
+-- categories are not cut off, and work on the colours a bit more, and improve those animations ... and the layout, and
+-- make it fancier"). The tabs have room all round inside their strip, so no outline is cut off; each is a chunky key in
+-- its own colour with its own little drawing, on a lip it presses into, the chosen one deeper, lifted and bounced. A
+-- tab's colour runs through everything in it: its tiles washed pale in it, outlined and lettered in deeper shades of it
+-- (its hue kept, never greyed). The tiles sit on a tray over the background, each a card on a lip that lifts under the
+-- pointer and sinks under a press, and they pop in one after another when a tab opens; the rare ones and what is sold
+-- for Robux have a gleam running round their outline; the best value of the token packs says so. Your tokens count up
+-- and down, the difference rising off the wallet; beside them, on a wide screen, how many of a tab are yours. A tab
+-- chosen or a thing bought puffs a little of the background's material (ShopLook.puff).
 
 local ContextActionService = game:GetService("ContextActionService")
 local GuiService = game:GetService("GuiService")
@@ -21,6 +32,7 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -45,7 +57,7 @@ local ShopLook: any = (function(): any
 end)()
 
 local ShopService = {}
-ShopService.VERSION = "the shop, 2026-10-20"
+ShopService.VERSION = "the shop, 2026-10-22"
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
@@ -73,9 +85,15 @@ local LOOK = {
 	soonInk = rgb(68, 68, 65),
 	white = rgb(255, 255, 255),
 }
+-- A TAB'S COLOURS (family, below): its own, a pale wash of it, and two deeper shades of it for outlines and words.
+type Family = { fill: Color3, pale: Color3, edge: Color3, ink: Color3 }
 local CHUNKY = Style.FONT.display
 local BODY = Style.FONT.heading
 local MIN_TOUCH = 44 -- pixels: nothing you press is smaller than a thumb
+-- ROOM (the hundred-and-twenty-second pass): inside the tabs' strip and round the grid's tiles, so an outline, a lip or a
+-- lift is never cut off at an edge; and the lips the tabs and the tiles stand on.
+local TAB_ROOM, TAB_LIP = 10, 5
+local TILE_ROOM, TILE_LIP = 9, 6
 local CLOSE_ACTION = "ShopClose"
 local TAB_ACTION = "ShopTabs"
 
@@ -100,6 +118,16 @@ local shop = {
 	stateRemote = nil :: RemoteFunction?,
 	controls = nil :: any,
 	seenOwned = nil :: { [string]: boolean }?, -- what the server said you owned last time (a Robux background unboxed)
+	palette = nil :: Family?, -- this tab's colours, for everything drawn now
+	fresh = false, -- a tab has just opened: its tiles pop in
+	wide = false, -- room in the header for how many of a tab are yours
+	drawn = nil :: string?, -- what the grid was last drawn from
+	gleams = {} :: { UIGradient }, -- the lights running round the rare tiles' outlines
+	-- LIVELIER (the hundred-and-thirty-fifth pass, from your test: "improve the shop looks even more"): turned, swept and
+	-- breathed by the same frame loop as the gleams.
+	rays = {} :: { Frame }, -- the sunbursts behind the icons
+	sheens = {} :: { { grad: UIGradient, phase: number } }, -- the sheen across each card
+	breathe = {} :: { UIScale }, -- the prices you can pay
 }
 
 -- ===== SMALL THINGS =====
@@ -110,12 +138,13 @@ local function corner(parent: Instance, radius: UDim)
 	c.Parent = parent
 end
 
-local function stroke(parent: Instance, colour: Color3, thickness: number)
+local function stroke(parent: Instance, colour: Color3, thickness: number): UIStroke
 	local s = Instance.new("UIStroke")
 	s.Color = colour
 	s.Thickness = thickness
 	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	s.Parent = parent
+	return s
 end
 
 local function label(parent: Instance, name: string, text: string, font: Font, size: number, colour: Color3): TextLabel
@@ -261,6 +290,15 @@ local function toast(text: string)
 	end
 	holder.Text = text
 	holder.Visible = true
+	-- In the colours of the tab it is said over.
+	local fam = shop.palette
+	if fam then
+		holder.BackgroundColor3 = fam.pale
+		holder.TextColor3 = fam.ink
+		if ui.toastEdge then
+			ui.toastEdge.Color = fam.edge
+		end
+	end
 	holder.Position = UDim2.new(0.5, 0, 1, 20)
 	TweenService:Create(holder, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 		{ Position = UDim2.new(0.5, 0, 1, -24) }):Play()
@@ -351,6 +389,86 @@ local function drawIcon(icon: Frame, item: any)
 	end
 end
 
+-- ===== A TAB'S COLOURS (the hundred-and-twenty-second pass, from your test: "work on the colours a bit more") =====
+--
+-- Every tab's own colour (ShopLook.TAB_COLOURS) runs through everything in it: its tiles washed pale in it, outlined
+-- and lettered in deeper shades of the same colour (its hue kept and its colour strengthened as it darkens, so a deep
+-- shade is never a grey), the tray's scroll bar, the "i" card, the confirm card and the toast. A tab and what is in it
+-- are one family; the next tab is another.
+local function family(tab: string): Family
+	local own = if ShopLook and ShopLook.TAB_COLOURS then ShopLook.TAB_COLOURS[tab] else nil
+	if typeof(own) ~= "Color3" then
+		return { fill = LOOK.panel, pale = LOOK.tile, edge = LOOK.edge, ink = LOOK.ink }
+	end
+	local h, s, v = own:ToHSV()
+	return {
+		fill = own,
+		pale = own:Lerp(LOOK.white, 0.72),
+		edge = Color3.fromHSV(h, math.min(1, s * 1.25 + 0.15), v * 0.42),
+		ink = Color3.fromHSV(h, math.min(1, s + 0.2), v * 0.26),
+	}
+end
+
+-- A TAB'S OWN LITTLE DRAWING, on a white disc at the start of its key: what is in it, made of shapes like the tiles'.
+local function tabGlyph(disc: Frame, tab: string, ink: Color3)
+	if tab == "Featured" then
+		-- A star: two squares, one turned.
+		for _, turn in ipairs({ 0, 45 }) do
+			blob(disc, UDim2.fromScale(0.46, 0.46), UDim2.fromScale(0.5, 0.5), ink, false).Rotation = turn
+		end
+	elseif tab == "Steps" then
+		blob(disc, UDim2.fromScale(0.2, 0.34), UDim2.fromScale(0.38, 0.58), ink, true).Rotation = -12
+		blob(disc, UDim2.fromScale(0.2, 0.34), UDim2.fromScale(0.62, 0.42), ink, true).Rotation = 12
+	elseif tab == "Trails" then
+		blob(disc, UDim2.fromScale(0.3, 0.3), UDim2.fromScale(0.66, 0.5), ink, true)
+		blob(disc, UDim2.fromScale(0.2, 0.2), UDim2.fromScale(0.4, 0.5), ink, true).BackgroundTransparency = 0.35
+		blob(disc, UDim2.fromScale(0.12, 0.12), UDim2.fromScale(0.22, 0.5), ink, true).BackgroundTransparency = 0.6
+	elseif tab == "Sounds" then
+		for k, tall in ipairs({ 0.3, 0.56, 0.4 }) do
+			blob(disc, UDim2.fromScale(0.14, tall), UDim2.fromScale(0.3 + (k - 1) * 0.2, 0.5), ink, false)
+		end
+	elseif tab == "Auras" then
+		local ring = blob(disc, UDim2.fromScale(0.62, 0.62), UDim2.fromScale(0.5, 0.5), ink, true)
+		ring.BackgroundTransparency = 1
+		stroke(ring, ink, 2)
+		blob(disc, UDim2.fromScale(0.22, 0.22), UDim2.fromScale(0.5, 0.5), ink, true)
+	elseif tab == "Emotes" then
+		blob(disc, UDim2.fromScale(0.28, 0.28), UDim2.fromScale(0.5, 0.3), ink, true)
+		blob(disc, UDim2.fromScale(0.42, 0.3), UDim2.fromScale(0.5, 0.68), ink, false)
+	elseif tab == "Passes" then
+		-- A ticket, with a notch at each end.
+		blob(disc, UDim2.fromScale(0.64, 0.4), UDim2.fromScale(0.5, 0.5), ink, false)
+		for _, x in ipairs({ 0.18, 0.82 }) do
+			blob(disc, UDim2.fromScale(0.16, 0.16), UDim2.fromScale(x, 0.5), LOOK.white, true)
+		end
+	elseif tab == "Tokens" then
+		local c = blob(disc, UDim2.fromScale(0.6, 0.6), UDim2.fromScale(0.5, 0.5), LOOK.token, true)
+		stroke(c, LOOK.tokenEdge, 2)
+		blob(c, UDim2.fromScale(0.42, 0.42), UDim2.fromScale(0.5, 0.5), rgb(255, 238, 200), true)
+	elseif tab == "Backgrounds" then
+		-- A swatch, shading from one colour into another.
+		local swatch = blob(disc, UDim2.fromScale(0.58, 0.58), UDim2.fromScale(0.5, 0.5), LOOK.white, false)
+		local wash = Instance.new("UIGradient")
+		wash.Rotation = 45
+		wash.Color = ColorSequence.new(ink, ink:Lerp(LOOK.white, 0.6))
+		wash.Parent = swatch
+	end
+end
+
+-- THE BEST VALUE of the token packs: the most tokens for each Robux, from the catalogue's own numbers.
+local function bestPack(): string?
+	local best, most = nil, 0
+	for _, item in ipairs(ShopCatalog.inTab("Tokens")) do
+		if item.kind == "tokens" and type(item.tokens) == "number" and type(item.robux) == "number" and item.robux > 0 then
+			local each = item.tokens / item.robux
+			if each > most then
+				best, most = item.id, each
+			end
+		end
+	end
+	return best
+end
+
 -- ===== WHAT THE SERVER SAYS =====
 
 local function owned(id: string): boolean
@@ -377,7 +495,91 @@ local function paintTitle()
 		local theme = ShopLook.theme()
 		ui.title.BackgroundColor3 = theme.title
 		ui.title.TextColor3 = theme.titleInk
+		if ui.titleEdge then
+			ui.titleEdge.Color = theme.edge
+		end
+		-- (And the tray the tiles sit on in a pale wash of it, outlined in its edge.)
+		if ui.tray then
+			ui.tray.BackgroundColor3 = theme.top:Lerp(LOOK.white, 0.8)
+			ui.trayEdge.Color = theme.edge
+		end
 	end
+end
+
+-- YOUR TOKENS (the hundred-and-twenty-second pass): counted up or down to what the server says rather than jumped,
+-- the difference rising off the wallet (gained) or sinking from it (spent), and the wallet swelling or squeezing.
+-- With the shop shut, just written.
+local function showTokens(value: number)
+	local words = ui.tokenWords
+	local from = ui.shownTokens
+	ui.shownTokens = value
+	if not words then
+		return
+	end
+	if not (shop.open and typeof(from) == "number" and from ~= value) then
+		words.Text = tostring(value)
+		return
+	end
+	local counter = Instance.new("NumberValue")
+	counter.Value = from
+	counter.Changed:Connect(function(now: number)
+		if ui.shownTokens == value then
+			words.Text = tostring(math.floor(now + 0.5))
+		end
+	end)
+	local count = TweenService:Create(counter, TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ Value = value })
+	count.Completed:Once(function()
+		if ui.shownTokens == value then
+			words.Text = tostring(value)
+		end
+		counter:Destroy()
+	end)
+	count:Play()
+	local wallet, panel = ui.wallet, ui.panel
+	if not (wallet and panel) then
+		return
+	end
+	local gained = value > from
+	local swell = wallet:FindFirstChildOfClass("UIScale")
+	if swell then
+		swell.Scale = if gained then 1.14 else 0.9
+		TweenService:Create(swell, TweenInfo.new(0.42, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	end
+	local s = math.max(ui.bounce.Scale, 0.01)
+	local at = (wallet.AbsolutePosition - panel.AbsolutePosition) / s
+	local size = wallet.AbsoluteSize / s
+	local delta = label(panel, "Delta", (if gained then "+" else "") .. tostring(value - from), CHUNKY, 24,
+		if gained then LOOK.robuxEdge else LOOK.pinkInk)
+	delta.ZIndex = 25
+	delta.Size = UDim2.fromOffset(size.X, 30)
+	delta.Position = UDim2.fromOffset(at.X, at.Y + size.Y + 2)
+	local rim = Instance.new("UIStroke")
+	rim.Color = LOOK.white
+	rim.Thickness = 2
+	rim.Parent = delta
+	local drift = TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenService:Create(delta, drift, { Position = UDim2.fromOffset(at.X, at.Y + size.Y + (if gained then -16 else 24)),
+		TextTransparency = 1 }):Play()
+	TweenService:Create(rim, drift, { Transparency = 1 }):Play()
+	game:GetService("Debris"):AddItem(delta, 1)
+end
+
+-- What the grid is drawn from, in one line: an answer from the server that changes none of it does not draw the grid
+-- again (which would cut short its tiles popping in).
+local function drawnFrom(data: any): string
+	local bits = { tostring(data.ready), tostring(data.crates), tostring(data.chances) }
+	for _, set in ipairs({ data.owned, data.equipped }) do
+		if type(set) == "table" then
+			local keys = {}
+			for key, value in pairs(set) do
+				table.insert(keys, tostring(key) .. "=" .. tostring(value))
+			end
+			table.sort(keys)
+			table.insert(bits, table.concat(keys, ","))
+		end
+	end
+	return table.concat(bits, "|")
 end
 
 local function accept(data: any)
@@ -386,7 +588,11 @@ local function accept(data: any)
 	end
 	shop.data = data
 	if ui.tokenWords then
-		ui.tokenWords.Text = if data.ready then tostring(data.tokens) else "..."
+		if data.ready and typeof(data.tokens) == "number" then
+			showTokens(data.tokens)
+		else
+			ui.tokenWords.Text = "..."
+		end
 	end
 	-- THE BACKGROUND YOU HAVE ON (the hundred-and-sixth pass): the shop opens on it, and turns to it at once if it is
 	-- open; and a background bought with Robux is unboxed the moment Roblox says it is yours.
@@ -406,7 +612,8 @@ local function accept(data: any)
 		end
 		shop.seenOwned = table.clone(now)
 	end
-	if shop.open then
+	-- (Drawn again only when it changes what is drawn: an answer about your tokens alone leaves the tiles as they are.)
+	if shop.open and drawnFrom(data) ~= shop.drawn then
 		render()
 	end
 end
@@ -458,6 +665,10 @@ end
 
 local function pop(at: GuiObject)
 	uiSound("bubblePop", 0.7)
+	-- (And a little of the background's material out of it.)
+	if ShopLook and ShopLook.puff then
+		ShopLook.puff(at, 1.2)
+	end
 	local scale = Instance.new("UIScale")
 	scale.Scale = 1.12
 	scale.Parent = at
@@ -496,7 +707,18 @@ local function confirm(text: string, yesText: string, onYes: () -> ())
 	modal.Card.Message.Text = text
 	ui.yesWords.Text = yesText
 	ui.onYes = onYes
+	-- In the tab's colours; the dark coming up behind it, and the card swinging in.
+	local fam: Family = shop.palette or family(shop.tab)
+	modal.Card.BackgroundColor3 = fam.pale
+	modal.Card.Message.TextColor3 = fam.ink
+	if ui.cardEdge then
+		ui.cardEdge.Color = fam.edge
+	end
 	modal.Visible = true
+	modal.BackgroundTransparency = 1
+	TweenService:Create(modal, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { BackgroundTransparency = 0.4 }):Play()
+	modal.Card.Rotation = -4
+	TweenService:Create(modal.Card, TweenInfo.new(0.34, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Rotation = 0 }):Play()
 	local scale = modal.Card:FindFirstChildOfClass("UIScale")
 	if scale then
 		scale.Scale = 0.85
@@ -719,6 +941,13 @@ local function showInfo(item: any, anchor: GuiObject, hover: boolean)
 	end
 	shop.infoFor = item.id
 	shop.infoHover = hover
+	-- In the tab's colours.
+	local fam: Family = shop.palette or family(shop.tab)
+	if ui.infoEdge then
+		ui.infoEdge.Color = fam.edge
+	end
+	ui.infoTitle.TextColor3 = fam.ink
+	ui.infoKind.TextColor3 = fam.edge
 	ui.infoTitle.Text = item.name
 	local kind = if item.earn then EARN_WORDS[item.earn] else nil
 	ui.infoKind.Text = kind or KIND_WORDS[item.kind] or ""
@@ -743,34 +972,77 @@ end
 
 local function makeTile(item: any, order: number): TextButton
 	local t = shop.text
+	local fam: Family = shop.palette or family(shop.tab)
+	-- THE TILE is the button (a controller selects it; pressed, it tries the thing on). What you see is a card in the
+	-- tab's colours on a lip of its deeper shade (the hundred-and-twenty-second pass): under the pointer the card lifts
+	-- off its lip and its icon swells; pressed, it sinks onto the lip and springs back.
 	local tile = Instance.new("TextButton")
 	tile.Name = item.id
 	tile.LayoutOrder = order
 	tile.AutoButtonColor = false
 	tile.Text = ""
-	tile.BackgroundColor3 = LOOK.tile
+	tile.BackgroundTransparency = 1
 	tile.BorderSizePixel = 0
 	tile.Selectable = true
 	corner(tile, UDim.new(0, 18))
-	stroke(tile, LOOK.edge, 3)
-	-- LIT FROM ABOVE: a soft light at the top of the tile, fading into its own colour.
+	local lip = Instance.new("Frame")
+	lip.Name = "Lip"
+	lip.BackgroundColor3 = fam.edge
+	lip.BorderSizePixel = 0
+	lip.Position = UDim2.new(0, 0, 0, TILE_LIP)
+	lip.Size = UDim2.new(1, 0, 1, -TILE_LIP)
+	lip.Parent = tile
+	corner(lip, UDim.new(0, 18))
+	local card = Instance.new("Frame")
+	card.Name = "Card"
+	card.BackgroundColor3 = LOOK.white
+	card.BorderSizePixel = 0
+	card.Size = UDim2.new(1, 0, 1, -TILE_LIP)
+	card.Parent = tile
+	corner(card, UDim.new(0, 18))
+	local outline = stroke(card, fam.edge, 3)
+	-- LIT FROM ABOVE: white at the top of the card, fading into the tab's own pale colour.
 	local light = Instance.new("UIGradient")
 	light.Rotation = 90
-	light.Color = ColorSequence.new(LOOK.white, LOOK.tile)
-	light.Parent = tile
-	-- A LITTLE LIFT under the pointer.
+	light.Color = ColorSequence.new(LOOK.white, fam.pale)
+	light.Parent = card
 	local lift = Instance.new("UIScale")
 	lift.Parent = tile
+	local swell: UIScale? = nil -- the icon's, made with it below
+	local rest, raised, sunk = UDim2.new(0, 0, 0, 0), UDim2.new(0, 0, 0, -2), UDim2.new(0, 0, 0, TILE_LIP - 1)
+	local quick = TweenInfo.new(0.14, Enum.EasingStyle.Quad)
+	local spring = TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	tile.MouseEnter:Connect(function()
-		TweenService:Create(lift, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { Scale = 1.03 }):Play()
+		TweenService:Create(lift, quick, { Scale = 1.03 }):Play()
+		TweenService:Create(card, quick, { Position = raised }):Play()
+		if swell then
+			TweenService:Create(swell, spring, { Scale = 1.08 }):Play()
+		end
 	end)
 	tile.MouseLeave:Connect(function()
-		TweenService:Create(lift, TweenInfo.new(0.15, Enum.EasingStyle.Quad), { Scale = 1 }):Play()
+		TweenService:Create(lift, quick, { Scale = 1 }):Play()
+		TweenService:Create(card, quick, { Position = rest }):Play()
+		if swell then
+			TweenService:Create(swell, quick, { Scale = 1 }):Play()
+		end
+	end)
+	tile.InputBegan:Connect(function(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			TweenService:Create(card, TweenInfo.new(0.06, Enum.EasingStyle.Quad), { Position = sunk }):Play()
+		end
+	end)
+	tile.InputEnded:Connect(function(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			TweenService:Create(card, spring, { Position = rest }):Play()
+		end
 	end)
 
-	local cellW, cellH = shop.cell.X, shop.cell.Y
+	-- (cellH is the card's, over its lip.)
+	local cellW, cellH = shop.cell.X, shop.cell.Y - TILE_LIP
 	local priceH = math.max(MIN_TOUCH + 5, math.floor(cellH * 0.2))
-	local iconD = math.floor(math.min(cellW * 0.5, cellH * 0.38))
+	-- (A little smaller than it was, for bigger words under it; the hundred-and-twenty-third pass, from your test: "when I
+	-- hover over the icons in the shop, they get bigger which is cool but the text gets covered, work on sizing a bit".)
+	local iconD = math.floor(math.min(cellW * 0.46, cellH * 0.34))
 	local top = math.floor(10 * t)
 	-- ITS STAGE: a soft wash of the item's own colour behind the icon, so each tile has its colour.
 	local stage = Instance.new("Frame")
@@ -781,32 +1053,63 @@ local function makeTile(item: any, order: number): TextButton
 	stage.BackgroundColor3 = item.colour
 	stage.BackgroundTransparency = 0.72
 	stage.BorderSizePixel = 0
-	stage.Parent = tile
+	stage.ClipsDescendants = true
+	stage.Parent = card
 	corner(stage, UDim.new(0, 14))
+	-- A SUNBURST behind it, turning slowly: rays of the item's colour gone pale, fading out toward their ends.
+	local rays = Instance.new("Frame")
+	rays.Name = "Rays"
+	rays.AnchorPoint = Vector2.new(0.5, 0.5)
+	rays.Position = UDim2.new(0.5, 0, 0, 4 + iconD / 2)
+	rays.Size = UDim2.fromOffset(iconD * 2.4, iconD * 2.4)
+	rays.BackgroundTransparency = 1
+	rays.Parent = stage
+	for k = 0, 5 do
+		local ray = Instance.new("Frame")
+		ray.Name = "Ray"
+		ray.AnchorPoint = Vector2.new(0.5, 0.5)
+		ray.Position = UDim2.fromScale(0.5, 0.5)
+		ray.Size = UDim2.new(0, math.floor(iconD * 0.24), 1, 0)
+		ray.Rotation = k * 30
+		ray.BackgroundColor3 = item.colour:Lerp(LOOK.white, 0.55)
+		ray.BorderSizePixel = 0
+		ray.Parent = rays
+		local fade = Instance.new("UIGradient")
+		fade.Rotation = 90
+		fade.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, 0.45),
+			NumberSequenceKeypoint.new(0.5, 0.35), NumberSequenceKeypoint.new(0.7, 0.45), NumberSequenceKeypoint.new(1, 1) })
+		fade.Parent = ray
+	end
+	table.insert(shop.rays, rays)
 
 	local icon = Instance.new("Frame")
 	icon.Name = "Icon"
-	icon.AnchorPoint = Vector2.new(0.5, 0)
-	icon.Position = UDim2.new(0.5, 0, 0, top)
+	-- Held by its middle, so swelling under the pointer it grows evenly all round, into the gap under it and never over
+	-- the name (it grew downward from its top before).
+	icon.AnchorPoint = Vector2.new(0.5, 0.5)
+	icon.Position = UDim2.new(0.5, 0, 0, top + iconD / 2)
 	icon.Size = UDim2.fromOffset(iconD, iconD)
 	icon.BackgroundColor3 = item.colour
 	icon.BorderSizePixel = 0
-	icon.Parent = tile
+	icon.Parent = card
 	corner(icon, UDim.new(0.5, 0))
 	stroke(icon, item.accent, 3)
 	drawIcon(icon, item)
+	local iconSwell = Instance.new("UIScale")
+	iconSwell.Parent = icon
+	swell = iconSwell
 
 	-- THE WORDS, right under the icon, in the shop's own rounded letters: the name, and under it the description
 	-- shrinking to fit its room (never cut off in the middle of a word). The whole of it is on the "i".
 	local nameY = top + iconD + math.floor(8 * t)
-	local nameH = math.floor(22 * t)
-	local name = label(tile, "ItemName", item.name, CHUNKY, math.floor(18 * t), LOOK.ink)
+	local nameH = math.floor(26 * t)
+	local name = label(card, "ItemName", item.name, CHUNKY, math.floor(20 * t), fam.ink)
 	name.AnchorPoint = Vector2.new(0.5, 0)
 	name.Position = UDim2.new(0.5, 0, 0, nameY)
 	name.Size = UDim2.new(1, -16, 0, nameH)
 	name.TextTruncate = Enum.TextTruncate.AtEnd
 	local blurbY = nameY + nameH + 2
-	local blurb = label(tile, "Blurb", item.blurb, CHUNKY, math.floor(14 * t), LOOK.soft)
+	local blurb = label(card, "Blurb", item.blurb, CHUNKY, math.floor(15 * t), fam.edge)
 	blurb.AnchorPoint = Vector2.new(0.5, 0)
 	blurb.Position = UDim2.new(0.5, 0, 0, blurbY)
 	blurb.Size = UDim2.new(1, -18, 0, math.max(14, cellH - priceH - 14 - blurbY))
@@ -814,7 +1117,7 @@ local function makeTile(item: any, order: number): TextButton
 	blurb.TextScaled = true
 	blurb.TextYAlignment = Enum.TextYAlignment.Top
 	local fit = Instance.new("UITextSizeConstraint")
-	fit.MaxTextSize = math.floor(15 * t)
+	fit.MaxTextSize = math.floor(16 * t)
 	fit.MinTextSize = 10
 	fit.Parent = blurb
 
@@ -826,13 +1129,13 @@ local function makeTile(item: any, order: number): TextButton
 	more.BackgroundTransparency = 1
 	more.Position = UDim2.fromOffset(2, 2)
 	more.Size = UDim2.fromOffset(MIN_TOUCH, MIN_TOUCH)
-	more.Parent = tile
+	more.Parent = card
 	local dot = label(more, "Dot", "i", CHUNKY, math.floor(17 * t), LOOK.white)
 	dot.AnchorPoint = Vector2.new(0.5, 0.5)
 	dot.Position = UDim2.fromScale(0.5, 0.5)
 	dot.Size = UDim2.fromOffset(math.floor(26 * t), math.floor(26 * t))
 	dot.BackgroundTransparency = 0
-	dot.BackgroundColor3 = LOOK.soft
+	dot.BackgroundColor3 = fam.edge
 	corner(dot, UDim.new(0.5, 0))
 	more.MouseEnter:Connect(function()
 		showInfo(item, more, true)
@@ -854,12 +1157,13 @@ local function makeTile(item: any, order: number): TextButton
 	-- The badge, top right: Soon, Owned, or On.
 	local chances = if item.id == "SecondChance" and shop.data and typeof(shop.data.chances) == "number" then shop.data.chances else 0
 	local badgeText = if item.soon then "Soon" elseif chances > 0 then ("%d left"):format(chances)
-		elseif equipped(item) then "On" elseif owned(item.id) then "Owned" elseif item.once then "Once only" else nil
+		elseif equipped(item) then "On" elseif owned(item.id) then "Owned" elseif item.once then "Once only"
+		elseif item.kind == "tokens" and item.id == bestPack() then "Best value" else nil
 	if badgeText then
-		local badge = label(tile, "Badge", badgeText, CHUNKY, math.max(12, math.floor(13 * t)),
+		local badge = label(card, "Badge", badgeText, CHUNKY, math.max(12, math.floor(13 * t)),
 			if item.soon then LOOK.soonInk else LOOK.white)
 		badge.BackgroundTransparency = 0
-		badge.BackgroundColor3 = if item.soon then LOOK.soon else LOOK.edge
+		badge.BackgroundColor3 = if item.soon then LOOK.soon elseif badgeText == "Best value" then LOOK.robuxEdge else fam.edge
 		badge.AnchorPoint = Vector2.new(1, 0)
 		badge.Position = UDim2.new(1, -8, 0, 8)
 		badge.AutomaticSize = Enum.AutomaticSize.X
@@ -873,7 +1177,7 @@ local function makeTile(item: any, order: number): TextButton
 	-- ITS RARITY (a background): a pill in the rarity's colour, on the foot of its icon.
 	local rarity = if item.rarity then ShopCatalog.RARITY[item.rarity] else nil
 	if rarity then
-		local pill = label(tile, "Rarity", rarity.name, CHUNKY, math.max(12, math.floor(13 * t)), LOOK.white)
+		local pill = label(card, "Rarity", rarity.name, CHUNKY, math.max(12, math.floor(13 * t)), LOOK.white)
 		pill.BackgroundTransparency = 0
 		pill.BackgroundColor3 = rarity.colour
 		pill.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -888,15 +1192,33 @@ local function makeTile(item: any, order: number): TextButton
 		pillPad.PaddingRight = UDim.new(0, 8)
 		pillPad.Parent = pill
 	end
+	-- A GLEAM RUNNING ROUND THE OUTLINE of the rare ones (an epic background or better) and of what is sold for Robux
+	-- (but the token packs, a whole tab of them): the outline in its colour, with a white light turning round it.
+	local rare = item.rarity == "epic" or item.rarity == "legendary" or item.rarity == "mythic"
+	local gleam = if rare and rarity then rarity.colour elseif item.robux and item.kind ~= "tokens" then LOOK.token else nil
+	if gleam then
+		outline.Color = LOOK.white
+		outline.Thickness = 4
+		local run = Instance.new("UIGradient")
+		run.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, gleam),
+			ColorSequenceKeypoint.new(0.4, gleam),
+			ColorSequenceKeypoint.new(0.5, LOOK.white),
+			ColorSequenceKeypoint.new(0.6, gleam),
+			ColorSequenceKeypoint.new(1, gleam),
+		})
+		run.Parent = outline
+		table.insert(shop.gleams, run)
+	end
 
-	-- THE PRICE: amber for tokens, green for Robux, grey for soon, teal once it is yours.
+	-- THE PRICE: amber for tokens, green for Robux, grey for soon, the tab's own colours once it is yours.
 	local fill, edge, ink, words
 	if item.soon then
 		fill, edge, ink = LOOK.soon, LOOK.soonEdge, LOOK.soonInk
 		words = if item.price then tostring(item.price) else ("R$ " .. tostring(item.robux))
 	elseif item.robux and not (item.kind == "background" and owned(item.id)) then
 		if item.passId ~= nil and owned(item.id) then
-			fill, edge, ink, words = LOOK.tile, LOOK.edge, LOOK.ink, "Owned"
+			fill, edge, ink, words = fam.pale, fam.edge, fam.ink, "Owned"
 		else
 			fill, edge, ink, words = LOOK.robux, LOOK.robuxEdge, LOOK.robuxInk, "R$ " .. tostring(item.robux)
 		end
@@ -918,25 +1240,47 @@ local function makeTile(item: any, order: number): TextButton
 		-- Earned, never sold: what it takes, where a price would be.
 		fill, edge, ink, words = LOOK.soon, LOOK.soonEdge, LOOK.soonInk, "Finish the story"
 	elseif owned(item.id) and item.kind == "emote" then
-		fill, edge, ink, words = LOOK.panel, LOOK.edge, LOOK.ink, "Play"
+		fill, edge, ink, words = fam.fill, fam.edge, fam.ink, "Play"
 	elseif owned(item.id) then
 		-- A sound pack is used, not worn.
 		local sound = item.kind == "sound"
 		if equipped(item) then
-			fill, edge, ink, words = LOOK.edge, LOOK.ink, LOOK.white, if sound then "Stop" else "Take off"
+			fill, edge, ink, words = fam.edge, fam.ink, LOOK.white, if sound then "Stop" else "Take off"
 		else
-			fill, edge, ink, words = LOOK.panel, LOOK.edge, LOOK.ink, if sound then "Use" else "Put on"
+			fill, edge, ink, words = fam.fill, fam.edge, fam.ink, if sound then "Use" else "Put on"
 		end
 	else
 		fill, edge, ink, words = LOOK.token, LOOK.tokenEdge, LOOK.tokenInk, tostring(item.price)
 	end
-	local holder, face, content = squishy(tile, "Price", fill, edge)
+	local holder, face, content = squishy(card, "Price", fill, edge)
 	holder.AnchorPoint = Vector2.new(0.5, 1)
 	holder.Position = UDim2.new(0.5, 0, 1, -8)
 	holder.Size = UDim2.new(1, -20, 0, priceH)
 	if item.price and not owned(item.id) and fill == LOOK.token then
 		coin(content, math.floor(18 * t))
+		-- ONE YOU CAN PAY breathes, gently: what you can have says so.
+		if not item.soon and tokens() >= item.price then
+			local breath = Instance.new("UIScale")
+			breath.Parent = content
+			table.insert(shop.breathe, breath)
+		end
 	end
+	-- A SHEEN sweeping across the card now and then, each tile a beat after the one before it.
+	local sheen = Instance.new("Frame")
+	sheen.Name = "Sheen"
+	sheen.Size = UDim2.fromScale(1, 1)
+	sheen.BackgroundColor3 = LOOK.white
+	sheen.BorderSizePixel = 0
+	sheen.ZIndex = 4
+	sheen.Parent = card
+	corner(sheen, UDim.new(0, 18))
+	local sweep = Instance.new("UIGradient")
+	sweep.Rotation = 20
+	sweep.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.42, 1),
+		NumberSequenceKeypoint.new(0.5, 0.62), NumberSequenceKeypoint.new(0.58, 1), NumberSequenceKeypoint.new(1, 1) })
+	sweep.Offset = Vector2.new(-2, 0)
+	sweep.Parent = sheen
+	table.insert(shop.sheens, { grad = sweep, phase = (order % 12) * 0.38 })
 	buttonWords(content, words, ink, math.floor(19 * t))
 	face.Activated:Connect(function()
 		pressPrice(item, tile)
@@ -979,10 +1323,70 @@ local function makeTile(item: any, order: number): TextButton
 			toast(item.blurb .. ".")
 		end
 	end)
+	-- POPPED IN, one after another, when a tab has just opened (not when the server's answer draws it again).
+	if shop.fresh then
+		lift.Scale = 0
+		task.delay(math.min(order - 1, 12) * 0.035, function()
+			if lift.Parent then
+				TweenService:Create(lift, TweenInfo.new(0.34, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+			end
+		end)
+	end
 	return tile
 end
 
 -- ===== THE GRID AND THE TABS =====
+
+-- THE TABS, painted for the one chosen (the hundred-and-twenty-second pass): every tab in its own colour on a lip of its
+-- deeper shade; the chosen one deep with white words, lifted a little over the rest and bounced as it is chosen; one
+-- under the pointer lifted a little too.
+local function settleTab(part: any)
+	local want = if part.button.Name == shop.tab then 1.06 elseif part.hovered then 1.03 else 1
+	TweenService:Create(part.scale, TweenInfo.new(0.16, Enum.EasingStyle.Quad), { Scale = want }):Play()
+end
+
+local function paintTabs()
+	for _, part in ipairs(ui.tabParts or {}) do
+		local button = part.button
+		local chosen = button.Name == shop.tab
+		local fam = family(button.Name)
+		button.BackgroundColor3 = if chosen then fam.ink else fam.edge
+		part.top.BackgroundColor3 = if chosen then fam.edge else fam.fill
+		part.edge.Color = if chosen then fam.ink else fam.edge
+		part.words.TextColor3 = if chosen then LOOK.white else fam.ink
+		if chosen and not part.chosen then
+			part.scale.Scale = 0.86
+			TweenService:Create(part.scale, TweenInfo.new(0.38, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+				{ Scale = 1.06 }):Play()
+		elseif part.chosen and not chosen then
+			settleTab(part)
+		end
+		part.chosen = chosen
+	end
+end
+
+-- The chosen tab scrolled into the strip when it is off either end of it (a controller's bumpers, a narrow screen).
+local function tabIntoView(button: GuiObject)
+	local strip = ui.tabs
+	if not strip then
+		return
+	end
+	local s = math.max(ui.bounce.Scale, 0.01)
+	local at = strip.CanvasPosition.X
+	local left = (button.AbsolutePosition.X - strip.AbsolutePosition.X) / s + at
+	local right = left + button.AbsoluteSize.X / s
+	local view = strip.AbsoluteSize.X / s
+	local want = at
+	if left - TAB_ROOM < at then
+		want = left - TAB_ROOM
+	elseif right + TAB_ROOM > at + view then
+		want = right + TAB_ROOM - view
+	end
+	if want ~= at then
+		TweenService:Create(strip, TweenInfo.new(0.25, Enum.EasingStyle.Quad),
+			{ CanvasPosition = Vector2.new(math.max(0, want), 0) }):Play()
+	end
+end
 
 render = function()
 	local grid = ui.grid
@@ -999,6 +1403,14 @@ render = function()
 	if ui.loading then
 		ui.loading.Visible = not (data and data.ready)
 	end
+	-- THIS TAB'S COLOURS for everything drawn now; the rare tiles' gleams made afresh with them.
+	local fam = family(shop.tab)
+	shop.palette = fam
+	table.clear(shop.gleams)
+	table.clear(shop.rays)
+	table.clear(shop.sheens)
+	table.clear(shop.breathe)
+	grid.ScrollBarImageColor3 = fam.edge
 	local first: GuiObject? = nil
 	for order, item in ipairs(ShopCatalog.inTab(shop.tab)) do
 		-- BOUGHT ONCE (the starter pack): off Featured once it is yours, and still in its own tab, Owned.
@@ -1009,17 +1421,31 @@ render = function()
 		end
 	end
 	ui.firstTile = first
-	-- EVERY TAB ITS OWN COLOUR (ShopLook.TAB_COLOURS), the chosen one deeper with white words.
-	for _, button in ipairs(ui.tabButtons or {}) do
-		local selected = button.Name == shop.tab
-		local own = if ShopLook and ShopLook.TAB_COLOURS then ShopLook.TAB_COLOURS[button.Name] else nil
-		if own then
-			button.BackgroundColor3 = if selected then own:Lerp(LOOK.edge, 0.55) else own
-			button.TextColor3 = if selected then LOOK.white else LOOK.edge
-		else
-			button.BackgroundColor3 = if selected then LOOK.edge else LOOK.tile
-			button.TextColor3 = if selected then LOOK.tile else LOOK.edge
+	shop.fresh = false
+	shop.drawn = if data then drawnFrom(data) else nil
+	-- EVERY TAB ITS OWN COLOUR (ShopLook.TAB_COLOURS, through family), the chosen one deeper with white words.
+	paintTabs()
+	-- HOW MANY OF THIS TAB ARE YOURS (of what can be had for good: not the token packs, a second chance or the crate).
+	local progress = ui.progress
+	if progress then
+		local have, of = 0, 0
+		for _, item in ipairs(ShopCatalog.inTab(shop.tab)) do
+			if item.kind ~= "tokens" and item.kind ~= "product" and item.kind ~= "crate" and not item.soon then
+				of += 1
+				if owned(item.id) then
+					have += 1
+				end
+			end
 		end
+		progress.Visible = of > 0 and shop.wide
+		progress.BackgroundColor3 = fam.pale
+		ui.progressEdge.Color = fam.edge
+		ui.progressWords.Text = ("%d of %d yours"):format(have, of)
+		ui.progressWords.TextColor3 = fam.ink
+		ui.progressBar.BackgroundColor3 = fam.edge
+		ui.progressFill.BackgroundColor3 = fam.edge
+		TweenService:Create(ui.progressFill, TweenInfo.new(0.45, Enum.EasingStyle.Quad),
+			{ Size = UDim2.fromScale(if of > 0 then have / of else 0, 1) }):Play()
 	end
 end
 
@@ -1027,12 +1453,19 @@ function ShopService.showTab(tab: string)
 	if not table.find(ShopCatalog.TABS, tab) then
 		return
 	end
+	-- (Its tiles pop in when it is another tab; the same one pressed again is only drawn again.)
+	shop.fresh = shop.tab ~= tab
 	shop.tab = tab
 	closeConfirm()
 	render()
 	local grid = ui.grid
 	if grid then
 		grid.CanvasPosition = Vector2.zero
+	end
+	local index = table.find(ShopCatalog.TABS, tab)
+	local part = if index and ui.tabParts then ui.tabParts[index] else nil
+	if part and shop.open then
+		tabIntoView(part.button)
 	end
 	if usingPad() and shop.open and ui.firstTile then
 		GuiService.SelectedObject = ui.firstTile
@@ -1059,22 +1492,34 @@ local function layout()
 
 	local headH = math.max(MIN_TOUCH + 8, math.floor(60 * t))
 	local tabsH = math.max(MIN_TOUCH, math.floor(46 * t))
+	shop.wide = w >= 640
 	ui.header.Size = UDim2.new(1, -(28 + MIN_TOUCH + 16), 0, headH)
 	ui.title.TextSize = math.floor(26 * t)
 	ui.tokenWords.TextSize = math.floor(20 * t)
-	ui.tabs.Position = UDim2.new(0, 14, 0, headH + 12)
-	ui.tabs.Size = UDim2.new(1, -28, 0, tabsH + 6)
-	for _, button in ipairs(ui.tabButtons) do
-		button.TextSize = math.floor(17 * t)
-		button.Size = UDim2.new(0, 0, 0, tabsH)
+	ui.progressWords.TextSize = math.floor(16 * t)
+	-- THE TABS' STRIP, TAB_ROOM bigger than its tabs all round (they sit inside it TAB_ROOM from every edge): a tab's
+	-- outline, its lip and its lift are never cut off where the strip ends.
+	local stripTop = headH + 12 - TAB_ROOM
+	ui.tabs.Position = UDim2.new(0, 14 - TAB_ROOM, 0, stripTop)
+	ui.tabs.Size = UDim2.new(1, -(28 - 2 * TAB_ROOM), 0, tabsH + 2 * TAB_ROOM)
+	local discD = math.floor((tabsH - TAB_LIP) * 0.62)
+	for _, part in ipairs(ui.tabParts) do
+		part.words.TextSize = math.floor(17 * t)
+		part.button.Size = UDim2.new(0, 0, 0, tabsH)
+		part.disc.Size = UDim2.fromOffset(discD, discD)
+		part.pad.PaddingLeft = UDim.new(0, 10 + discD + 8)
 	end
-	local gridTop = headH + tabsH + 26
-	ui.grid.Position = UDim2.new(0, 14, 0, gridTop)
-	ui.grid.Size = UDim2.new(1, -28, 1, -(gridTop + 14))
+	-- THE TRAY under the tabs, and the grid inside it with TILE_ROOM round its tiles.
+	local trayTop = stripTop + tabsH + 2 * TAB_ROOM + 2
+	ui.tray.Position = UDim2.new(0, 12, 0, trayTop)
+	ui.tray.Size = UDim2.new(1, -24, 1, -(trayTop + 12))
+	local gridTop = trayTop + 4
+	ui.grid.Position = UDim2.new(0, 16, 0, gridTop)
+	ui.grid.Size = UDim2.new(1, -36, 1, -(gridTop + 18))
 	local gap = math.floor(12 * t)
-	local inner = (w - 28) - 16 -- the scroll bar's room
+	local inner = (w - 36) - 16 - 2 * TILE_ROOM -- the scroll bar's room, and the room round the tiles
 	local cellW = math.floor((inner - gap * (shop.cols - 1)) / shop.cols)
-	local cellH = math.floor(math.clamp(cellW * 1.2, 170, 300))
+	local cellH = math.floor(math.clamp(cellW * 1.2, 170, 300)) + TILE_LIP
 	shop.cell = Vector2.new(cellW, cellH)
 	ui.gridLayout.CellSize = UDim2.fromOffset(cellW, cellH)
 	ui.gridLayout.CellPadding = UDim2.fromOffset(gap, gap)
@@ -1110,6 +1555,7 @@ local function build()
 	dim.BackgroundTransparency = 0.45
 	dim.Size = UDim2.new(1, 0, 1, 0)
 	dim.Parent = screen
+	ui.dim = dim
 	dim.Activated:Connect(function()
 		ShopService.close()
 	end)
@@ -1159,7 +1605,7 @@ local function build()
 	title.Size = UDim2.new(0, 0, 1, -6)
 	title.LayoutOrder = 1
 	corner(title, UDim.new(0.5, 0))
-	stroke(title, LOOK.pinkInk, 3)
+	ui.titleEdge = stroke(title, LOOK.pinkInk, 3)
 	local titlePad = Instance.new("UIPadding")
 	titlePad.PaddingLeft = UDim.new(0, 18)
 	titlePad.PaddingRight = UDim.new(0, 18)
@@ -1175,6 +1621,9 @@ local function build()
 	wallet.Parent = header
 	corner(wallet, UDim.new(0.5, 0))
 	stroke(wallet, LOOK.amberInk, 3)
+	-- (Swelling as tokens come in, squeezing as they go: showTokens.)
+	Instance.new("UIScale").Parent = wallet
+	ui.wallet = wallet
 	local walletRow = Instance.new("UIListLayout")
 	walletRow.FillDirection = Enum.FillDirection.Horizontal
 	walletRow.VerticalAlignment = Enum.VerticalAlignment.Center
@@ -1208,6 +1657,52 @@ local function build()
 		ShopService.showTab("Tokens")
 	end)
 
+	-- HOW MANY OF THIS TAB ARE YOURS, beside your tokens on a wide screen: words and a bar, in the tab's colours.
+	local progress = Instance.new("Frame")
+	progress.Name = "Progress"
+	progress.BackgroundColor3 = LOOK.tile
+	progress.AutomaticSize = Enum.AutomaticSize.X
+	progress.Size = UDim2.new(0, 0, 1, -10)
+	progress.LayoutOrder = 3
+	progress.Visible = false
+	progress.Parent = header
+	corner(progress, UDim.new(0.5, 0))
+	ui.progressEdge = stroke(progress, LOOK.edge, 3)
+	local progressRow = Instance.new("UIListLayout")
+	progressRow.FillDirection = Enum.FillDirection.Horizontal
+	progressRow.VerticalAlignment = Enum.VerticalAlignment.Center
+	progressRow.Padding = UDim.new(0, 10)
+	progressRow.SortOrder = Enum.SortOrder.LayoutOrder
+	progressRow.Parent = progress
+	local progressPad = Instance.new("UIPadding")
+	progressPad.PaddingLeft = UDim.new(0, 14)
+	progressPad.PaddingRight = UDim.new(0, 14)
+	progressPad.Parent = progress
+	local progressWords = label(progress, "Words", "", CHUNKY, 16, LOOK.ink)
+	progressWords.AutomaticSize = Enum.AutomaticSize.X
+	progressWords.Size = UDim2.new(0, 0, 1, 0)
+	progressWords.LayoutOrder = 1
+	local bar = Instance.new("Frame")
+	bar.Name = "Bar"
+	bar.Size = UDim2.fromOffset(72, 10)
+	bar.BackgroundColor3 = LOOK.edge
+	bar.BackgroundTransparency = 0.75
+	bar.BorderSizePixel = 0
+	bar.LayoutOrder = 2
+	bar.Parent = progress
+	corner(bar, UDim.new(0.5, 0))
+	local barFill = Instance.new("Frame")
+	barFill.Name = "Fill"
+	barFill.Size = UDim2.fromScale(0, 1)
+	barFill.BackgroundColor3 = LOOK.edge
+	barFill.BorderSizePixel = 0
+	barFill.Parent = bar
+	corner(barFill, UDim.new(0.5, 0))
+	ui.progress = progress
+	ui.progressWords = progressWords
+	ui.progressBar = bar
+	ui.progressFill = barFill
+
 	local close = Instance.new("TextButton")
 	close.Name = "Close"
 	close.AnchorPoint = Vector2.new(1, 0)
@@ -1224,8 +1719,19 @@ local function build()
 	close.Activated:Connect(function()
 		ShopService.close()
 	end)
+	-- (Turning under the pointer.)
+	close.MouseEnter:Connect(function()
+		TweenService:Create(close, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Rotation = 90 }):Play()
+	end)
+	close.MouseLeave:Connect(function()
+		TweenService:Create(close, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Rotation = 0 }):Play()
+	end)
 
-	-- THE TABS: a strip that scrolls sideways when it does not fit.
+	-- THE TABS: a strip that scrolls sideways when it does not fit, with TAB_ROOM inside it all round (the hundred-and-
+	-- twenty-second pass, from your test: "resize the UI appropriately so that the edges of the categories are not cut
+	-- off": their outlines were cut along the top and on the left). Each tab is a chunky key: the button is its lip, in
+	-- its colour's deeper shade; on it the face, outlined, with a white disc and the tab's own little drawing; and the
+	-- words. Pressed, the face sinks onto the lip and springs back.
 	local tabs = Instance.new("ScrollingFrame")
 	tabs.Name = "Tabs"
 	tabs.BackgroundTransparency = 1
@@ -1237,39 +1743,126 @@ local function build()
 	tabs.Selectable = false
 	tabs.Parent = panel
 	ui.tabs = tabs
+	local tabRoom = Instance.new("UIPadding")
+	tabRoom.PaddingLeft = UDim.new(0, TAB_ROOM)
+	tabRoom.PaddingRight = UDim.new(0, TAB_ROOM)
+	tabRoom.PaddingTop = UDim.new(0, TAB_ROOM)
+	tabRoom.PaddingBottom = UDim.new(0, TAB_ROOM)
+	tabRoom.Parent = tabs
 	local tabRow = Instance.new("UIListLayout")
 	tabRow.FillDirection = Enum.FillDirection.Horizontal
-	tabRow.Padding = UDim.new(0, 8)
+	tabRow.Padding = UDim.new(0, 12)
 	tabRow.SortOrder = Enum.SortOrder.LayoutOrder
 	tabRow.Parent = tabs
+	-- (Room after the last one too, whether or not the canvas counts the padding on its right.)
+	local tail = Instance.new("Frame")
+	tail.Name = "Tail"
+	tail.BackgroundTransparency = 1
+	tail.LayoutOrder = #ShopCatalog.TABS + 1
+	tail.Size = UDim2.fromOffset(TAB_ROOM, 1)
+	tail.Parent = tabs
 	ui.tabButtons = {}
+	ui.tabParts = {}
 	for order, tab in ipairs(ShopCatalog.TABS) do
+		local fam = family(tab)
 		local button = Instance.new("TextButton")
 		button.Name = tab
 		button.LayoutOrder = order
 		button.AutoButtonColor = false
 		button.AutomaticSize = Enum.AutomaticSize.X
-		button.FontFace = CHUNKY
-		button.Text = tab
-		button.BackgroundColor3 = LOOK.tile
-		button.TextColor3 = LOOK.edge
+		button.Text = ""
+		button.BorderSizePixel = 0
+		button.BackgroundColor3 = fam.edge
 		button.Parent = tabs
 		corner(button, UDim.new(0.5, 0))
-		stroke(button, LOOK.edge, 3)
+		local top = Instance.new("Frame")
+		top.Name = "Face"
+		top.BackgroundColor3 = fam.fill
+		top.BorderSizePixel = 0
+		top.Size = UDim2.new(1, 0, 1, -TAB_LIP)
+		top.Parent = button
+		corner(top, UDim.new(0.5, 0))
+		local edge = stroke(top, fam.edge, 2.5)
+		local disc = Instance.new("Frame")
+		disc.Name = "Disc"
+		disc.AnchorPoint = Vector2.new(0, 0.5)
+		disc.Position = UDim2.new(0, 10, 0.5, 0)
+		disc.BackgroundColor3 = LOOK.white
+		disc.BorderSizePixel = 0
+		disc.Parent = top
+		corner(disc, UDim.new(0.5, 0))
+		tabGlyph(disc, tab, fam.edge)
+		local words = label(button, "Words", tab, CHUNKY, 17, fam.ink)
+		words.AutomaticSize = Enum.AutomaticSize.X
+		words.Size = UDim2.new(0, 0, 1, -TAB_LIP)
+		words.ZIndex = 2
 		local pad = Instance.new("UIPadding")
-		pad.PaddingLeft = UDim.new(0, 16)
-		pad.PaddingRight = UDim.new(0, 16)
-		pad.Parent = button
+		pad.PaddingLeft = UDim.new(0, 44)
+		pad.PaddingRight = UDim.new(0, 18)
+		pad.Parent = words
+		local scale = Instance.new("UIScale")
+		scale.Parent = button
+		local part = { button = button, top = top, edge = edge, disc = disc, words = words, pad = pad, scale = scale,
+			hovered = false, chosen = false }
+		local function sink(down: boolean)
+			local to = if down then UDim2.new(0, 0, 0, TAB_LIP - 1) else UDim2.new(0, 0, 0, 0)
+			local how = if down then TweenInfo.new(0.06, Enum.EasingStyle.Quad)
+				else TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+			TweenService:Create(top, how, { Position = to }):Play()
+			TweenService:Create(words, how, { Position = to }):Play()
+		end
+		button.MouseEnter:Connect(function()
+			part.hovered = true
+			settleTab(part)
+		end)
+		button.MouseLeave:Connect(function()
+			part.hovered = false
+			settleTab(part)
+			sink(false)
+		end)
+		button.InputBegan:Connect(function(input: InputObject)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				sink(true)
+			end
+		end)
+		button.InputEnded:Connect(function(input: InputObject)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				sink(false)
+			end
+		end)
 		button.Activated:Connect(function()
+			if usingPad() then
+				sink(true)
+				task.delay(0.07, sink, false)
+			end
 			if ShopLook then
 				ShopLook.tab(tab)
+				if ShopLook.puff then
+					ShopLook.puff(button, 0.5)
+				end
 			else
 				uiSound("buttonClick", 0.4)
 			end
 			ShopService.showTab(tab)
 		end)
 		table.insert(ui.tabButtons, button)
+		table.insert(ui.tabParts, part)
 	end
+
+	-- THE TRAY the tiles sit on (the hundred-and-twenty-second pass): a pale sheet over the background, in a wash of its
+	-- colours, so what moves in it is behind the tiles and never under their words.
+	local tray = Instance.new("Frame")
+	tray.Name = "Tray"
+	tray.BackgroundColor3 = LOOK.white
+	tray.BackgroundTransparency = 0.25
+	tray.BorderSizePixel = 0
+	tray.ZIndex = 2
+	tray.Parent = panel
+	corner(tray, UDim.new(0, 20))
+	local trayEdge = stroke(tray, LOOK.edge, 3)
+	trayEdge.Transparency = 0.35
+	ui.tray = tray
+	ui.trayEdge = trayEdge
 
 	-- THE GRID.
 	local grid = Instance.new("ScrollingFrame")
@@ -1282,6 +1875,7 @@ local function build()
 	grid.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	grid.CanvasSize = UDim2.new(0, 0, 0, 0)
 	grid.Selectable = false
+	grid.ZIndex = 3
 	grid.Parent = panel
 	ui.grid = grid
 	local gridLayout = Instance.new("UIGridLayout")
@@ -1289,9 +1883,11 @@ local function build()
 	gridLayout.Parent = grid
 	ui.gridLayout = gridLayout
 	local gridPad = Instance.new("UIPadding")
-	gridPad.PaddingTop = UDim.new(0, 4)
-	gridPad.PaddingBottom = UDim.new(0, 12)
-	gridPad.PaddingLeft = UDim.new(0, 2)
+	-- (TILE_ROOM round the tiles: a little more above, for a lifted one's outline, and below, for the lips.)
+	gridPad.PaddingTop = UDim.new(0, TILE_ROOM + 3)
+	gridPad.PaddingBottom = UDim.new(0, TILE_ROOM + 8)
+	gridPad.PaddingLeft = UDim.new(0, TILE_ROOM)
+	gridPad.PaddingRight = UDim.new(0, TILE_ROOM)
 	gridPad.Parent = grid
 	local loading = label(panel, "Loading", "Opening your shop...", CHUNKY, 20, LOOK.edge)
 	loading.Name = "Loading"
@@ -1299,6 +1895,7 @@ local function build()
 	loading.Position = UDim2.fromScale(0.5, 0.6)
 	loading.Size = UDim2.new(1, 0, 0, 30)
 	loading.Visible = false
+	loading.ZIndex = 4
 	ui.loading = loading
 
 	-- THE "i" CARD: an item's whole description and what a thing of its kind does, by its tile.
@@ -1312,7 +1909,7 @@ local function build()
 	info.AutomaticSize = Enum.AutomaticSize.Y
 	info.Parent = panel
 	corner(info, UDim.new(0, 16))
-	stroke(info, LOOK.edge, 3)
+	ui.infoEdge = stroke(info, LOOK.edge, 3)
 	local infoMost = Instance.new("UISizeConstraint")
 	infoMost.MaxSize = Vector2.new(300, 400)
 	infoMost.Parent = info
@@ -1358,6 +1955,7 @@ local function build()
 	modal.BackgroundTransparency = 0.4
 	modal.Size = UDim2.fromScale(1, 1)
 	modal.Visible = false
+	modal.ZIndex = 10
 	modal.Parent = panel
 	corner(modal, UDim.new(0, 26))
 	modal.Activated:Connect(closeConfirm)
@@ -1371,7 +1969,7 @@ local function build()
 	card.Active = true
 	card.Parent = modal
 	corner(card, UDim.new(0, 22))
-	stroke(card, LOOK.edge, 4)
+	ui.cardEdge = stroke(card, LOOK.edge, 4)
 	local cardMax = Instance.new("UISizeConstraint")
 	cardMax.MaxSize = Vector2.new(440, 260)
 	cardMax.Parent = card
@@ -1420,7 +2018,7 @@ local function build()
 	toastFrame.Size = UDim2.new(0, 0, 0, 40)
 	toastFrame.ZIndex = 30
 	corner(toastFrame, UDim.new(0.5, 0))
-	stroke(toastFrame, LOOK.edge, 3)
+	ui.toastEdge = stroke(toastFrame, LOOK.edge, 3)
 	local toastPad = Instance.new("UIPadding")
 	toastPad.PaddingLeft = UDim.new(0, 18)
 	toastPad.PaddingRight = UDim.new(0, 18)
@@ -1475,7 +2073,49 @@ function ShopService.open(tab: string?)
 	ui.screen.Enabled = true
 	ui.panel.Visible = true
 	shop.tab = tab or shop.tab
+	-- (Its tiles pop in, and its tabs pop up one after another: the one it opens on counts as chosen already, so it
+	-- pops up with the rest rather than bouncing first.)
+	shop.fresh = true
+	for _, part in ipairs(ui.tabParts) do
+		part.chosen = part.button.Name == shop.tab
+		part.hovered = false
+	end
 	layout()
+	for k, part in ipairs(ui.tabParts) do
+		part.scale.Scale = 0
+		task.delay(0.08 + k * 0.03, function()
+			if shop.open then
+				TweenService:Create(part.scale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+					{ Scale = if part.button.Name == shop.tab then 1.06 else 1 }):Play()
+			end
+		end)
+	end
+	-- The dark coming up behind it, and the gleams set turning round the rare tiles while it is open.
+	ui.dim.BackgroundTransparency = 1
+	TweenService:Create(ui.dim, TweenInfo.new(0.25, Enum.EasingStyle.Quad), { BackgroundTransparency = 0.45 }):Play()
+	if ui.spin then
+		ui.spin:Disconnect()
+	end
+	ui.spin = RunService.RenderStepped:Connect(function()
+		local now = os.clock()
+		local turn = (now * 80) % 360
+		for _, run in ipairs(shop.gleams) do
+			run.Rotation = turn
+		end
+		local slow = (now * 14) % 360
+		for _, rays in ipairs(shop.rays) do
+			rays.Rotation = slow
+		end
+		-- Each sheen crosses its card in 0.8 seconds, once every five.
+		for _, sheen in ipairs(shop.sheens) do
+			local p = ((now + sheen.phase) % 5) / 0.8
+			sheen.grad.Offset = Vector2.new(if p < 1 then -1 + 2 * p else -2, 0)
+		end
+		local breath = 1 + 0.045 * math.sin(now * 3.2)
+		for _, scale in ipairs(shop.breathe) do
+			scale.Scale = breath
+		end
+	end)
 	-- OPENING: squashed up out of almost nothing, a little past full size and a little turned, and settled; its theme
 	-- painted behind it, the lid's pop, and a burst of its material (ShopLook).
 	ui.bounce.Scale = 0.35
@@ -1523,7 +2163,10 @@ function ShopService.open(tab: string?)
 	ContextActionService:BindActionAtPriority(TAB_ACTION, function(_, inputState, input)
 		if inputState == Enum.UserInputState.Begin then
 			local at = table.find(ShopCatalog.TABS, shop.tab) or 1
-			local step = if input.KeyCode == Enum.KeyCode.ButtonL1 then -1 else 1
+			-- (And the arrow keys on a keyboard: the hundred-and-twenty-third pass, from your test: "I wanna be able to
+			-- switch tabs by using arrow keys on my keyboard in the shop".)
+			local back = input.KeyCode == Enum.KeyCode.ButtonL1 or input.KeyCode == Enum.KeyCode.Left
+			local step = if back then -1 else 1
 			local nextTab = ShopCatalog.TABS[((at - 1 + step) % #ShopCatalog.TABS) + 1]
 			if ShopLook then
 				ShopLook.tab(nextTab)
@@ -1531,7 +2174,8 @@ function ShopService.open(tab: string?)
 			ShopService.showTab(nextTab)
 		end
 		return Enum.ContextActionResult.Sink
-	end, false, Enum.ContextActionPriority.High.Value + 20, Enum.KeyCode.ButtonL1, Enum.KeyCode.ButtonR1)
+	end, false, Enum.ContextActionPriority.High.Value + 20, Enum.KeyCode.ButtonL1, Enum.KeyCode.ButtonR1, Enum.KeyCode.Left,
+		Enum.KeyCode.Right)
 	if usingPad() and ui.firstTile then
 		GuiService.SelectedObject = ui.firstTile
 	end
@@ -1549,6 +2193,11 @@ function ShopService.close()
 		ShopLook.closed()
 	else
 		uiSound("buttonClick", 0.4)
+	end
+	TweenService:Create(ui.dim, TweenInfo.new(0.22, Enum.EasingStyle.Quad), { BackgroundTransparency = 1 }):Play()
+	if ui.spin then
+		ui.spin:Disconnect()
+		ui.spin = nil
 	end
 	local squeeze = TweenService:Create(ui.bounce, TweenInfo.new(0.06, Enum.EasingStyle.Quad), { Scale = 1.05 })
 	squeeze:Play()
@@ -1763,6 +2412,9 @@ local function earned(amount: any, info: any)
 	if story then
 		table.insert(reasons, "Story complete")
 	end
+	if type(info) == "table" and info.trueEnding == true then
+		table.insert(reasons, "The true ending")
+	end
 	if type(info) == "table" then
 		if info.hardcore then
 			table.insert(reasons, "Hardcore")
@@ -1802,6 +2454,9 @@ local function earned(amount: any, info: any)
 		end
 	end
 	local ribbon = if type(info) == "table" and info.ribbon then "  and the green ribbon (Trails)" else ""
+	if type(info) == "table" and info.trueEnding == true then
+		ribbon = "  and the key holder's plaque"
+	end
 	if type(info) == "table" and type(info.gift) == "string" then
 		ribbon = ("  and the %s trail"):format(string.lower(info.gift))
 	end
@@ -1922,5 +2577,5 @@ ShopService.kit = {
 	hold = hold,
 }
 
-ShopService.STAMP = "0e161fe6"
+ShopService.STAMP = "9fa2efc2"
 return ShopService

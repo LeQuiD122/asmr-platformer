@@ -190,6 +190,23 @@ local Materials: { [string]: MaterialDef } = {
 		sfxEvent = "soapCrumble",
 		deformationAnim = "crumble",
 	},
+	-- COOKIE (the hundred-and-tenth pass, from your notes: "add a cookie chunk"): a big round biscuit with a bite out of
+	-- it, BUILT OF CRUMBS like the soap bar (GRANULAR in ChunkBuilder), so it really breaks up under you, with chocolate
+	-- chips pressed into its top. Where soap is a waxy bar that crumbles quietly, a cookie is dry and crisp: it CRACKS
+	-- first, lines running out from your foot, then crumbles a crumb at a time and gives way a little sooner than soap.
+	-- Not slippery: a biscuit has grip.
+	Cookie = {
+		category = "risk",
+		dissolveTime = 1.7,
+		decayDuration = 8,
+		sfxMinGap = 0.2,
+		-- ITS OWN CRUNCH (audio/gen_sheet_sfx.py, cookieCrunch_x4). Until its sheet is imported, the chocolate bar's dry
+		-- snap a little higher stands in.
+		sfxEvent = "cookieCrunch",
+		sfxFallback = "chocolateSnap",
+		sfxFallbackPitch = 1.08,
+		deformationAnim = "crumble",
+	},
 	CreamyKeyboard = {
 		-- PACE, not risk. Nothing about a keyboard can drop you: the keys bottom out on a
 		-- solid chassis 0.55 studs down and that chassis is the floor. What it changes is
@@ -799,7 +816,7 @@ local Constants = {
 }
 
 return {
-	STAMP = "dc90b4f4",
+	STAMP = "cb2d1920",
 	Materials = Materials,
 	Constants = Constants,
 }

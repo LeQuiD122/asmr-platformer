@@ -41,7 +41,8 @@
 --   MRS VENN, the baths attendant, behind her ticket desk on the first stable chunk.
 --   TOBI OKAFOR, Pip's dad, on a bench on a stable chunk about halfway, his red towel round his neck.
 --   MR BARLOW, the night engineer, with a lit lantern on the gangway to the flume
---        (FloodedHallsService writes where: the halls' EngineerSpot).
+--        (FloodedHallsService writes where: the halls' EngineerSpot). And beside him THE TIME CLOCK, with
+--        your card in its rack (the hundred-and-fourteenth pass: below, at timeClock).
 --
 -- === City Shore's people ===
 --
@@ -76,6 +77,8 @@ local OPENINGS: { [number]: { string } } = {
 	[2] = { "The Sky Pools, Harrow Bay", "14 August. Three o'clock. Nobody has gone down since the street went under." },
 	[3] = { "Harrow Bay", "14 August. Eight minutes to midnight. The pumps never started." },
 	[4] = { "The Corporation Baths", "14 August. Four minutes to midnight. Under the pumping station, where the clocks are moving again." },
+	-- HILL HOUSE (the hundred-and-eleventh pass): first of all of them.
+	[5] = { "Hill House, Harrow Bay", "14 August. Eight in the morning. The day you are meant to clock in." },
 }
 
 -- THE THINGS TO READ, by level id: a title (what the board says from the route) and the words on it.
@@ -128,6 +131,17 @@ local NOTES: { [number]: { Note } } = {
 		{ title = "Lost property", body = "CORPORATION BATHS. LOST PROPERTY, 14 AUGUST.\n\nOne red towel (T. Okafor). One bar "
 			.. "of soap, used. One bucket and spade. One front door key on a green ribbon, marked HILL HOUSE.\n\nNot "
 			.. "collected." },
+	},
+	-- HILL HOUSE (the hundred-and-eleventh pass): the morning, on the way up.
+	[5] = {
+		{ title = "Milk order", body = "HARROW BAY DAIRY. HILL HOUSE.\n\nTwo pints, every morning but Sunday. Paid to the "
+			.. "end of August.\n\nMr Marsh's account, carried on." },
+		{ title = "Harrow Bay Gazette", body = "14 AUGUST. MORNING EDITION.\n\nKEY HOLDER TO CLOCK IN TONIGHT. The "
+			.. "Waterworks name the new key holder for Outfall 3 as %s, of Hill House. The gates will be opened at "
+			.. "midnight and the tide will go out." },
+		{ title = "A postcard on the doormat", lying = true, body = "To Hill House. A picture of the pier.\n\nSee you on "
+			.. "the sea wall at nine. I'll bring a cone.\n\nS." },
+		{ title = "On the gatepost", body = "HILL HOUSE.\n\nNo circulars, thank you. Milk on the step.\n\nE. Marsh" },
 	},
 }
 
@@ -355,6 +369,135 @@ local function tobi(parent: Instance, cap: BasePart)
 	end
 end
 
+-- ===== THE TIME CLOCK (the hundred-and-fourteenth pass): the true ending's first half =====
+--
+-- Beside Mr Barlow on the gangway, a cast-iron time recorder on its own pillar, the card rack on its side with one card
+-- left in it: yours, NOT CLOCKED IN. "Clock in" takes it, but only once you know what it cost the one before you (the
+-- clue "price", which Mr Barlow gives when you ask him about your father); until then he tells you where to go
+-- (NOT_YET). Clocked in, you are marked so for this level (the player's ClockedIn; stage() clears it for the next), your
+-- card is punched on your screen (FloodedHallsClient, "clockin"), a note goes in your journal, and the gates at the
+-- bottom of the flume end differently for you.
+local NOT_YET = {
+	-- not yet knowing whose child you are
+	first = "Not yet. You'd want to know whose shift you're taking first. Mr Wick on the pier knew him.",
+	-- knowing, and not yet asked what it cost him
+	father = "Ask me about him first. Then sign.",
+}
+local CLOCKED = "There. That's all the job is. Go and open them. Then come back up."
+
+local function timeClock(parent: Instance, spot: CFrame, npc: any)
+	local iron = Color3.fromRGB(58, 66, 62)
+	local brass = Color3.fromRGB(196, 160, 84)
+	local cream = Color3.fromRGB(236, 230, 212)
+	local ink = Color3.fromRGB(30, 30, 32)
+	local model = Instance.new("Model")
+	model.Name = "TimeClock"
+	-- To his left and a little in front of him, its face the way people come along the deck, as his is: clear of the far
+	-- rail behind it and of the lantern in his left hand. It stands on its own pillar on the deck.
+	local at = spot * CFrame.new(-2.0, 0, -2.5)
+	prop(model, "ClockPlinth", Vector3.new(1.4, 0.2, 1.4), at * CFrame.new(0, 0.1, 0), iron, Enum.Material.Metal)
+	prop(model, "ClockPillar", Vector3.new(0.7, 3, 0.7), at * CFrame.new(0, 1.7, 0), iron, Enum.Material.Metal)
+	local body = prop(model, "ClockBody", Vector3.new(1.6, 2.2, 1.1), at * CFrame.new(0, 4.3, 0), iron, Enum.Material.Metal)
+	prop(model, "ClockDial", Vector3.new(0.08, 1, 1), at * CFrame.new(0, 4.8, -0.58) * CFrame.Angles(0, math.pi / 2, 0), cream,
+		Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+	-- Its hands at three minutes to midnight (the dial faces -Z, so clockwise as you look at it is a positive turn).
+	local face = at * CFrame.new(0, 4.8, -0.64)
+	for _, hand in ipairs({ { "ClockHourHand", (11 + 57 / 60) * 30, 0.28 }, { "ClockMinuteHand", 57 * 6, 0.42 } }) do
+		local long = hand[3] :: number
+		prop(model, hand[1] :: string, Vector3.new(0.06, long, 0.03),
+			face * CFrame.Angles(0, 0, math.rad(hand[2] :: number)) * CFrame.new(0, long / 2, 0), ink, Enum.Material.SmoothPlastic)
+	end
+	-- The slot the card goes into under the dial, the maker's plate over it, and the brass lever on its right that
+	-- stamps it.
+	prop(model, "ClockSlot", Vector3.new(0.9, 0.1, 0.05), at * CFrame.new(0, 3.75, -0.57), ink, Enum.Material.SmoothPlastic)
+	prop(model, "ClockPlate", Vector3.new(1.2, 0.3, 0.04), at * CFrame.new(0, 5.25, -0.57), brass, Enum.Material.Metal)
+	prop(model, "ClockLever", Vector3.new(0.12, 0.8, 0.12), at * CFrame.new(0.86, 4.5, -0.2), brass, Enum.Material.Metal)
+	prop(model, "ClockLeverKnob", Vector3.new(0.3, 0.3, 0.3), at * CFrame.new(0.86, 4.95, -0.2), brass, Enum.Material.Metal,
+		Enum.PartType.Ball)
+	-- THE RACK on its left side, and the one card left in it.
+	prop(model, "CardRack", Vector3.new(0.25, 1.3, 0.9), at * CFrame.new(-0.93, 4.1, 0), iron, Enum.Material.Metal)
+	local card = prop(model, "ClockCard", Vector3.new(0.04, 0.8, 0.55), at * CFrame.new(-1.08, 4.45, 0), cream,
+		Enum.Material.SmoothPlastic)
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Left
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 120
+	gui.LightInfluence = 1
+	gui.Parent = card
+	local words = Instance.new("TextLabel")
+	words.Name = "Words"
+	words.Size = UDim2.fromScale(1, 1)
+	words.BackgroundTransparency = 1
+	words.TextScaled = true
+	words.FontFace = Style.WORLD.sign
+	words.TextColor3 = Color3.fromRGB(44, 38, 32)
+	words.Text = "KEY HOLDER\n14 AUG\nNOT CLOCKED IN"
+	words.Parent = gui
+	-- Where you stand to use it: in front of it, facing it.
+	local stand = at * CFrame.new(0, 3, -2.2) * CFrame.Angles(0, math.pi, 0)
+	model:SetAttribute("Frame", at)
+	model:SetAttribute("Stand", stand)
+	model.Parent = parent
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "ClockInPrompt"
+	prompt.ActionText = "Clock in"
+	prompt.ObjectText = "Time clock"
+	prompt.HoldDuration = 0.6
+	prompt.MaxActivationDistance = 7
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = body
+	prompt.Triggered:Connect(function(player: Player)
+		if player:GetAttribute("ClockedIn") == true or not npc.model.Parent then
+			return
+		end
+		if not Townsfolk.knows(player, "clue:price") then
+			Townsfolk.say(npc, if Townsfolk.knows(player, "clue:father") then NOT_YET.father else NOT_YET.first)
+			return
+		end
+		player:SetAttribute("ClockedIn", true)
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if root and root:IsA("BasePart") then
+			root.CFrame = stand
+			root.AssemblyLinearVelocity = Vector3.zero
+		end
+		local folder = ReplicatedStorage:FindFirstChild("RemoteEvents")
+		local halls = folder and folder:FindFirstChild("HallsCinema")
+		if halls and halls:IsA("RemoteEvent") then
+			halls:FireClient(player, "clockin", model)
+		end
+		pcall(Townsfolk.write, player, "clocked")
+		task.delay(2.6, function()
+			if npc.model.Parent then
+				Townsfolk.say(npc, CLOCKED)
+			end
+		end)
+	end)
+end
+
+-- EDWIN MARSH, with his face (the hundred-and-fifteenth pass): along Outfall 3 in the daylight behind its gate, where only
+-- the true ending's screen shows him (FloodedHallsClient hides him from every other). The key holder before you, the one
+-- on the Deco tower, in the dark clothes he wears there, with the green ribbon at his neck. In the gate chamber itself,
+-- so he goes with the halls.
+local function marsh()
+	local halls = workspace:FindFirstChild("FloodedHalls")
+	local chamber = halls and halls:FindFirstChild("GateChamber")
+	local spot = chamber and chamber:GetAttribute("MarshSpot")
+	if not chamber or typeof(spot) ~= "CFrame" then
+		return
+	end
+	local npc = Townsfolk.spawn(chamber, "Marsh", spot, "stand",
+		{ Color3.fromRGB(214, 176, 146), Color3.fromRGB(40, 40, 44), Color3.fromRGB(40, 40, 44) })
+	if not npc then
+		return
+	end
+	-- The ribbon he wore the key on, round his neck and down his chest.
+	for _, side in ipairs({ -1, 1 }) do
+		Townsfolk.wear(npc, "Ribbon", Vector3.new(0.14, 1.1, 0.06), Color3.fromRGB(58, 150, 88), "UpperTorso",
+			CFrame.new(side * 0.28, 0.25, -0.52) * CFrame.Angles(0, 0, side * 0.45))
+	end
+end
+
 -- MR BARLOW, the night engineer, on the gangway with his lantern (the halls say where).
 local function barlow(parent: Instance)
 	local halls = workspace:FindFirstChild("FloodedHalls")
@@ -386,6 +529,7 @@ local function barlow(parent: Instance)
 		light.Shadows = false
 		light.Parent = glass
 	end
+	timeClock(parent, spot, npc)
 end
 
 -- ===== THE NOOKS: THE OPTIONAL PLACES OFF THE ROUTE =====
@@ -1141,6 +1285,8 @@ end
 function StoryService.stage(level: any, instance: any, players: { Player })
 	for _, player in ipairs(players) do
 		pcall(StoryService.opening, player, level.levelId)
+		-- A NEW LEVEL, A NEW SHIFT: nobody is clocked in on it until they clock in on it (the time clock, above).
+		player:SetAttribute("ClockedIn", nil)
 	end
 	if not instance or not instance.placedChunks then
 		return
@@ -1187,6 +1333,7 @@ function StoryService.stage(level: any, instance: any, players: { Player })
 				pcall(tobi, folder, mid)
 			end
 			pcall(barlow, folder)
+			pcall(marsh)
 		end
 	end
 	-- CITY SHORE'S SIREN TOWER, and every level's secrets on the spots its service marked.
@@ -1315,5 +1462,5 @@ function StoryService.stage(level: any, instance: any, players: { Player })
 	print(("StoryService: %d nooks off the route, %d keepsakes in them."):format(#nooks, count))
 end
 
-StoryService.STAMP = "618da104"
+StoryService.STAMP = "527b60fd"
 return StoryService

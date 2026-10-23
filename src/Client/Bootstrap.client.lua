@@ -127,13 +127,14 @@ task.spawn(CloudService.start)
 -- the lobby's viewer, and Ctrl for the cursor), THE SHOP (the lobby kiosk and the pause menu), and THE FIRST
 -- FIVE MINUTES (the welcome, the lobby guide, each material's hint once), and THE FOOTPRINTS AND STEP
 -- SOUNDS everyone wears (StepService), THE EMOTES everyone sees (EmoteService), and THE SQUISH ROOM'S lifts
--- (SquishRoomClient), and THE LAUNCH in the Sunken City's harbour with its searchlight (SearchlightClient). And
+-- (SquishRoomClient), and THE LAUNCH in the Sunken City's harbour with its searchlight (SearchlightClient), and
+-- HILL HOUSE'S HALL, taking his key (HillHouseClient). And
 -- in Studio only, the test panel (DevPanelClient, F8). The prompts are Roblox's own: a restyled one was tried
 -- and taken out, because it swallowed the camera's right-click release when the cursor was over it.
 for _, name in ipairs({ "SkyPoolsClient", "SunkenCityClient", "CityShoreClient", "FloodedHallsClient",
-	"AmbienceService", "StoryClient", "JournalService", "ViewModeService", "ShopService", "OnboardingService",
+	"HillHouseClient", "AmbienceService", "StoryClient", "JournalService", "ViewModeService", "ShopService", "OnboardingService",
 	"StepService", "EmoteService", "SquishRoomClient", "DevPanelClient", "SearchlightClient", "CosmeticsClient",
-	"TalkClient" }) do
+	"TalkClient", "LobbyLife", "PlayerLife", "StalkerClient" }) do
 	task.spawn(function()
 		local module = Services:WaitForChild(name, 30)
 		if module and module:IsA("ModuleScript") then

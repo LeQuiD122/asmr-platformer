@@ -29,6 +29,12 @@
 --   CLOUDS ARE FLAT. City Shore's cloud banks were balls, and from the level they were white eggs in
 --   front of everything. These are wide, low ellipsoids laid edge to edge as a floor, and none of
 --   them is ever at eye level.
+--   CLOUDS ARE SOLID (the hundred-and-eighteenth pass, from your test: "the translucent chunks such as
+--   honey, slime, soda aren't rendered properly and stay invisible most of the time"). Roblox draws
+--   see-through parts one after another by how far each one's middle is from the camera, and a cloud
+--   is a hundred studs across: its middle was often nearer than a chunk in front of it, so the cloud
+--   was drawn after the chunk and painted over it. Every cloud was 88 to 97 per cent opaque anyway;
+--   fully opaque, it is drawn with the solid things and can never hide a chunk in front of it.
 --   THE WATER GOES SOMEWHERE. Basin to curtain to final pool to the sea; terrace pools spill to the
 --   sea. A waterfall that stops in mid-air is the same mistake as a wall that floats.
 --   ONLY THE SLIDE ENDS THE LEVEL. It is a ride -- the rider is moved, as on the Flooded Halls'
@@ -1336,7 +1342,7 @@ local function cloudSea(parent: Instance, centre: Vector3, top: number)
 			local puff = ellipsoid(folder, "Cloud", Vector3.new(wide, tall, wide * rng:NextNumber(0.8, 1.0)),
 				CFrame.new(at) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0),
 				CLOUD_TOP:Lerp(CLOUD_UNDER, rng:NextNumber(0, 0.55)))
-			puff.Transparency = rng:NextNumber(0.03, 0.12)
+			puff.Transparency = 0
 			-- No sky in them. A cloud with reflectance is a mirror the size of the horizon, and it
 			-- was adding the last of the white that hid the chunks.
 			puff.Reflectance = 0
@@ -1344,7 +1350,7 @@ local function cloudSea(parent: Instance, centre: Vector3, top: number)
 				local under = ellipsoid(folder, "Cloud", Vector3.new(wide * 1.1, tall * 1.2, wide),
 					CFrame.new(Vector3.new(at.X, top - CLOUD_THICK * 0.6, at.Z)) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0),
 					CLOUD_UNDER)
-				under.Transparency = rng:NextNumber(0.1, 0.25)
+				under.Transparency = 0
 			end
 		end
 		radius += size * 0.62
@@ -1747,9 +1753,16 @@ local function buildSlide(parent: Instance, spec: any, towerTopY: number): numbe
 		-- A HOOP over the trough, with a pennant hung off the top of it: its crown a good two studs over a
 		-- seated rider's head, even leaning into a banked turn.
 		if index % hoopEvery == 0 and index > 1 then
+			-- EACH HOOP ITS OWN MODEL (the hundred-and-eighth pass), tagged SlideArch, with the middle of it (Centre):
+			-- the rider's screen lights it up ahead of them and flares it as they pass under it (SkyPoolsClient).
+			local arch = Instance.new("Model")
+			arch.Name = "SlideArch"
+			arch:SetAttribute("Centre", (frame * CFrame.new(0, 2.4, 0)).Position)
+			arch.Parent = folder
+			CollectionService:AddTag(arch, "SlideArch")
 			for step = 0, 8 do
 				local a2 = math.pi * (step / 8)
-				block(folder, "SlideHoop", Vector3.new(0.55, 0.55, 0.55),
+				block(arch, "SlideHoop", Vector3.new(0.55, 0.55, 0.55),
 					frame * CFrame.new(math.cos(a2) * (wide / 2 + 0.9), math.sin(a2) * (wide / 2 + 0.6) + 2.4, 0),
 					if (index // hoopEvery) % 2 == 0 then COPING else SLIDE, Enum.Material.SmoothPlastic, false)
 			end
@@ -2488,5 +2501,5 @@ Players.PlayerRemoving:Connect(function(player: Player)
 	arrivedAt[player] = nil
 end)
 
-SkyPoolsService.STAMP = "3b8f2fe4"
+SkyPoolsService.STAMP = "d628dbf4"
 return SkyPoolsService

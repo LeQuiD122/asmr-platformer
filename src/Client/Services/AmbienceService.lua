@@ -30,6 +30,11 @@ local WIND = "rbxasset://sounds/action_falling.mp3"
 
 type Bed = { name: string, volume: number, fallback: string?, speed: number? }
 local BEDS: { [string]: { Bed } } = {
+	-- HILL HOUSE (the hundred-and-eleventh pass): the garden's morning, and the Hold already there under it, faintly.
+	hillHouse = {
+		{ name = "HillMorning", volume = 0.45, fallback = WIND, speed = 0.3 },
+		{ name = "HoldDrone", volume = 0.1, fallback = BASS, speed = 0.3 },
+	},
 	cityShore = {
 		{ name = "ShoreSea", volume = 0.5, fallback = WATER, speed = 0.22 },
 		{ name = "HoldDrone", volume = 0.22, fallback = BASS, speed = 0.3 },
@@ -108,8 +113,13 @@ local function lobbyGroup(): SoundGroup
 	end
 	return group :: SoundGroup
 end
+-- EVERY SOUND THE LOBBY MAKES, IN ANY LEVEL (the hundred-and-thirtieth pass, from your test: "I have lobby sounds in
+-- my level games ... the lobby fountain splashes and stuff, they should only be in the lobby"): without the lobby's own
+-- sounds imported, the server's stand-ins (the engine's one splash, over and over) played everywhere at once and
+-- followed you into every level; only the back rooms were hushed. Now every sound under the lobby goes quiet the moment
+-- you are in any level, wherever it is played from, and comes back when you do.
 local function intoHush(item: Instance)
-	if item:IsA("Sound") and not item:FindFirstAncestorWhichIsA("BasePart") then
+	if item:IsA("Sound") then
 		item.SoundGroup = lobbyGroup()
 	end
 end
@@ -436,7 +446,7 @@ local function refresh()
 	if wanted ~= level then
 		-- A NEW LEVEL (or the lobby): whatever hushed the last one is over.
 		level = wanted
-		hushLobby(wanted == "backRooms")
+		hushLobby(wanted ~= nil)
 		lobbyOn(wanted == nil)
 		stopAll(1.5)
 		player:SetAttribute("Hushed", nil)
@@ -492,5 +502,5 @@ function AmbienceService.start()
 	print("AmbienceService: running")
 end
 
-AmbienceService.STAMP = "1f86d816"
+AmbienceService.STAMP = "93ae5f36"
 return AmbienceService

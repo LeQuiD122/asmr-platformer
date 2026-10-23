@@ -166,7 +166,9 @@ function Maw.build(hinge: CFrame, parent: Instance): Built
 	local glow = Instance.new("PointLight")
 	glow.Color = Color3.fromRGB(190, 255, 110)
 	glow.Brightness = 0
-	glow.Range = 60
+	-- (Reaching the teeth's tips and not the one hanging over them: at 60 it washed your face out white, as the test of
+	-- the hundred-and-twenty-fourth pass showed.)
+	glow.Range = 46
 	glow.Shadows = true
 	glow.Parent = deep
 	-- AND RED DOWN ITS THROAT, past the hinge: the gullet is lit from inside like a lamp through meat.
@@ -285,9 +287,11 @@ function Maw.light(built: Built, amount: number, clock: number?)
 		dip = if math.noise(clock * 3.1, 0.5) > 0.38 then 0.4 else 1
 		throb = 0.65 + 0.35 * math.abs(math.sin(clock * 2.6))
 	end
-	built.glow.Brightness = 2.2 * amount * pulse * dip
-	built.gullet.Brightness = 2 * amount * throb
-	built.rim.Brightness = 1.2 * amount
+	-- (Brighter since the hundred-and-twenty-fourth pass, from your test, "I don't understand what is going on still": it
+	-- was a dark shape with a red smear under it. Now its gums are red and its teeth white in its own light.)
+	built.glow.Brightness = 3.4 * amount * pulse * dip
+	built.gullet.Brightness = 3.2 * amount * throb
+	built.rim.Brightness = 2.2 * amount
 	for _, faint in ipairs(built.aura) do
 		faint.Brightness = 0.7 * amount * pulse
 	end
@@ -324,5 +328,5 @@ function Maw.destroy(built: Built?)
 	end
 end
 
-Maw.STAMP = "92892b24"
+Maw.STAMP = "17049ea6"
 return Maw

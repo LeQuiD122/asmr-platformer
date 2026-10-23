@@ -1087,6 +1087,134 @@ local function buildNiche(halls: Model, leg: HallRoute.Leg, along: number, side:
 end
 
 -- One leg: two walls, a window rhythm, a colonnade, and whatever else lands in its bays.
+-- ===== THE GALLERIES, WHERE PEOPLE WATCHED FROM (the hundred-and-thirty-fourth pass) =====
+--
+-- From your test of 2026-10-23, "improve the quality of level 4's level models and layout": the hall was walls and
+-- water and nothing at the height you look from. Public baths had spectators' galleries down both sides; these do now,
+-- between the dado and the windows: a timber deck on iron brackets let into the wall (every one carried down to the wall,
+-- nothing hanging in the air), a cast-iron railing along its open edge with lifebuoys hung on it, benches along the back,
+-- and on its front, facing the walkway, the baths' enamel signs. Stopped either side of every transverse arch.
+local GALLERY_Y = 42 -- its deck's top, over the flooded floor: under the windows and the niches, over the dado
+local GALLERY_DEEP = 16
+local IRON = Color3.fromRGB(46, 58, 62)
+local ENAMEL, ENAMEL_INK = Color3.fromRGB(34, 54, 92), Color3.fromRGB(240, 232, 206)
+local SIGNS = { "CORPORATION BATHS", "NO DIVING", "DEEP END", "NO RUNNING ON THE GALLERY", "BATHS CLOSE AT MIDNIGHT",
+	"PLEASE USE THE FOOTBATH", "OPENED 1911", "LADIES' SLIPPER BATHS" }
+
+local function buildGallery(halls: Model, leg: HallRoute.Leg, along: number, length: number, side: number)
+	if length < 8 then
+		return
+	end
+	local wall = HALL_HALF_WIDTH - WALL_THICK / 2
+	local mid = wall - GALLERY_DEEP / 2
+	local edge = wall - GALLERY_DEEP + 0.6
+	timber(halls, legFrame(leg, along, side * mid, GALLERY_Y - 0.8), Vector3.new(GALLERY_DEEP, 1.6, length), "GalleryDeck",
+		Color3.fromRGB(122, 92, 66))
+	local fascia = slab(halls, legFrame(leg, along, side * (wall - GALLERY_DEEP + 0.4), GALLERY_Y - 2.2),
+		Vector3.new(0.8, 3, length), "GalleryFascia")
+	fascia.Color = TRIM_COLOUR
+	fascia.CanCollide = false
+	-- THE BRACKETS that carry it, every twelve studs or so: a bearer under the deck out to its edge, and a strut up to it
+	-- from low on the wall.
+	local count = math.max(2, math.floor(length / 12) + 1)
+	for k = 0, count - 1 do
+		local a = along - length / 2 + 1 + k * (length - 2) / (count - 1)
+		fitting(halls, "GalleryBearer", Vector3.new(GALLERY_DEEP - 0.5, 0.9, 0.7),
+			legFrame(leg, a, side * (mid + 0.25), GALLERY_Y - 2.05), IRON, Enum.Material.Metal)
+		local foot = legFrame(leg, a, side * (wall - 0.3), GALLERY_Y - 12).Position
+		local head = legFrame(leg, a, side * (wall - GALLERY_DEEP + 1.5), GALLERY_Y - 2.4).Position
+		local cf, long = spanFrame(foot, head, Vector3.yAxis)
+		fitting(halls, "GalleryStrut", Vector3.new(0.6, 0.6, long), cf, IRON, Enum.Material.Metal)
+	end
+	-- THE RAILING: a handrail, a low rail, and balusters between, along the open edge.
+	fitting(halls, "GalleryRail", Vector3.new(0.5, 0.5, length), legFrame(leg, along, side * edge, GALLERY_Y + 4), IRON,
+		Enum.Material.Metal)
+	fitting(halls, "GalleryRail", Vector3.new(0.35, 0.35, length), legFrame(leg, along, side * edge, GALLERY_Y + 0.8), IRON,
+		Enum.Material.Metal)
+	local posts = math.max(2, math.floor(length / 5))
+	for k = 0, posts do
+		local a = along - length / 2 + k * length / posts
+		fitting(halls, "GalleryBaluster", Vector3.new(0.3, 3.4, 0.3), legFrame(leg, a, side * edge, GALLERY_Y + 2.3), IRON,
+			Enum.Material.Metal)
+	end
+	-- A BENCH along the back, on two iron legs.
+	if length > 30 then
+		local bench = legFrame(leg, along, side * (wall - 2.6), GALLERY_Y)
+		timber(halls, bench * CFrame.new(0, 1.5, 0), Vector3.new(2.6, 0.4, 12), "GalleryBench", Color3.fromRGB(140, 104, 72))
+		timber(halls, bench * CFrame.new(side * 1.2, 2.9, 0), Vector3.new(0.35, 1.6, 12), "GalleryBench", Color3.fromRGB(140, 104, 72))
+		for _, z in ipairs({ -5, 5 }) do
+			fitting(halls, "GalleryBenchLeg", Vector3.new(2.2, 1.3, 0.4), bench * CFrame.new(0, 0.65, z), IRON, Enum.Material.Metal)
+		end
+	end
+end
+
+-- A LIFEBUOY on the railing's front, red and white, a ring of segments facing the walkway.
+local function lifebuoy(halls: Model, leg: HallRoute.Leg, along: number, side: number)
+	local edge = HALL_HALF_WIDTH - WALL_THICK / 2 - GALLERY_DEEP + 0.6
+	local centre = legFrame(leg, along, side * (edge - 0.5), GALLERY_Y + 2.2)
+	local segments = 12
+	for k = 0, segments - 1 do
+		local a = (k + 0.5) / segments * math.pi * 2
+		local at = centre * CFrame.new(0, math.cos(a) * 1.5, math.sin(a) * 1.5)
+		fitting(halls, "Lifebuoy", Vector3.new(0.6, 0.85, 0.85), at * CFrame.Angles(a, 0, 0),
+			if math.floor(k / 3) % 2 == 0 then Color3.fromRGB(200, 58, 48) else Color3.fromRGB(240, 236, 226),
+			Enum.Material.SmoothPlastic)
+	end
+end
+
+-- AN ENAMEL SIGN on the gallery's front, facing the walkway: the baths' cream letters on blue, in the town's print.
+local function enamelSign(halls: Model, leg: HallRoute.Leg, along: number, side: number, words: string)
+	local edge = HALL_HALF_WIDTH - WALL_THICK / 2 - GALLERY_DEEP + 0.6
+	local board = fitting(halls, "EnamelSign", Vector3.new(0.3, 5, 24), legFrame(leg, along, side * (edge - 0.5), GALLERY_Y - 1.2),
+		ENAMEL, Enum.Material.SmoothPlastic)
+	board.Reflectance = 0.12
+	local gui = Instance.new("SurfaceGui")
+	-- The face toward the walkway: the frame's X runs left, so the left wall's sign faces -X.
+	gui.Face = if side > 0 then Enum.NormalId.Left else Enum.NormalId.Right
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 20
+	gui.LightInfluence = 1
+	gui.Parent = board
+	local rim = Instance.new("Frame")
+	rim.Size = UDim2.new(1, -24, 1, -24)
+	rim.Position = UDim2.fromOffset(12, 12)
+	rim.BackgroundTransparency = 1
+	rim.Parent = gui
+	local edging = Instance.new("UIStroke")
+	edging.Color = ENAMEL_INK
+	edging.Thickness = 4
+	edging.Parent = rim
+	local text = Instance.new("TextLabel")
+	text.Size = UDim2.new(1, -40, 1, -30)
+	text.Position = UDim2.fromOffset(20, 15)
+	text.BackgroundTransparency = 1
+	text.FontFace = Style.WORLD.sign
+	text.TextColor3 = ENAMEL_INK
+	text.TextScaled = true
+	text.Text = words
+	text.Parent = gui
+end
+
+-- A LAMP HANGING ON A CHAIN over the walkway's edge, high over the deck, with a real light in it (named so the client
+-- fails it with the roof lights when it is behind you).
+local function pendant(halls: Model, leg: HallRoute.Leg, along: number, lateral: number, at: number)
+	local drop = 14
+	local top = legFrame(leg, along, lateral, HEIGHT)
+	fitting(halls, "PendantChain", Vector3.new(0.25, drop, 0.25), top * CFrame.new(0, -drop / 2, 0), IRON, Enum.Material.Metal)
+	local shade = fitting(halls, "PendantShade", Vector3.new(1.6, 5, 5), top * CFrame.new(0, -drop - 0.4, 0)
+		* CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(40, 96, 84), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+	shade.Reflectance = 0.1
+	local bulb = fitting(halls, "PendantLight", Vector3.new(1.3, 1.3, 1.3), top * CFrame.new(0, -drop - 1.4, 0),
+		Color3.fromRGB(255, 232, 196), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+	bulb:SetAttribute("Along", at)
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 214, 164)
+	light.Brightness = 0.9
+	light.Range = 36
+	light.Shadows = false
+	light.Parent = bulb
+end
+
 local function buildLeg(halls: Model, leg: HallRoute.Leg, legIndex: number, isLast: boolean,
 	rng: Random)
 	-- Where the walls start and stop. A junction is a square as wide as the corridor, so the
@@ -1397,6 +1525,27 @@ local function buildLeg(halls: Model, leg: HallRoute.Leg, legIndex: number, isLa
 			Vector3.new(11, pierTop - capital - foot, 11), "Pier")
 		slab(halls, legFrame(leg, along, 0, pierTop - capital / 2),
 			Vector3.new(16, capital, 16), "PierCap")
+
+		-- ===== THE GALLERIES, their signs and lifebuoys, and a lamp hung over the walkway (above) =====
+		local bayHalf = (span / bays) / 2
+		for _, side in ipairs({ 1, -1 }) do
+			if archBay then
+				local gap = WALL_THICK / 2 + 2
+				buildGallery(halls, leg, along - (bayHalf + gap) / 2, bayHalf - gap, side)
+				buildGallery(halls, leg, along + (bayHalf + gap) / 2, bayHalf - gap, side)
+			else
+				buildGallery(halls, leg, along, bayHalf * 2, side)
+			end
+		end
+		if not archBay then
+			local signSide = if (bay + legIndex) % 2 == 0 then 1 else -1
+			if (bay + legIndex) % 3 == 1 then
+				enamelSign(halls, leg, along, signSide, SIGNS[(legIndex * 3 + bay) % #SIGNS + 1])
+			end
+			lifebuoy(halls, leg, along + bayHalf * 0.55, -signSide)
+		end
+		local hang = if bay % 2 == 0 then 1 else -1
+		pendant(halls, leg, along + bayHalf, hang * (LANE_HALF + 8), leg.startAt + along + bayHalf)
 
 		-- ===== WHAT IS IN THIS BAY =====
 		--
@@ -3022,9 +3171,14 @@ local GATES = {
 	-- every caption in it to be read twice
 	SECONDS = 42,
 	KEY_AT = 14,
+	-- THE TRUE ENDING (the hundred-and-fifteenth pass), for a rider who clocked in at the time clock by Mr Barlow: this
+	-- much longer, and where Edwin Marsh waits for them, along Outfall 3 in the daylight behind its gate
+	TRUE = 16,
+	MARSH_AT = -66,
 	-- how long the mouth at the bottom of the fall takes, between the flume and the chamber: the fall
-	-- into it, the jaws, and the dark with its one line in it
-	MAW = 8.5,
+	-- into it, the jaws, and the dark with its one line in it (longer since the hundred-and-thirty-second pass, from
+	-- your test: "the monster scene in level 4 should be longer, and the jaws need to snap longer")
+	MAW = 13.5,
 }
 
 local function buildGates(halls: Model, endFrame: CFrame, pitAt: Vector3)
@@ -3263,6 +3417,9 @@ local function buildGates(halls: Model, endFrame: CFrame, pitAt: Vector3)
 	model:SetAttribute("Ladder", frame * Vector3.new(0, 0, ladderZ))
 	model:SetAttribute("Stand", frame * CFrame.new(g.STAND))
 	model:SetAttribute("Seconds", g.SECONDS)
+	-- Where Edwin Marsh stands (StoryService stands him there), on Outfall 3's floor in the daylight, facing the room: only
+	-- the true ending's screen ever shows him (FloodedHallsClient).
+	model:SetAttribute("MarshSpot", frame * CFrame.new(0, 0, g.MARSH_AT) * CFrame.Angles(0, math.pi, 0))
 	model.Parent = halls
 end
 
@@ -3905,6 +4062,8 @@ function FloodedHallsService.attachSlide(halls: Model, onArrive: ((Player) -> ()
 		-- ride down and the gates after it (FloodedHallsClient).
 		local chamber = halls:FindFirstChild("GateChamber")
 		local remote = hallsRemote()
+		-- CLOCKED IN (the time clock by Mr Barlow, StoryService): the gates end differently for them, and take longer.
+		local gates = GATES.SECONDS + (if player:GetAttribute("ClockedIn") == true then GATES.TRUE else 0)
 		-- The one thing a rider's client may say: "I am drawing my ride." Taken only from someone riding.
 		if remote and not listening then
 			listening = true
@@ -3916,7 +4075,7 @@ function FloodedHallsService.attachSlide(halls: Model, onArrive: ((Player) -> ()
 		end
 		if remote then
 			remote:FireAllClients("flume", player, workspace:GetServerTimeNow(), SLIDE_SECONDS,
-				if chamber then GATES.SECONDS else 0, if chamber then GATES.MAW else 0)
+				if chamber then gates else 0, if chamber then GATES.MAW else 0)
 		end
 
 		task.spawn(function()
@@ -3964,7 +4123,7 @@ function FloodedHallsService.attachSlide(halls: Model, onArrive: ((Player) -> ()
 						giveKey(character)
 					end
 				end)
-				task.wait(GATES.SECONDS)
+				task.wait(gates)
 			elseif root.Parent then
 				root.CFrame = slideFrame * CFrame.new(slidePoint(1))
 			end
@@ -4548,5 +4707,5 @@ function FloodedHallsService.applyAtmosphere(): () -> ()
 	end
 end
 
-FloodedHallsService.STAMP = "ce0c84fb"
+FloodedHallsService.STAMP = "facf4cb4"
 return FloodedHallsService

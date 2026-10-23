@@ -71,6 +71,11 @@ local function rest(entry: Playing)
 	end
 end
 
+-- Whether `player` is in an emote on this screen (PlayerLife leaves them be meanwhile).
+function EmoteService.isPlaying(player: Player): boolean
+	return playing[player] ~= nil
+end
+
 local function stopFor(player: Player)
 	local entry = playing[player]
 	if entry then
@@ -468,5 +473,5 @@ function EmoteService.start()
 	print("EmoteService: running, " .. EmoteService.VERSION)
 end
 
-EmoteService.STAMP = "148273ad"
+EmoteService.STAMP = "ef8c7244"
 return EmoteService

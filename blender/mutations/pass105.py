@@ -51,7 +51,7 @@ MUTATIONS = [
     ('an image for a background', LOOK, SHOP, 'local f = Instance.new("Frame")\n\tf.AnchorPoint', 'local f = Instance.new("ImageLabel")\n\tf.AnchorPoint'),
     ('not put in the shop', SHOPC, SHOP, '\t\tShopLook.attach(panel, screen)', '\t\tShopLook.attached = true'),
     ('not closing its look', SHOPC, SHOP, '\t\tShopLook.closed()\n', '\t\tlocal _ = ShopLook\n'),
-    ('the tabs one colour (ShopService)', SHOPC, SHOP, 'ShopLook.TAB_COLOURS[button.Name]', 'ShopLook.TAB_COLOURS[shop.tab]'),
+    ('the tabs one colour (ShopService)', SHOPC, SHOP, 'local fam = family(button.Name)', 'local fam = family(shop.tab)'),
     ("a controller's tab silent", SHOPC, SHOP, 'ShopLook.tab(nextTab)', 'ShopLook.tab(shop.tab)'),
     ('the title not recoloured', SHOPC, SHOP, 'ui.title.BackgroundColor3 = theme.title', 'ui.title.BackgroundColor3 = LOOK.edge'),
     ('the module not started', BOOT, SHOP, '"ShopLook", "SquishRoomClient"', '"SquishRoomClient"'),

@@ -5,6 +5,7 @@ measures), drawn from src/Shared/LobbyLayout.lua, so crowding shows before Studi
 so the world's -Z is drawn upward."""
 import math
 import pathlib
+import re
 import sys
 
 import matplotlib
@@ -37,9 +38,15 @@ def main():
     fig, ax = plt.subplots(figsize=(13, 13))
     ax.set_facecolor("#3b5c7a")
     m = L["margin"]
+    # EACH PLACE IN ITS OWN COLOURS (LobbyLayout.ZONES, the hundred-and-ninth pass): its band round its inlay.
+    zones = {}
+    for name, *rgb in re.findall(r"^\t(\w+) = \{ inlay = Color3\.fromRGB\((\d+), (\d+), (\d+)\), "
+                                 r"trim = Color3\.fromRGB\((\d+), (\d+), (\d+)\) \}", L["text"], re.M):
+        values = [int(v) / 255 for v in rgb]
+        zones[name] = (tuple(values[:3]), tuple(values[3:]))
     for name, d in L["decks"].items():
-        ground = "#5e7a52" if name == "garden" else "#5a5468"
-        ax.add_patch(Rectangle((d["x"] - d["w"] / 2, -(d["z"] + d["d"] / 2)), d["w"], d["d"], color="#46404f", zorder=1))
+        ground, band = zones.get(name, ("#5e7a52" if name == "garden" else "#5a5468", "#46404f"))
+        ax.add_patch(Rectangle((d["x"] - d["w"] / 2, -(d["z"] + d["d"] / 2)), d["w"], d["d"], color=band, zorder=1))
         ax.add_patch(Rectangle((d["x"] - d["w"] / 2 + m, -(d["z"] + d["d"] / 2 - m)), d["w"] - 2 * m, d["d"] - 2 * m,
                                color=ground, zorder=1.5))
         ax.text(d["x"], -(d["z"] - d["d"] / 2 + 2.5), name.upper(), ha="center", va="top", color="white", fontsize=9,

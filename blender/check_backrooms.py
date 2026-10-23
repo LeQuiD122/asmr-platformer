@@ -443,16 +443,51 @@ for needle, why in (
 flat_fn = ROOMS[ROOMS.find("local function flat("):ROOMS.find("for gx = 0, cols do")]
 if "p.CanCollide = false" not in flat_fn:
     fail("BackRoomsService: the dressing can be walked into")
-# HIM, WORSE: stooped and bowed under the ceiling, the seam where his face is not; shown in stop-motion, twitching,
-# rushing down a straight. And still slower than you over a straight: a rush is short.
+# HIM, WORSE: stooped and bowed under the ceiling, the seam where his face is not, rushing down a straight. And still
+# slower than you over a straight: a rush is short.
+# JOINTED AND WALKING (the hundred-and-twenty-first pass, from your test: "the animation for the monster in the
+# backrooms is messed up and should be scarier"): he was one stiff block jumped along a few times a second, his seam
+# left behind when his head twitched. Now every limb hangs on a joint (the stoop and the bow in the joints' rests), the
+# seam is welded to the head, he is moved smoothly, and every screen draws him walking (StalkerClient).
 for needle, why in (
-    ('local seam = decor(model, "Seam"', "his face has no seam to open"),
-    ("local spine = base * CFrame.new(0, 5.5, 0) * CFrame.Angles(math.rad(-16), 0, 0)", "he stands straight, not stooped"),
-    ("nextFrame = now + 0.14 + math.random() * 0.18", "he is seen moving smoothly, not in jerks"),
+    ('welded(head, seam, CFrame.new(0, -0.08, -0.56))', "his face has no seam to open, or it is left behind as his head turns"),
+    ('joint("Spine", hips, torso, CFrame.new(0, 0.2, 0) * CFrame.Angles(math.rad(-16), 0, 0)', "he stands straight, not stooped"),
+    ('joint("HeadJ", neck, head, CFrame.new(0, 0.45, 0) * CFrame.Angles(math.rad(-18), 0, 0)', "his head is not bowed"),
+    ('joint("Knee" .. tag, thigh, shin,', "his legs have no knees to walk on"),
+    ('joint("Elbow" .. tag, upper, lower,', "his arms have no elbows"),
+    ("p.Anchored = false\n\tp.Massless = true", "his limbs are fixed in place, and nothing can move them"),
     ("rushUntil = now + 0.6", "he never rushes"),
+    ('model:SetAttribute("Rushing", now < rushUntil)', "no screen is told when he rushes"),
+    ('model:SetAttribute("Paused", not walking)', "no screen is told when he stops"),
 ):
     if needle not in ROOMS:
         fail("BackRoomsService: " + why)
+if "nextFrame = now + 0.14" in ROOMS or "head.CFrame = frame * headRest" in ROOMS:
+    fail("BackRoomsService: he is jumped along in jerks again, his head turned apart from his seam")
+STALKER = (SRC / "Client" / "Services" / "StalkerClient.lua").read_text(encoding="utf-8") if (SRC / "Client" / "Services" / "StalkerClient.lua").exists() else ""
+if not STALKER:
+    fail("there is no StalkerClient: he is never drawn walking")
+for needle, why in (
+    ("hide(real)", "his own stiff body is drawn under the walking one"),
+    ("\t\tanimate(one, dt, now, camera)\n", "he is drawn, but never walking"),
+    ("one.at = one.at:Lerp(root.CFrame, 1 - math.exp(-dt * FOLLOW))", "he jumps from place to place"),
+    ('drive(one, "Knee" .. side, CFrame.Angles(0.75 * math.max(0, -leg) * math.min(pace, 1.2), 0, 0))',
+     "his knees bend the ordinary way (or not at all)"),
+    ('drive(one, "Hip" .. side, CFrame.Angles(leg * swing, 0, 0))', "his legs do not walk"),
+    ('drive(one, "Shoulder" .. side, CFrame.Angles(1.4 + 0.12 * late, 0, -0.15 * sign))', "rushing, he does not reach for you"),
+    ("if to.Magnitude < LOOK_NEAR and camera.CFrame.LookVector:Dot(-to.Unit) > 0.55 then", "his head never turns to look at you"),
+    ("thud(one.at.Position, math.clamp(pace, 0.4, 1.2))", "his feet come down without a sound"),
+    ("one.tilt += ((if paused then 0.7 else 0) - one.tilt)", "stopping, his head does not tip over"),
+    ("if item:IsA(\"Sound\") then\n\t\t\titem:Destroy()", "his breath is heard twice"),
+):
+    if needle not in STALKER:
+        fail("StalkerClient: " + why)
+turn = re.search(r"^local LOOK_TURN, LOOK_PITCH, LOOK_NEAR = math\.rad\(([\d.]+)\)", STALKER, re.M)
+if not turn or float(turn.group(1)) <= 100:
+    fail("StalkerClient: his head turns only as far as a neck should (it should go further)")
+CLIENT_BOOT_ = (SRC / "Client" / "Bootstrap.client.lua").read_text(encoding="utf-8")
+if '"StalkerClient" }) do' not in CLIENT_BOOT_ or '"StalkerClient",' not in BOOT:
+    fail("StalkerClient is never started, or not in the paste check")
 # THE DREAD AND THE SCREAMER on your screen; the back rooms' own light, given back as you leave.
 for needle, why in (
     ('local slam = folder and folder:FindFirstChild("DoorSlam")', "the staff door is not heard opening"),
@@ -462,7 +497,10 @@ for needle, why in (
     ("face = screamerFace()", "being caught has no face to see"),
     ('sound("ScreamerStab", "rbxasset://sounds/bass.mp3", 1, 1)', "the screamer is silent"),
     ("light.Brightness = 0\n\tend\n\tsound(\"TubeDie\"", "the lights do not go out before he is there"),
-    ("Cinema.point(eye, 70 - 40 * math.min(1, s / 0.6))", "the picture does not punch in on him"),
+    # (Not zoomed to a narrow lens a stud off his face any more, the hundred-and-thirty-third pass: that was two slabs.
+    # Over your shoulder at a size you can read, and it flies at the lens.)
+    ("eye = CFrame.lookAt(his - toward * 5.6 + across * 1.7 + Vector3.new(0, 0.5, 0), his)", "his face is not seen whole"),
+    ("local from = his:Lerp(eye.Position + eye.LookVector * 1.4, lunge)", "his face does not lunge at you"),
     ('grade.Name = "BackRoomsGrade"', "the back rooms have no light of their own"),
     ("backRoomsLight(down)", "the back rooms' light stays on after you leave"),
     ('local open = Players.LocalPlayer:GetAttribute("BackRoomsFrom") == "lobby"', "the door you came in by is lit for "
@@ -471,8 +509,9 @@ for needle, why in (
     if needle not in STORY_CLIENT:
         fail("StoryClient: " + why)
 
-# ONLY THE HUM: the lobby's everywhere-sounds hushed while you are down here, and given back.
-if "hushLobby(wanted == \"backRooms\")" not in AMBIENCE:
+# ONLY THE HUM: the lobby's sounds hushed while you are down here (and, since the hundred-and-thirtieth pass, in every
+# level: "I have lobby sounds in my level games"), and given back.
+if "hushLobby(wanted ~= nil)" not in AMBIENCE:
     fail("AmbienceService: the lobby's sea follows you into the back rooms")
 # Hushed through a sound group of the screen's own, because the server keeps setting the wind's volume and keeps
 # making new breakers: anything new in the lobby while you are down there goes into the group too.

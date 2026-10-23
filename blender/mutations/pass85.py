@@ -43,11 +43,15 @@ MUTATIONS = [
      '\tFisherman = { "greet", "remember", "sad", "worry", "lean", "worry", "remember", "warn" },\n'
      '\tVenn = { "greet", "point", "shrug", "lean", "explain", "warn", "remember", "shrug" },\n'
      '\tTobi = { "greet", "worry", "sad", "point", "explain" },\n'
-     '\tBarlow = { "greet", "explain", "point", "lean", "sad", "warn", "explain" },',
+     '\tBarlow = { "greet", "explain", "point", "lean", "sad", "warn", "explain" },\n'
+     '\tGale = { "greet", "worry", "point", "remember", "warn", "shrug" },\n'
+     '\tDunn = { "greet", "explain", "remember", "lean", "sad", "shrug" },',
      '\tFisherman = { "greet", "point", "sad", "point", "lean", "point", "remember", "point" },\n'
      '\tVenn = { "greet", "point", "shrug", "point", "explain", "point", "remember", "point" },\n'
      '\tTobi = { "greet", "point", "sad", "point", "explain" },\n'
-     '\tBarlow = { "greet", "point", "sad", "point", "explain", "point", "explain" },'),
+     '\tBarlow = { "greet", "point", "sad", "point", "explain", "point", "explain" },\n'
+     '\tGale = { "greet", "point", "worry", "point", "warn", "point" },\n'
+     '\tDunn = { "greet", "point", "remember", "point", "sad", "point" },'),
     ("a line said without a gesture", TOWNS, STORY, '\t\tnpc.model:SetAttribute("Gesture", gestureFor(npc, text))\n', ""),
     ("a gesture never started", TOWNS, STORY, '\t\tnpc.model:SetAttribute("GestureAt", workspace:GetServerTimeNow())\n', ""),
     ("a habit fighting the gesture", TOWNS, STORY, "\t\tnpc.talking = os.clock() + seconds\n", ""),

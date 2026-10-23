@@ -46,7 +46,8 @@ MUTATIONS = [
      "local alt = nil"),
     ("City Shore's chord with nothing behind it", SHORE, STORY, ', alt = "EndChord", altPitch = 0.89 })', " })"),
     ("the Sky Pools' chord with nothing behind it", SKY, STORY, ', alt = "EndChord", altPitch = 1.19 })', " })"),
-    ("the Halls' chord with nothing behind it", HALLS, STORY, ' or sound("EndChord", nil, 0.7, 1, false)', ""),
+    ("the Halls' chord with nothing behind it", HALLS, STORY, 'sound("HallsChord", nil, 0.7, 1, false) or sound("EndChord", nil, 0.7, 1, false)',
+     'sound("HallsChord", nil, 0.7, 1, false)'),
     # The code still reads.
     ("a name never declared in the stand-in", CINEMA, PARSE, "made.PlaybackSpeed = (options.altPitch or 1) * (options.pitch or 1)",
      "made.PlaybackSpeed = (options.altPitch or 1) * (options.pitch or one)"),

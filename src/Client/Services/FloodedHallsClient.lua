@@ -31,9 +31,21 @@
 --   MIDNIGHT       the clock on the wall reaches twelve.
 --   THE LAST LINE  "14 August. 9:14 in the morning." And then LEVEL COMPLETE, and the room is yours
 --                  for a few seconds before the lobby takes you.
+--   OR, CLOCKED IN (the true ending, the hundred-and-fifteenth pass; below, at TRUE): someone walks up Outfall 3
+--                  out of the daylight. Edwin Marsh, with his face. He stops at the gate and waves, as he waved
+--                  the night he went down, and you wave back; then he goes back out into the morning, and it is
+--                  15 August.
 --
 -- Everything the scene changes in the room (the gate, the wheel, the lamps, the clock, the water) is
 -- changed on this screen only: each rider opens their own gates.
+--
+-- === Clocking in (the hundred-and-fourteenth pass) ===
+--
+-- The time clock by Mr Barlow on the gangway (StoryService): once you know what it cost the one before you, "Clock in"
+-- stands you at it and a short scene plays on your screen. YOUR CARD, over your shoulder: it comes out of the rack and
+-- into the slot, a soft heavy punch, and it says CLOCKED IN. ON SHIFT, from along the deck: you at the clock and Mr
+-- Barlow beside it as he says his piece. Then the camera is yours again, the card stays punched on your screen, and the
+-- clock's prompt is gone from it.
 --
 -- === On everyone's ===
 --
@@ -79,7 +91,7 @@ local HallRoute: any = (function()
 end)()
 
 local FloodedHallsClient = {}
-FloodedHallsClient.VERSION = "ninety-fifth pass, 2026-10-18"
+FloodedHallsClient.VERSION = "the hundred-and-fifteenth pass, 2026-10-21"
 
 local GROAN = "rbxasset://sounds/bass.mp3"
 local RUSH = "rbxasset://sounds/impact_water.mp3"
@@ -211,7 +223,8 @@ type Scene = { began: number, slide: number, gates: number, halls: Instance, cha
 	gateRest: CFrame?, wheelRest: CFrame?, maw: number, mouth: any, fallFrom: Vector3?, heart: Sound?,
 	rumble: Sound?, lastFall: Vector3?, path: { CFrame }?, rush: Sound?, clockAt: number, exitFrame: CFrame?,
 	thought: number, wake: Instance?, growl: Sound?, exitSpeed: number?, fallM: number?, fallD: number?,
-	tumble: number?, lit: any?, mawRest: CFrame?, lungeAt: number? }
+	tumble: number?, lit: any?, mawRest: CFrame?, lungeAt: number?, trueEnd: boolean, marsh: Model?, marshRest: CFrame?,
+	marshJoints: { [string]: any }?, marshParts: { Instance }, throat: any?, swallowed: boolean?, crunched: number? }
 local scene: Scene? = nil
 local hallsEvent: RemoteEvent? = nil
 
@@ -371,6 +384,19 @@ local function relight(current: Scene)
 	end
 end
 
+-- The throat put away, its red with it, and the picture steady again.
+local function dropThroat(current: Scene)
+	local throat = current.throat
+	if throat then
+		throat.model:Destroy()
+		throat.tint:Destroy()
+		current.throat = nil
+	end
+	if Cinema then
+		Cinema.waver(0)
+	end
+end
+
 local function endScene()
 	local current = scene
 	if not current then
@@ -387,6 +413,7 @@ local function endScene()
 		Maw.destroy(current.mouth)
 		current.mouth = nil
 	end
+	dropThroat(current)
 	for _, s in ipairs(current.sounds) do
 		if s.Parent then
 			TweenService:Create(s, TweenInfo.new(2.5), { Volume = 0 }):Play()
@@ -584,6 +611,122 @@ local BEAT = {
 	last = 35,
 }
 
+-- ===== THE TRUE ENDING (the hundred-and-fifteenth pass; you chose it) =====
+--
+-- For a rider who clocked in at the time clock on the gangway (StoryService), the gates end differently. After
+-- midnight, someone walks up Outfall 3 out of the daylight: EDWIN MARSH, the key holder before you, the one on the Deco
+-- tower, in the dark clothes he wears there, the green ribbon at his neck, and his face. He stops at the gate. He waves,
+-- as he waved to you from the dive board the night he went down, and you wave back. Then he goes back out into the
+-- morning, and it is 15 August. On this screen only; every other screen and every other ending never shows him. The
+-- beats, in seconds after the rider came up in the chamber (BEAT.last is the first), and FloodedHallsService's
+-- GATES.TRUE makes the run that much longer:
+local TRUE = { light = 35, face = 41.6, wave = 46.2, morning = 51.2, done = 57.2 }
+-- Along Outfall 3, in the chamber's frame (its gate's line is at -41): where he stops, how fast he walks (studs a
+-- second), and how far back into the light he goes.
+local MARSH = { stop = -45, walk = 3.6, back = -78 }
+
+-- A WALK, on his joints: the legs swinging from the hips, a knee giving as its leg comes through, the arms against them.
+local function walkPose(name: string, t: number): CFrame?
+	local s = math.sin(t * 5.4)
+	if name == "RightHip" then
+		return CFrame.Angles(s * 0.42, 0, 0)
+	elseif name == "LeftHip" then
+		return CFrame.Angles(-s * 0.42, 0, 0)
+	elseif name == "RightKnee" then
+		return CFrame.Angles(-math.max(0, s) * 0.5, 0, 0)
+	elseif name == "LeftKnee" then
+		return CFrame.Angles(-math.max(0, -s) * 0.5, 0, 0)
+	elseif name == "RightShoulder" then
+		return CFrame.Angles(-s * 0.3, 0, 0)
+	elseif name == "LeftShoulder" then
+		return CFrame.Angles(s * 0.3, 0, 0)
+	end
+	return nil
+end
+
+local function trueStep(current: Scene, b: number)
+	local frame = current.frame :: CFrame
+	local function at(x: number, y: number, z: number): Vector3
+		return frame * Vector3.new(x, y, z)
+	end
+	local ahead = frame.LookVector
+	-- HIM: walking up out of the light, stopping at the gate, waving, turning and going back into it.
+	local model = current.marsh
+	if model and model.Parent and current.marshRest then
+		local from = frame:PointToObjectSpace((current.marshRest :: CFrame).Position)
+		local span = MARSH.stop - from.Z
+		local z, yaw, seen, walking = MARSH.stop, 0, 1, false
+		if b < TRUE.face then
+			local u = math.clamp((b - TRUE.light - 0.6) * MARSH.walk / math.max(1, span), 0, 1)
+			z = from.Z + span * u
+			walking = u > 0 and u < 1
+			seen = math.clamp((b - TRUE.light) / 0.8, 0, 1)
+		elseif b >= TRUE.morning then
+			yaw = math.pi * ease((b - TRUE.morning) / 0.8)
+			local going = math.max(0, b - TRUE.morning - 0.8)
+			z = math.max(MARSH.back, MARSH.stop - going * MARSH.walk)
+			walking = going > 0 and z > MARSH.back
+			seen = 1 - math.clamp((b - (TRUE.done - 2.6)) / 2.2, 0, 1)
+		end
+		local p = at(from.X, from.Y, z)
+		model:PivotTo(CFrame.lookAt(p, p - ahead) * CFrame.Angles(0, yaw, 0))
+		for _, item in ipairs(current.marshParts) do
+			(item :: any).LocalTransparencyModifier = 1 - seen
+		end
+		local joints = current.marshJoints
+		if Poses and joints then
+			local r6 = Poses.isR6(joints)
+			local raised = math.clamp((b - TRUE.wave) / 0.5, 0, 1) * math.clamp((TRUE.morning - b) / 0.5, 0, 1)
+			for name, joint in pairs(joints) do
+				local by: CFrame? = nil
+				if walking then
+					by = walkPose(name, b)
+				elseif raised > 0 then
+					by = Poses.wave(name, b - TRUE.wave, raised, r6)
+				end
+				Poses.drive(joint, by or CFrame.identity)
+			end
+		end
+	end
+	if b < TRUE.face then
+		-- SOMEONE IN THE LIGHT: from behind you at the wheel, down Outfall 3 into the morning.
+		if once(current, "true light") then
+			Cinema.cut()
+			Cinema.caption("Outfall 3", "Someone is walking up out of the morning.", 5)
+		end
+		Cinema.point(CFrame.lookAt(at(-6, 7, -12), at(0, 4, -60)), 50)
+	elseif b < TRUE.wave then
+		-- HIS FACE: at the gate, square on, close; the chord carried home.
+		if once(current, "true face") then
+			Cinema.cut()
+			Cinema.caption("Edwin Marsh", "Key holder, 1979. He has his face back.", 5)
+			local chord = sound("MorningChord", nil, 0.7, 1, false) or sound("EndChord", nil, 0.7, 1, false)
+			if chord then
+				game:GetService("Debris"):AddItem(chord, 14)
+			end
+		end
+		Cinema.point(CFrame.lookAt(at(0, 5.2, MARSH.stop + 7), at(0, 4.7, MARSH.stop)), 38)
+	elseif b < TRUE.morning then
+		-- THE WAVE: from the side, you at the wheel and him at the gate, both waving.
+		if once(current, "true wave") then
+			Cinema.cut()
+			holdMine("wave")
+			Cinema.caption("The wave", "He waved to you from the dive board, the night he went down. You wave back.", 5)
+		end
+		Cinema.point(CFrame.lookAt(at(17, 6, -27), at(-4, 3.5, -33)), 52)
+	elseif b < TRUE.done then
+		-- INTO THE MORNING: over your shoulder, him going back out into the light.
+		if once(current, "true morning") then
+			Cinema.cut()
+			holdMine(nil)
+			Cinema.caption("Harrow Bay", "15 August. The tide went out, and the day ended.", 6)
+		end
+		Cinema.point(CFrame.lookAt(at(-6.8, 5.3, -17), at(0, 5, -70)), 52)
+	else
+		endScene()
+	end
+end
+
 -- THE GATE CHAMBER, `b` seconds after the server put the rider in it.
 local function chamberStep(current: Scene, root: BasePart, humanoid: Humanoid, b: number)
 	local chamber = current.chamber :: Instance
@@ -609,6 +752,7 @@ local function chamberStep(current: Scene, root: BasePart, humanoid: Humanoid, b
 				Maw.destroy(current.mouth)
 				current.mouth = nil
 			end
+			dropThroat(current)
 			local heart = current.heart
 			if heart and heart.Parent then
 				TweenService:Create(heart, TweenInfo.new(2), { Volume = 0 }):Play()
@@ -625,6 +769,8 @@ local function chamberStep(current: Scene, root: BasePart, humanoid: Humanoid, b
 			humanoid.PlatformStand = true
 			holdMine("climb")
 			keep(current, sound(nil, SPLASH, 0.8, 0.7, false))
+			-- (Said, so it is plain what happened: it swallowed you, and it gave you back.)
+			Cinema.think(Players.LocalPlayer.Character, "It... spat me out?", 2.6)
 		end
 		-- In the chamber's own axes: its +Z is back into the sump, away from the gates.
 		local lad = frame:PointToObjectSpace(ladder)
@@ -804,6 +950,8 @@ local function chamberStep(current: Scene, root: BasePart, humanoid: Humanoid, b
 			-- Square on to the face, from seven studs out into the room.
 			Cinema.point(CFrame.lookAt(face * Vector3.new(0, 0, 7), face.Position), 42, true)
 		end
+	elseif current.trueEnd then
+		trueStep(current, b)
 	elseif b < current.gates + 0.8 then
 		-- THE LAST LINE, pushing in from behind the rider toward the open gate and the light.
 		if once(current, "last") then
@@ -835,11 +983,17 @@ local JAWS = {
 	dark = 0.45, -- falling on, fast, into nothing
 	reveal = 0.8, -- the light comes up in it and it lunges up at you, opening
 	face = 1.8, -- past you from above at an angle: a speck over a mouth that fills the shaft, turning over to look
-	into = 2.6, -- your face, close, from under it, lit from below by the mouth: "No. No no no no."; then you drop
-	bite = 3.5, -- from inside it, looking up at you coming down into it
-	snap = 3.95, -- from above, wide: it shuts on you
-	caption = 4.55, -- in the dark: the one line
+	into = 3.1, -- your face, close, from under it, lit from below by the mouth: "No. No no no no."; then you drop
+	bite = 4.1, -- from inside it, looking up at you coming down into it
+	snap = 5.0, -- from above, wide: it creaks shut, and SLAMS on you
+	crunch = 6.2, -- and crunches down twice more (CRUNCHES) before the dark
+	caption = 6.4, -- in the dark: the one line
 }
+-- THE JAWS, LONGER AND HARDER (the hundred-and-thirty-second pass, from your test: "the jaws need to snap longer, and
+-- create lots of impact"): CREAK seconds before the slam they start to close, slowly, then slam; after it, at each of
+-- CRUNCHES (seconds after the slam), they give a little and bite down again.
+local CREAK = 0.9
+local CRUNCHES = { 0.45, 0.9 }
 -- Where it waits, and how far it lunges: MAW_DEEP under the end of the tube's fall in the dark, then MAW_RISE up at you.
 -- HANG: how fast you fall while time all but stops over it (studs a second).
 local MAW_DEEP, MAW_RISE, LUNGE = 116, 34, 0.55
@@ -864,6 +1018,178 @@ local function fallSpeed(m: number, v0: number): number
 	return 45 + 35 * (m - JAWS.into - 0.25)
 end
 
+-- SWALLOWED (the hundred-and-twenty-fourth pass, from your test: "the moment where there is the monster scene, like I
+-- don't understand what is going on still"). After the jaws shut it was black for five seconds and then you were in
+-- water. Now, down its throat: ribbed, wet, dark red, lit by its own slow pulse, you turning over and over as it swallows
+-- you down (its rings going up past you), its heartbeat and the line; then it heaves, a rush of water and white, and it
+-- spits you out into the sump of the Gate Chamber, where you come up thinking just that. THROAT's beats are from the
+-- jaws' snap; it heaves SPIT seconds before the server moves you (GATES.MAW).
+local THROAT = { from = 0.6, radius = 11, slats = 16, ribs = 7, gap = 9, speed = 7, spit = 0.9 }
+-- AND WITH DRAMA (the hundred-and-thirty-second pass, from your test: "when I'm inside its throat it should be more
+-- dramatic"): its heart beats every BEAT seconds, and on each beat its walls squeeze in SQUEEZE studs and its light flares,
+-- the picture knocked; wet streaks rush up past you, the picture rolls and the speed is on.
+local THROAT_BEAT, THROAT_SQUEEZE = 0.8, 1.6
+type Throat = { model: Model, ribs: { Model }, base: Vector3, pulse: PointLight, made: number,
+	walls: { { part: BasePart, rest: CFrame, out: Vector3 } }, tint: ColorCorrectionEffect, beats: number }
+
+local function buildThroat(at: Vector3): Throat
+	local model = Instance.new("Model")
+	model.Name = "HoldThroat"
+	local function part(parent: Instance, size: Vector3, cf: CFrame, colour: Color3): Part
+		local p = Instance.new("Part")
+		p.Anchored, p.CanCollide, p.CanTouch, p.CanQuery, p.CastShadow = true, false, false, false, false
+		p.Material = Enum.Material.SmoothPlastic
+		p.Reflectance = 0.14
+		p.Size = size
+		p.CFrame = cf
+		p.Color = colour
+		p.Parent = parent
+		return p
+	end
+	-- The walls: slats round a tube, from over you on down.
+	local walls = {}
+	for k = 1, THROAT.slats do
+		local a = k / THROAT.slats * math.pi * 2
+		local out = Vector3.new(math.cos(a), 0, math.sin(a))
+		local mid = at + out * THROAT.radius - Vector3.new(0, 24, 0)
+		local slat = part(model, Vector3.new(4.8, 90, 1.4), CFrame.lookAt(mid, mid - out), Color3.fromRGB(122, 34, 42))
+		table.insert(walls, { part = slat, rest = slat.CFrame, out = out })
+	end
+	-- WET STREAKS rushing up past you as it swallows.
+	local streaks = part(model, Vector3.new(THROAT.radius * 1.6, 1, THROAT.radius * 1.6), CFrame.new(at - Vector3.new(0, 30, 0)),
+		Color3.new(0, 0, 0))
+	streaks.Transparency = 1
+	local wet = Instance.new("ParticleEmitter")
+	wet.Name = "Wet"
+	wet.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	wet.Color = ColorSequence.new(Color3.fromRGB(255, 196, 196))
+	wet.LightEmission = 0.3
+	wet.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 0.15) })
+	wet.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+	wet.Lifetime = NumberRange.new(0.6, 1)
+	wet.Speed = NumberRange.new(40, 60)
+	wet.EmissionDirection = Enum.NormalId.Top
+	wet.Shape = Enum.ParticleEmitterShape.Box
+	wet.Rate = 90
+	wet.Parent = streaks
+	-- The ribs: rings a little inside the wall, which the swallowing carries up past you.
+	local ribs = {}
+	for r = 1, THROAT.ribs do
+		local rib = Instance.new("Model")
+		rib.Name = "Rib"
+		for k = 1, THROAT.slats do
+			local a = (k + 0.5) / THROAT.slats * math.pi * 2
+			local out = Vector3.new(math.cos(a), 0, math.sin(a))
+			local p = at + out * (THROAT.radius - 1.1)
+			part(rib, Vector3.new(4.6, 1.6, 1.8), CFrame.lookAt(p, p - out), Color3.fromRGB(86, 20, 28))
+		end
+		rib.Parent = model
+		table.insert(ribs, rib)
+	end
+	-- Its own slow pulse of red, on you.
+	local glow = part(model, Vector3.new(1, 1, 1), CFrame.new(at + Vector3.new(0, 4, 0)), Color3.new(0, 0, 0))
+	glow.Transparency = 1
+	local pulse = Instance.new("PointLight")
+	pulse.Color = Color3.fromRGB(255, 80, 70)
+	pulse.Brightness = 1.4
+	pulse.Range = 26
+	pulse.Shadows = false
+	pulse.Parent = glow
+	model.Parent = workspace
+	-- Its red over everything, while you are in it.
+	local tint = Instance.new("ColorCorrectionEffect")
+	tint.Name = "ThroatTint"
+	tint.TintColor = Color3.fromRGB(255, 206, 204)
+	tint.Contrast = 0.14
+	tint.Saturation = 0.12
+	tint.Parent = game:GetService("Lighting")
+	return { model = model, ribs = ribs, base = at, pulse = pulse, made = os.clock(), walls = walls, tint = tint, beats = 0 }
+end
+
+local function throatStep(current: Scene, root: BasePart, m: number, side: Vector3)
+	local held = current.lastFall
+	if not held then
+		return
+	end
+	local s = m - JAWS.snap - THROAT.from
+	if not current.throat then
+		current.throat = buildThroat(held)
+		Cinema.cut()
+		Cinema.black(false, 0.6)
+		local lit: Lit? = current.lit
+		if lit and lit.glimmer then
+			lit.glimmer.Brightness = 0.9
+		end
+	end
+	local throat: Throat = current.throat
+	-- The rings, going up past you as it swallows: a rib every THROAT.gap studs, wrapping round.
+	local shift = (s * THROAT.speed) % THROAT.gap
+	for r, rib in ipairs(throat.ribs) do
+		local y = -32 + (r - 1) * THROAT.gap + shift
+		rib:PivotTo(CFrame.new(throat.base + Vector3.new(0, y, 0)))
+	end
+	-- ITS HEART: on every beat the walls squeeze in and spring back, its light flares, the picture is knocked.
+	local beat = math.max(0, s) % THROAT_BEAT / THROAT_BEAT
+	local squeeze = THROAT_SQUEEZE * math.exp(-beat * 5)
+	for _, wall in ipairs(throat.walls) do
+		wall.part.CFrame = wall.rest - wall.out * squeeze
+	end
+	throat.pulse.Brightness = 1 + 2.4 * math.exp(-beat * 6)
+	local beats = math.floor(math.max(0, s) / THROAT_BEAT)
+	if beats > throat.beats then
+		throat.beats = beats
+		Cinema.impact(0.3)
+		Cinema.shake(1.1)
+	end
+	Cinema.shake(0.45)
+	Cinema.speedLines(0.7)
+	Cinema.waver(0.9)
+	-- YOU, turning over and over, slowly, held in the middle of it.
+	local spin = s * 0.9
+	root.CFrame = CFrame.new(held) * CFrame.Angles(0, spin, 0) * CFrame.Angles(math.pi / 2, 0, 0.3)
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.AssemblyAngularVelocity = Vector3.zero
+	if s > 0.6 and once(current, "swallowed") then
+		Cinema.think(Players.LocalPlayer.Character, "It swallowed me...", 2.4)
+	end
+	if s > 3.2 and once(current, "let me out") then
+		Cinema.think(Players.LocalPlayer.Character, "Let me OUT!", 1.8)
+	end
+	-- FROM OVER YOU, down its throat: you turning in it, the rings coming up at us.
+	Cinema.point(CFrame.lookAt(held + Vector3.new(0, 9, 0) + side * 2.5, held - Vector3.new(0, 6, 0), side), 72)
+end
+
+-- AFTER THE BITE, `m` seconds into the mouth: its line in the dark and its heartbeat; down its throat; then it heaves.
+local function afterBite(current: Scene, root: BasePart, m: number, side: Vector3)
+	if m > JAWS.caption and once(current, "keeps") then
+		Cinema.caption("The Hold", "It keeps what it is given.", 7)
+	end
+	if m > JAWS.caption + 0.2 and once(current, "heart") then
+		current.heart = sound("Heartbeat", BASS, 0.6, 0.45, true)
+		keep(current, current.heart)
+	end
+	local spitAt = current.maw - THROAT.spit
+	if m >= JAWS.crunch + THROAT.from and m < spitAt then
+		throatStep(current, root, m, side)
+	elseif m >= spitAt and once(current, "spat") then
+		-- IT HEAVES: the walls clamp, a rush of water and white, and out.
+		local throat = current.throat
+		if throat then
+			for _, wall in ipairs(throat.walls) do
+				wall.part.CFrame = wall.rest - wall.out * (THROAT_SQUEEZE * 2.5)
+			end
+			throat.pulse.Brightness = 4
+		end
+		keep(current, sound(nil, SPLASH, 1, 0.55, false))
+		keep(current, sound("MawRoar", BASS, 0.6, 0.3, false))
+		Cinema.impact(1.6)
+		Cinema.shake(2.8)
+		Cinema.speedLines(0)
+		Cinema.waver(0)
+		Cinema.black(true, 0.3)
+	end
+end
+
 local function mawStep(current: Scene, root: BasePart, humanoid: Humanoid, m: number)
 	local mouth = current.mouth
 	local from = current.fallFrom
@@ -872,6 +1198,11 @@ local function mawStep(current: Scene, root: BasePart, humanoid: Humanoid, m: nu
 		if once(current, "dip") then
 			Cinema.black(true, 0.8)
 		end
+		return
+	end
+	-- SWALLOWED: the mouth is gone from the picture, and the rest happens down its throat.
+	if current.swallowed then
+		afterBite(current, root, m, mouth.hinge.UpVector)
 		return
 	end
 	local slideFrame = current.halls:GetAttribute("SlideFrame")
@@ -890,6 +1221,10 @@ local function mawStep(current: Scene, root: BasePart, humanoid: Humanoid, m: nu
 		current.exitSpeed = if path and n > 2 then (path[n].Position - path[n - 1].Position).Magnitude * (n - 1) / current.slide
 			else 40
 		current.fallM, current.fallD, current.tumble = 0, 0, 0
+		-- HIT LIKE THE DIVE (the hundred-and-thirty-second pass, from your test: "I want as much impact when falling down
+		-- in level 3 and 4 as in level 1"): out of the tube with a jolt.
+		Cinema.impact(1)
+		Cinema.shake(1.2)
 	end
 	-- THE LUNGE: up out of the dark at you, fast and then slowing, as it opens.
 	local rest: CFrame = current.mawRest or mouth.hinge
@@ -942,14 +1277,26 @@ local function mawStep(current: Scene, root: BasePart, humanoid: Humanoid, m: nu
 	root.AssemblyAngularVelocity = Vector3.zero
 	-- THE JAWS: shut in the dark; SPRUNG open as it lunges; breathing, slow, while you hang; then shut on you.
 	local upper, lower = 0.04, 0.03
-	if m >= JAWS.reveal and m < JAWS.snap - 0.4 then
+	if m >= JAWS.reveal and m < JAWS.snap - CREAK then
 		local u = 1 - (1 - math.clamp((m - JAWS.reveal) / 0.35, 0, 1)) ^ 3
 		local breath = 0.03 * math.sin((m - JAWS.reveal) * 2.2)
 		upper, lower = 0.04 + (0.86 - 0.04) * u + breath, 0.03 + (0.72 - 0.03) * u + breath
-	elseif m >= JAWS.snap - 0.4 then
-		local u = math.clamp((m - (JAWS.snap - 0.4)) / 0.36, 0, 1)
-		u = u * u * u
-		upper, lower = 0.86 + (0.02 - 0.86) * u, 0.72 + (0.02 - 0.72) * u
+	elseif m < JAWS.snap then
+		-- CREAKING SHUT, slowly, a third of the way; then the slam.
+		local creak = ease((m - (JAWS.snap - CREAK)) / (CREAK - 0.25))
+		local slam = math.clamp((m - (JAWS.snap - 0.25)) / 0.25, 0, 1) ^ 3
+		local up, lo = 0.86 - 0.3 * creak, 0.72 - 0.25 * creak
+		upper, lower = up + (0.02 - up) * slam, lo + (0.02 - lo) * slam
+	elseif m >= JAWS.snap then
+		-- SHUT, and crunching: giving a little and biting down again, twice.
+		local gape = 0
+		for _, at in ipairs(CRUNCHES) do
+			local w = (m - JAWS.snap - (at - 0.25)) / 0.25
+			if w > 0 and w < 1 then
+				gape = 0.14 * math.sin(math.pi * w ^ 0.6)
+			end
+		end
+		upper, lower = 0.02 + gape, 0.02 + gape * 0.8
 	end
 	Maw.set(mouth, upper, lower)
 	-- ITS LIGHT: nothing until it comes for you, then all at once (one stutter as it catches), then never steady.
@@ -973,20 +1320,31 @@ local function mawStep(current: Scene, root: BasePart, humanoid: Humanoid, m: nu
 		Maw.breathe(mouth, 10)
 		Cinema.cut()
 	end
+	-- WHAT YOU SEE, said as you see it (the hundred-and-twenty-fourth pass: the test could not tell what it was).
+	if m >= JAWS.reveal + 0.15 and once(current, "a mouth") then
+		Cinema.think(character, "Is that... a MOUTH?!", 1.3)
+	end
 	if m >= JAWS.face + 0.05 and once(current, "no") then
 		Cinema.think(character, "No. No no no no.", 1.6)
+		-- (The light on you down to a glimmer for the close look at your face: with the mouth's own light coming up under
+		-- you, it was washed out white.)
+		local lit: Lit? = current.lit
+		if lit and lit.glimmer then
+			lit.glimmer.Brightness = 0.35
+		end
 	end
 	if m < JAWS.reveal then
 		-- FROM ABOVE, falling with you, into nothing: black under you, and the growl.
 		Cinema.speedLines(0.65)
+		Cinema.shake(0.45)
 		Cinema.point(CFrame.lookAt(pos + Vector3.new(0, 9, 0) + inward * 3 + side * 1.5, pos - Vector3.new(0, 30, 0), side), 66)
 	elseif m < JAWS.face then
 		-- PAST YOU, FROM ABOVE AT AN ANGLE, into it: you in the top third of the picture, small, and under you a mouth
 		-- that fills the shaft, its teeth ringing a gullet lit from inside; you twisting over to look. Easing in. (It
 		-- looked further down, and you were above the picture, under the top bar, the whole shot: check_shots.py.)
 		local k = ease((m - JAWS.reveal) / (JAWS.face - JAWS.reveal))
-		local eye = pos + Vector3.new(0, 14 - 1 * k, 0) + inward * (20 - 2 * k) + side * 8
-		local target = (hinge.Position + opens * 16):Lerp(pos, 0.76)
+		local eye = pos + Vector3.new(0, 18 - 1 * k, 0) + inward * (20 - 2 * k) + side * 8
+		local target = (hinge.Position + opens * 16):Lerp(pos, 0.62)
 		Cinema.point(CFrame.lookAt(eye, target, Vector3.yAxis), 74 - 4 * k)
 		Cinema.focus(nil)
 	elseif m < JAWS.into then
@@ -1014,36 +1372,49 @@ local function mawStep(current: Scene, root: BasePart, humanoid: Humanoid, m: nu
 		local eye = hinge.Position + opens * 9 + inward * 5
 		Cinema.point(CFrame.lookAt(eye, pos, side), 82)
 		Cinema.focus((pos - eye).Magnitude, 0.35)
-	elseif m < JAWS.snap + 0.1 then
-		-- FROM ABOVE, WIDE: the jaws slamming shut on you, teeth through teeth.
+	elseif m < JAWS.crunch then
+		-- FROM ABOVE, WIDE: the jaws creaking, then slamming shut on you, teeth through teeth, and crunching down.
 		if once(current, "bite") then
 			Cinema.cut()
 			Cinema.focus(nil)
+			-- The creak as they start to close.
+			keep(current, sound("MawRumble", BASS, 0.7, 0.32, false))
 		end
-		if m > JAWS.snap - 0.2 and once(current, "snap") then
+		if m > JAWS.snap - 0.05 and once(current, "snap") then
+			-- THE SLAM: everything at once.
 			keep(current, sound("JawsShut", BASS, 1, 0.3, false))
-			Cinema.impact(1.5)
-			Cinema.shake(3)
+			keep(current, sound("MawRoar", BASS, 0.8, 0.26, false))
+			Cinema.impact(2)
+			Cinema.shake(3.8)
 			Maw.breathe(mouth, 0)
+		end
+		for index, at in ipairs(CRUNCHES) do
+			if m > JAWS.snap + at - 0.03 and (current.crunched or 0) < index then
+				current.crunched = index
+				keep(current, sound("JawsShut", BASS, 0.85 - 0.15 * index, 0.26 - 0.03 * index, false))
+				Cinema.impact(1.1 - 0.25 * index)
+				Cinema.shake(2.2 - 0.5 * index)
+			end
+		end
+		if m > JAWS.snap then
+			Cinema.shake(0.6)
 		end
 		Cinema.point(CFrame.lookAt(hinge.Position + opens * 55 + inward * 24 + side * 14, hinge.Position + opens * 22,
 			Vector3.yAxis), 70)
 	else
-		-- BLACK. Then only a heartbeat, from inside something.
+		-- BLACK as it shuts. Then DOWN ITS THROAT (throatStep), its heartbeat, the line; then it heaves and spits you out.
 		if once(current, "dark") then
 			Cinema.black(true)
 			local rumble = current.rumble
 			if rumble and rumble.Parent then
 				TweenService:Create(rumble, TweenInfo.new(0.4), { Volume = 0 }):Play()
 			end
+			if Maw then
+				Maw.destroy(mouth)
+			end
+			current.swallowed = true
 		end
-		if m > JAWS.caption and once(current, "keeps") then
-			Cinema.caption("The Hold", "It keeps what it is given.", 7)
-		end
-		if m > JAWS.caption + 0.2 and once(current, "heart") then
-			current.heart = sound("Heartbeat", BASS, 0.6, 0.45, true)
-			keep(current, current.heart)
-		end
+		afterBite(current, root, m, side)
 	end
 end
 
@@ -1177,13 +1548,31 @@ local function started(player: Player, began: number, slide: number, gates: numb
 		arrived = false, fallEye = nil, gateRest = nil, wheelRest = nil, maw = maw, mouth = nil, fallFrom = nil,
 		heart = nil, rumble = nil, lastFall = nil, path = path, rush = nil,
 		clockAt = os.clock() - (workspace:GetServerTimeNow() - began), exitFrame = nil, thought = 0, wake = nil,
-		growl = nil, exitSpeed = nil, fallM = nil, fallD = nil, tumble = nil, lit = nil, mawRest = nil, lungeAt = nil }
+		growl = nil, exitSpeed = nil, fallM = nil, fallD = nil, tumble = nil, lit = nil, mawRest = nil, lungeAt = nil,
+		trueEnd = false, marsh = nil, marshRest = nil, marshJoints = nil, marshParts = {} }
 	if path and hallsEvent then
 		hallsEvent:FireServer("riding")
 	end
 	if not (scene :: Scene).frame then
 		(scene :: Scene).chamber = nil
 	end
+	-- THE TRUE ENDING'S MAN, in the light behind the gate: hidden on this screen from the start, and shown only if this
+	-- rider clocked in (and the server gave the gates the time for it).
+	local opening = scene :: Scene
+	local him = chamber and chamber:FindFirstChild("Marsh")
+	if him and him:IsA("Model") then
+		for _, item in ipairs(him:GetDescendants()) do
+			if item:IsA("BasePart") or item:IsA("Decal") then
+				item.LocalTransparencyModifier = 1
+				table.insert(opening.marshParts, item)
+			end
+		end
+		opening.marsh = him
+		opening.marshRest = him:GetPivot()
+		opening.marshJoints = if Poses then Poses.joints(him) else nil
+	end
+	opening.trueEnd = opening.marsh ~= nil and opening.chamber ~= nil and Players.LocalPlayer:GetAttribute("ClockedIn") == true
+		and gates >= TRUE.done
 	-- YOUR NAME ON THE ROTA, on this screen.
 	local rota = chamber and chamber:FindFirstChild("RotaBoard")
 	local words = rota and rota:FindFirstChild("Words", true)
@@ -1235,7 +1624,7 @@ local LAMP_BACK = 0.8 -- seconds back up, when you are sent back past it
 local STUTTER = { { 0.18, 0.06 }, { 1, 0.08 }, { 0.18, 0.1 }, { 0.85, 0.12 } }
 local LAMP_BAY: number = if HallRoute and typeof(HallRoute.BAY) == "number" then HallRoute.BAY else 96
 
-type Lamp = { light: SurfaceLight?, bright: number, colour: Color3, along: number, failed: boolean, level: number,
+type Lamp = { light: Light?, bright: number, colour: Color3, along: number, failed: boolean, level: number,
 	turn: number, fresh: boolean }
 local lamps: { [BasePart]: Lamp } = {}
 local lampsAt = 0
@@ -1319,10 +1708,12 @@ local function stepLamps()
 	if now - lampsSeen > 1 then
 		lampsSeen = now
 		for _, item in ipairs(halls:GetChildren()) do
-			if item:IsA("BasePart") and item.Name == "RoofLight" and not lamps[item] and not item:GetAttribute("Failing") then
+			-- (And the lamps hanging over the walkway since the hundred-and-thirty-fourth pass: they fail with them.)
+			if item:IsA("BasePart") and (item.Name == "RoofLight" or item.Name == "PendantLight") and not lamps[item]
+				and not item:GetAttribute("Failing") then
 				local along = item:GetAttribute("Along")
 				if typeof(along) == "number" then
-					local light = item:FindFirstChildOfClass("SurfaceLight")
+					local light: Light? = item:FindFirstChildOfClass("SurfaceLight") or item:FindFirstChildOfClass("PointLight")
 					lamps[item] = { light = light, bright = if light then light.Brightness else 0, colour = item.Color,
 						along = along, failed = false, level = 1, turn = 0, fresh = true }
 				end
@@ -1367,7 +1758,85 @@ local function stepLamps()
 	end
 end
 
+-- ===== CLOCKING IN (the hundred-and-fourteenth pass) =====
+--
+-- How long each shot is held, when the card slides from the rack to the slot, and when it is punched.
+local CLOCK = { card = 2.4, shift = 3.6, slideFrom = 0.5, slideTo = 1.4, punch = 1.6 }
+local clocking = { token = 0 }
+
+local function clockIn(model: Model)
+	local frame = model:GetAttribute("Frame")
+	local character = Players.LocalPlayer.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local card = model:FindFirstChild("ClockCard")
+	if scene or not (Cinema and typeof(frame) == "CFrame" and root and root:IsA("BasePart") and card and card:IsA("BasePart")) then
+		return
+	end
+	local at: CFrame = frame
+	local prompt = model:FindFirstChild("ClockInPrompt", true)
+	if prompt and prompt:IsA("ProximityPrompt") then
+		prompt.Enabled = false
+	end
+	clocking.token += 1
+	local token = clocking.token
+	local rack = card.CFrame
+	-- In the slot under the dial, its written side turned to the front.
+	local slot = at * CFrame.new(0, 3.9, -0.6) * CFrame.Angles(0, -math.pi / 2, 0)
+	local stamped = ("KEY HOLDER\n%s\n14 AUG  11:57 PM\nCLOCKED IN"):format(string.upper(Players.LocalPlayer.DisplayName))
+	Cinema.begin({ hush = false })
+	holdMine("key")
+	local began = os.clock()
+	local punched, cut = false, false
+	local hook: RBXScriptConnection? = nil
+	hook = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - began
+		if clocking.token ~= token or not model.Parent then
+			if hook then
+				hook:Disconnect()
+			end
+			holdMine(nil)
+			Cinema.finish(true)
+			return
+		end
+		if t < CLOCK.card then
+			-- YOUR CARD: over your shoulder, on the slot.
+			Cinema.point(CFrame.lookAt(at * Vector3.new(1.4, 5, -5), at * Vector3.new(0.3, 4, -1)), 48)
+			card.CFrame = rack:Lerp(slot, ease((t - CLOCK.slideFrom) / (CLOCK.slideTo - CLOCK.slideFrom)))
+			if t >= CLOCK.punch and not punched then
+				punched = true
+				local punch = sound("ClockPunch", CLICK, 0.75, 0.45, false)
+				if punch then
+					game:GetService("Debris"):AddItem(punch, 4)
+				end
+				Cinema.impact(0.2)
+				local words = card:FindFirstChild("Words", true)
+				if words and words:IsA("TextLabel") then
+					words.Text = stamped
+					words.TextColor3 = Color3.fromRGB(150, 30, 30)
+				end
+			end
+		elseif t < CLOCK.card + CLOCK.shift then
+			-- ON SHIFT: from along the deck, you at the clock and Mr Barlow beside it.
+			if not cut then
+				cut = true
+				holdMine(nil)
+				Cinema.cut()
+				Cinema.caption("Clocked in", "14 August. Three minutes to midnight. On shift.", 5)
+			end
+			Cinema.point(CFrame.lookAt(at * Vector3.new(9, 5, -7), at * Vector3.new(1, 2.8, 0)), 55)
+		else
+			if hook then
+				hook:Disconnect()
+			end
+			Cinema.finish()
+		end
+	end)
+end
+
 function FloodedHallsClient.start()
+	if Cinema and Cinema.onLeave then
+		Cinema.onLeave(endScene)
+	end
 	-- The lamps first: they need nothing from the server but the halls themselves.
 	local lampsWarned = false
 	for _, part in ipairs(CollectionService:GetTagged("FlumeWater")) do
@@ -1391,6 +1860,11 @@ function FloodedHallsClient.start()
 	end
 	hallsEvent = event
 	event.OnClientEvent:Connect(function(kind: any, player: any, began: any, slide: any, gates: any, maw: any)
+		-- CLOCKED IN (the time clock's word, to you alone): its second value is the clock, not a player.
+		if kind == "clockin" and typeof(player) == "Instance" and player:IsA("Model") then
+			clockIn(player)
+			return
+		end
 		if kind ~= "flume" or typeof(player) ~= "Instance" or not player:IsA("Player") or typeof(began) ~= "number"
 			or typeof(slide) ~= "number" then
 			return
@@ -1407,5 +1881,5 @@ function FloodedHallsClient.start()
 	print("FloodedHallsClient: running, " .. FloodedHallsClient.VERSION)
 end
 
-FloodedHallsClient.STAMP = "49a6c165"
+FloodedHallsClient.STAMP = "bfede0cc"
 return FloodedHallsClient

@@ -59,6 +59,8 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
+local ContextActionService = game:GetService("ContextActionService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 
 local Cinema = {}
 
@@ -83,7 +85,7 @@ type Live = { gui: ScreenGui, top: Frame, bottom: Frame, veil: Frame, fov: numbe
 	aim: CFrame?, eye: Vector3?, at: number, cut: boolean, shake: number, focus: DepthOfFieldEffect?,
 	ending: boolean, told: boolean, finishing: boolean, readUntil: number, freeAt: number, queue: number,
 	sounds: { Sound }, lines: { Frame }, lineAmount: number, burst: number, kick: number, flash: Frame,
-	impactFx: ColorCorrectionEffect? }
+	impactFx: ColorCorrectionEffect?, waver: number }
 -- THE SPEED LINES: this many, streaming in from the edges of the picture.
 local LINE_COUNT = 36
 local live: Live? = nil
@@ -126,6 +128,57 @@ end
 function Cinema.active(): boolean
 	return live ~= nil
 end
+
+-- HELD STILL (the hundred-and-thirtieth pass, from your test: "I can walk around during animations"): the controls are
+-- switched off when a scene begins, and the shop and the welcome switch them back on as they close, so a scene could be
+-- walked out of. While a scene has the camera, moving and jumping go nowhere, whoever else has the controls (a scene's
+-- own MoveTo still walks you where it wants you).
+local STILL = "CinemaHoldsYouStill"
+local function holdStill(on: boolean)
+	if on then
+		ContextActionService:BindActionAtPriority(STILL, function()
+			return Enum.ContextActionResult.Sink
+		end, false, Enum.ContextActionPriority.High.Value + 100, Enum.PlayerActions.CharacterForward,
+			Enum.PlayerActions.CharacterBackward, Enum.PlayerActions.CharacterLeft, Enum.PlayerActions.CharacterRight,
+			Enum.PlayerActions.CharacterJump, Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D, Enum.KeyCode.Up,
+			Enum.KeyCode.Down, Enum.KeyCode.Left, Enum.KeyCode.Right, Enum.KeyCode.Space, Enum.KeyCode.Thumbstick1)
+	else
+		ContextActionService:UnbindAction(STILL)
+	end
+end
+
+-- WHEN THE LOBBY TAKES YOU (the same pass, from your test: "when I leave to lobby every animation should stop even if it
+-- is playing"): whatever scene is on is over at once, its camera given back, its sounds and the ones it kept faded, and
+-- every scene's own things (registered with Cinema.onLeave) put away, so nothing plays on over the lobby or moves you
+-- back. Going down into the back rooms is not leaving.
+local leaving: { () -> () } = {}
+local kept: { Sound } = {}
+function Cinema.onLeave(fn: () -> ())
+	table.insert(leaving, fn)
+end
+local function left()
+	for _, s in ipairs(kept) do
+		Cinema.fade(s, 1.5)
+	end
+	table.clear(kept)
+	if live then
+		Cinema.finish(true)
+	end
+	for _, fn in ipairs(leaving) do
+		local ok, err = pcall(fn)
+		if not ok then
+			warn("Cinema: a scene could not be put away on leaving: " .. tostring(err))
+		end
+	end
+end
+local wasIn = Players.LocalPlayer:GetAttribute("InLevel")
+Players.LocalPlayer:GetAttributeChangedSignal("InLevel"):Connect(function()
+	local now = Players.LocalPlayer:GetAttribute("InLevel")
+	if wasIn ~= nil and now ~= wasIn and now ~= "backRooms" then
+		left()
+	end
+	wasIn = now
+end)
 
 -- True once an ending's story has been told (done(), its captions read), or when there is no scene:
 -- what the banner waits for before it comes up.
@@ -247,10 +300,15 @@ function Cinema.begin(options: { hush: boolean? }?)
 			found:Disable()
 		end)
 	end
+	holdStill(true)
+	-- The prompts put away while a scene plays: "Look" hung over the locker all through its scene.
+	pcall(function()
+		ProximityPromptService.Enabled = false
+	end)
 	live = { gui = gui, top = top, bottom = bottom, veil = veil, fov = camera.FieldOfView, controls = found,
 		words = words, aim = nil, eye = nil, at = os.clock(), cut = true, shake = 0, focus = nil,
 		ending = ending, told = false, finishing = false, readUntil = 0, freeAt = 0, queue = 0, sounds = {},
-		lines = lines, lineAmount = 0, burst = 0, kick = 0, flash = flash, impactFx = nil }
+		lines = lines, lineAmount = 0, burst = 0, kick = 0, flash = flash, impactFx = nil, waver = 0 }
 	if ending then
 		tell("began")
 	end
@@ -269,6 +327,55 @@ function Cinema.clear(eye: Vector3, at: Vector3, ignore: { Instance }?): Vector3
 	params.FilterDescendantsInstances = ignore or {}
 	local hit = workspace:Raycast(at, eye - at, params)
 	return if hit then hit.Position + hit.Normal * 0.6 else eye
+end
+
+-- OUT OF THE SHOT (the hundred-and-thirtieth pass, from your test: "it just gets covered if I stand in front of it, move
+-- me out the way if I'm in the way and do the same for every animation where it makes sense"): if you stand between a
+-- shot's eye and what it looks at, you take a step aside to whichever side has room, clear of the line by `clearance`,
+-- and turn to look at it. Nothing happens if you are not in the way.
+function Cinema.stepAside(eye: Vector3, at: Vector3, clearance: number?)
+	local character = Players.LocalPlayer.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not (root and root:IsA("BasePart") and humanoid) then
+		return
+	end
+	local need = clearance or 2.4
+	local here = root.Position
+	local a = Vector3.new(eye.X, here.Y, eye.Z)
+	local b = Vector3.new(at.X, here.Y, at.Z)
+	local line = b - a
+	if line.Magnitude < 0.1 then
+		return
+	end
+	local u = (here - a):Dot(line) / line:Dot(line)
+	local nearest = a + line * math.clamp(u, 0, 1)
+	local off = here - nearest
+	if u <= 0.02 or u >= 0.98 or off.Magnitude >= need then
+		return
+	end
+	local side = Vector3.yAxis:Cross(line.Unit)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { character :: Instance }
+	local function room(dir: Vector3): number
+		local hit = workspace:Raycast(here, dir * (need + 1.5), params)
+		return if hit then hit.Distance else need + 1.5
+	end
+	local sign = if off:Dot(side) >= 0 then 1 else -1
+	if room(side * sign) < need + 0.6 and room(-side * sign) > room(side * sign) then
+		sign = -sign
+	end
+	local to = nearest + side * sign * need
+	humanoid:MoveTo(to)
+	task.delay(0.45, function()
+		if root.Parent then
+			local look = Vector3.new(at.X - root.Position.X, 0, at.Z - root.Position.Z)
+			if look.Magnitude > 0.2 then
+				root.CFrame = CFrame.lookAt(root.Position, root.Position + look.Unit)
+			end
+		end
+	end)
 end
 
 -- The next point() starts a new shot: no pan from wherever the last one was looking.
@@ -338,14 +445,28 @@ function Cinema.point(cf: CFrame, fov: number?, steady: boolean?)
 			math.noise(now * 22, 3.7) * jolt * 0.03)
 		current.shake = jolt * math.exp(-4.5 * dt)
 	end
+	-- SEEN THROUGH WATER (Cinema.waver): a slow roll and the lens breathing, as moving water bends a view.
+	local w = current.waver
+	if w > 0 then
+		drift *= CFrame.Angles(math.sin(now * 1.4) * 0.01 * w, 0, (math.sin(now * 1.9) * 0.028 + math.sin(now * 3.3) * 0.01) * w)
+	end
 	camera.CFrame = CFrame.new(cf.Position) * (aim :: CFrame) * drift
 	-- AN IMPACT's punch in, dying away.
 	local kick = current.kick
 	current.kick = kick * math.exp(-7 * dt)
 	if fov then
-		camera.FieldOfView = math.max(8, fov - kick)
+		camera.FieldOfView = math.max(8, fov - kick + math.sin(now * 2.1) * 2.4 * w)
 	end
 	drawLines(current, dt)
+end
+
+-- THE PICTURE SWIMMING, `amount` 0 to 1 (the hundred-and-twenty-sixth pass, under the Sunken City's water): what a scene
+-- sees through moving water, a slow roll and the lens breathing. 0 puts it right.
+function Cinema.waver(amount: number)
+	local current = live
+	if current then
+		current.waver = math.clamp(amount, 0, 1)
+	end
 end
 
 -- AN IMPACT FRAME (`strength` about 1; 1.5 for a crash): two frames in hard black and white, a soft white
@@ -452,26 +573,30 @@ function Cinema.think(character: Model?, text: string, seconds: number?)
 		c.Parent = dot
 		table.insert(dots, dot)
 	end
-	local appear = TweenInfo.new(0.25, Enum.EasingStyle.Quad)
-	TweenService:Create(bubble, appear, { BackgroundTransparency = 0.05 }):Play()
-	TweenService:Create(edge, appear, { Transparency = 0.2 }):Play()
-	TweenService:Create(words, appear, { TextTransparency = 0 }):Play()
+	-- POPPED IN, and out (the hundred-and-thirtieth pass, from your test): faded in and out, the bubble went grey and its
+	-- words vanished into it before it did, and for a moment there was an empty bubble over your head. Now it is all
+	-- there at once, words with it, swelling up from your head, and shrinks away back into it.
+	local pop = Instance.new("UIScale")
+	pop.Scale = 0.4
+	pop.Parent = bubble
+	bubble.BackgroundTransparency = 0.05
+	edge.Transparency = 0.2
+	words.TextTransparency = 0
+	words.MaxVisibleGraphemes = 1
 	for _, dot in ipairs(dots) do
-		TweenService:Create(dot, appear, { BackgroundTransparency = 0.05 }):Play()
+		dot.BackgroundTransparency = 0.05
 	end
+	TweenService:Create(pop, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 	-- Written out as it is thought: a letter at a time, about thirty a second.
 	local length = utf8.len(text) or #text
 	TweenService:Create(words, TweenInfo.new(length / 30, Enum.EasingStyle.Linear), { MaxVisibleGraphemes = length }):Play()
 	task.delay(seconds or 3.5, function()
 		if board.Parent then
-			local gone = TweenInfo.new(0.4, Enum.EasingStyle.Quad)
-			TweenService:Create(bubble, gone, { BackgroundTransparency = 1 }):Play()
-			TweenService:Create(edge, gone, { Transparency = 1 }):Play()
-			TweenService:Create(words, gone, { TextTransparency = 1 }):Play()
+			TweenService:Create(pop, TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.In), { Scale = 0 }):Play()
 			for _, dot in ipairs(dots) do
-				TweenService:Create(dot, gone, { BackgroundTransparency = 1 }):Play()
+				TweenService:Create(dot, TweenInfo.new(0.12), { BackgroundTransparency = 1 }):Play()
 			end
-			task.delay(0.45, function()
+			task.delay(0.18, function()
 				board:Destroy()
 			end)
 		end
@@ -725,7 +850,17 @@ function Cinema.sound(name: string, volume: number, options: SoundOptions?): Sou
 	if current and not (options and options.keep) then
 		table.insert(current.sounds, made)
 	elseif not made.Looped then
-		game:GetService("Debris"):AddItem(made, 20)
+		-- Gone once it has played out: a fixed twenty seconds cut the Sky Pools' song off halfway (your test of
+		-- 2026-10-22), and a sound that never loads is cleared after two minutes. Faded at once if the lobby takes you.
+		table.insert(kept, made)
+		made.Ended:Once(function()
+			local index = table.find(kept, made)
+			if index then
+				table.remove(kept, index)
+			end
+			made:Destroy()
+		end)
+		game:GetService("Debris"):AddItem(made, 120)
 	end
 	return made
 end
@@ -829,6 +964,10 @@ function Cinema.finish(now: boolean?)
 			found:Enable()
 		end)
 	end
+	holdStill(false)
+	pcall(function()
+		ProximityPromptService.Enabled = true
+	end)
 	local open = TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 	TweenService:Create(current.top, open, { Size = UDim2.fromScale(1, 0) }):Play()
 	TweenService:Create(current.bottom, open, { Size = UDim2.fromScale(1, 0) }):Play()
@@ -838,5 +977,5 @@ function Cinema.finish(now: boolean?)
 	end)
 end
 
-Cinema.STAMP = "370ca4e7"
+Cinema.STAMP = "87246380"
 return Cinema

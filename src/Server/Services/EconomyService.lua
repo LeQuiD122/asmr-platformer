@@ -78,6 +78,10 @@ local TEMPLATE = {
 	-- What you have said to Harrow Bay's people and what they have told you (Townsfolk, Conversations): topic ids, and
 	-- "clue:" ids for what you have learned about your father (the hundred-and-fourth pass).
 	Heard = {} :: { [string]: boolean },
+	-- THE TRUE ENDING seen (the hundred-and-fifteenth and sixteenth passes): clocked in at the time clock, the gates
+	-- opened, his face seen. The key holder's plaque over your head in the lobby from then on, and the Watcher's ledge
+	-- empty on your screen (trueEnding).
+	TrueEnding = false,
 }
 
 type Profile = {
@@ -655,6 +659,109 @@ local function vipTag(player: Player)
 	shown.Enabled = player:GetAttribute("InLevel") == nil
 end
 
+-- THE KEY HOLDER'S PLAQUE (the hundred-and-sixteenth pass), over the head of anyone who has seen the true ending, in the
+-- lobby and the squish room for everyone in the server to see, as the VIP tag is (and over it, if they have both): the
+-- key's green ribbon colours with a brass rim, KEY HOLDER in the shop's chunky letters, and a small brass key. Earned,
+-- never sold. Put away on a level, as the VIP tag is.
+local KEY_TAG = "KeyTag"
+local KEY_GREEN, KEY_DEEP = Color3.fromRGB(58, 150, 88), Color3.fromRGB(14, 60, 32)
+local KEY_BRASS = Color3.fromRGB(214, 176, 90)
+
+local function keyTag(player: Player)
+	local character = player.Character
+	local head = character and character:FindFirstChild("Head")
+	if not (head and head:IsA("BasePart")) then
+		return
+	end
+	local existing = head:FindFirstChild(KEY_TAG)
+	local profile = profiles[player]
+	if not (profile and profile.Data.TrueEnding == true) then
+		if existing then
+			existing:Destroy()
+		end
+		return
+	end
+	local tag = existing
+	if not (tag and tag:IsA("BillboardGui")) then
+		local gui = Instance.new("BillboardGui")
+		gui.Name = KEY_TAG
+		gui.Size = UDim2.new(3.6, 0, 0.95, 0) -- studs, so it shrinks with distance like the head it is on
+		gui.MaxDistance = 80
+		gui.LightInfluence = 0
+		gui.AlwaysOnTop = false
+		local pill = Instance.new("Frame")
+		pill.Name = "Pill"
+		pill.Size = UDim2.fromScale(1, 1)
+		pill.BackgroundColor3 = Color3.new(1, 1, 1)
+		pill.Parent = gui
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0.5, 0)
+		corner.Parent = pill
+		local fill = Instance.new("UIGradient")
+		fill.Color = ColorSequence.new(Color3.fromRGB(96, 186, 120), KEY_GREEN)
+		fill.Rotation = 90
+		fill.Parent = pill
+		local rim = Instance.new("UIStroke")
+		rim.Color = KEY_BRASS
+		rim.Thickness = 2
+		rim.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		rim.Parent = pill
+		-- THE KEY: a brass ring for its bow, its shank, and two teeth, at the plaque's left end.
+		local key = Instance.new("Frame")
+		key.Name = "Key"
+		key.BackgroundTransparency = 1
+		key.AnchorPoint = Vector2.new(0, 0.5)
+		key.Position = UDim2.fromScale(0.07, 0.5)
+		key.Size = UDim2.fromScale(0.2, 0.6)
+		key.Parent = pill
+		local bow = Instance.new("Frame")
+		bow.Name = "Bow"
+		bow.AnchorPoint = Vector2.new(0, 0.5)
+		bow.Position = UDim2.fromScale(0, 0.5)
+		bow.Size = UDim2.fromScale(1, 1)
+		bow.SizeConstraint = Enum.SizeConstraint.RelativeYY
+		bow.BackgroundTransparency = 1
+		bow.Parent = key
+		local bowCorner = Instance.new("UICorner")
+		bowCorner.CornerRadius = UDim.new(0.5, 0)
+		bowCorner.Parent = bow
+		local bowRing = Instance.new("UIStroke")
+		bowRing.Color = KEY_BRASS
+		bowRing.Thickness = 3
+		bowRing.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		bowRing.Parent = bow
+		for _, bar in ipairs({ { 0.45, 0.5, 0.55, 0.16 }, { 0.82, 0.68, 0.08, 0.3 }, { 0.92, 0.68, 0.08, 0.3 } }) do
+			local piece = Instance.new("Frame")
+			piece.Name = "Shank"
+			piece.AnchorPoint = Vector2.new(0, 0.5)
+			piece.Position = UDim2.fromScale(bar[1], bar[2])
+			piece.Size = UDim2.fromScale(bar[3], bar[4])
+			piece.BackgroundColor3 = KEY_BRASS
+			piece.BorderSizePixel = 0
+			piece.Parent = key
+		end
+		local word = Instance.new("TextLabel")
+		word.Name = "Word"
+		word.BackgroundTransparency = 1
+		word.AnchorPoint = Vector2.new(1, 0.5)
+		word.Position = UDim2.fromScale(0.94, 0.52)
+		word.Size = UDim2.fromScale(0.64, 0.7)
+		word.FontFace = Style.FONT.display
+		word.TextScaled = true
+		word.Text = "KEY HOLDER"
+		word.TextColor3 = Color3.fromRGB(255, 255, 255)
+		word.TextStrokeColor3 = KEY_DEEP
+		word.TextStrokeTransparency = 0
+		word.Parent = pill
+		gui.Parent = head
+		tag = gui
+	end
+	local shown = tag :: BillboardGui
+	-- Over the name Roblox shows; over the VIP tag too, if they have that.
+	shown.StudsOffsetWorldSpace = Vector3.new(0, if head:FindFirstChild(VIP_TAG) then 4.75 else 3.35, 0)
+	shown.Enabled = player:GetAttribute("InLevel") == nil
+end
+
 local function dress(player: Player)
 	local profile = profiles[player]
 	local character = player.Character
@@ -669,6 +776,7 @@ local function dress(player: Player)
 		if aura and owns(player, aura.id) then aura else nil,
 		"Cosmetic")
 	vipTag(player)
+	keyTag(player)
 end
 
 -- FOOTPRINTS AND STEP SOUNDS, on the player for every client to see and hear (StepService). Written
@@ -859,6 +967,8 @@ local function load(player: Player)
 	dailyAttributes(player)
 	challengeAttributes(player)
 	materialsAttribute(player)
+	-- The true ending seen: told to this player's screen (the Watcher's ledge empty, StoryClient).
+	player:SetAttribute("TrueEnding", ready.Data.TrueEnding == true)
 	stepGear(player)
 	showCollection(player)
 	if not ready.Data.Welcomed then
@@ -1710,7 +1820,7 @@ local function onDev(player: Player, action: any)
 		data.DailyDay = today() - 1
 		dailyAttributes(player)
 	elseif action == "storyStart" then
-		-- The story from City Shore again next time (its place in the save put back to the start).
+		-- The story from the start again next time, Hill House since the hundred-and-eleventh pass (its place put back).
 		data.StoryAt = 1
 	elseif action == "vip" then
 		-- VIP on and off, to see the tag (a pass cannot be owned in Studio).
@@ -1722,6 +1832,18 @@ local function onDev(player: Player, action: any)
 	elseif action == "codesForget" then
 		-- Every code as if never posted, to post them again.
 		data.Codes = {}
+	elseif action == "trueEnding" then
+		-- The true ending as if seen, and unseen again: the key holder's plaque, and the Watcher's ledge (the next Sunken
+		-- City), to look at.
+		data.TrueEnding = not data.TrueEnding
+		player:SetAttribute("TrueEnding", data.TrueEnding == true)
+		keyTag(player)
+	elseif action == "storyKnown" then
+		-- Everything learned about your father, as if every question had been asked, so the time clock by Mr Barlow takes
+		-- your card at once (rejoin, or ask anyone something, for the journal to show the notes).
+		for _, clue in ipairs({ "face", "marsh", "ribbon", "father", "watcher", "price" }) do
+			data.Heard["clue:" .. clue] = true
+		end
 	elseif action == "materials" then
 		-- Every material found but one (Soap, on City Shore), to finish the collection on the next run; pressed again,
 		-- none found and the swatch trail taken back.
@@ -2034,17 +2156,18 @@ function EconomyService.finishedLevels(player: Player): { [string]: boolean }?
 	return finishedOf(profile.Data)
 end
 
--- THE STORY'S PLACE IN THIS SAVE (Bootstrap): the level to go on from, 1 being City Shore, the start.
+-- THE STORY'S PLACE IN THIS SAVE (Bootstrap): the level to go on from, along LevelDefinitions.Story (1 is Hill House,
+-- the start).
 function EconomyService.storyAt(player: Player): number
 	local profile = profiles[player]
 	local at = if profile and profile:IsActive() then tonumber(profile.Data.StoryAt) else nil
-	return math.clamp(math.floor(at or 1), 1, #LevelDefinitions.All)
+	return math.clamp(math.floor(at or 1), 1, #LevelDefinitions.Story)
 end
 
 function EconomyService.setStoryAt(player: Player, index: number)
 	local profile = profiles[player]
 	if profile and profile:IsActive() then
-		profile.Data.StoryAt = math.clamp(math.floor(index), 1, #LevelDefinitions.All)
+		profile.Data.StoryAt = math.clamp(math.floor(index), 1, #LevelDefinitions.Story)
 	end
 end
 
@@ -2302,6 +2425,30 @@ function EconomyService.finishStory(player: Player, hardcore: boolean)
 	end
 end
 
+-- THE TRUE ENDING (the hundred-and-fifteenth and sixteenth passes; Bootstrap, for a rider who clocked in at the time clock
+-- and came through the gates): once a save, ShopCatalog.REWARD.TRUE tokens (the 2x pass doubles them), the key holder's
+-- plaque over your head in the lobby from then on, and its badge; and on your screen his ledge on the Deco tower is empty
+-- (the player's TrueEnding, StoryClient). After that, nothing more: it is the ending, not a run.
+function EconomyService.trueEnding(player: Player)
+	local profile = profiles[player]
+	if not (profile and profile:IsActive()) or profile.Data.TrueEnding == true then
+		return
+	end
+	profile.Data.TrueEnding = true
+	local double = passes[player] ~= nil and passes[player].DoubleTokens == true
+	local amount = ShopCatalog.REWARD.TRUE * (if double then 2 else 1)
+	profile.Data.Tokens += amount
+	profile.Data.Earned += amount
+	logEconomy(player, true, amount, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, "TrueEnding")
+	player:SetAttribute("TrueEnding", true)
+	push(player)
+	keyTag(player)
+	task.spawn(EconomyService.awardBadge, player, ShopCatalog.BADGES.trueEnding)
+	if earnedRemote then
+		earnedRemote:FireClient(player, amount, { trueEnding = true, double = double })
+	end
+end
+
 function EconomyService.isWelcomed(player: Player): boolean
 	local profile = profiles[player]
 	return profile ~= nil and profile.Data.Welcomed == true
@@ -2368,9 +2515,10 @@ function EconomyService.start()
 	end)
 
 	local function joined(player: Player)
-		-- THE VIP TAG comes off on a level and back on in the lobby.
+		-- THE VIP TAG (and the key holder's plaque) comes off on a level and back on in the lobby.
 		player:GetAttributeChangedSignal("InLevel"):Connect(function()
 			vipTag(player)
+			keyTag(player)
 		end)
 		-- A NEW CHARACTER is dressed once its root is there (it may not be the moment it is added).
 		player.CharacterAdded:Connect(function(character: Model)
@@ -2447,5 +2595,5 @@ function EconomyService.start()
 	print(("EconomyService: running, %s."):format(if saving then "saving with ProfileStore" else "NOT SAVING (no ProfileStore)"))
 end
 
-EconomyService.STAMP = "0b849edf"
+EconomyService.STAMP = "66b1627b"
 return EconomyService

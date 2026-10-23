@@ -69,7 +69,7 @@ LobbyLayout.AT = {
 }
 
 -- THE LEVEL PADS: round the start, on an arc `radius` from it, `spread` degrees across, facing it.
-LobbyLayout.ARC = { radius = 30, spread = 150 }
+LobbyLayout.ARC = { radius = 30, spread = 172 }
 
 -- THE BENCHES (x, z, facing in radians: a sitter faces (sin, 0, cos) of it) and the planters (x, z).
 LobbyLayout.BENCHES = {
@@ -97,6 +97,35 @@ LobbyLayout.LAMPS = {
 	{ x = -24, z = 104 }, { x = 24, z = 104 },
 	{ x = 10.5, z = -63 }, { x = 59, z = -8.5 }, { x = -59, z = 8.5 }, { x = -8.5, z = 62 },
 }
+
+-- EACH PLACE ITS OWN COLOURS (the hundred-and-ninth pass, from your notes: "greatly improve the vibe and aesthetics
+-- of the lobby"): its inlay and the band round it, so you know where you are from the floor. Mid tones, so the pads,
+-- the keys and the stalls on them still stand out.
+LobbyLayout.ZONES = {
+	plaza = { inlay = Color3.fromRGB(158, 144, 134), trim = Color3.fromRGB(214, 196, 180) }, -- warm stone round the fountain
+	gates = { inlay = Color3.fromRGB(88, 124, 122), trim = Color3.fromRGB(156, 206, 196) }, -- the sea's green, to the levels
+	fame = { inlay = Color3.fromRGB(146, 124, 88), trim = Color3.fromRGB(226, 202, 150) }, -- old gold, for the best
+	arcade = { inlay = Color3.fromRGB(138, 102, 128), trim = Color3.fromRGB(226, 182, 210) }, -- candy, for the shop
+	garden = { inlay = Color3.fromRGB(112, 150, 104), trim = Color3.fromRGB(196, 214, 170) }, -- the lawn
+}
+
+-- THE FESTOONS (the hundred-and-ninth pass): over every walk, two strings of warm bulbs and pastel bunting
+-- criss-crossing from corner to corner, hung from four poles on the walk, `inset` in from its rails and its ends,
+-- `pole` studs tall, each string sagging `sag` in the middle.
+LobbyLayout.FESTOON = { inset = 1.8, pole = 12, sag = 2 }
+
+-- A walk's four festoon poles (from the origin, on its floor): one side's start and end, then the other side's.
+function LobbyLayout.festoonPoles(to: string): { Vector3 }
+	local centre, length, width, alongX = LobbyLayout.walk(to)
+	local a = length / 2 - LobbyLayout.FESTOON.inset
+	local b = width / 2 - LobbyLayout.FESTOON.inset
+	if alongX then
+		return { centre + Vector3.new(-a, 0, -b), centre + Vector3.new(a, 0, -b), centre + Vector3.new(-a, 0, b),
+			centre + Vector3.new(a, 0, b) }
+	end
+	return { centre + Vector3.new(-b, 0, -a), centre + Vector3.new(-b, 0, a), centre + Vector3.new(b, 0, -a),
+		centre + Vector3.new(b, 0, a) }
+end
 
 -- A deck's centre, from the origin.
 function LobbyLayout.centre(name: string): Vector3
@@ -160,5 +189,5 @@ function LobbyLayout.over(offset: Vector3, slack: number): boolean
 	return false
 end
 
-LobbyLayout.STAMP = "fa28ae08"
+LobbyLayout.STAMP = "d2908861"
 return LobbyLayout

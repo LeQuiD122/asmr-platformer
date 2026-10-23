@@ -41,7 +41,7 @@ MUTATIONS = [
     ('the water shot from too high', SHORE, SHOTS, 'local WATER_SHOT = 120', 'local WATER_SHOT = 420'),
     ('the camera over the surface', SHORE, SHOTS, 'eye = Vector3.new(eye.X, math.min(eye.Y, current.water - 1.5), eye.Z)', 'eye = Vector3.new(eye.X, eye.Y, eye.Z)'),
     ("the chamber's walk rushed", HC, SHOTS, '\twalk = 14,\n', '\twalk = 9.8,\n'),
-    ('a shot changed, not restated', SKY, SHOTS, 'landing + away * 32 + Vector3.new(0, 4, 0)', 'landing + away * 26 + Vector3.new(0, 4, 0)'),
+    ('a shot changed, not restated', SKY, SHOTS, 'landing + away * (14 - 4 * k) + side * 4', 'landing + away * (11 - 4 * k) + side * 4'),
     ('a name never declared', SUNK, PARSE, 'local eye = Vector3.new(spec.vortex.X - 10, spec.bottomY + 0.5, spec.vortex.Z)', 'local eye = Vector3.new(specs.vortex.X - 10, spec.bottomY + 0.5, spec.vortex.Z)'),
 ]
 

@@ -29,7 +29,7 @@ for checker in (SQUISH, PARSE):
 
 MUTATIONS = [
     # The shelf's place and size.
-    ("too few cubbies", ROOM, SQUISH, "local SHELF_COLUMNS, SHELF_ROWS = 9, 3", "local SHELF_COLUMNS, SHELF_ROWS = 8, 3"),
+    ("too few cubbies", ROOM, SQUISH, "local SHELF_COLUMNS, SHELF_ROWS = 10, 3", "local SHELF_COLUMNS, SHELF_ROWS = 9, 3"),
     ("into the lift", ROOM, SQUISH, "local SHELF_LEFT = 26", "local SHELF_LEFT = 14"),
     ("into the side wall", ROOM, SQUISH, "local SHELF_LEFT = 26", "local SHELF_LEFT = 52"),
     ("through the ceiling", ROOM, SQUISH, "local CUBBY = Vector3.new(3.2, 3, 2.2)", "local CUBBY = Vector3.new(3.2, 7, 2.2)"),

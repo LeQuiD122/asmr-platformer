@@ -349,9 +349,11 @@ function SunkenPath.outfallFrame(o: Outfall, v: number, t: number): CFrame
 	local floating = o.waterY + 0.9 + math.sin(t * 2.1) * 0.25
 	local y = at.Y + (floating - at.Y) * lift
 	local here = Vector3.new(at.X, y, at.Z)
-	-- On their back, feet first (facing downstream and tipped back, so the head trails), turning in it.
-	return CFrame.lookAt(here, here + run) * CFrame.Angles(0, math.sin(t * 0.7) * 0.5 * lift, 0)
+	-- On their back, feet first (facing downstream and tipped back, so the head trails), turning in it, but never so far
+	-- round that their head goes into the culvert's wall (it did, at half a radian: your test of 2026-10-23).
+	return CFrame.lookAt(here, here + run) * CFrame.Angles(0, math.sin(t * 0.7) * 0.22 * lift, 0)
 		* CFrame.Angles(math.rad(78) * lift, 0, math.sin(t * 1.4) * 0.3 * lift)
 end
 
+SunkenPath.STAMP = "938bcf38"
 return SunkenPath

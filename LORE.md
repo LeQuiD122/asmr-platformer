@@ -77,7 +77,9 @@ Mrs Venn has an answer for them: it is the back rooms of the baths, dear. Staff 
 - **Clocks stop at 11:52 above the pumping station and move below it.**
 - **The siren at noon is a test. The siren at midnight is not.**
 - **The people repeat their day and half recognise you.** They do not leave their places. The ones
-  who went down to look for the key holder are in the baths, still looking.
+  who went down to look for the key holder are in the baths, still looking. What you said to them is
+  gone when the day comes round again, and you can say it again; what they told you, you keep.
+  **(suggested)**
 - **A key holder the Hold keeps too long loses their face.** Nobody says so. E. Marsh stands on a
   ledge of the Deco tower and watches the route, and has never said a word.
 
@@ -85,8 +87,9 @@ Mrs Venn has an answer for them: it is the back rooms of the baths, dear. Staff 
 ("It isn't hungry. It's patient."); the Sunken City's long shape in the water is some part of it; Mr
 Barlow warns you that what is at the bottom of the flume is not the water; Mrs Venn does not look under
 the loose board. At the end of the fall it opens its mouth, and it is only ever its mouth: rows of long
-thin teeth, a glow far down the throat, the rest of it the dark. It shuts on you, and you come up in the
-Gate Chamber as if you had been given back. The last thing it says, on a black screen, is what it is:
+thin teeth, a glow far down the throat, the rest of it the dark. Its jaws creak shut on you, slam, and bite
+down again; you go down its throat turning over, its heart squeezing the walls round you, and it spits you out
+into the Gate Chamber's sump, as if you had been given back. The last thing it says, on a black screen, is what it is:
 **The Hold. It keeps what it is given.** It is never named, never seen whole and never explained **(the
 mouth is you; the rest suggested)**.
 ## You
@@ -110,8 +113,11 @@ ask people (`Shared/Conversations.lua`): the Marsh look (Sal), the name (Mrs Oka
 (Maren, Mrs Venn), your father (Mr Wick), the one on the tower (Mr Wick), and what it cost him (Mr Barlow);
 each piece goes in your journal. **Pip is you**, thirty years on, waiting by the sea for a father who went
 down to find the key holder; Tobi is your father's story again. Open the gates or she waits as you waited.
-The true ending is still clocking in (Hill House, below); opening the gates gives the Watcher his face back,
-and lets him stop waiting **(suggested how)**.
+**The true ending is clocking in (BUILT, the hundred-and-fourteenth to sixteenth passes; how, suggested).** Beside Mr
+Barlow on the gangway is the time clock, your card in its rack. It takes your card only once you know what it cost
+him; then, at the gates, after midnight, Edwin Marsh walks up Outfall 3 out of the daylight with his face back. He
+stops at the gate and waves, as he waved from the dive board in 1979, and you wave back. He goes back out into the
+morning, and it is 15 August: the day ends. After that his ledge on the Deco tower is empty. He has stopped waiting.
 
 ## The levels
 
@@ -120,7 +126,7 @@ and lets him stop waiting **(suggested how)**.
 | 1 City Shore | the Front: the sands, the pier, Sal's cart | 9:14 AM | Sal's honey, Pip's sand, the dairy butter, the Corporation Gardens | the high dive, past Maren | the key man is missing and the whole town is waiting on him |
 | 2 Sky Pools | the Promenade Hotel roof, over the sea | 3:00 PM | the bar's soda jelly, Room 14's mattress, the laundry steam, Dev's parcel | the long slide, as Rudy plays the same song | Tobi went down to find you and has not come back |
 | 3 The Sunken City | the harbour, the High Street, the aquarium | 11:52 PM | the fishmonger's ice, the harbour mud, the salt pans, the jellyfish | the harbour drain, and Outfall 3 | your name is on the time card |
-| 4 Flooded Halls | the Corporation Baths, under the pumping station | 11:56 PM | Mrs Venn's soap, the brickworks clay, the Engine House coal and clinker | the flume, to the gates | the key was in your pocket; the tide goes out; it is 9:14 again |
+| 4 Flooded Halls | the Corporation Baths, under the pumping station | 11:56 PM | Mrs Venn's soap, the brickworks clay, the Engine House coal and clinker | the flume, to the gates | the key was in your pocket; the tide goes out; it is 9:14 again (or, clocked in, 15 August) |
 
 ## How the story is told
 
@@ -140,7 +146,9 @@ is ever told outright, and every layer rewards the player who went looking in th
 - **The endings**: every level ends going down, played as a scene you do not control, and the level's
   own sound goes silent when it starts. Only the scene's sound is left.
 - **The sound**: every level has its own bed (the sea, the roof wind and the party through a wall, the
-  harbour at night, the baths' hum), and under all of them the same low drone: the Hold. It is only
+  harbour at night, the baths' hum), and under all of them the same low drone: the Hold. The party's song,
+  heard through the wall all the way up the Sky Pools, is heard in full only once, clear, on the long way
+  down, and its last chord lands with you in the pool **(suggested)**. It is only
   noticed when it stops, and it stops at every ending.
 
 | Secret | Where | Opened with | What it is |
@@ -166,9 +174,13 @@ is ever told outright, and every layer rewards the player who went looking in th
 - **Mr Wick**, the fisherman. Held the key himself in 1946. Knows the word for the Hold, and that
   nobody who goes down the drain comes back.
 - **The Watcher**, faceless, on the Deco tower. Edwin Marsh, key holder from 1979, your father. Never
-  speaks. In the back rooms something walks in his shape, stooped under the ceiling, and if it reaches
-  you its blank face opens into the Hold's mouth.
-- **Mrs Venn**, the baths attendant. Has sold a ticket to everyone who came down looking for you.
+  speaks. In the back rooms something walks in his shape, stooped under the ceiling, on legs like poles
+  whose knees bend the wrong way, its head turning further round than a neck goes to look at you; and if
+  it reaches you it folds down over you with its arms round you, and its blank face opens into the Hold's
+  mouth. At the true ending he has his face again, in the same
+  dark clothes, the green ribbon at his neck; he waves, and goes, and his ledge is empty from then on.
+- **Mrs Venn**, the baths attendant. Has sold a ticket to everyone who came down looking for you. Her baths
+  still have their enamel signs up along the galleries: BATHS CLOSE AT MIDNIGHT **(suggested)**.
   Cuts the soap at nine; it comes back uncut at nine.
 - **Tobi Okafor**, Pip's dad, in his trunks with his red towel. Still looking. The halls are longer
   every time.
@@ -176,6 +188,12 @@ is ever told outright, and every layer rewards the player who went looking in th
   left a letter behind the bricks in the Siren Room.
 - **Mr Barlow**, the night engineer. Has been on since the 11th. Can start the engines, cannot open
   the gates, knows what the Hold is made of and what happened to Marsh.
+- **Mr Gale**, the milkman, at the top of Hill House's climb at eight in the morning **(suggested)**. Has left two
+  pints on the Marsh step every morning since 1979, one for him and one for the little one, because nobody stopped
+  the order. Knows the clock stopped the night Marsh went down, and some mornings thinks he hears it ticking.
+- **Mrs Dunn**, the postwoman, inside the garden gate **(suggested)**. Thirty years on the hill round. Knows the door
+  was painted the ribbon's green the week Marsh got the key, so a key holder's door could be found in the dark, and
+  saw the little one on the sea wall every evening, watching the water.
 
 ## The keepsakes
 
@@ -206,18 +224,17 @@ Corporation Baths underneath, and the Gate Chamber at the very bottom.
 ## What is never explained
 
 - Whether opening the gates will cost you what it cost him.
-- Whether opening the gates ends the day or only starts it again.
+- Why it is clocking in, and not the gates, that ends the day.
 - Who the Watcher was, beyond a name on a list.
 - What the lobby is. (It is the one place with no water and no time of day, which may be the answer.)
 - What is at the bottom of the Hold, beyond its mouth.
-- How the Outfall 3 key is in your pocket at midnight when you left it on its hook at Hill House.
 
 ## Hooks for later (suggested)
 
-- **Level 5: Hill House, 8:00 in the morning.** Before any of it: your father's house on the hill,
+- **Level 5: Hill House, 8:00 in the morning (BUILT, the outside and the hall: the hundred-and-eleventh and twelfth passes).** Before any of it: your father's house on the hill,
   his big clock stopped in the hall since 1979, his coat on the hook, the key on its green ribbon by
-  the door, the sea wall you waited on seen from the window, and you deciding. The true ending would
-  be clocking in.
+  the door, the sea wall you waited on seen from the window, and you deciding. The true ending is
+  clocking in (BUILT: the hundred-and-fourteenth to sixteenth passes).
 - **A keepsake journal**, saved between sessions and shown in the lobby: 27 cards to find.
 - **The radio on the roof**: Rudy's song broken into by the shipping forecast for Harrow Bay, the same
   forecast every time.

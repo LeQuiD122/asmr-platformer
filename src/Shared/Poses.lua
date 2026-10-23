@@ -377,6 +377,64 @@ function Poses.pry(name: string, t: number, w: number, r6: boolean): CFrame?
 	return nil
 end
 
+-- THE BAR SWUNG INTO A WALL (the hundred-and-twenty-ninth pass, from your test: "I should actually hit the bricks"): three
+-- blows half a second apart, each drawn back over the right shoulder and brought down hard into the wall, the body
+-- turning into it, the left hand out to brace; the last held, leaning on it, as the bricks go. STRIKES is when each lands
+-- (StoryClient draws the bar from the hand with strikeBack, and hits the wall on these).
+Poses.STRIKES = { 0.45, 0.95, 1.45 }
+
+-- How far the bar is drawn back `t` seconds in: 0 at the wall, 1 right back over the shoulder. Drawn back over a third
+-- of a second, held a moment, and brought in fast (quickening into the wall); held on the wall a moment after each.
+function Poses.strikeBack(t: number): number
+	local previous = -0.4
+	for _, at in ipairs(Poses.STRIKES) do
+		if t < at + 0.12 then
+			if t >= at then
+				return 0
+			end
+			local from = math.max(previous + 0.12, 0.05)
+			if t < at - 0.1 then
+				local u = math.clamp((t - from) / math.max(0.05, at - 0.1 - from), 0, 1)
+				return u * u * (3 - 2 * u)
+			end
+			local u = (t - (at - 0.1)) / 0.1
+			return 1 - u * u
+		end
+		previous = at
+	end
+	return 0
+end
+
+function Poses.strike(name: string, t: number, w: number, r6: boolean): CFrame?
+	local back = Poses.strikeBack(t)
+	if r6 then
+		if name == "Right Shoulder" then
+			return CFrame.Angles(0, 0, (1.4 + 1.4 * back) * w)
+		elseif name == "Left Shoulder" then
+			return CFrame.Angles(0, 0, -0.9 * w)
+		elseif name == "Neck" then
+			return CFrame.Angles(0.1 * w, 0, 0)
+		end
+		return nil
+	end
+	if name == "RightShoulder" then
+		return CFrame.Angles((1.35 + 1.5 * back) * w, 0, -0.1 * w)
+	elseif name == "RightElbow" then
+		return CFrame.Angles((0.15 + 1.1 * back) * w, 0, 0)
+	elseif name == "LeftShoulder" then
+		return CFrame.Angles(0.75 * w, 0, 0.25 * w)
+	elseif name == "LeftElbow" then
+		return CFrame.Angles(0.6 * w, 0, 0)
+	elseif name == "Waist" then
+		return CFrame.Angles((-0.15 + 0.23 * back) * w, 0.22 * back * w, 0)
+	elseif name == "Neck" then
+		return CFrame.Angles(-0.1 * w, -0.1 * back * w, 0)
+	elseif name == "RightKnee" or name == "LeftKnee" then
+		return CFrame.Angles(-0.25 * w, 0, 0)
+	end
+	return nil
+end
+
 -- THE DETECTIVE: one hand at the chin, the other arm across under it, the head tilting slowly one way and
 -- then the other, leaning in a little: working out what this is and who left it.
 function Poses.ponder(name: string, t: number, w: number, r6: boolean): CFrame?
@@ -638,6 +696,48 @@ function Poses.spin(name: string, t: number, w: number, r6: boolean): CFrame?
 	return nil
 end
 
+-- ===== STANDING ABOUT (the hundred-and-twentieth pass): what anyone stood still a while does now and then =====
+-- (PlayerLife plays them over Roblox's own idle, on the joints each one names.)
+--
+-- LOOKING ROUND: the head turning slowly one way and then the other, the body a little after it.
+function Poses.lookAround(name: string, t: number, w: number, r6: boolean): CFrame?
+	local turn = math.sin(t * 1.6) * 0.75
+	if r6 then
+		if name == "Neck" then
+			return CFrame.Angles(0, 0, turn * 0.8 * w)
+		end
+		return nil
+	end
+	if name == "Neck" then
+		return CFrame.Angles(0.05 * w, turn * w, 0)
+	elseif name == "Waist" then
+		return CFrame.Angles(0, turn * 0.3 * w, 0)
+	end
+	return nil
+end
+
+-- A SHIFT OF WEIGHT: onto one hip, the shoulders rolling back once, the head tilted.
+function Poses.weightShift(name: string, t: number, w: number, r6: boolean): CFrame?
+	if r6 then
+		return nil
+	end
+	local roll = math.sin(math.clamp(t / 2.5, 0, 1) * math.pi)
+	if name == "Waist" then
+		return CFrame.Angles(0, 0.08 * w, 0.07 * w)
+	elseif name == "RightShoulder" then
+		return CFrame.Angles(-0.25 * roll * w, 0, 0.12 * roll * w)
+	elseif name == "LeftShoulder" then
+		return CFrame.Angles(-0.25 * roll * w, 0, -0.12 * roll * w)
+	elseif name == "Neck" then
+		return CFrame.Angles(0, 0, 0.12 * w)
+	elseif name == "RightHip" then
+		return CFrame.Angles(0, 0, 0.05 * w)
+	elseif name == "LeftKnee" then
+		return CFrame.Angles(-0.12 * w, 0, 0)
+	end
+	return nil
+end
+
 -- SIT AND SQUISH: down on the floor cross-legged (the body lowered on its root joint, legs folded under),
 -- hands together in front squeezing a little toy, head down to watch it. `squeeze` is 0 to 1, the toy's
 -- own beat, so the hands close as it does.
@@ -675,5 +775,5 @@ function Poses.sitSquish(name: string, t: number, w: number, r6: boolean): CFram
 	return nil
 end
 
-Poses.STAMP = "91b97109"
+Poses.STAMP = "f120320d"
 return Poses

@@ -54,6 +54,13 @@ local T3_ExtendedSoapPressure = {
 	"S", "M2", "M1", "S", "R1", "M2", "S", "S",
 }
 
+-- HILL HOUSE'S (the hundred-and-eleventh pass): shorter, the walk up before the day starts. Twenty-four slots, a
+-- stable landing every third, two risk slots apart from each other and never before a landing that takes off for one.
+local T5_HillPath = {
+	"S", "M1", "M2", "S", "R1", "M1", "S", "M2", "M1", "S", "R2", "M2",
+	"S", "M1", "M2", "S", "R1", "M1", "S", "M2", "M1", "S", "R2", "S",
+}
+
 -- ===== THE FLOODED HALLS =====
 --
 -- The same spiral, inside a building.
@@ -220,7 +227,7 @@ LevelDefinitions.Level1 = {
 		"P12_ButtonPad", "P14_ButtonDense", "P15_ButtonDome",
 		-- Risk.
 		"R1_SlimeLaunch", "R37_SlimeBlister", "R38_SlimeChannel", "C1_SlimeToPace",
-		"R2_SoapBridge", "R4_SoapStar", "R5_SoapPebbles", "R6_SoapHeart", "R18_SoapRing",
+		"R2_SoapBridge", "R4_SoapStar", "R5_SoapPebbles", "R6_SoapHeart", "R18_SoapRing", "R22_Cookie",
 		"R19_SoapWave", "R20_SoapBone", "R21_SoapCrescent", "R31_SoapLeaf", "C3_SoapWithWideLanding",
 		"R3_BubbleWrapStairs", "R8_BubbleWrapGiant", "C4_BubbleWrapToStable",
 		"R10_LegoStuds", "R23_LegoCross", "R24_LegoRing", "R29_LegoBone", "R30_LegoCrescent",
@@ -229,7 +236,7 @@ LevelDefinitions.Level1 = {
 		"R13_CloudSink", "R36_CloudSwell", "R15_LavaCrust", "R32_LavaVent",
 		"R16_Oobleck", "R17_MeltingSnow", "R34_SnowDrift",
 	},
-	allowedMaterials = { "Honey", "KineticSand", "ButterWax", "Slime", "Soap", "BubbleWrap",
+	allowedMaterials = { "Honey", "KineticSand", "ButterWax", "Slime", "Soap", "Cookie", "BubbleWrap",
 		"CreamyKeyboard", "Ice", "JelloSoda", "LambsEar", "Foam", "LightSwitch", "Clay", "Lego",
 		"Charcoal", "Chocolate", "Cloud", "ChocolateSolid", "Salt", "Lava", "Oobleck", "Buttons",
 		"Snow", "Needoh", "ButterStick", "LavaKeys" },
@@ -314,6 +321,7 @@ LevelDefinitions.Level2 = {
 		"R5_SoapPebbles",
 		"R6_SoapHeart",
 		"R18_SoapRing",
+		"R22_Cookie",
 		"R19_SoapWave",
 		"R20_SoapBone",
 		"R21_SoapCrescent",
@@ -323,7 +331,7 @@ LevelDefinitions.Level2 = {
 		"R13_CloudSink",
 		"R36_CloudSwell",
 	},
-	allowedMaterials = { "Honey", "Slime", "Soap", "BubbleWrap", "CreamyKeyboard", "JelloSoda", "LambsEar",
+	allowedMaterials = { "Honey", "Slime", "Soap", "Cookie", "BubbleWrap", "CreamyKeyboard", "JelloSoda", "LambsEar",
 		"Foam", "Cloud", "Buttons", "Needoh" },
 	parTime = 330,
 	baseSeed = 1002,
@@ -434,8 +442,8 @@ LevelDefinitions.Sandbox = {
 	-- lego is the one rigid material in a set otherwise made of things that give -- so its
 	-- pad feels unlike every other pad in the room the moment you stand on it.
 	headlineMaterial = "Lego",
-	minChunks = 85,
-	maxChunks = 85,
+	minChunks = 87,
+	maxChunks = 87,
 	allowedChunkIds = {
 		"S1_Straight",
 		"R39_JellyfishHop",
@@ -503,12 +511,13 @@ LevelDefinitions.Sandbox = {
 		"C2_PaceToStable",
 		"C3_SoapWithWideLanding",
 		"C4_BubbleWrapToStable",
+		"R22_Cookie",
 	},
-	allowedMaterials = { "Honey", "KineticSand", "ButterWax", "Slime", "Soap", "BubbleWrap", "CreamyKeyboard", "Ice", "JelloSoda", "LambsEar", "Foam", "LightSwitch", "Clay", "Lego", "Charcoal", "Chocolate", "Cloud", "ChocolateSolid", "Salt", "Lava", "Oobleck", "Buttons", "Snow", "Jellyfish" },
+	allowedMaterials = { "Honey", "KineticSand", "ButterWax", "Slime", "Soap", "BubbleWrap", "CreamyKeyboard", "Ice", "JelloSoda", "LambsEar", "Foam", "LightSwitch", "Clay", "Lego", "Charcoal", "Chocolate", "Cloud", "ChocolateSolid", "Salt", "Lava", "Oobleck", "Buttons", "Snow", "Jellyfish", "Cookie" },
 	parTime = 420,
 	baseSeed = 9999,
 	templates = {},
-	-- 85 chunks, 43 of them material-bearing, with a stable rest
+	-- 87 chunks, 44 of them material-bearing, with a stable rest
 	-- between every pair.
 	--
 	-- THE NEWEST EIGHT COME FIRST, and that is the only rule that really matters here. This
@@ -545,7 +554,10 @@ LevelDefinitions.Sandbox = {
 		-- that crumbles under you, or a risk material that dissolves on a timer, is not a
 		-- start. This one slab is the only reason a stable chunk is here at all.
 		"S1_Straight",
-		-- THE NEWEST: the Sunken City's jellyfish bells, the hop and the bloom.
+		-- THE NEWEST (the hundred-and-tenth pass): the cookie, cracking and crumbling under you, with a rest after it.
+		"R22_Cookie",
+		"S1_Straight",
+		-- Then the Sunken City's jellyfish bells, the hop and the bloom.
 		"R39_JellyfishHop",
 		"P29_JellyfishBloom",
 		"S1_Straight",
@@ -672,11 +684,75 @@ function LevelDefinitions.titleOf(level: any): string
 	return tostring(level.name)
 end
 
+-- ===== HILL HOUSE (the hundred-and-eleventh pass, you chose it; LORE.md, level 5) =====
+--
+-- Built fifth, played FIRST: eight in the morning on 14 August, before any of it. Your father's house on the hill over
+-- Harrow Bay, the walk up to it out of the morning mist, and at the top the garden and his front door (HillHouseService:
+-- the crag it stands on, the garden, the house). In the story's order and the lobby's, it comes before City Shore, so it
+-- is open to everyone and finishing it opens City Shore (HubService.isOpen); a save that has City Shore already keeps it.
+--
+-- WHAT IT IS MADE OF: a house and its garden in the morning. Honey for breakfast, the butter on the table, a biscuit,
+-- the lamb's ear in the borders, the clay of the flowerpots, his bed, the light switches on the landing, the soap in
+-- the bathroom, a parcel in its bubble wrap, the sand in the path. The lamb's ear is its pad: the quietest thing here.
+LevelDefinitions.Level5 = {
+	levelId = 5,
+	name = "Hill House",
+	-- When on 14 August it happens (the story: Townsfolk). First of all of them.
+	storyTime = "8:00 AM",
+	description = "Your father's house on the hill over Harrow Bay, at eight in the morning, before any of it.",
+	backdrop = "hillHouse",
+	-- ===== HOW IT ENDS =====
+	--
+	-- At his front door (HillHouseService). The route climbs out of the mist; the last chunk runs onto a footbridge to
+	-- the top of the crag the house stands on; up the garden path, and the door.
+	finale = "house",
+	headlineMaterial = "LambsEar",
+	minChunks = 24,
+	maxChunks = 24,
+	allowedChunkIds = {
+		-- Stable landings.
+		"S1_Straight", "S2_Junction",
+		-- Pace: breakfast, the borders, the pots, the bed, the landing, the path.
+		"P1_HoneyCorridor", "P18_HoneyComb", "P19_HoneyPool", "P4_PaceChain_H_KS",
+		"P7_LambsEar", "P10_ClayPress", "P17_ClayTerrace", "P8_Foam", "P9_LightSwitches",
+		"P24_ButterBlocks", "P25_ButterStick", "P2_ButterWaxCurve", "P3_KineticSandRamp", "R7_SandTurtle",
+		"C2_PaceToStable",
+		-- Risk: the soap in the bathroom, a biscuit, a parcel.
+		"R2_SoapBridge", "R6_SoapHeart", "R20_SoapBone", "R31_SoapLeaf", "C3_SoapWithWideLanding",
+		"R22_Cookie",
+		"R3_BubbleWrapStairs", "R8_BubbleWrapGiant", "C4_BubbleWrapToStable",
+	},
+	allowedMaterials = { "Honey", "KineticSand", "ButterWax", "ButterStick", "LambsEar", "Clay", "Foam", "LightSwitch",
+		"Soap", "Cookie", "BubbleWrap" },
+	avoidRecent = 5,
+	parTime = 210,
+	baseSeed = 1005,
+	templates = { T5_HillPath },
+}
+
+-- THE STORY'S ORDER AND THE LOBBY'S: Hill House at eight, City Shore at 9:14, Sky Pools at three, the Sunken City at
+-- 11:52, the Flooded Halls at 11:56.
+-- THE LOBBY'S ORDER, BY NUMBER (the hundred-and-eighteenth pass, from your test: "hill house stands next to level 1
+-- which it shouldn't, it should be near level 4"): the pads left to right in this order, each opening once the one
+-- before it is finished, so Hill House is the last pad, beside the Flooded Halls', and opens after them.
 LevelDefinitions.All = {
+	LevelDefinitions.Level1,
+	LevelDefinitions.Level2,
+	LevelDefinitions.Level3,
+	LevelDefinitions.Level4,
+	LevelDefinitions.Level5,
+}
+
+-- THE STORY'S ORDER, BY ITS CLOCK: Hill House at eight in the morning before any of it, then 9:14 on the Front, and on
+-- to the gates at midnight. The story pad plays them in this order, and a save's place in the story (StoryAt) counts
+-- along it.
+LevelDefinitions.Story = {
+	LevelDefinitions.Level5,
 	LevelDefinitions.Level1,
 	LevelDefinitions.Level2,
 	LevelDefinitions.Level3,
 	LevelDefinitions.Level4,
 }
 
+LevelDefinitions.STAMP = "4fc9bd94"
 return LevelDefinitions

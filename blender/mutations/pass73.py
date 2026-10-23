@@ -36,7 +36,7 @@ MUTATIONS = [
     ("no tokens in it", CAT, SHOP, "robux = 99, passId = 0, tokens = 500,", "robux = 99, passId = 0, tokens = 0,"),
     ("no trail in it", CAT, SHOP, 'gives = "SeaGlass", once = true,', 'once = true,'),
     ("not once only", CAT, SHOP, 'gives = "SeaGlass", once = true,', 'gives = "SeaGlass",'),
-    ("not first in Featured", CAT, SHOP, '{ "StarterPack", "VIP", "DoubleTokens",', '{ "VIP", "StarterPack", "DoubleTokens",'),
+    ("not first in Featured", CAT, SHOP, '{ "StarterPack", "VIP", "BgCrate",', '{ "VIP", "StarterPack", "BgCrate",'),
     ("its trail sold", CAT, SHOP, '\t\tearn = "starter", colour = rgb(130, 212, 190)', '\t\tprice = 200, colour = rgb(130, 212, 190)'),
     ("its trail given by nothing", CAT, SHOP, 'earn = "starter", colour', 'earn = "starters", colour'),
     ("given without the pass", ECON, SHOP, "profile:IsActive() and owned and owned.StarterPack and starter", "profile:IsActive() and starter"),

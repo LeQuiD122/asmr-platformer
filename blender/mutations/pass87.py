@@ -37,7 +37,7 @@ MUTATIONS = [
     ('the mouth not coming for you', HC, HALLS, 'Maw.place(mouth, rest + Vector3.new(0, MAW_RISE * lunge, 0))', 'Maw.place(mouth, rest)'),
     ('the mouth not waiting deep', HC, HALLS, 'Maw.facing(from - Vector3.new(0, MAW_DEEP, 0)', 'Maw.facing(from - Vector3.new(0, 20, 0)'),
     ('no lunge', HC, HALLS, 'local MAW_DEEP, MAW_RISE, LUNGE = 116, 34, 0.55', 'local MAW_DEEP, MAW_RISE, LUNGE = 116, 4, 0.55'),
-    ('the beats out of order', HC, HALLS, '\tbite = 3.5,', '\tbite = 2.0,'),
+    ('the beats out of order', HC, HALLS, '\tbite = 4.1,', '\tbite = 2.0,'),
     ('the bite shot against the mast', HC, HALLS, 'opens * 55 + inward * 24 + side * 14, hinge.Position', 'opens * 55 + inward * 36 + side * 2, hinge.Position'),
     ('the bite shot among the jaws', HC, HALLS, 'opens * 55 + inward * 24 + side * 14, hinge.Position', 'opens * 30 + inward * 24 + side * 14, hinge.Position'),
     ('lit before it opens', HC, HALLS, '\tif m < JAWS.reveal then\n\t\tMaw.light(mouth, 0)\n', '\tif m < JAWS.reveal then\n\t\tMaw.light(mouth, 1)\n'),

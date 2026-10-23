@@ -45,7 +45,7 @@ MUTATIONS = [
     ('a lamp in the way onto a walk', LAYOUT, HUB, '{ x = 84, z = -16 }', '{ x = 84, z = -6 }'),
     ('a lamp on the way to the start', LAYOUT, HUB, '{ x = 10.5, z = -63 }', '{ x = 2, z = -63 }'),
     ('two decks overlapping', LAYOUT, HUB, 'fame = { x = 104, z = 0, w = 56, d = 76 }', 'fame = { x = 64, z = 0, w = 56, d = 76 }'),
-    ('the pads crowding', LAYOUT, HUB, 'ARC = { radius = 30, spread = 150 }', 'ARC = { radius = 30, spread = 50 }'),
+    ('the pads crowding', LAYOUT, HUB, 'ARC = { radius = 30, spread = 172 }', 'ARC = { radius = 30, spread = 50 }'),
     ('the statue off the deck', LAYOUT, HUB, 'statue = Vector3.new(104, 3.5, -22)', 'statue = Vector3.new(104, 5, -22)'),
     ('arriving off the plaza', LAYOUT, HUB, 'spawn = Vector3.new(0, 1.5, -22)', 'spawn = Vector3.new(0, 1.5, -62)'),
     ('the lift letting you out behind it', SQUISHS, SQUISHCHECK, 'room.lobbyArrive = base + Vector3.new(7, 3.5, 0)', 'room.lobbyArrive = base + Vector3.new(-7, 3.5, 0)'),

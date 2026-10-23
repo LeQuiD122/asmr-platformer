@@ -116,7 +116,7 @@ end
 -- in the data rather than only on a sign.
 -- ===== THE STORY =====
 --
--- The four levels one after another, 9:14 in the morning to midnight (Bootstrap plays it): a pad of its own on the
+-- The five levels one after another, eight in the morning to midnight (Bootstrap plays it): a pad of its own on the
 -- level row, between the levels and the sandbox, voted for like a level and always open. Its id is no level's, and is
 -- also the story leaderboard's.
 HubService.STORY_ID = 100
@@ -124,7 +124,7 @@ local STORY = {
 	levelId = HubService.STORY_ID,
 	name = "Story",
 	story = true,
-	storyTime = "9:14 am to midnight",
+	storyTime = "8 am to midnight",
 	parTime = 0,
 	backdrop = "story",
 	minChunks = 12,
@@ -687,6 +687,17 @@ function HubService.refreshPads()
 				if shine and shine:IsA("PointLight") then
 					shine.Brightness = if not open then 0 elseif on then 1.1 else 0.45
 				end
+				-- Its postcard: dimmed behind the boards, brighter when chosen.
+				local card = window:FindFirstChild("Postcard")
+				local picture = card and card:FindFirstChild("Picture")
+				if picture and picture:IsA("SurfaceGui") then
+					picture.Brightness = if on then 1.6 else 1.1
+					local canvas = picture:FindFirstChildOfClass("Frame")
+					local veil = canvas and canvas:FindFirstChild("Veil")
+					if veil and veil:IsA("Frame") then
+						veil.BackgroundTransparency = if open then 1 else 0.5
+					end
+				end
 			end
 			-- The boards across a locked level's window, shown only while it is locked.
 			for _, board in ipairs(child:GetChildren()) do
@@ -748,6 +759,12 @@ end
 -- look, which is how Sky Pools and the Sunken City came to sit in the lobby as "no horizon yet";
 -- check_hub.py now fails if any level's backdrop has no look.
 local THEME_LOOKS = {
+	-- HILL HOUSE (the hundred-and-eleventh pass): the first light over the mist, and the green of the hill.
+	hillHouse = {
+		sky = Color3.fromRGB(236, 214, 190),
+		ground = Color3.fromRGB(96, 128, 92),
+		label = "the house on the hill, at eight",
+	},
 	cityShore = {
 		sky = Color3.fromRGB(196, 178, 226),
 		ground = Color3.fromRGB(120, 96, 150),
@@ -772,7 +789,7 @@ local THEME_LOOKS = {
 	story = {
 		sky = Color3.fromRGB(240, 200, 150),
 		ground = Color3.fromRGB(70, 66, 98),
-		label = "all four, one after another",
+		label = "all five, one after another",
 	},
 	none = {
 		sky = Color3.fromRGB(96, 100, 118),
@@ -783,6 +800,141 @@ local THEME_LOOKS = {
 
 local function themeLook(level)
 	return THEME_LOOKS[level.backdrop or "none"] or THEME_LOOKS.none
+end
+
+-- ===== A POSTCARD OF THE PLACE (the hundred-and-thirty-sixth pass) =====
+--
+-- From your test of 2026-10-23, "I wanna further improve the lobby": the level windows were tinted glass, and from the deck
+-- a tinted pane over the dark is a black slab. Each window carries a painted postcard of its level now, just in front of
+-- its glass: the sky over a band of its ground, and the one thing you would know it by. Drawn in shapes on a SurfaceGui,
+-- lit by the lobby's light (and by the window's own when it is chosen); dimmed behind the boards while it is locked.
+local function shape(parent: Instance, x: number, y: number, w: number, h: number, colour: Color3, round: number?): Frame
+	local f = Instance.new("Frame")
+	f.AnchorPoint = Vector2.new(0.5, 0.5)
+	f.Position = UDim2.fromScale(x, y)
+	f.Size = UDim2.fromScale(w, h)
+	f.BackgroundColor3 = colour
+	f.BorderSizePixel = 0
+	f.Parent = parent
+	if round then
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(round, 0)
+		c.Parent = f
+	end
+	return f
+end
+
+-- A disc `d` of the card's width across, round whatever the card's proportions.
+local function disc(parent: Instance, x: number, y: number, d: number, colour: Color3): Frame
+	local f = shape(parent, x, y, d, d, colour, 0.5)
+	local keep = Instance.new("UIAspectRatioConstraint")
+	keep.AspectRatio = 1
+	keep.DominantAxis = Enum.DominantAxis.Width
+	keep.Parent = f
+	return f
+end
+
+local function postcard(window: BasePart, backdrop: string, look: any)
+	local card = Instance.new("Part")
+	card.Name = "Postcard"
+	card.Anchored = true
+	card.CanCollide = false
+	card.CanTouch = false
+	card.CanQuery = false
+	card.Size = Vector3.new(window.Size.X - 0.2, window.Size.Y - 0.2, 0.1)
+	card.CFrame = window.CFrame * CFrame.new(0, 0, -(window.Size.Z / 2 + 0.06))
+	card.Material = Enum.Material.SmoothPlastic
+	card.Color = look.sky
+	card.Parent = window
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Picture"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 30
+	gui.LightInfluence = 0.4
+	gui.Brightness = 1.1
+	gui.Parent = card
+	local canvas = Instance.new("Frame")
+	canvas.Size = UDim2.fromScale(1, 1)
+	canvas.BackgroundColor3 = look.sky
+	canvas.BorderSizePixel = 0
+	canvas.ClipsDescendants = true
+	canvas.Parent = gui
+	local skyFade = Instance.new("UIGradient")
+	skyFade.Rotation = 90
+	skyFade.Color = ColorSequence.new(look.sky:Lerp(Color3.new(1, 1, 1), 0.4), look.sky)
+	skyFade.Parent = canvas
+	local white = Color3.fromRGB(250, 248, 242)
+	if backdrop == "cityShore" then
+		disc(canvas, 0.7, 0.3, 0.3, Color3.fromRGB(255, 226, 172))
+		shape(canvas, 0.5, 0.69, 1, 0.12, Color3.fromRGB(150, 168, 222))
+		shape(canvas, 0.5, 0.87, 1, 0.26, look.ground)
+		-- The Siren Tower: brick, a copper dome, the red lamp on top.
+		shape(canvas, 0.32, 0.55, 0.16, 0.5, Color3.fromRGB(168, 76, 64), 0.08)
+		disc(canvas, 0.32, 0.31, 0.17, Color3.fromRGB(96, 152, 132))
+		disc(canvas, 0.32, 0.25, 0.05, Color3.fromRGB(224, 64, 52))
+		disc(canvas, 0.32, 0.45, 0.07, white)
+	elseif backdrop == "skyPools" then
+		for k, x in ipairs({ 0.1, 0.32, 0.56, 0.8, 1.0 }) do
+			disc(canvas, x, 0.9 - (k % 2) * 0.03, 0.34, white)
+		end
+		-- The terraces, stacked, a pool on each.
+		for k = 0, 2 do
+			local w = 0.5 - k * 0.12
+			local y = 0.66 - k * 0.15
+			shape(canvas, 0.5, y, w, 0.12, Color3.fromRGB(236, 238, 244), 0.3)
+			shape(canvas, 0.5, y - 0.045, w * 0.8, 0.035, Color3.fromRGB(120, 196, 236), 0.5)
+		end
+	elseif backdrop == "sunkenCity" then
+		-- The whirlpool over them, rings going round.
+		for k = 1, 3 do
+			local ring = disc(canvas, 0.55, 0.3, 0.16 + k * 0.12, look.sky)
+			ring.BackgroundTransparency = 1
+			local edge = Instance.new("UIStroke")
+			edge.Color = Color3.fromRGB(214, 236, 232)
+			edge.Thickness = 3
+			edge.Transparency = 0.15 * k
+			edge.Parent = ring
+		end
+		-- The drowned rooftops, dark under the water.
+		for k, h in ipairs({ 0.34, 0.24, 0.42, 0.3, 0.38 }) do
+			local x = (k - 0.5) / 5
+			shape(canvas, x, 1 - h / 2, 0.16, h, look.ground)
+			local roof = shape(canvas, x, 1 - h - 0.02, 0.12, 0.08, look.ground)
+			roof.Rotation = 45
+		end
+	elseif backdrop == "floodedHalls" then
+		-- Three arches over the baths' water.
+		for _, x in ipairs({ 0.2, 0.5, 0.8 }) do
+			shape(canvas, x, 0.56, 0.26, 0.6, Color3.fromRGB(232, 226, 198), 0.12)
+			shape(canvas, x, 0.62, 0.15, 0.48, Color3.fromRGB(60, 92, 88), 0.5)
+		end
+		shape(canvas, 0.5, 0.92, 1, 0.16, Color3.fromRGB(120, 214, 196))
+	elseif backdrop == "hillHouse" then
+		disc(canvas, 0.5, 1.25, 1.3, look.ground)
+		-- The house: its walls, its roof, its green door, and the clock on its gable.
+		shape(canvas, 0.5, 0.56, 0.36, 0.26, white)
+		local roof = shape(canvas, 0.5, 0.42, 0.27, 0.27, Color3.fromRGB(70, 74, 92))
+		roof.Rotation = 45
+		roof.ZIndex = 0
+		shape(canvas, 0.5, 0.63, 0.07, 0.12, Color3.fromRGB(50, 110, 82))
+		disc(canvas, 0.5, 0.44, 0.07, white)
+	elseif backdrop == "story" then
+		-- The five skies, one after another.
+		for k, sky in ipairs({ THEME_LOOKS.hillHouse.sky, THEME_LOOKS.cityShore.sky, THEME_LOOKS.skyPools.sky,
+			THEME_LOOKS.sunkenCity.sky, THEME_LOOKS.floodedHalls.sky }) do
+			shape(canvas, (k - 0.5) / 5, 0.5, 0.2, 1, sky)
+		end
+	end
+	-- The veil a locked level's picture is dimmed by (refreshPads).
+	local veil = Instance.new("Frame")
+	veil.Name = "Veil"
+	veil.Size = UDim2.fromScale(1, 1)
+	veil.BackgroundColor3 = Color3.new(0, 0, 0)
+	veil.BackgroundTransparency = 1
+	veil.BorderSizePixel = 0
+	veil.ZIndex = 5
+	veil.Parent = canvas
 end
 
 local function makeLevelPad(level, index: number, parent: Folder): BasePart
@@ -829,6 +981,7 @@ local function makeLevelPad(level, index: number, parent: Folder): BasePart
 	shine.Brightness = 0.45
 	shine.Shadows = false
 	shine.Parent = window
+	postcard(window, level.backdrop or "none", look)
 
 	local frame = Instance.new("Part")
 	frame.Name = "ThemeFrame"
@@ -1071,6 +1224,25 @@ local function buildAmbience(folder: Folder)
 	local ownSound = game:GetService("SoundService"):FindFirstChild("LobbySounds") ~= nil
 
 	if not ownSound then
+		-- FROM THE LOBBY ITSELF, falling off with distance (the hundred-and-thirtieth pass, from your test: "get less
+		-- and less loud the farther I am from them and vice versa"): parented to the folder they were heard everywhere
+		-- at once, as loud at the gates as at the fountain, and in every level.
+		local voices = Instance.new("Part")
+		voices.Name = "LobbyVoices"
+		voices.Anchored = true
+		voices.CanCollide = false
+		voices.CanTouch = false
+		voices.CanQuery = false
+		voices.Transparency = 1
+		voices.Size = Vector3.new(1, 1, 1)
+		voices.Position = HUB_ORIGIN + Vector3.new(0, 4, 0)
+		voices.Parent = folder
+		local function fromLobby(s: Sound, near: number, far: number)
+			s.RollOffMode = Enum.RollOffMode.InverseTapered
+			s.RollOffMinDistance = near
+			s.RollOffMaxDistance = far
+			s.Parent = voices
+		end
 		-- THE SEA, as several voices rather than one.
 		--
 		-- A single looping sample is recognisable as a loop within about two passes, and once you
@@ -1094,7 +1266,7 @@ local function buildAmbience(folder: Folder)
 			swell.Looped = true
 			swell.PlaybackSpeed = voice[1] :: number
 			swell.Volume = voice[2] :: number
-			swell.Parent = folder
+			fromLobby(swell, 60, 320)
 			-- Staggered starts, so the three never line up on the same beat.
 			task.delay(voice[3] :: number, function()
 				if swell.Parent then
@@ -1118,7 +1290,7 @@ local function buildAmbience(folder: Folder)
 		wind.Looped = true
 		wind.PlaybackSpeed = 0.35
 		wind.Volume = 0.12
-		wind.Parent = folder
+		fromLobby(wind, 60, 320)
 		wind:Play()
 
 		-- And a slow swell in that wind's volume, so even the quietest layer is not a flat tone.
@@ -1141,7 +1313,7 @@ local function buildAmbience(folder: Folder)
 				crest.SoundId = "rbxasset://sounds/impact_water.mp3"
 				crest.PlaybackSpeed = math.random(55, 88) / 100
 				crest.Volume = math.random(5, 11) / 100
-				crest.Parent = folder
+				fromLobby(crest, 40, 260)
 				crest:Play()
 				game:GetService("Debris"):AddItem(crest, 8)
 			end
@@ -4316,12 +4488,14 @@ local function buildSurroundings(folder: Folder)
 		local middle = HUB_ORIGIN + Vector3.new(deck.x, 0, deck.z)
 		local inlay = decorPart("DeckInlay", Vector3.new(deck.w - 10, 0.35, deck.d - 10), middle + Vector3.new(0, 1.15, 0),
 			folder)
+		-- EACH PLACE ITS OWN COLOURS (LobbyLayout.ZONES, the hundred-and-ninth pass), the old ones where it has none.
+		local zone = (LobbyLayout.ZONES :: any)[name]
 		inlay.Material = if name == "garden" then Enum.Material.Grass else Enum.Material.Marble
-		inlay.Color = if name == "garden" then Color3.fromRGB(112, 150, 104) else PALETTE.inlay
+		inlay.Color = if zone then zone.inlay else PALETTE.inlay
 		local trim = decorPart("DeckTrim", Vector3.new(deck.w - 4, 0.5, deck.d - 4), middle + Vector3.new(0, 1.05, 0),
 			folder)
 		trim.Material = Enum.Material.Marble
-		trim.Color = PALETTE.trim
+		trim.Color = if zone then zone.trim else PALETTE.trim
 	end
 
 	-- COLUMNS ROUND THE PLAZA, on its band (2.5 in from the edge): the corners and the quarter points of each side,
@@ -5220,6 +5394,107 @@ local function buildPromenade(folder: Folder)
 	end
 end
 
+-- ===== THE FESTOONS (the hundred-and-ninth pass) =====
+--
+-- From your notes: "greatly improve the vibe and aesthetics of the lobby". Over every walk, two strings criss-cross
+-- from corner to corner, sagging a little: warm bulbs and pastel bunting, one after the other, hung from four iron
+-- poles standing on the walk at its corners (LobbyLayout.festoonPoles), so every string is held at both ends. Every
+-- fourth bulb is a small real light; nothing is Neon. None of it collides but the poles, and all of it is over your
+-- head.
+local FESTOON_IRON = Color3.fromRGB(40, 38, 48)
+local FESTOON_BULB = Color3.fromRGB(255, 228, 176)
+local FESTOON_BUNTING = { Color3.fromRGB(250, 196, 214), Color3.fromRGB(176, 222, 204), Color3.fromRGB(255, 226, 150),
+	Color3.fromRGB(200, 190, 246), Color3.fromRGB(255, 206, 170) }
+local FESTOON_STEP = 1.7 -- studs along a string between one bulb or pennant and the next
+local FESTOON_LIGHT_EVERY = 4 -- bulbs
+local FESTOON_LIGHT = 0.3 -- each lit bulb's brightness: a string of small lights, not a floodlight
+
+local function festoonString(folder: Folder, from: Vector3, to: Vector3, sag: number, salt: number)
+	local function at(t: number): Vector3
+		return from:Lerp(to, t) - Vector3.new(0, 4 * sag * t * (1 - t), 0)
+	end
+	-- The wire, in short straight pieces along its curve.
+	local pieces = 14
+	for k = 0, pieces - 1 do
+		local a, b = at(k / pieces), at((k + 1) / pieces)
+		local wire = decorPart("FestoonWire", Vector3.new(0.08, 0.08, (b - a).Magnitude + 0.05), (a + b) / 2, folder)
+		wire.CFrame = CFrame.lookAt((a + b) / 2, b)
+		wire.Material = Enum.Material.Metal
+		wire.Color = FESTOON_IRON
+		wire.CastShadow = false
+	end
+	-- Bulbs and pennants, by turns, all along it.
+	local long = (to - from).Magnitude
+	local count = math.max(2, math.floor(long / FESTOON_STEP))
+	local bulbs = 0
+	for k = 1, count - 1 do
+		local t = k / count
+		local here = at(t)
+		local ahead = at(math.min(1, t + 0.01))
+		local frame = CFrame.lookAt(here, if (ahead - here).Magnitude > 1e-3 then ahead else here + (to - from).Unit)
+		if k % 2 == 1 then
+			bulbs += 1
+			local bulb = decorPart("FestoonBulb", Vector3.new(0.4, 0.4, 0.4), here - Vector3.new(0, 0.32, 0), folder)
+			bulb.Shape = Enum.PartType.Ball
+			bulb.Material = Enum.Material.SmoothPlastic
+			bulb.Color = FESTOON_BULB
+			bulb.Reflectance = 0.2
+			bulb.CastShadow = false
+			if bulbs % FESTOON_LIGHT_EVERY == 0 then
+				local glow = Instance.new("PointLight")
+				glow.Color = FESTOON_BULB
+				glow.Range = 7
+				glow.Brightness = FESTOON_LIGHT
+				glow.Shadows = false
+				glow.Parent = bulb
+			end
+		else
+			-- A PENNANT: a triangle pointing down, made of two halves meeting along its middle.
+			local colour = FESTOON_BUNTING[((k // 2 + salt) % #FESTOON_BUNTING) + 1]
+			for _, half in ipairs({ { 0.25, CFrame.Angles(math.pi, 0, 0) }, { -0.25, CFrame.Angles(0, 0, math.pi) } }) do
+				local wedge = Instance.new("WedgePart")
+				wedge.Name = "FestoonPennant"
+				wedge.Anchored = true
+				wedge.CanCollide = false
+				wedge.CanTouch = false
+				wedge.CanQuery = false
+				wedge.CastShadow = false
+				wedge.Size = Vector3.new(0.06, 1.1, 0.5)
+				wedge.CFrame = frame * CFrame.new(0, -0.55, half[1]) * half[2]
+				wedge.Material = Enum.Material.Fabric
+				wedge.Color = colour
+				wedge.Parent = folder
+			end
+		end
+	end
+end
+
+local function buildFestoons(folder: Folder)
+	local hang = LobbyLayout.FESTOON
+	for index, w in ipairs(LobbyLayout.WALKS) do
+		local poles = LobbyLayout.festoonPoles(w.to)
+		local tops = {}
+		for _, at in ipairs(poles) do
+			local base = HUB_ORIGIN + at + Vector3.new(0, 1, 0) -- the walk's floor
+			local foot = decorPart("FestoonFoot", Vector3.new(1.4, 0.4, 1.4), base + Vector3.new(0, 0.2, 0), folder)
+			foot.Material = Enum.Material.Slate
+			foot.Color = PALETTE.deck
+			local pole = decorPart("FestoonPole", Vector3.new(0.4, hang.pole, 0.4), base + Vector3.new(0, hang.pole / 2, 0), folder)
+			pole.Material = Enum.Material.Metal
+			pole.Color = FESTOON_IRON
+			pole.CanCollide = true
+			local knob = decorPart("FestoonKnob", Vector3.new(0.7, 0.7, 0.7), base + Vector3.new(0, hang.pole + 0.2, 0), folder)
+			knob.Shape = Enum.PartType.Ball
+			knob.Material = Enum.Material.Metal
+			knob.Color = FESTOON_IRON
+			table.insert(tops, base + Vector3.new(0, hang.pole - 0.4, 0))
+		end
+		-- Corner to corner: one side's start to the other side's end, and the other side's start to this side's end.
+		festoonString(folder, tops[1], tops[4], hang.sag, index)
+		festoonString(folder, tops[3], tops[2], hang.sag, index + 2)
+	end
+end
+
 -- Idempotent: calling it twice returns the room that already exists rather than a second
 -- one, because Bootstrap runs it at server start and nothing should be able to stack it.
 function HubService.build(): { spawnPosition: Vector3 }
@@ -5520,6 +5795,12 @@ function HubService.build(): { spawnPosition: Vector3 }
 		warn("HubService: the surroundings failed to build, the lobby still works: " .. tostring(decorErr))
 	end
 
+	-- THE FESTOONS over the walks (the hundred-and-ninth pass): scenery too, so a failure costs only them.
+	local festoonOk, festoonErr = pcall(buildFestoons, folder)
+	if not festoonOk then
+		warn("HubService: the festoons failed to build, the lobby still works: " .. tostring(festoonErr))
+	end
+
 	-- AFTER the surroundings, not before: the fountain loop attaches to FountainJet, and
 	-- buildSurroundings is what creates it. Run first, this found nothing and the water was
 	-- silent -- a bug with no error message, which is the kind that survives a long time.
@@ -5534,5 +5815,5 @@ function HubService.build(): { spawnPosition: Vector3 }
 	return { spawnPosition = HubService.spawnPosition() }
 end
 
-HubService.STAMP = "d5991690"
+HubService.STAMP = "f3c4e0b7"
 return HubService

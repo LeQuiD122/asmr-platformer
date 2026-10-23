@@ -120,6 +120,11 @@ local Keepsakes: { [string]: Keepsake } = {
 		from = "the sweet shop on the High Street",
 		line = "Dev bought it for the party. It goes a little softer every time the day comes round.",
 	},
+	Cookie = {
+		thing = "A biscuit from the Promenade Hotel's tea room",
+		from = "the Promenade Hotel",
+		line = "Iced for the regatta that morning. Somebody had taken one bite and put it back on the plate.",
+	},
 	ChocolateSolid = {
 		thing = "A slab from Marlow's cellar",
 		from = "under the sweet shop",
@@ -157,5 +162,5 @@ local Keepsakes: { [string]: Keepsake } = {
 	},
 }
 
-Keepsakes.STAMP = "3c18d973"
+Keepsakes.STAMP = "2213dd3d"
 return Keepsakes

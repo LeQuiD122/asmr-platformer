@@ -31,8 +31,8 @@ LEVEL_BADGE = ("\t-- THE LEVEL'S BADGE (ShopCatalog.BADGES), for a run really pl
                "\t\tEconomyService.awardBadge(player, badges.level[levelId])\n\tend\n")
 
 MUTATIONS = [
-    ("none to set", CAT, SHOP, "level = { [1] = 0, [2] = 0, [3] = 0, [4] = 0 },", "level = {},"),
-    ("one starting set", CAT, SHOP, "level = { [1] = 0, [2] = 0, [3] = 0, [4] = 0 },", "level = { [1] = 123, [2] = 0, [3] = 0, [4] = 0 },"),
+    ("none to set", CAT, SHOP, "level = { [1] = 0, [2] = 0, [3] = 0, [4] = 0, [5] = 0 },", "level = {},"),
+    ("one starting set", CAT, SHOP, "level = { [1] = 0, [2] = 0, [3] = 0, [4] = 0, [5] = 0 },", "level = { [1] = 123, [2] = 0, [3] = 0, [4] = 0, [5] = 0 },"),
     ("a badge not made asked for", ECON, SHOP, 'if type(badgeId) ~= "number" or badgeId == 0 then', 'if type(badgeId) ~= "number" then'),
     ("asked on every finish", ECON, SHOP, "\tif asked[badgeId] then\n\t\treturn\n\tend\n", ""),
     ("never awarded", ECON, SHOP, "BadgeService:AwardBadge(player.UserId, badgeId)", "print(player.UserId, badgeId)"),

@@ -1186,6 +1186,20 @@ function ShopLook.closed()
 	end)
 end
 
+-- A LITTLE OF THE BACKGROUND'S MATERIAL where something in the shop was pressed (the hundred-and-twenty-second pass: a
+-- tab chosen, a thing bought): its effect, small, with no sound of its own (the press has its own). Not under a crate,
+-- and the back rooms' light fails only for a purchase (a tab is too small a thing).
+function ShopLook.puff(over: GuiObject, strength: number)
+	if not look.open or look.crating then
+		return
+	end
+	if look.theme.effect == "flicker" and strength < 1 then
+		return
+	end
+	local centre = over.AbsolutePosition + over.AbsoluteSize / 2 + GuiService:GetGuiInset()
+	burst(look.theme.effect, centre, strength)
+end
+
 -- A tab chosen: its own small sound.
 function ShopLook.tab(name: string)
 	local index = table.find(ShopLook.TAB_ORDER, name)
@@ -1194,5 +1208,5 @@ function ShopLook.tab(name: string)
 	end
 end
 
-ShopLook.STAMP = "5dc54558"
+ShopLook.STAMP = "b104ab03"
 return ShopLook

@@ -348,6 +348,13 @@ local TOYS: { [string]: { Piece } } = {
 	Soap = {
 		{ "Block", Vector3.new(1.4, 0.55, 0.9), Vector3.new(0, 0.28, 0), nil, Enum.Material.SmoothPlastic, 0 },
 	},
+	-- A biscuit lying flat, three chips in its top.
+	Cookie = {
+		{ "Cylinder", Vector3.new(0.24, 1.3, 1.3), Vector3.new(0, 0.12, 0), nil, Enum.Material.Sand, 0 },
+		{ "Block", Vector3.new(0.2, 0.1, 0.2), Vector3.new(0.3, 0.27, 0.15), Color3.fromRGB(66, 38, 22), Enum.Material.SmoothPlastic, 0 },
+		{ "Block", Vector3.new(0.18, 0.1, 0.18), Vector3.new(-0.25, 0.27, -0.2), Color3.fromRGB(66, 38, 22), Enum.Material.SmoothPlastic, 0 },
+		{ "Block", Vector3.new(0.16, 0.1, 0.16), Vector3.new(-0.1, 0.27, 0.32), Color3.fromRGB(66, 38, 22), Enum.Material.SmoothPlastic, 0 },
+	},
 	KineticSand = {
 		{ "Cylinder", Vector3.new(1, 1, 1), Vector3.new(0, 0.5, 0), Color3.fromRGB(230, 70, 60), Enum.Material.SmoothPlastic, 0 },
 		{ "Cylinder", Vector3.new(0.12, 0.9, 0.9), Vector3.new(0, 1.02, 0), nil, Enum.Material.Sand, 0 },
@@ -583,7 +590,9 @@ end
 
 -- The first opening, and anyone's look after it: the secret's scene on their screen, and what it says
 -- into their journal (quietly: the scene ends on its own card, which says where the words went).
-function Interactables.reveal(player: Player, id: string, eye: CFrame, focus: Vector3, anchor: BasePart, kind: string?)
+-- (`span`, a thing's size to frame whole in its close look: a locker's inside. Without it the look closes right in.)
+function Interactables.reveal(player: Player, id: string, eye: CFrame, focus: Vector3, anchor: BasePart, kind: string?,
+	span: number?, rise: number?)
 	local secret = Interactables.SECRETS[id]
 	if not secret then
 		return
@@ -616,7 +625,8 @@ function Interactables.reveal(player: Player, id: string, eye: CFrame, focus: Ve
 	if remote then
 		remote:FireClient(player, kind or "moment", {
 			id = id, title = secret.title, line = secret.line, eye = eye, focus = focus, index = secret.order,
-			found = count, total = TOTAL, think = if secret.think then secret.think[2] else nil, again = again,
+			found = count, total = TOTAL, think = if secret.think then secret.think[2] else nil, again = again, span = span,
+			rise = rise,
 		})
 	end
 	local note = secret.note or { title = secret.title, body = secret.line }
@@ -630,9 +640,12 @@ end
 -- THE BAR IS SEEN AT WORK. The first time the bar opens something, whoever holds it is shown working it in
 -- (StoryClient's "pry": three hard tugs, what they think of it over their head) and the thing gives on the last
 -- tug, PRY_SECONDS later, rather than flying open before anyone has touched it. `on.secret` names what is in it.
-type Handlers = { open: (Player) -> (), look: (Player) -> (), secret: string? }
+-- `strike`: swung into, not levered (the bricks): the scene is three blows (StoryClient), and it is told which way is
+-- out of the thing (the host's LookVector).
+type Handlers = { open: (Player) -> (), look: (Player) -> (), secret: string?, strike: boolean? }
 local PRY_SECONDS = 1.75
-local function openable(host: BasePart, action: string, object: string, needsBar: boolean, refusal: string, on: Handlers)
+local function openable(host: BasePart, action: string, object: string, needsBar: boolean, refusal: string,
+	on: Handlers): ProximityPrompt
 	local opened = false
 	local p = prompt(host, action, object, Enum.KeyCode.E, if needsBar then 0.9 else 0)
 	p.Triggered:Connect(function(player: Player)
@@ -650,7 +663,8 @@ local function openable(host: BasePart, action: string, object: string, needsBar
 				local remote = storyRemote()
 				if remote then
 					remote:FireClient(player, "pry", { at = host.Position, object = object,
-						think = if secret and secret.think then secret.think[1] else "Let's see what's in here." })
+						think = if secret and secret.think then secret.think[1] else "Let's see what's in here.",
+						strike = on.strike == true, out = host.CFrame.LookVector })
 				end
 				wait = PRY_SECONDS
 			end
@@ -664,6 +678,7 @@ local function openable(host: BasePart, action: string, object: string, needsBar
 			on.look(player)
 		end
 	end)
+	return p
 end
 
 -- A staff locker standing on `base` (its floor, front along base's LookVector). `opts.label` is
@@ -694,7 +709,16 @@ local function lockerHolds(parent: Instance, base: CFrame, door: BasePart, what:
 			bit("CoatSleeve", Vector3.new(0.24, 2.3, 0.3), CFrame.new(x, 3.3, 0.22) * CFrame.Angles(0, 0, x * 0.12), wool,
 				Enum.Material.Fabric)
 		end
-		bit("CoatButtons", Vector3.new(0.08, 1.6, 0.04), CFrame.new(0.12, 3.2, 0.04), Color3.fromRGB(196, 170, 110))
+		-- (A coat that reads as a coat, framed whole in the look: the hundred-and-twenty-fourth pass, from your test: "the
+		-- animation inside looks weird". Brass buttons down its front, a pocket, and in it the note in your own hand, its
+		-- corner showing.)
+		for k = 0, 3 do
+			bit("CoatButton", Vector3.new(0.13, 0.13, 0.13), CFrame.new(0.14, 4.0 - k * 0.42, 0.04), Color3.fromRGB(214, 180, 96),
+				Enum.Material.Metal, Enum.PartType.Ball)
+		end
+		bit("CoatPocket", Vector3.new(0.36, 0.06, 0.05), CFrame.new(-0.24, 2.75, 0.04), wool:Lerp(Color3.new(0, 0, 0), 0.35))
+		bit("PocketNote", Vector3.new(0.22, 0.28, 0.02), CFrame.new(-0.22, 2.88, 0.06) * CFrame.Angles(0, 0, 0.18),
+			Color3.fromRGB(240, 234, 214))
 		local drip = Instance.new("ParticleEmitter")
 		drip.Texture = "rbxasset://textures/particles/sparkles_main.dds"
 		drip.Color = ColorSequence.new(Color3.fromRGB(200, 226, 236))
@@ -739,6 +763,9 @@ local function lockerHolds(parent: Instance, base: CFrame, door: BasePart, what:
 	end
 end
 
+-- How much of a locker's inside its close look frames (studs): the coat on its hook, the card on its door.
+local LOCKER_SPAN = 3.6
+
 function Interactables.locker(parent: Instance, base: CFrame, opts: { label: string, bar: boolean?, secret: string?,
 	eye: CFrame?, dud: boolean? })
 	local steel = Color3.fromRGB(88, 104, 110)
@@ -763,7 +790,7 @@ function Interactables.locker(parent: Instance, base: CFrame, opts: { label: str
 	local lamp = Instance.new("PointLight")
 	lamp.Color = Color3.fromRGB(255, 220, 170)
 	lamp.Brightness = 0
-	lamp.Range = 5
+	lamp.Range = 7
 	lamp.Shadows = false
 	lamp.Parent = bulb
 	local door = piece(parent, "LockerDoor", Vector3.new(1.4, 5.8, 0.1), base * CFrame.new(0, 3, -0.75), steel, Enum.Material.Metal, true)
@@ -801,21 +828,27 @@ function Interactables.locker(parent: Instance, base: CFrame, opts: { label: str
 	if opts.secret then
 		Interactables.glint(plate, Color3.fromRGB(240, 230, 200))
 	end
-	openable(door, "Open", "Locker " .. opts.label, opts.bar == true, "It is rusted shut. It would take something to prise it.", {
+	local p = openable(door, "Open", "Locker " .. opts.label, opts.bar == true, "It is rusted shut. It would take something to prise it.", {
 		open = function()
 			-- OUT, toward whoever opened it (a positive turn: the door's free edge comes forward), and its lamp on.
 			swing(door, hinge, math.rad(105), 0.9)
-			TweenService:Create(lamp, TweenInfo.new(0.5), { Brightness = 0.9 }):Play()
+			TweenService:Create(lamp, TweenInfo.new(0.5), { Brightness = 1.6 }):Play()
 		end,
 		look = function(player: Player)
 			if opts.secret then
-				Interactables.reveal(player, opts.secret, opts.eye or (base * CFrame.new(1.2, 4.2, -4.5)), inside.Position, body)
+				Interactables.reveal(player, opts.secret, opts.eye or (base * CFrame.new(1.2, 4.2, -4.5)), inside.Position, body,
+					nil, LOCKER_SPAN)
 			elseif opts.dud then
 				Interactables.whisper(player, "Empty. A wire hanger, and the smell of the sea.")
 			end
 		end,
 		secret = opts.secret,
 	})
+	-- ONE OF A ROW (the hundred-and-twenty-fourth pass, from your test: "locker 3 is hard to open"): lockers stand side by
+	-- side, and every one's prompt came up at once and Roblox chose among them; on each screen only the one in front of
+	-- you shows now (StoryClient), measured from where its door stands shut.
+	p:SetAttribute("RowAt", door.Position)
+	game:GetService("CollectionService"):AddTag(p, "OneOfARow")
 	return body
 end
 
@@ -878,21 +911,32 @@ function Interactables.looseBricks(parent: Instance, face: CFrame, secret: strin
 			table.insert(bricks, b)
 		end
 	end
+	-- THE PATCH ITSELF holds the prompt and the dust, fixed at the hole, facing out of the wall: on the first brick, the
+	-- prompt went out with it and lay on the floor saying "Look" (your test of 2026-10-22).
+	local patch = piece(parent, "BrickPatch", Vector3.new(cols * brick.X, rows * brick.Y, 0.3), face * CFrame.new(0, 0, -0.1),
+		Color3.fromRGB(150, 86, 70), Enum.Material.Brick)
+	patch.Transparency = 1
 	-- Brick dust trickling out of the joints: what makes you look twice at this bit of wall.
-	Interactables.glint(bricks[1], Color3.fromRGB(230, 200, 170))
-	openable(bricks[1], "Prise out", "Loose bricks", true, "The bricks shift a little. It would take something to prise them.", {
+	Interactables.glint(patch, Color3.fromRGB(230, 200, 170))
+	openable(patch, "Prise out", "Loose bricks", true, "The bricks shift a little. It would take something to prise them.", {
+		-- STRUCK, not levered (the same pass, from your test: "I should actually hit the bricks and there should be some
+		-- pieces flying out"): three blows of the bar on your screen, and on the last the patch bursts out together,
+		-- tumbling, and lands on the floor.
+		strike = true,
 		open = function()
 			for index, b in ipairs(bricks) do
-				task.delay(index * 0.05, function()
+				task.delay(index * 0.015, function()
 					b.Anchored = false
 					b.CanCollide = true
-					b.AssemblyLinearVelocity = face.LookVector * math.random(6, 12) + Vector3.new(0, math.random(2, 5), 0)
+					b.AssemblyLinearVelocity = face.LookVector * math.random(9, 15)
+						+ Vector3.new(math.random(-3, 3), math.random(3, 6), math.random(-3, 3))
+					b.AssemblyAngularVelocity = Vector3.new(math.random(-8, 8), math.random(-8, 8), math.random(-8, 8))
 					Debris:AddItem(b, 20)
 				end)
 			end
 		end,
 		look = function(player: Player)
-			Interactables.reveal(player, secret, eye, paper.Position, paper)
+			Interactables.reveal(player, secret, eye, paper.Position, paper, nil, nil, 1.3)
 		end,
 		secret = secret,
 	})
@@ -934,5 +978,5 @@ function Interactables.loosePlank(parent: Instance, base: CFrame, secret: string
 	})
 end
 
-Interactables.STAMP = "14cc0d41"
+Interactables.STAMP = "3ee2e4f1"
 return Interactables

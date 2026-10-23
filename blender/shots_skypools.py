@@ -30,6 +30,7 @@ HOPS = [tuple(float(x) for x in h) for h in re.findall(r"\{ ([\d.]+), ([\d.]+), 
 PLUNGE_HOLD, BURST_LEAD, BURST_HOLD = num(CLIENT, r"^local PLUNGE_HOLD = ([\d.]+).*\n^local BURST_LEAD = ([\d.]+).*\n^local BURST_HOLD = ([\d.]+)")
 OVER_TOP, UNDER_BOTTOM = num(CLIENT, r"local plunge = below\(cloudTop \+ ([\d.]+), 0\)\n\tlocal out = below\(cloudBottom - ([\d.]+), plunge\)")
 HOLD = num(CLIENT, r"^local HOLD = ([\d.]+)")[0]
+BELOW_HOLD, MIST_LEAST = num(CLIENT, r"^local BELOW_HOLD = ([\d.]+).*\n^local MIST_LEAST = ([\d.]+)")
 
 SHOT_LINES = (
     "local eye = Cinema.clear(here - flat * 10 + Vector3.new(0, 5.5, 0), here, ignore)",
@@ -38,6 +39,8 @@ SHOT_LINES = (
     "Cinema.point(CFrame.lookAt(eye, here:Lerp(far, 0.3) + Vector3.new(0, 1, 0)), 56)",
     "scene.eye = Cinema.clear(here - flat * 14 + out * 9 + Vector3.new(0, 15, 0), here, ignore)",
     "Cinema.point(CFrame.lookAt(scene.eye :: Vector3, here), 60 - math.min(held, PLUNGE_HOLD) * 6)",
+    "local eye = Cinema.clear(here - flat * 8 + out * 2.5 + Vector3.new(0, 3.5, 0), here, ignore)",
+    "Cinema.point(CFrame.lookAt(eye, here + run * 4 + Vector3.new(0, 1.2, 0)), 66)",
     "local eye = mid + away * (150 - 28 * drift) + Vector3.new(0, 6 + 6 * drift, 0)",
     "Cinema.point(CFrame.lookAt(eye, mid:Lerp(marks.outAt, 0.38)), 66, true)",
     "scene.eye = Cinema.clear(marks.outAt + marks.outRun * 30 + away * 22 + Vector3.new(0, -24, 0), marks.outAt, ignore)",
@@ -48,7 +51,7 @@ SHOT_LINES = (
     "Cinema.point(CFrame.lookAt(landing + away * 20 + side * 10 + Vector3.new(0, 2.5, 0), here), 58)",
     "local eye = Vector3.new(at.X, landing.Y + 2.2, at.Z) + side * 13 - dir * (4 - s * 2.2)",
     "Cinema.point(CFrame.lookAt(eye, at + Vector3.new(0, 0.5, 0)), 56)",
-    "Cinema.point(CFrame.lookAt(landing + away * 32 + Vector3.new(0, 4, 0), landing + Vector3.new(0, 7, 0)), 70)",
+    "Cinema.point(CFrame.lookAt(landing + away * (14 - 4 * k) + side * 4 + Vector3.new(0, 2.4, 0),\n\t\tlanding + Vector3.new(0, 0.6, 0)), 60)",
 )
 
 
@@ -155,6 +158,12 @@ def slide(count=None, seed=0, fps=60):
                     state["eye"] = here - fl * 14 + out * 9 + v(0, 15, 0)
                 held = t - state["since"]
                 frames.append(Frame(t, "slide: the plunge", state["eye"], here, 60 - min(held, PLUNGE_HOLD) * 6, subject=body))
+            elif left > BURST_LEAD + BELOW_HOLD and (state["shot"] == "slide: in the cloud"
+                                                    or left > BURST_LEAD + BELOW_HOLD + MIST_LEAST):
+                # Riding through the cloud with them, close behind and over (the cloud thinned round them on screen).
+                start("slide: in the cloud")
+                frames.append(Frame(t, "slide: in the cloud", here - fl * 8 + out * 2.5 + v(0, 3.5, 0), here + run * 4 + v(0, 1.2, 0),
+                                    66, subject=body))
             elif left > BURST_LEAD and (state["shot"] == "slide: under the cloud, wide" or left > BURST_LEAD + 1):
                 start("slide: under the cloud, wide")
                 held = t - state["since"]
@@ -201,12 +210,14 @@ def slide(count=None, seed=0, fps=60):
         frames.append(Frame(t0 + s, "slide: the skim", eye, at + v(0, 0.5, 0), 56, subject=rider(at, d)))
     end = landing + d * (SPEED * SKIM * 0.5)
     away = flat(end - landing) if np.linalg.norm(flat(end - landing)) > 0.01 else d
+    side = v(-away[2], 0, away[0])
     for i in range(int(HOLD * fps)):
         s = i / fps
+        k = min(1, s / HOLD)
         swimmer = {"head": end + v(0, 1.2, 0), "feet": end - v(0, 2.5, 0)}
-        frames.append(Frame(t0 + SKIM + s, "slide: the landing", end + away * 32 + v(0, 4, 0), end + v(0, 7, 0), 70,
-                            subject=swimmer))
-    cutting = {"slide: the push", "slide: the track", "slide: the plunge", "slide: under the cloud, wide",
+        frames.append(Frame(t0 + SKIM + s, "slide: the landing", end + away * (14 - 4 * k) + side * 4 + v(0, 2.4, 0),
+                            end + v(0, 0.6, 0), 60, subject=swimmer))
+    cutting = {"slide: the push", "slide: the track", "slide: the plunge", "slide: in the cloud", "slide: under the cloud, wide",
                "slide: waiting under the cloud", "slide: the face", "slide: the pool", "slide: the skim"}
     return mark_cuts(frames, cutting), r
 

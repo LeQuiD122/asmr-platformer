@@ -4,13 +4,21 @@ Roblox game from a locked GDD: a 3D platformer where every platform is a tactile
 ASMR-inspired material (honey, butter-wax, kinetic sand, slime, soap, bubble wrap), with
 template-based procedural level generation, chill/hardcore modes and a leaderboard.
 
-It has grown well past those six. `MaterialConfig` now carries 27 material entries across 67
+It has grown well past those six. `MaterialConfig` now carries 28 material entries across 68
 chunks, there are four levels plus a Sandbox, and players choose a run in a lobby rather than
 being dropped into a hardcoded level. See **Levels and the lobby** and **The Flooded Halls**
 below for the parts this file did not cover before.
 
-Last updated: 2026-10-18. **Everything up to and including the ninety-second pass has been played in Studio (you).**
-Built since, waiting for a test: the hundred-and-first to hundred-and-fourth passes, from your notes of 2026-10-20:
+Last updated: 2026-10-22. **Everything up to and including the ninety-second pass has been played in Studio (you).**
+Built since, waiting for a test: the hundred-and-thirtieth to thirty-sixth passes, from your test of 2026-10-23 and its
+video (**Your test of 2026-10-23**, first below); the hundred-and-twenty-third to twenty-ninth passes, from your test of
+2026-10-22 (**Your test of 2026-10-22**); the hundred-and-seventeenth to twenty-second passes, from your test of
+2026-10-21 (**Your test of 2026-10-21**); the hundred-and-fourteenth to sixteenth passes, the true ending (**Clocking in, and
+his face**); the hundred-and-thirteenth pass, Hill House's people (**Mr Gale and Mrs Dunn**); the hundred-and-twelfth pass, Hill House's hall (**His key and his clock**); the hundred-and-eleventh pass, Hill House from the outside (**Hill House**); the hundred-and-tenth pass, the
+cookie you asked for (**The cookie**);
+the hundred-and-fifth to hundred-and-ninth passes, the rest of your notes of 2026-10-20: the shop made over with backgrounds and their crates, thin trails and auras with rings, Sky Pools' arches
+and the lobby's look and feel (**The shop, the trails, the arches and the lobby**, first below); the hundred-and-first to
+hundred-and-fourth passes, from the same notes:
 sounds where they are, one font and every device, the back rooms, and what you say to people with the story under it
 (**Your notes of 2026-10-20**, first below); the ninety-ninth and hundredth passes, one style on every screen and the
 lobby as a promenade by the sea (**One style, and the lobby as a promenade**); the ninety-sixth to ninety-eighth,
@@ -673,6 +681,633 @@ running under the room's haze (density 0.32, haze 1.6, lilac decay) all along.
 - **Slabs under any hole-opening material no longer collide** (`ChunkBuilder`: step counts,
   displacement, wading and embers join the dissolve clock), and a re-inflated bubble wrap cell
   now gets its floor back -- it used to look whole and let you fall straight through.
+
+## Your test of 2026-10-23 (hundred-and-thirtieth to thirty-sixth passes, 2026-10-23)
+
+Everything in your message, the red screenshot, the clock screenshot and the video with them. How each is done is mine
+**(suggested)**. Not played yet.
+
+- **Lobby sounds in the levels (130)**: with the lobby's own sounds not imported, the server's stand-ins (the engine's
+  one splash, over and over, for the sea, the wind and the breakers) played everywhere at once and followed you into
+  every level; only the back rooms hushed them. Now every sound the lobby makes goes quiet the moment you are in any
+  level, and the stand-ins are played from the lobby itself, falling off with distance (full near, gone by 260 to 320
+  studs), as the fountain's own already did.
+- **The hardcore clock (130)**: never up in Chill (a hardcore run put it up and a Chill vote left it there, still
+  showing that run's time). In Hardcore, press it and it folds down to a small round stopwatch in its corner; press that
+  and it opens again.
+- **Walking during scenes (130)**: the shop and the welcome switched your controls back on as they closed, even in a
+  scene. While a scene has the camera now, moving and jumping go nowhere whatever else does, and the prompts ("Look",
+  "Talk") are put away until it ends.
+- **Leaving to the lobby mid-scene (130)**: every scene ends at once when the lobby takes you, its camera, bars and
+  sounds with it (the songs and chords it kept too), and each level's own scene puts its things away; the Sunken City's
+  ride had gone on setting you along its culvert.
+- **Out of the way (130)**: when you stand between a scene's camera and what it shows (Locker 3: your back filled the
+  picture), you take a step aside to whichever side has room and turn to look at it. Every secret's scene does this.
+- **The crowbar's last shot (130, the red screenshot)**: the look into the bricks' hole was down at the sill, all
+  bricks; it looks into the hole from above now, at the letter.
+- **Thought bubbles (130)**: they popped up and away instead of fading, which left an empty bubble over your head.
+- **The Sunken City's fall (131)**: hit like the dive. A jolt and a burst of the whirlpool's water as it takes you, the
+  speed coming on as it drags you round, a flash and a burst of water as it pulls you under, the picture shaking and
+  the lines streaming down the shaft, a hard landing in the sluice in white water; a wake off you all the way down the
+  culvert and a splash where it sets you down. Nothing through the walls: the alongside shot is kept in from the
+  culvert's ribs (it was pulled into your hair), you no longer turn so far that your head goes into the bricks, and the
+  station's camera never passes through a pump or a pillar.
+- **The mouth (132)**: longer (thirteen and a half seconds, not eight and a half). The jaws creak shut, slam with
+  everything (the roar, the impact, the shaft shaking) and crunch down twice more before the dark. Down its throat: its
+  heart squeezes the walls in and flares its light on every beat, wet streaks rush up past you, the picture rolls and
+  shakes, you think "Let me OUT!", and it heaves you out. The fall out of the flume starts with a jolt and shakes all
+  the way down.
+- **The back rooms' catch (133)**: you could not tell what it was: his face was made of flat boxes, a stud from a
+  narrow lens. Now, after the lights die: side on, you and him folded down over you, his arms coming round you, and you
+  think "What IS that?!"; then over your shoulder his round blank head, at a size you can read, splits open onto the
+  fangs and the red light; it lunges; black. Three and a half seconds, not two; the server waits for the black.
+- **The Flooded Halls (134)**: galleries down both walls, between the tiled dado and the windows, where spectators
+  watched from: a timber deck on iron brackets let into the wall, a cast-iron railing with lifebuoys on it, benches
+  along the back; the baths' enamel signs on their fronts (CORPORATION BATHS, NO DIVING, DEEP END, BATHS CLOSE AT
+  MIDNIGHT, and more); and lamps hanging on chains over the walkway, each with a real light, failing behind you with the
+  roof lights. They stop either side of every arch.
+- **The shop (135)**: a sunburst turning slowly behind every item in its colour, a sheen sweeping across each card now
+  and then, and a price you can pay breathing gently.
+- **The lobby (136)**: the level windows were tinted glass, black slabs from the deck. Each carries a painted postcard of
+  its place: the Siren Tower against the sun and sea, the Sky Pools' terraces in the clouds, the Sunken City's roofs
+  under the whirlpool, the baths' arches, Hill House on its hill, the story's five skies. Dimmed behind the boards while
+  a level is locked, brighter when chosen.
+
+**Checked**: `check_story.py` (you held still and the prompts put away while a scene has the camera, every scene
+ended when the lobby takes you and each level's cleanup called, the step aside, the thought's pop, the kept sounds let
+go; the lobby's voices from the lobby itself, falling off, and hushed in every level; the catch side on, his round head
+whole and yours hidden, three and a half seconds and the server waiting for it); `check_backrooms.py` (the lobby
+hushed there, his face); `check_halls.py` (the mouth's slam with the impact and the shake, the galleries on their
+brackets, the enamel signs in the town's print, the lamps on chains failing with the roof's); `check_shop.py` (the
+sunburst, the sheen, the breathing price); `check_hub.py` (a postcard in every window, dimmed while locked);
+`check_shots.py` (the culvert's alongside shot, the bite to the crunch and the throat after it restated; storyboards
+redrawn); `roblox_enums.py` (`PlayerActions`, `DominantAxis`). `pass130.py` 14 of 14, `pass131.py` 9 of 9,
+`pass132.py` 11 of 11, `pass133.py` 8 of 8, `pass134.py` 7 of 7, `pass135.py` 6 of 6, `pass136.py` 3 of 3; ten anchors
+in the older suites moved to the lines as these passes left them. The full run after it: 129 suites, 2280 of 2282
+caught, src, the Blender scripts and the sound generators put back byte for byte. The two it missed were rules made
+too easy: the longer mouth let pass 92's "your face too brief" through (its replacement now breaks the beat), and the
+catch's hidden head was looked for on a line written twice (the rule takes the one that hides his head now); both
+suites rerun, 29 of 29 and 8 of 8.
+
+## Before you test in Studio (passes 130 to 136)
+
+**Paste**
+1. The Luau: if you pasted `passes_123_129`, these are all that changed since (`SINCE_PASSES_123_129.txt` in the zip):
+   **Shared** `SunkenPath`; **Server** `Bootstrap`, and Services `BackRoomsService`, `FloodedHallsService`,
+   `HubService`, `Interactables`; **Client** Services `AmbienceService`, `Cinema`, `CityShoreClient`,
+   `FloodedHallsClient`, `HillHouseClient`, `ShopService`, `SkyPoolsClient`, `StoryClient`, `SunkenCityClient`,
+   `UIService` (16, none new).
+   `python tools/paste_list.py` lists the same sixteen (your last `--mark` was after 123 to 129); then `--mark`.
+
+**Import (UPLOADS: none)**
+
+**Then play**
+2. The lobby: walk away from the fountain (it fades), look at the level windows; start a level and listen (no lobby).
+3. A hardcore run: press the clock (it folds); vote Chill after it (no clock).
+4. City Shore: the bricks with the bar (the last look into the hole). Try to walk during a scene (you cannot).
+5. The Sunken City: the whirlpool to the station; then leave to the lobby during a scene (everything stops).
+6. The Flooded Halls: the galleries, the lamps; Locker 3 (you step aside); the mouth and its throat.
+7. The back rooms: be caught. The shop: hover the tiles.
+
+## Your test of 2026-10-22 (hundred-and-twenty-third to twenty-ninth passes, 2026-10-22)
+
+Everything in your message and the video with it, every point. How each is done is mine **(suggested)**. Not played
+yet.
+
+- **The honey steps the wrong way round (123)**: Blender's modelled prints face back along the way you walk; each is
+  turned a half turn about the ground now (`StepService`, `MESH_TURN`).
+- **The fountain's bubbles (123)**: they were Glass, dull grey-blue balls against the sky. A soap film now: nearly clear,
+  a faint colour each, a glint of the sun on it, blown from just over the water and drifting up slowly.
+- **Talking again after the second run (123)**: what you have said is held by the person you said it to and made afresh
+  each level, so every run their topics come back; what you learned stays in your save, and a topic you have never
+  said is marked **New**.
+- **The words between you and them, styled (123)**: each bubble has the speaker's name on a tag in their colour, a light
+  across it and a shadow under it, and is written out a letter at a time; your choices have the person's disc, lift off
+  their shadows with an arrow on the one you are on.
+- **The shop's icons covering their names (123)**: an icon is held by its middle and swells evenly, measured to stay
+  inside the gap over its name; the names and blurbs are bigger. **Arrow keys** change tab, as L1 and R1 do.
+- **Locker 3 (124)**: lockers stand side by side and every prompt came up at once; only the one in front of you shows
+  now. Inside, the close look backs off the locker's own width, so the coat is seen whole by its lamp, with brass
+  buttons, a pocket and the note in it.
+- **The monster scene in the Flooded Halls (124)**: you see the mouth and think "Is that... a MOUTH?!"; it bites, and the
+  camera goes down its throat with you, turning over through its ribs; it spits you out into the Gate Chamber's sump,
+  and you come up thinking "It... spat me out?".
+- **The back rooms' catch (125)**: he stops and folds down over you on every screen, his knees giving, his arms round you
+  and his head at yours; your screen goes from beside you to his face in front of you, bigger, the fangs a hand long and
+  lit, splitting open; he lunges; black. The server waits for the black before the lobby.
+- **The Sunken City's whirlpool from inside (126)**: under the water the picture swims (a slow roll and the lens
+  breathing, `Cinema.waver`), soft with a little blur, the water thick and sea green with shafts of daylight slanting
+  down round the throat and silt and bubbles going by, so it never reads as a thing hanging in the sky.
+- **Oobleck's sound (126)**: one sheet of four takes of its own (`audio/sheets/ooblSquelch_x4.wav`): a muffled thup
+  as it goes firm under the step, a slow creamy sink, thick blorps coming up through it and a soft sticky suck as the
+  foot comes away; a quick step, a long sink, a stamp that stays firm, and one that holds on. The four old squelches are
+  retired.
+- **The Sky Pools' song (127)**: the music cut out partway down was the party heard through a wall. Now the party's own
+  song plays in full over the slide (`PoolsSong`: the same four chords, the felt piano and strings, a soft kick and bass,
+  then the tune), started so far in that its last chord lands with you in the pool; the pool's chord only stands in
+  without it. A sound kept past its scene now plays out instead of being cut at twenty seconds.
+- **Seeing yourself in Sky Pools' ending (127)**: the four seconds of empty sky in the cloud are you now, the camera
+  riding close behind and over you, the cloud thinned round you on your screen and wisps streaming past; the wide shot
+  under the cloud is short; the landing is close, easing in on you in the pool.
+- **Hill House (128)**: no grass in the hall (filling ground over the grass left the top cells grass; each cell is
+  changed outright now). Your camera can no longer go up through the ceiling (the upstairs floor is solid) or out
+  through the windows (while your head is in the hall, the camera is kept inside its walls). The key's scene is shot
+  again: in front of you and to one side as you take it, then over your shoulder as you turn to his clock, the whole
+  clock in the picture, and you start when it ticks; you reach the key at your chest, hold it there, and carry it low
+  to the door.
+- **The bricks and the bar (129)**: you step up and swing the bar into the wall three times, its tip landing on the
+  bricks each time, chips and dust flying out and the wall shaking, a dull knock each blow (`BarStrike`); on the last
+  the patch bursts out, tumbling onto the floor (`BrickBurst`). The "Look" prompt stays at the hole.
+- **City Shore's finale (129)**: the shot "covered by a plane" was Maren's: the camera was behind her looking down at you,
+  and she stands thirty studs back from the tip, so it was the deck's floor. It is her reaction now, turned to the
+  board and starting as you go. **The hit**: the camera holds at the surface a moment as you go in, the spray going up,
+  foam racing out over the water, the flash and the jolt harder, then goes under after you into a burst of bubbles.
+- **The butter (129)**: the wrapper was see-through (0.3), so it read as a glass case with a block of butter standing in
+  it and the water showing through its edges. It is waxed paper now, cream and all but opaque; the butter shows where
+  it cracks.
+
+**Checked**: `check_shop.py` (the prints turned round, the arrow keys, the icon's swell measured against the gap
+over its name); `check_hub.py` (the bubbles a film with a glint, blown low and rising slowly; the new sounds looked
+for); `check_story.py` (talk afresh each run, the bubbles dressed and written out, the choices, one locker of a row,
+the coat, the mouth and its throat, his catch and its beats, the water under the whirlpool, the song and kept sounds,
+the strike and its chips, Maren, the hit held, the butter's paper); `check_skypools.py` (the ride in the cloud replayed,
+nobody on screen for no more than a few seconds); `check_hillhouse.py` (the cells changed to ground, the solid
+ceiling, the camera kept in the hall, the key's scene); `check_shots.py` (every new shot restated and measured: you in
+the cloud, the landing close, the key and the clock, Maren's reaction, the hit; storyboards redrawn);
+`check_audio.py` (the song, the strike, the burst and oobleck's sheet at their families' levels). Passes 124 to 126
+had no rules of their own until now; they do. `pass123.py` 17 of 17, `pass124.py` 10 of 10, `pass125.py` 7 of 7,
+`pass126.py` 5 of 5, `pass127.py` 11 of 11, `pass128.py` 11 of 11, `pass129.py` 23 of 23; fourteen anchors in the older
+suites moved to the lines as these passes left them, and one rule tightened (a count of the two-shot's resets, which the
+strike scene had made too easy). The full run after it: 122 suites, 2224 of 2224 caught, src, the Blender scripts and
+the sound generators put back byte for byte.
+
+## Before you test in Studio (passes 123 to 129)
+
+**Paste**
+1. The Luau: if you pasted `passes_117_122`, these are all that changed since (`SINCE_PASSES_117_122.txt` in the zip):
+   **Shared** `Conversations`, `Poses`, `Style`; **Server** `Bootstrap`, `ChunkBuilder`, and Services
+   `BackRoomsService`, `HillHouseService`, `Interactables`, `Townsfolk`; **Client** Services `Cinema`,
+   `CityShoreClient`, `FloodedHallsClient`, `HillHouseClient`, `LobbyLife`, `Maw`, `ShopService`, `SkyPoolsClient`,
+   `StalkerClient`, `StepService`, `StoryClient`, `SunkenCityClient`, `TalkClient` (22, none new).
+   `python tools/paste_list.py` lists everything since your last `--mark` (all of 93 to 129); then `--mark`.
+
+**Import (UPLOADS: 4)**
+2. `audio/sheets/ooblSquelch_x4.wav` into **SoundService.MaterialSounds**, and delete the four old `ooblSquelch_1` to
+   `ooblSquelch_4` there.
+3. `audio/endings/PoolsSong.wav`, `audio/story/BarStrike.wav` and `audio/story/BrickBurst.wav` into
+   **SoundService.StorySounds**.
+
+**Then play**
+4. The lobby: the fountain's bubbles; your prints in honey toes first; talk to Mrs Venn, finish a level, talk again
+   (her topics back, the new ones marked); the shop's icons on hover, and the arrow keys.
+5. City Shore: the Siren Room's bricks with the bar; the dive (Maren, and the hit). A butter platform.
+6. Sky Pools: the slide (you in the cloud, the song to the end, the landing).
+7. The Sunken City: the whirlpool from inside. The Flooded Halls: Locker 3, and the mouth.
+8. Hill House: turn your camera hard about in the hall (it stays in), and take the key.
+9. The back rooms: be caught.
+
+## Your test of 2026-10-21 (hundred-and-eighteenth to twenty-second passes, 2026-10-22)
+
+Everything in your message with the three screenshots, and what you answered after. How each is done is mine
+**(suggested)**. Not played yet.
+
+- **Sounds in the lobby (118)**: they were the soap bubbles off the fountain, popping aloud as you walked through them.
+  Only a bubble you tap is heard now; one you walk into, or one that bursts by itself, pops in silence. (A step sound
+  pack you have on from the shop also plays in the lobby and the squish room, never on a level: take it off in the
+  shop's Sounds tab if that is what you heard.)
+- **The see-through chunks in Sky Pools and Hill House (118)**: Roblox draws see-through things back to front by their
+  middles, so the huge see-through cloud puffs, their undersides and Hill House's mist sheets, whose middles were
+  nearer, were drawn over the honey, slime and soda and hid them. The clouds and their undersides are solid now; the
+  mist is one solid sheet far below with the drifting mist made by emitters; and honey and slime (and the honey's
+  strings, the slime's gobs and the jelly's bits) are SmoothPlastic rather than Glass, which vanished against a bright
+  sky.
+- **Grass in the house (118)**: the terrain's grass grew up through the hall's floorboards and the path. Under the
+  house, the garden path and the step the ground is bare now (Ground), and it goes when the level does.
+- **Hill House beside level 4 (118)**: the lobby's pads are in the levels' own numbers (Hill House is the fifth pad, by
+  the Flooded Halls, and opens last there), while the story still plays it first: `LevelDefinitions.Story` is the
+  story's order, the story's card names the right level next, and a save's place in the story is counted along it.
+- **One speech bubble (119)**: what you can say is in the same bubble as what people say (`Style.BUBBLE`: the cream,
+  the ink, the letters, the rim, yours rimmed in gold), with a tail, popping in; who you are talking to sits over them
+  in a pill. Everyone tells a line with their body (a nod, a shrug, a point, hands as they talk), and your own lines are
+  told the same way on everyone's screen; a player's gesture moves only the joints it uses, so your walk is never
+  stiffened by it.
+- **Your character, all the time (120)**: `PlayerLife.lua`, new. Your head turns toward where the camera looks (up to
+  70 degrees, the waist taking a little), and comes back to the front rather than twisting when you look behind you.
+  Standing still for four seconds, now and then a fidget: looking round, shifting your weight, thinking. Never over a
+  gesture, an emote, a seat, the flume, the water or a scene of yours. **In Hill House's hall**: you walk to the key,
+  your hand goes up and it leaves its hook as your hand reaches it, it is in your hand, and you walk out of the open door
+  with it, the last shot following you.
+- **The thing in the back rooms (121)**: one stiff block jumped along a few times a second before, his seam left behind
+  when his head twitched. Now every limb is on a joint (the stoop and the bow in the joints' rests), the seam is welded
+  to his face, the server moves him smoothly, and every screen draws him walking (`StalkerClient.lua`, new): long slow
+  strides on legs like poles, the knees bending the wrong way as each leg comes through, his hips dropping and swaying,
+  a heavy soft thud at every step; arms hanging past his knees, swinging late and loose, and reaching out at you when he
+  rushes; his head bowed and lolling, now and then snapping to another angle for a moment, and when you can see him,
+  turning toward you in stiff jerks, up to 150 degrees round; when he stops, his head tips slowly over, too far.
+- **The shop (122)**: the tabs' outlines were cut along the top and on the left by the strip they scroll in. The strip
+  has room inside it all round now (TAB_ROOM), measured by the checker against how far the widest tab grows when it is
+  chosen, and the grid has room round its tiles the same way (TILE_ROOM). Each tab is a chunky key in its own colour,
+  with its own little drawing on a white disc (a star, footprints, a trail, sound bars, a ring, a figure, a ticket, a
+  coin, a swatch), on a lip of a deeper shade that it sinks into when pressed; the chosen one deeper still, white
+  lettered, lifted and bounced; under the pointer they lift a little. A tab's colour runs through everything in it: its
+  tiles washed pale in it and outlined and lettered in deeper shades of the same colour (its hue kept, never greyed; the
+  checker measures every tab's words for contrast), the scroll bar, the "i" card, the confirm card and the toast. The
+  tiles sit on a pale tray over the background, each a card on a lip: lifting under the pointer with its icon swelling,
+  sinking under a press, and popping in one after another when a tab opens (not when the server's answer draws the
+  grid again). The rare backgrounds (epic and up) and what is sold for Robux have a white gleam running round their
+  outline. The pack with the most tokens for each Robux says **Best value** (worked out from the catalogue, never
+  written in). Your tokens count up or down with the difference rising off the wallet; beside them, on a wide screen,
+  how many of the tab are yours, with a bar. The dark behind the shop fades in and out, the confirm card swings in, the
+  X turns under the pointer, and choosing a tab or buying something puffs a little of the background's material
+  (`ShopLook.puff`).
+
+**Checked**: `check_skypools.py` (the clouds and their undersides solid); `check_hillhouse.py` (the mist one solid
+sheet, the ground bare under the house and the path and gone with the level, Hill House fifth in the lobby and first in
+the story); `check_hub.py` (the lobby's pads in the levels' order, the story's own list not taken for a level); the
+chunk looks (honey and slime off Glass); `check_story.py` (one bubble, the gestures, your character's life and the key
+scene); `check_shots.py` (Hill House's last shot follows you out); `check_backrooms.py` (jointed, smooth, the seam on
+his face, drawn walking on every screen: the stride, the wrong-way knees, the reach, the head, the thud);
+`check_shop.py` (the room round the tabs and the tiles measured, the colours measured, the lips, the tray, the popping
+in, the gleams, the best value, the counting). `pass118.py` 18 of 18, `pass119.py` 14 of 14, `pass120.py` 21 of 21,
+`pass121.py` 21 of 21, `pass122.py` 43 of 43. The full run after it: 115 suites, 2140 of 2140 caught, src put back
+byte for byte. (pass09's write failed for a moment on `blender/gen_serpent.py` and left its planted bug there, which the
+runner did not guard; it was put back by hand, the eleven suites it held up run again clean, and `run_all.py` now keeps
+and puts back the Blender scripts, their measurements and the sound generators as well as src.)
+
+## Before you test in Studio (passes 117 to 122)
+
+**Paste**
+1. The Luau: if you pasted `passes_114_116`, these 21 are all that changed since. **New**: `PlayerLife` and
+   `StalkerClient` (StarterPlayerScripts/Services, ModuleScripts). **Changed**: Shared `LevelDefinitions`,
+   `MaterialAppearance`, `Poses`, `Style`; Server `Bootstrap`, and Services `BackRoomsService`, `EconomyService`,
+   `HillHouseService`, `SkyPoolsService`, `Townsfolk`; Client `Bootstrap`, and Services `DeformationRenderer`,
+   `EmoteService`, `HillHouseClient`, `LobbyLife`, `ShopLook`, `ShopService`, `StoryClient`, `TalkClient`.
+   `python tools/paste_list.py` lists everything since your last `--mark` (all of 93 to 122); then `--mark`.
+
+**Import (UPLOADS: none)**
+
+**Then play**
+2. The lobby: walk through the fountain's bubbles (silent), tap one (a pop); Hill House is the fifth pad, by the Flooded
+   Halls. Stand still a few seconds (a fidget) and turn the camera (your head follows). Talk to anyone: your choices in
+   the same cream bubble, everyone gesturing as they speak.
+3. The shop: every tab whole at its edges, its colour through its tiles, the tiles popping in; hover and press a tile
+   and a tab; open a crate or buy something cheap (your tokens counting down, the material's puff).
+4. Sky Pools and Hill House: the honey, slime and soda seen from every side; no grass in the hall; take the key and
+   walk out with it.
+5. The back rooms (the seventh fall in one run, or the lobby's back corridor): watch him walk, rush and stop.
+
+## Fixed from your Studio log (2026-10-21): the font weight
+
+"Black is not a valid member of Enum.FontWeight" (Style:32), and with it every script that needs Style (ChunkBuilder,
+UIService, the client Bootstrap) failed to load. Roblox has no weight called Black; its heaviest is **Heavy**, and Style
+says Heavy now (it had been wrong since the hundred-and-second pass, when every word became Nunito). Nothing else
+changed. The checks missed it because a wrong enum name still parses: `check_luau_syntax.py` now also holds every
+`Enum.X.Y` in the game to Roblox's own lists (`blender/roblox_enums.py`), and every other one in the game is right.
+`pass117.py` 6 of 6.
+
+**Paste**: `src/Shared/Style.lua` (ReplicatedStorage/Shared/Style) and `src/Server/Bootstrap.server.lua` (its stamp
+for Style). No uploads.
+
+## Clocking in, and his face (hundred-and-fourteenth to sixteenth passes, 2026-10-21)
+
+The true ending you chose with the plot on 2026-10-20 ("You are Marsh's child": clocking in, and the Watcher given his
+face back). How it is done is mine **(suggested)**. Not played yet. Storyboards: `blender/shots_clock.png` (clocking
+in) and `blender/shots_true.png` (the ending).
+
+- **The time clock (114)**: beside Mr Barlow on the gangway to the flume, a cast-iron recorder on its own pillar, its
+  hands at three minutes to midnight, a brass lever, and the card rack on its side with one card left in it: yours,
+  NOT CLOCKED IN. **"Clock in"** takes it only once you know what it cost your father (the clue Mr Barlow gives when
+  you ask him "Tell me about my father", which needs Mr Wick's "Why are you looking at me like that?" first). Too soon,
+  Mr Barlow tells you: "Not yet. You'd want to know whose shift you're taking first. Mr Wick on the pier knew him." (or,
+  once you know whose child you are, "Ask me about him first. Then sign."). Clocked in: a short scene on your screen
+  (your card into the slot, a soft heavy punch, CLOCKED IN; then you and Mr Barlow, "Clocked in. 14 August. Three
+  minutes to midnight. On shift."), he says "There. That's all the job is. Go and open them. Then come back up.", and
+  a note goes in your journal (**Clocked in**). It lasts for this level only: every level starts with nobody clocked in.
+- **His face (115)**: clocked in, the gates end differently, sixteen seconds longer. After midnight, someone walks up
+  Outfall 3 out of the daylight ("Someone is walking up out of the morning."). Edwin Marsh, in the Watcher's dark
+  clothes with his own face, the green ribbon at his neck ("Key holder, 1979. He has his face back."), and a chord that
+  carries the Flooded Halls' own home. He stops at the gate and waves; you wave back ("He waved to you from the dive
+  board, the night he went down. You wave back."). He turns and goes back into the light until he is gone: "15 August.
+  The tide went out, and the day ended." On your screen only: every other screen and every other ending never shows
+  him (he stands in the outfall behind the shut gate, hidden).
+- **What it gives (116)**: once a save, 300 tokens (the 2x pass doubles them), the **KEY HOLDER plaque** over your head
+  in the lobby and the squish room for everyone to see (the key's green, a brass rim and a small brass key; over the VIP
+  tag if you have both; put away on a level), and its badge; and from then on his ledge on the Deco tower is empty on
+  your screen. The token pill says "The true ending".
+- **To test quickly**: the test panel (F8) has **Know the whole story** (every clue, so the clock takes your card at
+  once) and **True ending on/off** (the plaque, and his ledge on your next Sunken City).
+
+**Checked**: a new, nineteenth checker, `check_trueending.py` (the clock on the deck clear of the far rail and of the
+way to the flume; earned and pointed to; clocked in for one level; the card punched; the note; Edwin Marsh inside
+Outfall 3 facing the room, hidden from every screen but the clocked in rider's, given the time and waiting for it; the
+beats in order and inside that time; he stops outside the room, waves, goes back up the outfall; 15 August; the
+chord; once a save, the plaque, the Watcher gone, the test panel); `check_shots.py` (the two clocking in shots and the
+four of the ending, frame by frame: the first framings of both clocking in shots and of the last shot of the ending
+lost you under a bar, and were moved); `check_audio.py` (ClockPunch and MorningChord made, at their level);
+`check_story.py` (he says nothing); `check_shop.py` (the true ending's tokens are the one new place tokens are paid).
+`pass114.py` 24 of 24, `pass115.py` 31 of 31, `pass116.py` 29 of 29.
+
+## Before you test in Studio (passes 114 to 116)
+
+**Paste**
+1. The Luau: `python tools/paste_list.py` lists it (StoryService, Townsfolk, Conversations, FloodedHallsService,
+   FloodedHallsClient, EconomyService, ShopCatalog, ShopService, StoryClient, DevPanelClient and Bootstrap changed;
+   nothing new). Then `--mark`.
+
+**Import (UPLOADS: 2 sounds)**
+2. **SoundService.StorySounds**: ClockPunch and MorningChord from `audio/endings/`.
+
+**Make (optional)**
+3. A badge for the true ending (Creator Dashboard, Engagement, Badges), its id in `ShopCatalog.BADGES.trueEnding`.
+
+**Then play**
+4. The Flooded Halls: press **Know the whole story** on the test panel (or ask Mr Wick and Mr Barlow), clock in at the
+   time clock beside Mr Barlow, ride the flume, and watch the gates to the end. Back in the lobby: the plaque over
+   your head, and 300 tokens.
+
+## Mr Gale and Mrs Dunn (hundred-and-thirteenth pass, 2026-10-21)
+
+Hill House's people, at eight in the morning, before any of it. Who they are and what they say is mine
+**(suggested)**; `LORE.md` has them under The people. Not played yet. Where they stand: `blender/plan_hillhouse.png`.
+
+- **Mr Gale**, the milkman, meets you at the top of the climb: on the landing, on the far side from the way over to
+  the footbridge (never in it), his wire crate of milk at his feet and an empty bottle in his hand, in his white coat
+  and cap. Two pints on the step every morning, "same as when he was here"; the tide still in; the paper says you are
+  key holder for Outfall 3 and the station wants you by nine; the key on its hook where it always was; mind the
+  bridge, it bounces.
+- **Mrs Dunn**, the postwoman, inside the garden gate beside the path, in her navy with her red bag and the morning's
+  letters: nothing for you but the paper, and your name is on its front; thirty years on this hill; Sal's card came
+  yesterday; nobody writes to Hill House now.
+- **What you can ask them**: Mr Gale, why he still brings the milk ("Two pints. One for him and one for the little
+  one."), what the station wants you for, and then why the big clock stopped, which gives a new note for your journal,
+  **His clock**. Mrs Dunn, what the paper says about you and why the door is green (the ribbon's green, so a key
+  holder's door could be found in the dark). Once you know whose child you are (Mr Wick, in the Sunken City), each has
+  one more thing on a later visit: the second pint was for you; and she saw you on the sea wall every evening.
+- Both greet you as you come near, tell every line with a gesture, and have their own voice and their own look, as
+  everyone in Harrow Bay does. Both know about the key, so the story's thread is heard on Hill House whoever you talk to.
+
+**Checked**: `check_story.py` (Hill House's two stood up with lines, gestures, voices and looks, both knowing about
+the key; their topics followable, the new clue with its note; the hall's captions read for dashes now too);
+`check_hillhouse.py` (Mr Gale on the landing in from its edges, on the far side from the bridge and at least four studs
+off the way from the top of the climb to the bridge; Mrs Dunn off the path and its lamb's ear, and out of the
+gateway; both stood up when the house is built). `pass113.py` 17 of 17.
+
+## Before you test in Studio (pass 113)
+
+**Paste**
+1. The Luau: `python tools/paste_list.py` lists it (Townsfolk, Conversations and HillHouseService changed; nothing
+   new). Then `--mark`.
+
+**Import (UPLOADS: none)**
+
+**Then play**
+2. Hill House: talk to Mr Gale at the top of the climb (F) and to Mrs Dunn inside the gate; ask Mr Gale why he brings
+   the milk, then about the clock, and look for **His clock** in your journal.
+
+## His key and his clock (hundred-and-twelfth pass, 2026-10-21)
+
+Hill House's hall, as `LORE.md` has it: his clock stopped since 1979, his coat on the hook, the key on its green ribbon
+by the door. How it is done is mine **(suggested)**. Not played yet. A storyboard of the scene: `blender/shots_hill.png`.
+
+- **"Go in"** at his door swings it open now, and that is all it does: the level ends inside.
+- **The hall**: floorboards on the plinth and a long red rug, a dado rail round the walls, the hall table with its lamp
+  lit (a soft warm light) and a photograph, and the morning sun through the side window, a slant of light across the
+  floor with dust turning in it. His coat and his cap on the hooks to the left of the door, as he left them. His
+  longcase clock against the right-hand wall, its hands at four minutes to midnight, its pendulum still behind the
+  glass of its trunk. And on its own brass hook to the right of the door, the key on its green ribbon.
+- **"Take the key"** (hold it a moment) stands you in front of the hook and plays a scene on your screen, three shots:
+  beside you as the key comes off its hook ("His key, on its green ribbon. Where you left it last night."); his clock,
+  all of it, and a beat in, its pendulum starts and it ticks ("Four minutes to midnight since 1979. It is going
+  again."); then from the back of the hall, you by the open door with the morning behind you. Then the banner, and
+  the lobby once it has been watched, as every level's ending is. The key is gone from its hook on your screen, and the
+  pendulum goes on swinging for as long as the house stands.
+- **Two sounds of its own** (`audio/gen_hall_sfx.py`): KeyLift (the ribbon's soft brush and the key touching its hook
+  once) and ClockStart (the movement freed with a wooden knock, then tick, tock, a second apart, fading as it goes on).
+  Both have a quiet stand-in: without them the scene plays silent.
+
+**Checked**: `check_hillhouse.py` (the door ends nothing now; the key does, once a player, after its scene has been
+asked for; his clock at 11:56; everything the scene reads is set, by the names it reads, with the pendulum swung from
+where the server hangs it; the hall's lights soft; the remote, the client and its sounds wired and made);
+`check_shots.py` (the three shots, frame by frame as the camera sees them: you in the picture and the size each shot
+means, the clock's face and its pendulum both in its shot; the first framing lost your head under the top bar and was
+pulled back); `check_audio.py` (the two sounds made, at their level, soft enough). `pass112.py` 23 of 23.
+
+## Before you test in Studio (pass 112)
+
+**Paste**
+1. The Luau: `python tools/paste_list.py` lists it. New: **HillHouseClient** (a ModuleScript in
+   StarterPlayerScripts/Services). Then `--mark`.
+
+**Import (UPLOADS: 2 sounds)**
+2. **SoundService.StorySounds**: KeyLift and ClockStart from `audio/endings/`.
+
+**Then play**
+3. Hill House: "Go in" at the door, walk to the hook right of the door, "Take the key", and watch.
+
+## Hill House (hundred-and-eleventh pass, 2026-10-21)
+
+You chose it (`ROADMAP.md` section 8, item 7; `LORE.md`, level 5): your father's house on the hill at eight in the
+morning, before any of it. This pass is the outside; the hall (his clock, his coat, the key, you deciding) is the next.
+How it is done is mine **(suggested)**. Not played yet. A picture from above: `blender/plan_hillhouse.png`.
+
+- **First in the story's clock**: Hill House comes before City Shore in the story and in the lobby's row of pads, so
+  it is the first level everyone plays and finishing it opens City Shore. A save that has City Shore finished keeps
+  it open. **One thing to know**: a story save from before this pass is one level behind where it was (its place
+  counts from Hill House now); in Studio, the test panel's "Story from the start" puts it back at Hill House.
+- **The climb**: the usual spiral, 24 chunks of a house and garden's things (honey, butter, a biscuit, lamb's ear,
+  the clay of the pots, his bed, the landing's light switches, the bathroom's soap, a parcel), rising out of the
+  morning mist that lies over the town. A fall goes down into the mist.
+- **The end of it**: a stone landing at the route's end and a footbridge (braced off the rock) across to the top of a
+  crag of real ground standing out of the mist beside the spiral, never near it. On the top: a picket fence round the
+  edge with the gate open where the bridge comes in, the house's name on the gatepost, stepping stones through lamb's
+  ear to the door, an apple tree, a bench looking out to sea. The house: two storeys of white render on a brick plinth,
+  sash windows, a slate roof and a chimney, his green front door under a little porch, a brass knocker, two pints of
+  milk on the step and the morning's paper on the mat. **"Go in"** at the door, it swings in, and you have finished.
+- **Out in the mist**: St Brigid's on its own hill, and the top of the Deco tower over the town.
+- **Its light, its sound, its words**: eight in the morning, the sun low and warm; a bed of its own (a breeze through
+  the grass and the apple tree, the sea far under the mist, now and then a wood pigeon, low and slow) with the Hold's
+  drone faint under it; "Hill House, Harrow Bay. 14 August. Eight in the morning. The day you are meant to clock in.";
+  four things to read on the way up: the dairy's milk order on his account, the morning paper naming you key holder,
+  a postcard from Sal ("See you on the sea wall at nine. I'll bring a cone."), and his name on the gatepost.
+- Its pad in the lobby (the first in the arc, which is wider now for seven), its banner ("You stood at his door", a
+  door opening onto warm light), its badge.
+
+**Checked**: a new, eighteenth checker, `check_hillhouse.py` (first in the story at eight, ending at the house, its
+light, banner, pad and badge; the crag pushed out until its edge is 26 studs outside the route's circle with its rocks
+on the far side only, nothing going down through the spiral, the footbridge a short walk braced off the crag, the house
+and garden inside the fence, the mist under the route; built, the old finish line stood down, taken down before the
+next level and when it goes, its ground cleared; the door's prompt, swinging in, ending once; no Neon);
+`check_story.py` (four things to read and a bed of its own on every level now, Hill House's included);
+`check_hub.py` (seven pads in the arc). `pass111.py` 33 of 33.
+
+## Before you test in Studio (pass 111)
+
+**Paste**
+1. The Luau: `python tools/paste_list.py` lists it. New: **HillHouseService** (a ModuleScript in
+   ServerScriptService/Services). Then `--mark`.
+
+**Import (UPLOADS: 1 sound)**
+2. **SoundService.AmbienceSounds**: HillMorning from `audio/ambience/`.
+
+**Then play**
+3. Vote for Hill House (the first pad): climb out of the mist, look for the crag and the house as you near the top,
+   cross the footbridge, walk up the garden and "Go in".
+4. The story: it starts at Hill House now.
+
+## The cookie (hundred-and-tenth pass, 2026-10-21)
+
+You: "Add a cookie chunk yk." (`ROADMAP.md` section 9, item 10.) How it is done is mine **(suggested)**. Not played
+yet.
+
+- **A twenty-eighth material, Cookie**: a giant round biscuit, twenty studs across, with a bite out of one side (away
+  from the way in and the way out), golden and matte, with chocolate chips pressed into its top.
+- **Built of crumbs**, like the soap bar (the cubes are the floor), so it really breaks up under you. A cookie is dry
+  and crisp where soap is waxy: your first step on a part of it **cracks** it, lines running out from your foot; every
+  step after runs the cracks on; then it **crumbles** a crumb at a time, the cracked top pieces falling out first, the
+  crumbs dropping (not drifting up like soap's flakes) and rolling where they land, chips and all, until you drop
+  through. It gives way a little sooner than soap, and it is not slippery.
+- **Its own crunch** (`cookieCrunch_x4`, one upload): a crisp break, often in two, a dry thud under it and crumbs
+  skittering off. Until it is imported, the chocolate bar's snap stands in.
+- **Where it is**: City Shore and Sky Pools, and first in the sandbox (the level Studio loads), so you meet it as you
+  spawn. Its keepsake, a biscuit from the Promenade Hotel's tea room ("somebody had taken one bite and put it back on
+  the plate"), goes on the squish room's shelf, which is ten cubbies across now (room for two more). It is in the
+  materials collection, the swatch and the lobby's board, with its first-time hint.
+
+**Checked**: `check_chunk_forms.py` (the cookie built of crumbs, its chips in the top layer only, dark, neither too many
+nor tall enough to trip on, one round cookie, cracking then crumbling at its own pace with its own crumbs and dust, its
+crunch, in the three levels and the sandbox's count), `check_plan_shapes.py` (its outline walked: it meets its
+neighbours eight studs wide), `check_story.py` (its keepsake), `check_squishroom.py` (the shelf), `check_audio.py`
+(its sheet). `pass110.py` 28 of 28.
+
+**The full run after it**: 103 suites, and src put back byte for byte. One older suite stopped on a line the cookie had changed (the shelf, ten cubbies across now); moved onto it and run again: 1860 of 1860 planted bugs caught.
+
+## Before you test in Studio (pass 110)
+
+**Paste**
+1. The Luau: `python tools/paste_list.py` (with 105 to 109's if you have not pasted those yet). Then `--mark`.
+
+**Import (UPLOADS: 1 sound)**
+2. **SoundService.MaterialSounds**: `cookieCrunch_x4` from `audio/sheets/`.
+
+**Then play**
+3. The sandbox: you spawn facing the cookie. Walk onto it, stand still on one spot and watch it crack and crumble,
+   walk round the bite, and listen.
+4. The squish room: the cookie's slab, and its keepsake's cubby on the shelf.
+
+## The shop, the trails, the arches and the lobby (hundred-and-fifth to hundred-and-ninth passes, 2026-10-20 and 21)
+
+The next four things from your notes of 2026-10-20 (`ROADMAP.md` section 9, items 5 to 8). How each is done is mine
+**(suggested)** unless marked. Not played yet. What to paste and import is **Before you test in Studio (passes 105 to
+109)**, below.
+
+### The shop's look (the hundred-and-fifth pass, `Client/Services/ShopLook.lua`)
+
+- **A material behind it** (you: "stylistically connect the shop UI ... with the rest of the level"): the shop's panel
+  stands on one of the game's materials, drawn from shapes alone (no images to upload): cookie with its chips, soap
+  with bubbles rising, ice with frost, honey dripping, slime and jelly wobbling, kinetic sand with a footprint or two,
+  clouds drifting, bubble wrap, lava's glowing cracks, the back rooms' wallpaper under a failing tube (and now and then
+  something tall crossing far behind), and the Hold. It opens on cookie, soap or ice at random (you: "a random
+  background of set defaults"), or on the one you have on.
+- **A press on the background answers** (you: "crack if it's ice, or sparkle if it's lava, or crumble if it's soap"):
+  crumbs, flakes, cracks running out, a drip, a splat, a pop, sparks, the light failing, ripples; each with that
+  material's own sound (your soap recording for soap). A press on a button or a tile does not.
+- **The cursor, with a mouse** (you: "the mouse icon ... a cookie that crumbles"): a cookie, losing a bite and a shower
+  of crumbs at every click, whole again after five. Not on a touch screen, where it would sit under your finger.
+- **Every tab its own colour and sound** (you: "the colors need variety", "different sounds when you switch"):
+  Featured a sparkle of notes, Steps two footfalls, Trails a swish, Sounds a squeak toy, Auras a bell's shimmer,
+  Emotes a rubber boing, Passes a ticket stamped, Tokens coins, Backgrounds paper unrolling.
+- **Opening and closing** (you: "a unique little animation and a unique sound"): it squashes up out of nothing, a
+  little past full size and turned, and settles, with a sweet jar's lid popping off and a burst of its material;
+  closing, it squeezes and drops away turning, with the lid going back on.
+
+### Backgrounds and their crate (the hundred-and-sixth pass)
+
+- **Nine to collect** (you chose token crates and Robux mythics): Honey, Slime and Kinetic sand (common), Jelly and
+  Bubble wrap (rare), Cloud and Lava (epic), the Back rooms (legendary), and the Hold (mythic, a Robux pass). Their
+  own tab, each tile with its rarity on a pill; tap one to try it behind the shop.
+- **The crate**: 250 tokens, **always a background you do not have yet**. Common 60%, rare 25%, epic 11%, legendary 4%;
+  once you have every one of a rarity, the others share its chance, and the card says your odds before you pay. Rolled
+  by the server, never your screen. It shakes harder and harder while the server rolls it, throws its lid, and what
+  came out bursts out of it in its own material and goes behind the shop: light turning behind it for an epic one and
+  up, a flash for a legendary or the mythic, a sound for each rarity; then "Put it on" or "Later".
+- **Found while building it (Roblox's rules):** a crate opened with tokens that Robux can buy is a *paid random item*,
+  and Roblox requires games to keep those from players where they are restricted. The server asks Roblox's policy for
+  each player on joining (`PolicyService`) and offers the crates only where it says yes; where it says no, or does not
+  answer, the crate's tile says "Not here". In Studio they are offered anyway, with a warning in Output, so you can
+  test them.
+- **The Hold** needs its game pass made (below); bought, it is unboxed on the spot like a crate.
+
+### Trails and auras (the hundred-and-seventh pass)
+
+You: "less wide", "more specific effects, not just a line that fades out", auras "more pronounced". A trail was one
+ribbon two studs tall; now each is thin strands (a quarter of a stud or so), each moved its own way about you on every
+screen:
+- **Soap suds** two threads twisting round each other; **Honey** one thick thread sagging; **Slime** a wobbling string
+  and a darker one out of step; **Cloud** three faint wisps; the **Green ribbon** fluttering in a figure of eight; **Sea
+  glass** two glassy threads turning, one glinting all along; the **Swatch** five threads one over another, every
+  material's colour, rippling; **Lava** a white-hot thread crackling inside a dull red heat; **Jelly** two threads
+  hopping; **Sprinkles** a pink, blue and yellow candy stripe.
+- **Auras with a ring or a halo**: bubbles round your feet (Bubbles), a smouldering ring of coals turning the other way
+  (Embers), a circle of frost (Snowfall), a crown of gold over your head (Gold sparkle, which comes with VIP), a halo
+  of little stars (Starlight).
+
+### Sky Pools' arches (the hundred-and-eighth pass)
+
+You: "glowing or making these cool sparkling effects and kind of like shake my camera a little". On the way down, each
+hoop over the slide starts to glow as you come toward it (a small real light in its crown); passing under it, it
+flares, its hoop flashes pale, sparkles in its own colours burst off it, the air of it rushes past (a new sound,
+ArchPass, a little different each arch) and the picture gives a small shake. It keeps a soft glow behind you, and all
+of it fades out at the bottom.
+
+### The lobby's look and feel (the hundred-and-ninth pass)
+
+You: "greatly improve the vibe and aesthetics of the lobby". Picture: `blender/plan_lobby.png`.
+- **Each place its own colours**, its floor and the band round it: warm stone round the fountain, the sea's green at
+  the level gates, old gold in the hall of fame, candy pink in the arcade, the lawn in the garden. Mid tones, so the
+  pads and stalls still stand out.
+- **Festoons over every walk**: two strings criss-crossing corner to corner, warm bulbs and pastel bunting by turns,
+  hung from four iron poles on the walk, high over your head. Every fourth bulb is a small real light.
+- **On your screen only**: soap bubbles drifting up off the fountain on the breeze, wobbling and shimmering; walk into
+  one or tap it and it pops, with the bubble wrap's soft pop. Gulls wheeling slowly round the promenade, gliding, now
+  and then beating their wings. Fireflies blinking over the garden.
+
+**Checked**: `check_shop.py` (every theme drawn and answering, the defaults, the tabs; the backgrounds against
+ShopLook's themes, the crate's odds whole and never the mythic, always one you lack, rolled on the server, opened never
+bought, the policy asked and obeyed, the odds said first; the trails' strands thin and moving by motions the client
+knows; the rings within their limit), `check_audio.py` (the shop's sounds at their level, their slots the generator's,
+a reveal for each rarity, ArchPass), `check_skypools.py` (the arches lit, passed, sparkling, heard, shaking, put
+away, lit in small steps), `check_hub.py` (each place's colours, the festoons held at both ends and over your head, the
+bubbles, gulls and fireflies only in the lobby and within their limits). `pass105.py` 31 of 31, `pass106.py` 33 of 33,
+`pass107.py` 15 of 15, `pass108.py` 16 of 16, `pass109.py` 26 of 26.
+
+**The full run after them**: 102 suites, and src put back byte for byte. Four older suites stopped before the end, each on a line these passes had changed under it (the paste check's Robux list, the Featured row, the shop's list of actions, and two of the ninety-seventh's lines now matching the new rings as well); each was moved onto the code as it is and run again: 1832 of 1832 planted bugs caught.
+
+## Before you test in Studio (passes 105 to 109)
+
+**Paste**
+1. **The Luau**: `python tools/paste_list.py` lists them. New: **ShopLook** and **LobbyLife** (ModuleScripts in
+   StarterPlayerScripts/Services). Then `python tools/paste_list.py --mark`.
+
+**Import (UPLOADS: 7 sounds)**
+2. **SoundService.ShopSounds** (a new Folder): the six files in `audio/shop/` (CookieCrunch_x4, CrateReveal_x5,
+   CrateShake, ShopClose, ShopOpen, ShopTab_x9).
+3. **SoundService.StorySounds**: ArchPass from `audio/endings/`.
+
+**The Hold's game pass**
+4. On the Creator Dashboard (the game, Monetization, Passes) make a pass for **The Hold** (I suggest 399 Robux), and put
+   its id in `Shared/ShopCatalog.lua` at `BgHold`'s `passId = 0`. Until then it shows as not on sale yet, and the
+   PASTE CHECK lists it.
+
+**Then play**
+5. **PASTE CHECK** names anything missing.
+6. **The shop**: open and close it a few times (a different background each time), press its background, click with
+   the mouse and watch the cookie, change tabs. With the Studio tokens, open crates in the Backgrounds tab, put one on,
+   close and open the shop.
+7. **Trails and auras**: try each on in the shop and walk about behind the shop; look at Bubbles, Embers, Snowfall,
+   Gold sparkle and Starlight.
+8. **Sky Pools**: ride the slide and watch the arches.
+9. **The lobby**: walk the boardwalks; pop the fountain's bubbles by walking into them and by clicking or tapping.
+10. **The Self-test (F8)**, here and in the Device Emulator on a phone (the crate's card and the shop on a small screen).
 
 ## Your notes of 2026-10-20 (hundred-and-first to hundred-and-fourth passes)
 

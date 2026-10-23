@@ -231,6 +231,18 @@ def check_pads_are_reachable():
         fail("HubService", "a level pad's window is not glass with a real light behind it")
     if "shine.Brightness = if not open then 0 elseif on then 1.1 else 0.45" not in text:
         fail("HubService", "a level pad's window light does not go out behind the boards, or brighten when chosen")
+    # A POSTCARD OF THE PLACE (the hundred-and-thirty-sixth pass, from your test: "I wanna further improve the lobby"):
+    # tinted glass over the dark read as a black slab; each window carries a picture of its level, and every level's
+    # backdrop has one drawn; dimmed behind the boards, brighter when chosen.
+    if 'postcard(window, level.backdrop or "none", look)' not in text:
+        fail("HubService", "the level windows are blank glass")
+    looks = re.findall(r"^\t(\w+) = \{\n\t\tsky = ", text[text.find("local THEME_LOOKS = {"):text.find("local function themeLook(")], re.M)
+    pictured = set(re.findall(r'backdrop == "(\w+)"', text[text.find("local function postcard("):text.find("local function makeLevelPad(")]))
+    for name in looks:
+        if name != "none" and name not in pictured:
+            fail("HubService", "the %s window has no picture of its place" % name)
+    if "veil.BackgroundTransparency = if open then 1 else 0.5" not in text:
+        fail("HubService", "a locked level's picture is as bright as an open one")
 
     # ON PIERS DOWN INTO THE SEA, the sea where the piers end.
     for needle, why in (
@@ -342,7 +354,7 @@ def check_level_fields():
     blocks = {}
     for match in re.finditer(r"LevelDefinitions\.(\w+) = \{(.*?)\n\}", text, re.S):
         name, body = match.group(1), match.group(2)
-        if name in ("All", "ById"):
+        if name in ("All", "ById", "Story"):
             continue
         blocks[name] = set(re.findall(r"^\t(\w+) =", body, re.M))
 
@@ -1103,7 +1115,7 @@ def check_story_mode():
         fail("Bootstrap", "the kill plane takes a story player being moved for a fall")
     if "\tstoryLeave(player)\n\tstoryMoving[player] = nil\n" not in boot:
         fail("Bootstrap", "a story player who left during a move is kept")
-    if ("if run.index >= #LevelDefinitions.All then\n\t\tstoryRun = nil\n\t\tfor player in pairs(run.players) do\n"
+    if ("if run.index >= #LevelDefinitions.Story then\n\t\tstoryRun = nil\n\t\tfor player in pairs(run.players) do\n"
             "\t\t\tif player.Parent == Players and HubService.isInRun(player) then\n\t\t\t\tHubService.returnToHub(player)") not in nxt:
         fail("Bootstrap", "the end of a story does not send everyone home")
     step = within(boot, "local function storyStep(", "\nend\n")
@@ -1138,9 +1150,10 @@ def check_story_mode():
 
     for needle, why in (
         ("StoryAt = 1,", "a new save has no place in the story"),
-        ("return math.clamp(math.floor(at or 1), 1, #LevelDefinitions.All)", "a story's saved place can be out of range"),
-        ("profile.Data.StoryAt = math.clamp(math.floor(index), 1, #LevelDefinitions.All)", "a story's place is not saved (or out of range)"),
-        ('elseif action == "storyStart" then\n\t\t-- The story from City Shore again', "the test panel cannot start the story again"),
+        ("return math.clamp(math.floor(at or 1), 1, #LevelDefinitions.Story)", "a story's saved place can be out of range"),
+        ("profile.Data.StoryAt = math.clamp(math.floor(index), 1, #LevelDefinitions.Story)", "a story's place is not saved (or out of range)"),
+        ('elseif action == "storyStart" then\n\t\t-- The story from the start again next time, Hill House since the hundred-and-eleventh pass (its place put back).\n\t\tdata.StoryAt = 1',
+         "the test panel cannot start the story again"),
     ):
         if needle not in economy:
             fail("EconomyService", why)
@@ -1303,7 +1316,126 @@ def check_post_box():
         fail("ShopService", "the post box's prompt opens nothing")
 
 
+def check_lobby_life():
+    """THE LOBBY'S LOOK AND FEEL (the hundred-and-ninth pass): each place its own floor colours; festoons over every
+    walk, held at both ends by poles on the walk and clear over your head, lit in small steps, never Neon; and on
+    your own screen, bubbles to pop, gulls and fireflies, only in the lobby, within their limits."""
+    hub = read(HUB_SERVICE)
+    layout = read(os.path.join(ROOT, "src", "Shared", "LobbyLayout.lua"))
+    life_path = os.path.join(ROOT, "src", "Client", "Services", "LobbyLife.lua")
+    life = read(life_path) if os.path.exists(life_path) else ""
+    client_boot = read(os.path.join(ROOT, "src", "Client", "Bootstrap.client.lua"))
+    zones_at = layout.find("LobbyLayout.ZONES = {")
+    zones_block = layout[zones_at:layout.find("\n}", zones_at)] if zones_at >= 0 else ""
+    zones = {}
+    for m in re.finditer(r"^\t(\w+) = \{ inlay = Color3\.fromRGB\((\d+), (\d+), (\d+)\), "
+                         r"trim = Color3\.fromRGB\((\d+), (\d+), (\d+)\) \}", zones_block, re.M):
+        values = [int(v) for v in m.groups()[1:]]
+        zones[m.group(1)] = (values[:3], values[3:])
+    decks_block = layout[layout.find("LobbyLayout.DECKS = {"):layout.find("LobbyLayout.WALKS = {")]
+    for deck in re.findall(r"^\t(\w+) = \{ x = ", decks_block, re.M):
+        if deck not in zones:
+            fail("LobbyLayout", "the %s deck has no colours of its own (ZONES)" % deck)
+
+    def luma(c):
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+
+    for name, (inlay, trim) in zones.items():
+        if luma(trim) <= luma(inlay) + 20:
+            fail("LobbyLayout", "the %s deck's band is not lighter than its inlay, so it has no edge" % name)
+        if luma(inlay) > 175:
+            fail("LobbyLayout", "the %s deck's inlay is too pale for its pads and stalls to stand out on" % name)
+    if len({tuple(inlay) for inlay, _ in zones.values()}) < len(zones):
+        fail("LobbyLayout", "two places share a floor colour")
+    for needle, why in (
+        ("inlay.Color = if zone then zone.inlay else PALETTE.inlay", "the decks' inlays are not each place's colour"),
+        ("trim.Color = if zone then zone.trim else PALETTE.trim", "the decks' bands are not each place's colour"),
+        ("local festoonOk, festoonErr = pcall(buildFestoons, folder)", "the festoons are never hung"),
+        ("local poles = LobbyLayout.festoonPoles(w.to)", "the festoons are not hung from the walks' poles"),
+        ("festoonString(folder, tops[1], tops[4], hang.sag, index)\n\t\tfestoonString(folder, tops[3], tops[2], hang.sag, index + 2)",
+         "the festoons do not run corner to corner, pole to pole"),
+        ("pole.CanCollide = true", "a festoon's pole can be walked through"),
+    ):
+        if needle not in hub:
+            fail("HubService", why)
+    festoon = hub[hub.find("-- ===== THE FESTOONS (the hundred-and-ninth pass) ====="):hub.find("-- Idempotent: calling it twice")]
+    if "Neon" in "\n".join(line.split("--", 1)[0] for line in festoon.splitlines()):
+        fail("HubService", "the festoons fake their light with Neon")
+    if "glow.Shadows = false" not in festoon:
+        fail("HubService", "a festoon's bulb casts shadows")
+    bright = re.search(r"^local FESTOON_LIGHT = ([\d.]+)", hub, re.M)
+    every = re.search(r"^local FESTOON_LIGHT_EVERY = (\d+)", hub, re.M)
+    if not bright or float(bright.group(1)) > 0.6 or not every or int(every.group(1)) < 3:
+        fail("HubService", "the festoons are lit brighter or thicker than a string of small lights")
+    # WHAT lobby_layout.festoon_poles RESTATES (so the poles it measures are the ones built), line for line.
+    for line in (
+        "local a = length / 2 - LobbyLayout.FESTOON.inset",
+        "local b = width / 2 - LobbyLayout.FESTOON.inset",
+        "return { centre + Vector3.new(-a, 0, -b), centre + Vector3.new(a, 0, -b), centre + Vector3.new(-a, 0, b),",
+        "return { centre + Vector3.new(-b, 0, -a), centre + Vector3.new(-b, 0, a), centre + Vector3.new(b, 0, -a),",
+    ):
+        if line not in layout:
+            fail("LobbyLayout", "festoonPoles no longer has `%s`, which lobby_layout.festoon_poles restates" % line)
+    hang = re.search(r"LobbyLayout\.FESTOON = \{ inset = ([\d.]+), pole = ([\d.]+), sag = ([\d.]+) \}", layout)
+    if not hang:
+        fail("LobbyLayout", "this check can no longer read FESTOON")
+    else:
+        inset, pole, sag = (float(v) for v in hang.groups())
+        # The lowest of it: the string's middle (a pole's top less 0.4, less the sag), less a pennant's 1.1.
+        if pole - 0.4 - sag - 1.1 < 8:
+            fail("LobbyLayout", "the festoons hang %.1f over the walk, low enough to jump into" % (pole - 0.4 - sag - 1.1))
+        if inset < 1.5:
+            fail("LobbyLayout", "the festoons' poles stand against the rails")
+    if not life:
+        fail("LobbyLife", "there is no LobbyLife.lua: the lobby is still")
+        return
+    for name, most in (("BUBBLES_MAX", 20), ("GULLS", 5)):
+        found = re.search(r"^local %s = (\d+)" % name, life, re.M)
+        if not found or int(found.group(1)) > most:
+            fail("LobbyLife", "%s has no limit, or too loose a one (%d at most)" % (name, most))
+    for needle, why in (
+        ('local inLobby = workspace:FindFirstChild("Hub") ~= nil and player:GetAttribute("InLevel") == nil',
+         "the lobby's life goes on during a level"),
+        ("for index = #bubbles, 1, -1 do\n\t\t\tpop(index, false, false)", "the bubbles stay when you leave the lobby"),
+        ("if (point - at).Magnitude < size / 2 + POP_REACH then\n\t\t\t\t\tpop(index, false, true)",
+         "walking into a bubble does not pop it, or it is heard (only a tap is: they were random sounds as you walked)"),
+        ("if age >= b.life or not b.part.Parent then\n\t\t\tpop(index, false, b.part.Parent ~= nil)",
+         "a bubble going by itself is heard (only a tap is: they were random sounds as you walked)"),
+        ("if best then\n\t\tpop(best, true, true)", "a bubble you tap pops without a sound"),
+        ("UserInputService.InputBegan:Connect(tapped)", "a bubble cannot be tapped"),
+        ('AudioService.takesFor("bubblePop")', "a bubble's pop is not the bubble wrap's own sound"),
+        ("s.RollOffMode = Enum.RollOffMode.InverseTapered", "a bubble's pop is heard from across the promenade"),
+        ("if age >= b.life or not b.part.Parent then", "a bubble never pops by itself, and they pile up"),
+        ("(camera.CFrame.Position - fountain).Magnitude < BUBBLE_NEAR", "bubbles are blown for someone nowhere near"),
+    ):
+        if needle not in life:
+            fail("LobbyLife", why)
+    # A SOAP FILM (the hundred-and-twenty-third pass, from your test: "bubbles look weird in the fountain"): never Glass
+    # (dull grey-blue balls against the sky), a skin you can almost see through with a glint on it, blown from just over
+    # the water and drifting up slowly, not up to the canopy.
+    blow = life[life.find("local function blow("):life.find("local function moveBubbles(")]
+    if "Enum.Material.Glass" in blow or "Enum.Material.SmoothPlastic)" not in blow:
+        fail("LobbyLife", "the bubbles are Glass again: dull grey balls against the sky")
+    alpha = re.search(r"ball\.Transparency = ([\d.]+)", blow)
+    if not alpha or float(alpha.group(1)) < 0.7:
+        fail("LobbyLife", "a bubble is not a thin film you can almost see through")
+    if 'local glint = piece("Glint"' not in blow or "b.glint.Position = at +" not in life:
+        fail("LobbyLife", "a bubble has no glint of the sun on it")
+    start = re.search(r"rng:NextNumber\(([\d.]+), ([\d.]+)\), math\.sin\(a\)", blow)
+    rise = re.search(r"rise = rng:NextNumber\(([\d.]+), ([\d.]+)\)", blow)
+    if not start or float(start.group(2)) > 5 or not rise or float(rise.group(2)) > 1:
+        fail("LobbyLife", "the bubbles are blown or rise up into the canopy, not over the water")
+    if "CanQuery = true" in life:
+        fail("LobbyLife", "a bubble is in the game's rays (the camera's, the trails' ground)")
+    if "Neon" in life:
+        fail("LobbyLife", "the lobby's life fakes light with Neon")
+    started = re.search(r"for _, name in ipairs\(\{(.*?)\}\) do", client_boot, re.S)
+    if not started or '"LobbyLife"' not in started.group(1):
+        fail("Bootstrap.client", "LobbyLife is never started")
+
+
 def main():
+    check_lobby_life()
     check_post_box()
     check_challenge_board()
     check_daily_chest()

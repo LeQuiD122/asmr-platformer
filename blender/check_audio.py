@@ -138,13 +138,13 @@ FAMILIES = {
     "shop": dict(lufs=(-28, -13), centroid=3000),
 }
 LOOPS = re.compile(r"^(UnderwaterHum|SlideRush|WhirlRoar|CulvertWash|FlumeRush|ShoreSea|RoofWind|PartyFar|HarbourNight|"
-                   r"BathsHum|HoldDrone|SeaBed_\d|FountainBed|Heartbeat|Lap|Pour|Stream|\w+Loop)$")
-MUSIC = re.compile(r"(Chord|SecretSting|Chime_\d|BuoyBell_(x)?\d|button_(combo|circuit)_\d|button_linear_(x)?\d|HoldDrone|"
+                   r"BathsHum|HoldDrone|HillMorning|SeaBed_\d|FountainBed|Heartbeat|Lap|Pour|Stream|\w+Loop)$")
+MUSIC = re.compile(r"(Chord|Song|SecretSting|Chime_\d|BuoyBell_(x)?\d|button_(combo|circuit)_\d|button_linear_(x)?\d|HoldDrone|"
                    r"PartyFar|Siren|CountdownTock_x\d|TownsfolkVoice_x\d|HarbourNight|ShopTab_x\d|CrateReveal_x\d|ShopOpen)$")
 ATTACK_FIRST = {"bubblePop_x4"}  # heard the moment the foot lands: loud from its first sample, by design
 SHEET = re.compile(r"^(\w+)_x(\d+)$")
 # Files kept only so their old ids still play: superseded by a sheet of the same event (checked for format alone).
-SUPERSEDED_BY_SHEET = re.compile(r"^(iceCrack|jelloWobble|foamCompress|switchClack|chocolateSnap)_\d$")
+SUPERSEDED_BY_SHEET = re.compile(r"^(iceCrack|jelloWobble|foamCompress|switchClack|chocolateSnap|ooblSquelch)_\d$")
 
 
 def check_file(folder, path, spec, takes):
@@ -589,6 +589,11 @@ if __name__ == "__main__":
     check_water()
     check_shop()
     check_own()
+    # OOBLECK'S OWN SOUND (the hundred-and-twenty-sixth pass, from your test: "I want oobleck to have a better sound"):
+    # one sheet of four takes of its own, made by gen_sheet_sfx.py, in place of the four old squelches.
+    sheet_gen = (AUDIO / "gen_sheet_sfx.py").read_text(encoding="utf-8")
+    if '("ooblSquelch", oobleck)' not in sheet_gen or not (AUDIO / "sheets" / "ooblSquelch_x4.wav").exists():
+        fail("oobleck has no sheet of its own (python audio/gen_sheet_sfx.py ooblSquelch)")
     if problems:
         for problem in problems:
             print("FAIL: " + problem)

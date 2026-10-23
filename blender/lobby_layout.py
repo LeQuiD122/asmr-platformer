@@ -66,7 +66,19 @@ def read():
                           re.findall(r"\{ x = (-?[\d.]+), z = (-?[\d.]+) \}", _block(text, "PLANTERS"))]
     layout["lamps"] = [(float(x), float(z)) for x, z in
                        re.findall(r"\{ x = (-?[\d.]+), z = (-?[\d.]+) \}", _block(text, "LAMPS"))]
+    festoon = _block(text, "FESTOON")
+    layout["festoon"] = {k: float(v) for k, v in re.findall(r"(\w+) = ([\d.]+)", festoon)}
     return layout
+
+
+def festoon_poles(layout, to):
+    """LobbyLayout.festoonPoles: a walk's four poles, (x, z), one side's start and end, then the other's."""
+    x, z, length, width, along_x = walk(layout, to)
+    a = length / 2 - layout["festoon"]["inset"]
+    b = width / 2 - layout["festoon"]["inset"]
+    if along_x:
+        return [(x - a, z - b), (x + a, z - b), (x - a, z + b), (x + a, z + b)]
+    return [(x - b, z - a), (x - b, z + a), (x + b, z - a), (x + b, z + a)]
 
 
 def arc(layout, count):
@@ -294,6 +306,10 @@ def footprints(layout, hub_text=None, pads=None):
     for x, z in layout["lamps"]:
         role = "thing" if deck_of(layout, x, z) else "walk"
         circle("lamp post", x, z, 0.8, role, group="lamp %g %g" % (x, z))
+    # THE FESTOONS' POLES (the hundred-and-ninth pass), their feet on the walks.
+    for w in layout["walks"]:
+        for x, z in festoon_poles(layout, w["to"]):
+            circle("festoon pole", x, z, 0.7, "walk", group="festoon %g %g" % (x, z))
     # THE PLAZA'S COLUMNS, on its trim band (2.5 in from the edge): the corners and the quarter points, so each
     # walk's way in is framed by two.
     plaza = layout["decks"]["plaza"]

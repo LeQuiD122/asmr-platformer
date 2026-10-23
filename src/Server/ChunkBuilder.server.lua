@@ -169,7 +169,15 @@ local DRIPPING: { [string]: boolean } = { Honey = true, Slime = true }
 -- so a dissolved soap cell dropped you 0.9 studs onto the slab and stopped you dead.
 -- The hole was real in the tiles and closed underneath. For soap the slab is kept as
 -- the anchor object the tiles hang off, and made invisible and non-colliding.
-local GRANULAR: { [string]: boolean } = { Soap = true }
+-- THE COOKIE (the hundred-and-tenth pass) is built the same way: a biscuit is crumbs pressed together, and it should
+-- break up into them.
+local GRANULAR: { [string]: boolean } = { Soap = true, Cookie = true }
+
+-- CHOCOLATE CHIPS in a granular top: about one cube in `every` of the top layer is a chip, a little proud of the rest,
+-- dark and glossy. Chosen from the cube's own indices, so every screen and every rebuild has them in the same places.
+local CHIPS: { [string]: { colour: Color3, every: number, proud: number } } = {
+	Cookie = { colour = Color3.fromRGB(66, 38, 22), every = 7, proud = 0.12 },
+}
 
 -- === Shelled materials ===
 --
@@ -207,9 +215,15 @@ local GRANULAR: { [string]: boolean } = { Soap = true }
 -- fractures, and those already come from Ice_Color, so whitening the whole sheet erases
 -- exactly the contrast the texture was drawn to provide.
 local SHELL_FINISH: { [string]: { whiten: number, transparency: number, reflectance: number } } = {
-	-- The wax film: butter taken most of the way to white, translucent enough that the
-	-- butter reads THROUGH it. Opaque, the platform is a white slab on something yellow.
-	ButterWax = { whiten = 0.62, transparency = 0.3, reflectance = 0.10 },
+	-- The wax film: butter taken toward white, all but opaque, a waxed paper's sheen on it. It
+	-- was translucent (0.3) so the butter would read through it, and in the game it read as a
+	-- glass case: the water showing through its edges and a yellow block standing inside it
+	-- (your test of 2026-10-22, "you can see what's wrong exactly with butter stick"). The
+	-- butter shows where the wrapper CRACKS, as it should; and whitened only half way, the
+	-- paper is the cream of a butter wrapper, not a white slab.
+	ButterWax = { whiten = 0.5, transparency = 0.06, reflectance = 0.12 },
+	-- The sticks' wrapper is the same paper, a touch creamier over their pale butter.
+	ButterStick = { whiten = 0.35, transparency = 0.06, reflectance = 0.12 },
 	-- A frozen sheet with water under it. Clearer than the wax and far more reflective,
 	-- because ice reads by what it bounces back rather than by its own colour -- and the
 	-- player has to be able to see that there is no floor beneath it.
@@ -960,6 +974,16 @@ local function attachGranules(
 					math.abs(tint) * 0.13
 				)
 				granule.Reflectance = granule.Reflectance * (0.7 + seed / 22)
+				-- A CHIP: dark, glossy and standing a little proud, on the top layer only.
+				local chips = CHIPS[materialName]
+				if chips and layer == 1 and (seed * 3 + seed2) % chips.every == 0 then
+					granule.Color = chips.colour
+					granule.Material = Enum.Material.SmoothPlastic
+					granule.Reflectance = 0.18
+					granule.Size += Vector3.new(0, chips.proud, 0)
+					granule.CFrame *= CFrame.new(0, chips.proud / 2, 0)
+					granule:SetAttribute("Chip", true)
+				end
 				-- Transparency varies DOWNWARD only, never above the material's own
 				-- value, so a cube can only ever be denser than the material and never
 				-- washed out. A no-op while soap is opaque; it matters the moment a
@@ -2543,6 +2567,11 @@ local LinearChunks: { [string]: { Segment } } = {
 	-- hole is 0.56 of the half-width, which is 5 studs at 18 and only 4.4 at 16.
 	R18_SoapRing = {
 		{ name = "Platform", material = "Soap", width = 18, length = 20, form = "ring" },
+	},
+	-- THE COOKIE (the hundred-and-tenth pass): one big round biscuit with a bite out of its side, 20 across, cut at the
+	-- cube's resolution like the soaps (PlanShapes.cookie).
+	R22_Cookie = {
+		{ name = "Platform", material = "Cookie", width = 20, length = 20, form = "cookie" },
 	},
 	-- The only chunk in the game that makes you TURN. The lane snakes a full 0.55 of the
 	-- half-width to each side and comes back to the middle at both faces, so it enters and
