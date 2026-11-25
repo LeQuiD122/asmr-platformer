@@ -40,7 +40,7 @@ MUTATIONS = [
     ("the lava never comes alive", RENDER, STORY, "\nlavaLife.start()\n", "\n\n"),
     ("no embers off the lava", RENDER, STORY, 'embers.Name = "Embers"', 'embers.Name = "Sparks"'),
     ("the lava never bubbles", RENDER, STORY, "lavaLife.bubble(platform, at)", "lavaLife.flare(platform, 0.1)"),
-    ("a burst without a flare", RENDER, STORY, "lavaLife.flare(tile, 1)", "lavaLife.flare(tile, 0)"),
+    ("a burst without a flare", RENDER, STORY, '\t\tcolumn:Emit(10)\n\t\tlavaLife.flare(tile, 1)', '\t\tcolumn:Emit(10)\n\t\tlavaLife.flare(tile, 0)'),
     # The endings' sounds.
     ("a scene's sounds left playing", CINEMA, STORY, "\tfor _, s in ipairs(current.sounds) do\n\t\tCinema.fade(s, 2.5)",
      "\tfor _, s in ipairs(current.sounds) do\n\t\tCinema.fade(s, 60)"),

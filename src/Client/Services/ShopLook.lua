@@ -76,7 +76,7 @@ ShopLook.THEMES = {
 	slime = { id = "slime", name = "Slime", rarity = "common", top = rgb(176, 244, 140), bottom = rgb(88, 196, 96),
 		edge = rgb(30, 100, 40), title = rgb(46, 150, 60), titleInk = rgb(240, 255, 236), decor = "blobs",
 		effect = "splat", sound = "MaterialSounds/slimeBoing", fx = rgb(120, 220, 110), fx2 = rgb(200, 255, 180) },
-	sand = { id = "sand", name = "Kinetic sand", rarity = "common", top = rgb(240, 214, 160), bottom = rgb(206, 170, 112),
+	sand = { id = "sand", name = "Sculpting sand", rarity = "common", top = rgb(240, 214, 160), bottom = rgb(206, 170, 112),
 		edge = rgb(120, 86, 40), title = rgb(170, 120, 60), titleInk = rgb(255, 248, 230), decor = "grains",
 		effect = "crumbs", sound = "MaterialSounds/kineticSandImprint", fx = rgb(226, 190, 130), fx2 = rgb(180, 140, 84) },
 	jello = { id = "jello", name = "Jelly", rarity = "rare", top = rgb(255, 150, 170), bottom = rgb(210, 60, 100),
@@ -103,12 +103,12 @@ ShopLook.THEMES = {
 ShopLook.DEFAULTS = { "cookie", "soap", "ice" }
 -- EVERY TAB ITS OWN COLOUR (from your notes: "the colors need variety"), its chosen one deeper.
 ShopLook.TAB_COLOURS = {
-	Featured = rgb(255, 214, 120), Steps = rgb(176, 222, 160), Trails = rgb(160, 204, 255), Sounds = rgb(250, 182, 212),
+	Featured = rgb(255, 214, 120), Pals = rgb(255, 196, 214), Steps = rgb(176, 222, 160), Trails = rgb(160, 204, 255), Sounds = rgb(250, 182, 212),
 	Auras = rgb(212, 184, 255), Emotes = rgb(255, 198, 150), Passes = rgb(150, 230, 212), Tokens = rgb(255, 232, 140),
-	Backgrounds = rgb(206, 204, 236),
+	Backgrounds = rgb(206, 204, 236), Wear = rgb(240, 206, 170),
 }
--- The tabs' sounds, in the order ShopTab_x9 holds them: ShopCatalog.TABS, then Backgrounds.
-ShopLook.TAB_ORDER = { "Featured", "Steps", "Trails", "Sounds", "Auras", "Emotes", "Passes", "Tokens", "Backgrounds" }
+-- The tabs' sounds, in the order ShopTab_x11 holds them: ShopCatalog.TABS (Pals second, Wear, the boutique, the last).
+ShopLook.TAB_ORDER = { "Featured", "Pals", "Steps", "Trails", "Sounds", "Auras", "Emotes", "Passes", "Tokens", "Backgrounds", "Wear" }
 local SLOT = { ShopTab = 1.2, CookieCrunch = 0.9, CrateReveal = 3.0, material = 1.0, Drip = 1.0 }
 
 local look = {
@@ -1204,9 +1204,9 @@ end
 function ShopLook.tab(name: string)
 	local index = table.find(ShopLook.TAB_ORDER, name)
 	if index then
-		playSound("ShopSounds/ShopTab_x9", 0.5, index)
+		playSound("ShopSounds/ShopTab_x11", 0.5, index)
 	end
 end
 
-ShopLook.STAMP = "b104ab03"
+ShopLook.STAMP = "90e3eed1"
 return ShopLook

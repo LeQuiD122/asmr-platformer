@@ -138,6 +138,15 @@ is ever told outright, and every layer rewards the player who went looking in th
   is an ordinary day.
 - **The keepsakes**: the first time you stand on each material, a card says whose it was.
 - **Things to read**: notice boards (R), and letters lying on the ground, a stone on each.
+- **The green envelopes** **(suggested, 2026-11-03)**: five letters in his hand, one lying on each level, his own 14
+  August, 1979, written to the little one on the sea wall, numbered in the order the story plays them. Eight in the
+  morning at Hill House (the key on its ribbon by the door, "that is the whole job"); nine on the Front (Sal's cone,
+  "not because I am afraid"); three o'clock on the roof (the song that never ends, the key checked and checked); eight
+  minutes to midnight by the drain ("something is down there. Not the water"); and four minutes to midnight in the
+  baths: he clocked in, "it keeps what it is given. I am giving it me, so it gives you the morning", and "one day it
+  will be your card in the rack. Sign it. Open them. Then come back up. I could not." The first four are signed E. M.;
+  the last is signed Dad. Read in order, they are his day beside yours, and they say what the true ending is without
+  ever naming it.
 - **Things to open**: lockers, a tin box, loose bricks, a loose board. Some open with a hand (E); some
   only to MR BARLOW'S PRY BAR, which lies somewhere early on every level and stays on your back.
 - **The secrets**: six, one or more a level and one under them all, each told as a short scene when it is
@@ -174,7 +183,9 @@ is ever told outright, and every layer rewards the player who went looking in th
 - **Mr Wick**, the fisherman. Held the key himself in 1946. Knows the word for the Hold, and that
   nobody who goes down the drain comes back.
 - **The Watcher**, faceless, on the Deco tower. Edwin Marsh, key holder from 1979, your father. Never
-  speaks. In the back rooms something walks in his shape, stooped under the ceiling, on legs like poles
+  speaks. **On every level he stands on the way ahead of you** **(suggested, 2026-11-03)**: twice a level, beside the
+  route, facing back down it, his blank head turning after you; and before you reach him he is gone, with a breath
+  under everything. The second time he is nearer the end. Nobody else sees him there. In the back rooms something walks in his shape, stooped under the ceiling, on legs like poles
   whose knees bend the wrong way, its head turning further round than a neck goes to look at you; and if
   it reaches you it folds down over you with its arms round you, and its blank face opens into the Hold's
   mouth. At the true ending he has his face again, in the same

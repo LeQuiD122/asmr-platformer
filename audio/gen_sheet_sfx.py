@@ -226,16 +226,29 @@ def ice_crack(take, rng):
 
 
 def jello_wobble(take, rng):
-    """Jelly soda: a wet low wobble as it gives, and a carbonated fizz on its tail."""
-    d = 0.8
+    """Jelly soda, made itself (the two-hundred-and-eighth pass, from the note of 2026-11-12: "I don't like that the soda
+    and medusa chunk have the same sound"). It and the jellyfish were one recipe: a sung body at the same four pitches,
+    a wet slap and a little fizz, and they were heard as one sound. The jellyfish keeps the sung gel bell. The soda has
+    no sung body at all now: a foot going into something carbonated. A soft low thump, a hiss of fizz let out and dying
+    away (thousands of bubbles, so it sparkles), and a few round bubbles coming up through it, each a short rising
+    blip, low enough to be water and not a toy."""
+    d = 0.85
     t = axis(d)
-    base = {1: 150, 2: 168, 3: 136, 4: 160}[take] * rng.uniform(0.97, 1.03)
-    f = base * (1 + 0.12 * np.sin(2 * np.pi * rng.uniform(8, 11) * t) * np.exp(-t / 0.3))
-    body = np.sin(phase(f)) * envelope(t, 0.01, 0.28) + 0.4 * np.sin(phase(f * 2.02)) * envelope(t, 0.01, 0.12)
-    squelch = filt(band(noise(d, rng), 200, 1200) * envelope(t, 0.003, 0.03), "low", 1400)
-    fizz = grains(d, {1: 26, 2: 40, 3: 20, 4: 50}[take], rng, 2200, 6000, length=(0.0004, 0.0012), where=(1.6, 2.2),
-                  fade=0.4, soft=0.3)
-    return finish(peak(body) + 0.5 * peak(squelch) + 0.12 * peak(fizz), -2.5, lowpass=6500)
+    thump = filt(band(noise(d, rng), 80, 260) * envelope(t, 0.004, 0.05), "low", 400)
+    hiss = band(noise(d, rng), 1600, 4800) * envelope(t, 0.012, {1: 0.30, 2: 0.42, 3: 0.24, 4: 0.36}[take])
+    sparkle = grains(d, {1: 60, 2: 90, 3: 45, 4: 75}[take], rng, 2200, 5200, length=(0.0006, 0.0018), where=(1.2, 2.0),
+                     fade=0.5, soft=0.3)
+    blips = np.zeros_like(t)
+    pitch = {1: 1.0, 2: 1.12, 3: 0.88, 4: 1.05}[take]
+    for _ in range({1: 5, 2: 8, 3: 4, 4: 7}[take]):
+        at = rng.uniform(0.03, 0.5)
+        length = rng.uniform(0.018, 0.035)
+        n, start = int(length * SR), int(at * SR)
+        tt = np.arange(n) / SR
+        f = rng.uniform(380, 620) * pitch * (1 + 0.9 * tt / length)  # rising: a bubble coming up
+        blips[start:start + n] += (np.sin(2 * np.pi * np.cumsum(f) / SR) * np.sin(np.pi * tt / length) ** 2
+                                   * rng.uniform(0.5, 1.0) * np.exp(-at / 0.35))
+    return finish(0.6 * peak(thump) + 0.4 * peak(hiss) + 0.22 * peak(sparkle) + 0.7 * peak(blips), -3.0, lowpass=4800)
 
 
 def bubble_pop(take, rng):

@@ -275,14 +275,37 @@ local function upright(a: Vector3, b: Vector3): CFrame
 	return shortest(yaw:VectorToWorldSpace(a), b) * yaw
 end
 
+-- A frame looking along `dir`, its up as near `up` as it can be (its right is dir x up).
+local function frameAlong(dir: Vector3, up: Vector3): CFrame
+	local right = dir:Cross(up)
+	if right.Magnitude < 1e-4 then
+		right = dir:Cross(if math.abs(dir.X) < 0.9 then Vector3.xAxis else Vector3.zAxis)
+	end
+	right = right.Unit
+	return CFrame.fromMatrix(Vector3.zero, right, right:Cross(dir), -dir)
+end
+
+-- ROLLED THROUGH A TURN (the two-hundred-and-first pass, seen in play). `upright` keeps the back up by
+-- turning the heading first; where the body points straight down, halfway round the serpent's turn over
+-- and under itself, one bone's heading and the next were half a turn apart, so the skin between them,
+-- drawn from both, collapsed into a flat striped web across the loop. Here the back is up wherever the
+-- body is level, as `upright` has it, and in a turn leans toward `across` as far as the body points up
+-- or down: on its side at the bottom of the turn and upright again at its end, a little more at each
+-- bone and never flipped. Where `across` is nothing (on the straights) this is `upright` exactly.
+local function rolled(a: Vector3, b: Vector3, across: Vector3): CFrame
+	local up = Vector3.yAxis - b * b.Y + across * math.abs(b.Y)
+	return frameAlong(b, up) * frameAlong(a, Vector3.yAxis):Inverse()
+end
+
 -- Poses a chain so each bone runs from one joint to the next: `joints[1]` is where the first
 -- bone's head goes and `joints[i + 1]` where bone i ends, in the part's own space. Each bone is
 -- turned from its rest direction onto its joint-to-joint one (the shortest way, or `level`, keeping
--- up up) and moved so its head is on its joint -- which is also what stretches a chain to a strand
--- of another height. `posed`, if given, gets each bone's posed frame in the part's space. Returns
--- how the last bone has moved from its rest frame, for whatever it carries on its end.
+-- up up, or with `across` given, keeping up up and rolled toward it through a turn) and moved so its
+-- head is on its joint -- which is also what stretches a chain to a strand of another height.
+-- `posed`, if given, gets each bone's posed frame in the part's space. Returns how the last bone has
+-- moved from its rest frame, for whatever it carries on its end.
 function SeaRig.follow(chain: Chain, rest: { [Bone]: CFrame }, joints: { Vector3 }, level: boolean?,
-	posed: { CFrame }?): CFrame
+	posed: { CFrame }?, across: { Vector3 }?): CFrame
 	local above = chain.base
 	local frame = CFrame.identity
 	for index, bone in ipairs(chain.bones) do
@@ -290,7 +313,11 @@ function SeaRig.follow(chain: Chain, rest: { [Bone]: CFrame }, joints: { Vector3
 		local to = joints[index + 1] - joints[index]
 		local turn = CFrame.identity
 		if from.Magnitude > 1e-4 and to.Magnitude > 1e-4 then
-			turn = if level then upright(from.Unit, to.Unit) else shortest(from.Unit, to.Unit)
+			if across then
+				turn = rolled(from.Unit, to.Unit, across[index] or Vector3.zero)
+			else
+				turn = if level then upright(from.Unit, to.Unit) else shortest(from.Unit, to.Unit)
+			end
 		end
 		frame = CFrame.new(joints[index]) * turn * rest[bone].Rotation
 		bone.Transform = (above * bone.CFrame):Inverse() * frame
@@ -326,4 +353,5 @@ function SeaRig.summary(): string
 	return line
 end
 
+SeaRig.STAMP = "1b6665f8"
 return SeaRig

@@ -258,6 +258,13 @@ def footprints(layout, hub_text=None, pads=None):
     for i, (x, z) in enumerate(arc(layout, pads)):
         rect("level pad %d" % (i + 1), x, z, pad + 0.2, pad + 0.6, _yaw_toward(x, z, sx, sz))
     rect("start pad", sx, sz, 14, 8)
+    # THE WORKSHOP (the two-hundred-and-fifth pass): its own start, and its signboard on legs at the wing's far end.
+    if "workshopStart" in at:
+        wx, _, wz = at["workshopStart"]
+        rect("workshop start", wx, wz, 14, 8)
+    if "workshopBoard" in at:
+        bx, _, bz = at["workshopBoard"]
+        rect("workshop board", bx, bz, 0.6, 11)
     housing = _size(r"housing\.Size = Vector3\.new\([\d.]+, ([\d.]+),", hub_text, 1, 7.6)
     for row, count in (("modeRow", 2), ("lengthRow", 3)):
         rx, _, rz = at[row]

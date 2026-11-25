@@ -73,7 +73,7 @@ MUTATIONS = [
     # A client's hello.
     ("a hello kept however long", CITY, SUNK, "string.sub(tostring(version), 1, 60)", "tostring(version)"),
     # The code still reads.
-    ("a name never declared", PAUSE, PARSE, "local me = Players.LocalPlayer", "local me = Plyers.LocalPlayer"),
+    ("a name never declared", PAUSE, PARSE, 'local function invite()\n\tlocal me = Players.LocalPlayer', 'local function invite()\n\tlocal me = Plyers.LocalPlayer'),
 ]
 
 paths = {m[1] for m in MUTATIONS}

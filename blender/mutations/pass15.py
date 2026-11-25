@@ -69,7 +69,7 @@ MUTATIONS = [
     ("the Sunken City at another time", LEVELDEFS, STORY, 'storyTime = "11:52 PM"', 'storyTime = "11:00 PM"'),
     # Half speed.
     ("the slide at full speed", SKYPATH, STORY, "SkyPath.SPEED = 36", "SkyPath.SPEED = 70"),
-    ("the drain at full speed", PATH, STORY, "SunkenPath.DRAIN_SECONDS = 13", "SunkenPath.DRAIN_SECONDS = 6.5"),
+    ("the drain at full speed", PATH, STORY, "SunkenPath.DRAIN_SECONDS = 12", "SunkenPath.DRAIN_SECONDS = 6.5"),
     ("the dive's carry at full speed", DIVE, STORY, "local CARRY_SPEED = 120", "local CARRY_SPEED = 350"),
     ("the diver's fall uncapped", SHORE, STORY, "local FALL_SPEED = 110", "local FALL_SPEED = 400"),
     # F7.

@@ -58,7 +58,7 @@ SHOT_LINES = (
     "Cinema.point(CFrame.lookAt(below + current.facing * 22 + side * 6 + Vector3.new(0, 2.5, 0), below + Vector3.new(0, 6, 0)), 52)",
     "local eye = here - current.facing * 7 + side * 1.5 + Vector3.new(0, 3 - math.min(since, 10) * 0.2, 0)",
     "eye = Vector3.new(eye.X, math.min(eye.Y, current.water - 1.5), eye.Z)",
-    "Cinema.point(CFrame.lookAt(eye, here:Lerp(lamp, math.clamp((since - 2) / 3.5, 0, 0.7))), 66)",
+    "Cinema.point(CFrame.lookAt(eye, here:Lerp(lamp, math.clamp((since - 2) / 3.5, 0, 0.92))), 62)",
 )
 
 
@@ -152,11 +152,11 @@ def dive(fps=60, under_for=5.0):
                                 subject={"spray": below + v(0, 4, 0)}))
         else:
             since = t - splash_at
-            lamp = v(here[0], WATER - 120 + 14.4, here[2]) + facing * 22
+            lamp = v(here[0], WATER - 70 + 21.8, here[2]) + facing * 40  # DEEP_DOWN 70, the lantern 21.8 up, 40 ahead (pass 235)
             eye = here - facing * 7 + side * 1.5 + v(0, 3 - min(since, 10) * 0.2, 0)
             eye = v(eye[0], min(eye[1], WATER - 1.5), eye[2])
-            target = here + (lamp - here) * min(0.7, max(0, (since - 2) / 3.5))
-            frames.append(Frame(t, "dive: under the water", eye, target, 66, subject=pose,
+            target = here + (lamp - here) * min(0.92, max(0, (since - 2) / 3.5))
+            frames.append(Frame(t, "dive: under the water", eye, target, 62, subject=pose,
                                 looks_at="subject" if since < 2.05 else "away"))
         t += dt
     # (The splash is the water shot's own eye turning up to the spray: no cut.)

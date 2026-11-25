@@ -463,7 +463,8 @@ def check_dive_finale():
     # AND THE SPLASH STILL HAS TO FINISH THE RUN, blackout or no blackout. Scoped to the dive's own
     # callback: the route's ending calls finishRunFor too, so a file-wide search passes while the
     # dive finishes nothing, which is the shape of the bug this whole section exists for.
-    if "finishRunFor(player)" not in dive_block:
+    # (Through finishFrom since the hundred-and-seventy-eighth pass: a finish from the level that asked.)
+    if "finishFrom(levelInstance)" not in dive_block:
         fail("Bootstrap", "the dive's splash no longer finishes the run, so hitting the water "
                           "does nothing at all.")
 
@@ -564,7 +565,7 @@ def check_countdown_ticks_evenly():
     client = read(VOTE_CLIENT)
     if "TICK_SOUND" in hub:
         fail("HubService", "plays the countdown's tick on the server again, so it is heard when it replicates, not on the second")
-    for needle in ("countdownEndsAt = workspace:GetServerTimeNow() + COUNTDOWN_SECONDS", "endsAt = countdownEndsAt,"):
+    for needle in ("countdownEndsAt = workspace:GetServerTimeNow() + seconds", "endsAt = countdownEndsAt,"):
         if needle not in hub:
             fail("HubService", "does not tell the clients when the countdown ends: `%s`" % needle)
     for needle in ("RunService.RenderStepped:Connect(function()", "workspace:GetServerTimeNow()", "TICK:Play()",
@@ -790,6 +791,11 @@ def check_paste_check():
             fail("Bootstrap", "the paste check does not look for the %s Script" % name)
     if 'scriptAt(StarterPlayerScripts, "StarterPlayerScripts", "Bootstrap", "LocalScript")' not in block:
         fail("Bootstrap", "the paste check does not look for the client's Bootstrap")
+    # What loads first (the hundred-and-fifty-ninth pass's Arrival): every LocalScript in src/ReplicatedFirst.
+    for path in sorted((root / "src" / "ReplicatedFirst").glob("*.client.lua")):
+        name = path.name.replace(".client.lua", "")
+        if 'scriptAt(game:GetService("ReplicatedFirst"), "ReplicatedFirst", "%s", "LocalScript")' % name not in block:
+            fail("Bootstrap", "the paste check does not look for ReplicatedFirst's %s" % name)
     for needle, why in (
         ('local storesOk = pcall(function()\n\t\tgame:GetService("DataStoreService"):GetDataStore("PasteCheck")',
          "does not say whether Studio can reach the data stores (or asks unguarded)"),
@@ -836,7 +842,9 @@ def check_dashboard():
         ('\tHubService.markInRun({ player })\n\tprogression(player, "start")', "a late joiner's start is not logged"),
         ('\t\tPlayerStateService.markCompleted(player)\n\t\tprogression(player, "complete")', "a finish is not logged"),
         # (the menu's own one: being caught in the back rooms ends a run with the same two lines)
-        ('in the middle of the run.\n\tif levelInstance and HubService.isInRun(player) then\n\t\tprogression(player, "fail")',
+        # (and only a run not yet finished: one left during its ending has been logged complete, the 207th pass)
+        ('\t\tlocal leaving = PlayerStateService.getState(player)\n\t\tif not (leaving and leaving.hasCompletedLevel) then\n'
+         '\t\t\tprogression(player, "fail")\n\t\tend\n',
          "leaving a run from the menu is not logged"),
         ('\tif runningFor[player] then\n\t\tprogression(player, "fail")\n\tend\n\tPlayerStateService.cleanup(player)',
          "leaving the server partway through a run is not logged"),
@@ -996,11 +1004,12 @@ def check_levels_open_in_order():
     if 'elseif kind == "opened" then\n\t\t\tHubVoteService.onOpened(payload)' not in banner:
         fail("HubVoteService", "the banner never says a level opened")
     on_opened = within(banner, "function HubVoteService.onOpened(", "\nend\n")
-    for needle, why in (
-        ('HubVoteService.say("NEW", title, body)', "the opened message is not held on the card"),
-        ("\tHubVoteService.say(\"NEW\", title, body)\n\ttock(2)", "a level opening makes no sound"),
+    # (Since the hundred-and-forty-second pass a notice waits its turn, and its chime sounds as it is shown: nextNotice.)
+    for needle, why, where in (
+        ('HubVoteService.tell("NEW", title, body, true)', "the opened message is not held on the card", on_opened),
+        ("if notice.chime then\n\t\t\ttock(2)", "a level opening makes no sound", within(banner, "local function nextNotice(", "\nend\n")),
     ):
-        if needle not in on_opened:
+        if needle not in where:
             fail("HubVoteService", why)
     # THE HELD MESSAGE every one of these goes through (say): held for its time, then the tally or nothing.
     say = within(banner, "function HubVoteService.say(", "\nend\n")
@@ -1074,7 +1083,7 @@ def check_story_mode():
 
     for needle, why in (
         ("HubService.setRunner(startFromLobby)", "the lobby cannot start a story"),
-        ("if level.story then\n\t\treturn startStory(players, origin)\n\tend\n\tstoryRun = nil", "a story is started as a level (or a level leaves a story running)"),
+        ("if level.story then\n\t\t\treturn startStory(players, origin)\n\t\tend\n\t\tstoryRun = nil", "a story is started as a level (or a level leaves a story running)"),
     ):
         if needle not in boot:
             fail("Bootstrap", why)
@@ -1116,7 +1125,7 @@ def check_story_mode():
     if "\tstoryLeave(player)\n\tstoryMoving[player] = nil\n" not in boot:
         fail("Bootstrap", "a story player who left during a move is kept")
     if ("if run.index >= #LevelDefinitions.Story then\n\t\tstoryRun = nil\n\t\tfor player in pairs(run.players) do\n"
-            "\t\t\tif player.Parent == Players and HubService.isInRun(player) then\n\t\t\t\tHubService.returnToHub(player)") not in nxt:
+            "\t\t\tif player.Parent == Players and HubService.isInRun(player) then\n\t\t\t\ttask.spawn(goHome, player)") not in nxt:
         fail("Bootstrap", "the end of a story does not send everyone home")
     step = within(boot, "local function storyStep(", "\nend\n")
     for needle, why in (
@@ -1130,7 +1139,7 @@ def check_story_mode():
     if "HubService.returnToHub(player)\n\t\t\ttellStory(player, \"behind\")" not in within(boot, "local function storyTimeUp(", "\nend\n"):
         fail("Bootstrap", "whoever is left behind when time is up is not taken out of the story and home")
     for needle, why in (
-        ("\tHubService.returnToHub(player)\n\t-- AND OUT OF THE STORY (storyLeave), so whoever is waiting in the lobby can go on.\n\tstoryLeave(player)",
+        ("goHome(player, function()\n\t\t\tstoryLeave(player)\n\t\tend)",
          "leaving a story from the menu leaves the others waiting"),
         ("\tsecondChance.falls[player] = nil\n\t-- OUT OF THE STORY too (storyLeave): the hub has already had them back, so the rest may go on.\n\tstoryLeave(player)\n",
          "leaving the server leaves a story's others waiting"),
@@ -1251,7 +1260,7 @@ def check_challenge_board():
          "a challenge done is not noticed (or a new day mistaken for one)"),
         ('if type(ids) == "string" and ids == knownIds and seenDone then', "a save loading or a new day is told as challenges done"),
         ('seenDone = type(doneValue) == "string"', "a challenge done earlier today is told again on joining"),
-        ('HubVoteService.say("+" .. reward, title,', "the card never says a challenge is done"),
+        ('HubVoteService.tell("+" .. reward, title,', "the card never says a challenge is done"),
         ('foot.Text = ("New ones in %dh %02dm")', "the board does not say when new challenges come"),
         ("left = math.max(0, nextAt - workspace:GetServerTimeNow())", "the board's countdown is not on the server's clock"),
     ):
@@ -1434,7 +1443,58 @@ def check_lobby_life():
         fail("Bootstrap.client", "LobbyLife is never started")
 
 
+def check_workshop():
+    """LONG RUNS BY DEFAULT, THE OPTIONS IN THE WORKSHOP (the two-hundred-and-fifth pass, from your note of 2026-11-07:
+    "by default the lengths of the level should be all long, and then in a specifically dedicated area for customisation
+    like a sandbox, there they could choose options and the difficulty"). An untouched ballot is long; the gates' start
+    begins a long Chill run whatever the keys say; the keys stand in the workshop (the garden's west wing) with a start of
+    their own, and only a run started there takes them; the keys show the workshop's choice; nothing on them is Neon."""
+    hub = read(HUB_SERVICE)
+    layout_text = read(os.path.join(ROOT, "src", "Shared", "LobbyLayout.lua"))
+    for needle, why in (
+        ('local LENGTH_ORDER = { "long", "medium", "short" }', "an untouched ballot is not a long run"),
+        ('local DEFAULT_RUN = { mode = "chill", length = "long" }', "the gates' start does not begin a long Chill run"),
+        ("mode = if fromWorkshop then winner(\"mode\", MODE_ORDER) :: string else DEFAULT_RUN.mode,",
+         "the keys' mode is taken by a run not started in the workshop"),
+        ("length = if fromWorkshop then winner(\"length\", LENGTH_ORDER) :: string else DEFAULT_RUN.length,",
+         "the keys' length is taken by a run not started in the workshop"),
+        ("fromWorkshop = workshop == true", "a vote does not know which start called it"),
+        ("local leading = HubService.workshopChoice()", "the keys light the run's choice instead of the workshop's"),
+        ("HubService.callVote(false)", "the gates' start does not call a default run"),
+        ("HubService.callVote(true)", "the workshop has no start of its own"),
+        ("buildWorkshop(folder)", "the workshop is never built"),
+        ("pad.Position = HUB_ORIGIN + AT.workshopStart", "the workshop's start is not where the layout puts it"),
+    ):
+        if needle not in hub:
+            fail("HubService", why)
+    taken = hub[hub.find("local decision = HubService.resolveVote()"):]
+    if "fromWorkshop = false" not in taken[:200]:
+        fail("HubService", "a workshop run's choice carries over to the next run from the gates")
+    keys = hub[hub.find("local function makeOptionPads("):hub.find("local function makeOptionPads(") + 4000]
+    if "inlay.Material = Enum.Material.Neon" in keys:
+        fail("HubService", "the option keys glow by being Neon")
+    garden = re.search(r"garden = \{ x = (-?[\d.]+), z = (-?[\d.]+), w = ([\d.]+), d = ([\d.]+) \}", layout_text)
+    if not garden:
+        fail("LobbyLayout", "the garden cannot be read")
+        return
+    gx, gz, gw, gd = (float(v) for v in garden.groups())
+    for name in ("lengthRow", "modeRow", "workshopStart", "workshopBoard"):
+        found = re.search(r"\t%s = Vector3\.new\((-?[\d.]+), (-?[\d.]+), (-?[\d.]+)\)" % name, layout_text)
+        if not found:
+            fail("LobbyLayout", "the workshop has no %s" % name)
+            continue
+        x, z = float(found.group(1)), float(found.group(3))
+        if not (abs(z - gz) <= gd / 2 and x < gx - 44):
+            fail("LobbyLayout", "the workshop's %s is not in the garden's west wing" % name)
+    lift = re.search(r"\tlift = Vector3\.new\((-?[\d.]+), (-?[\d.]+), (-?[\d.]+)\)", layout_text)
+    start = re.search(r"\tworkshopStart = Vector3\.new\((-?[\d.]+), (-?[\d.]+), (-?[\d.]+)\)", layout_text)
+    if lift and start and math.hypot(float(lift.group(1)) - float(start.group(1)),
+                                     float(lift.group(3)) - float(start.group(3))) > 45:
+        fail("LobbyLayout", "the workshop is not by the squish room's lift")
+
+
 def main():
+    check_workshop()
     check_lobby_life()
     check_post_box()
     check_challenge_board()

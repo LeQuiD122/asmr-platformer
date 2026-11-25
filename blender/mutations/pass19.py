@@ -44,7 +44,7 @@ MUTATIONS = [
     ("a restyled prompt back", VIEW, STORY, "\tui.word = word\n", "\tui.word = word\n\tlocal _ = Enum.ProximityPromptStyle.Custom\n"),
     # Back from first person into a proper third person view.
     ("left inside your head", VIEW, STORY, "\t\tsettleThird()\n\telse", "\t\tapply()\n\telse"),
-    ("first person by a scroll", VIEW, STORY, "player.CameraMinZoomDistance = LOBBY_NEAR", "player.CameraMinZoomDistance = 0.5"),
+    ("first person by a scroll", VIEW, STORY, '\t\tplayer.CameraMaxZoomDistance = THIRD_DISTANCE\n\t\tplayer.CameraMinZoomDistance = THIRD_DISTANCE\n\tend', '\t\tplayer.CameraMaxZoomDistance = THIRD_DISTANCE\n\t\tplayer.CameraMinZoomDistance = 0.5\n\tend'),
     # The drain's cries.
     ("cries in a warning sign's letters", SUNK, STORY, "piece.FontFace = if quiet then Style.FONT.murmur else Style.FONT.shout",
      "piece.FontFace = Style.FONT.display"),

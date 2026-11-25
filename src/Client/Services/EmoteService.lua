@@ -1,7 +1,7 @@
 --!strict
 -- StarterPlayerScripts/Services/EmoteService.lua
--- THE EMOTES: the shop's four (Wave, Sit and squish, Stretch, Spin), played by anyone who owns them and
--- seen by everyone.
+-- THE EMOTES: the shop's ten (Wave, Cheer, Bow, Shrug, Flex, Stretch, Spin, Groove, Sit and squish, and the Aura), played
+-- by anyone who owns them and seen by everyone.
 --
 -- A player asks the server to play one ("Emote"); the server checks they own it and tells every client,
 -- and every client poses that character itself, through the same joints the endings use (Poses: the
@@ -36,21 +36,34 @@ local function warnOnce(text: string)
 		warn(text .. " (shown once)")
 	end
 end
-EmoteService.VERSION = "emotes, 2026-10-05"
+EmoteService.VERSION = "ten emotes, keyed, the hundred-and-fifty-eighth pass, 2026-10-31"
 
--- Each emote: its pose in Poses, how long it lasts, and whether moving ends it (a spin is too quick to).
-local EMOTES: { [string]: { pose: string, seconds: number, keep: boolean?, toy: boolean? } } = {
-	Wave = { pose = "wave", seconds = 2.4 },
-	Stretch = { pose = "stretch", seconds = 3.4 },
-	Spin = { pose = "spin", seconds = 1.5, keep = true },
-	SitSquish = { pose = "sitSquish", seconds = 20, toy = true },
+-- Each emote: its pose in Poses, how long it lasts (Poses.LENGTH, as gen_poses.py wrote it), whether moving ends it (a
+-- spin is too quick to), the squeeze toy in the hands, and the glow round you (the Aura).
+-- KEYED NOW (the hundred-and-fifty-eighth pass, from your notes of 2026-10-31: "improve the existing emotes that can be
+-- bought, and add even more of them"): every one a pose in keys through time with the whole body in it (Poses, written by
+-- blender/gen_poses.py), and six more: Cheer, Bow, Shrug, Flex, Groove and the Aura.
+local EMOTES: { [string]: { pose: string, seconds: number, keep: boolean?, toy: boolean?, aura: boolean? } } = {
+	Wave = { pose = "emoteWave", seconds = 2.9 },
+	Cheer = { pose = "emoteCheer", seconds = 2.8 },
+	Bow = { pose = "emoteBow", seconds = 2.8 },
+	Shrug = { pose = "emoteShrug", seconds = 2 },
+	Flex = { pose = "emoteFlex", seconds = 2.8 },
+	Stretch = { pose = "emoteStretch", seconds = 4 },
+	Spin = { pose = "emoteSpin", seconds = 2.1, keep = true },
+	Groove = { pose = "emoteGroove", seconds = 8.9 },
+	SitSquish = { pose = "emoteSitSquish", seconds = 20, toy = true },
+	Aura = { pose = "emoteAura", seconds = 10.8, aura = true },
+	-- VIP only (the two-hundred-and-thirteenth pass).
+	RoyalWave = { pose = "emoteRoyalWave", seconds = 3.8 },
 }
-local ORDER = { "Wave", "SitSquish", "Stretch", "Spin" }
+local ORDER = { "Wave", "Cheer", "Bow", "Shrug", "Flex", "Stretch", "Spin", "Groove", "SitSquish", "Aura", "RoyalWave" }
 local PICKER_ACTION = "EmotePicker"
 local CLOSE_ACTION = "EmotePickerClose"
 local MOVING = 3 -- studs a second of walking that ends an emote
 
-type Playing = { id: string, began: number, seconds: number, model: Instance?, joints: { [string]: any }?, toy: BasePart? }
+type Playing = { id: string, began: number, seconds: number, model: Instance?, joints: { [string]: any }?, toy: BasePart?,
+	glow: Attachment? }
 local playing: { [Player]: Playing } = {}
 local stepped: RBXScriptConnection? = nil
 local kit: any = nil
@@ -69,6 +82,67 @@ local function rest(entry: Playing)
 		entry.toy:Destroy()
 		entry.toy = nil
 	end
+	local glow = entry.glow
+	if glow then
+		-- Let the motes already up finish rising, the light fading with them.
+		entry.glow = nil
+		for _, item in ipairs(glow:GetChildren()) do
+			if item:IsA("ParticleEmitter") then
+				item.Enabled = false
+			elseif item:IsA("PointLight") then
+				TweenService:Create(item, TweenInfo.new(0.8, Enum.EasingStyle.Sine), { Brightness = 0 }):Play()
+			end
+		end
+		game:GetService("Debris"):AddItem(glow, 2.6)
+	end
+end
+
+-- THE AURA'S GLOW (the hundred-and-fifty-eighth pass): while the Aura plays, warm motes rise slowly round you from your
+-- feet, a few pale wisps drift up with them, and a soft warm light is on you. A real light, low; nothing lit by being Neon.
+local function auraOn(entry: Playing, root: BasePart)
+	if entry.glow then
+		return
+	end
+	local at = Instance.new("Attachment")
+	at.Name = "EmoteAura"
+	at.Position = Vector3.new(0, -(root.Size.Y / 2 + 1.9), 0)
+	at.Parent = root
+	local motes = Instance.new("ParticleEmitter")
+	motes.Name = "Motes"
+	motes.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	motes.Color = ColorSequence.new(Color3.fromRGB(255, 240, 200), Color3.fromRGB(255, 204, 130))
+	motes.LightEmission = 0.7
+	motes.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.25, 0.2),
+		NumberSequenceKeypoint.new(1, 0) })
+	motes.Transparency = NumberSequence.new(0.15, 1)
+	motes.Lifetime = NumberRange.new(1.8, 2.8)
+	motes.Speed = NumberRange.new(1.4, 2.6)
+	motes.SpreadAngle = Vector2.new(38, 38)
+	motes.Acceleration = Vector3.new(0, 0.8, 0)
+	motes.Drag = 0.7
+	motes.Rate = 12
+	motes.Parent = at
+	local wisps = Instance.new("ParticleEmitter")
+	wisps.Name = "Wisps"
+	wisps.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	wisps.Color = ColorSequence.new(Color3.fromRGB(255, 246, 228))
+	wisps.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 2.6) })
+	wisps.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, 0.88),
+		NumberSequenceKeypoint.new(1, 1) })
+	wisps.Lifetime = NumberRange.new(2, 3)
+	wisps.Speed = NumberRange.new(0.8, 1.4)
+	wisps.SpreadAngle = Vector2.new(25, 25)
+	wisps.RotSpeed = NumberRange.new(-15, 15)
+	wisps.Rate = 2.5
+	wisps.Parent = at
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 226, 176)
+	light.Brightness = 0
+	light.Range = 9
+	light.Shadows = false
+	light.Parent = at
+	TweenService:Create(light, TweenInfo.new(0.8, Enum.EasingStyle.Sine), { Brightness = 0.9 }):Play()
+	entry.glow = at
 end
 
 -- Whether `player` is in an emote on this screen (PlayerLife leaves them be meanwhile).
@@ -152,6 +226,9 @@ local function poseAll()
 		end
 		if emote.toy then
 			holdToy(entry, character :: Model, root :: BasePart, t)
+		end
+		if emote.aura then
+			auraOn(entry, root :: BasePart)
 		end
 	end
 	local hook = stepped
@@ -473,5 +550,5 @@ function EmoteService.start()
 	print("EmoteService: running, " .. EmoteService.VERSION)
 end
 
-EmoteService.STAMP = "ef8c7244"
+EmoteService.STAMP = "6b4fb966"
 return EmoteService

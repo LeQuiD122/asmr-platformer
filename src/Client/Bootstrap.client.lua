@@ -129,12 +129,14 @@ task.spawn(CloudService.start)
 -- SOUNDS everyone wears (StepService), THE EMOTES everyone sees (EmoteService), and THE SQUISH ROOM'S lifts
 -- (SquishRoomClient), and THE LAUNCH in the Sunken City's harbour with its searchlight (SearchlightClient), and
 -- HILL HOUSE'S HALL, taking his key (HillHouseClient). And
--- in Studio only, the test panel (DevPanelClient, F8). The prompts are Roblox's own: a restyled one was tried
--- and taken out, because it swallowed the camera's right-click release when the cursor was over it.
+-- in Studio only, the test panel (DevPanelClient, F8). And THE RUN, FELT (RunFeel): a checkpoint reached. The prompts are Roblox's own: a restyled one was tried
+-- and taken out, because it swallowed the camera's right-click release when the cursor was over it. And YOUR HANDS
+-- (Haptics, the hundred-and-sixty-fourth pass): started here to feel a hard landing; the steps, the presses and the
+-- scenes ask it for the rest. And THE TELEPRINTER (the hundred-and-sixty-fifth): a creamy keyboard's strip of tape.
 for _, name in ipairs({ "SkyPoolsClient", "SunkenCityClient", "CityShoreClient", "FloodedHallsClient",
 	"HillHouseClient", "AmbienceService", "StoryClient", "JournalService", "ViewModeService", "ShopService", "OnboardingService",
 	"StepService", "EmoteService", "SquishRoomClient", "DevPanelClient", "SearchlightClient", "CosmeticsClient",
-	"TalkClient", "LobbyLife", "PlayerLife", "StalkerClient" }) do
+	"TalkClient", "LobbyLife", "PlayerLife", "GroundMarks", "DrawingBoard", "Haptics", "Teleprinter", "RunFeel", "StalkerClient" }) do
 	task.spawn(function()
 		local module = Services:WaitForChild(name, 30)
 		if module and module:IsA("ModuleScript") then
@@ -161,15 +163,40 @@ local SlimeLaunch = RemoteEvents:WaitForChild("SlimeLaunch")
 -- Bootstrap predates this remote would otherwise yield here forever -- and every line below this
 -- one would never run, which is the failure this file has already had once.
 local ScreenFade = RemoteEvents:WaitForChild("ScreenFade", 10) :: RemoteEvent?
+-- WHAT IS OPEN, PUT AWAY AS THE SCREEN GOES BLACK (the hundred-and-forty-third pass). A run starts for everyone standing
+-- in the lobby, so one that started while you were in the shop, at the post box, in the journal, the emotes or the menu
+-- took it with you onto the level, over the black and then over the level, your controls still held by the shop. The
+-- list a scene puts away (Cinema.closeOverlays), for every move the server makes under a black or a dip.
+local function putAway()
+	local cinema = Services:FindFirstChild("Cinema")
+	if not (cinema and cinema:IsA("ModuleScript")) then
+		return
+	end
+	local ok, module = pcall(require, cinema)
+	if ok and type(module) == "table" and type(module.closeOverlays) == "function" then
+		local fine, err = pcall(module.closeOverlays)
+		if not fine then
+			warn("[client] what was open could not be put away for the black: " .. tostring(err))
+		end
+	end
+end
 if ScreenFade then
 	ScreenFade.OnClientEvent:Connect(function(payload)
 		if typeof(payload) ~= "table" then
 			return
 		end
-		if payload.black then
-			UIService.fadeToBlack(payload.time)
-		else
+		-- A DIP (a fall caught): black at once and back. A CARD alone: the level's name, on a black already up. The
+		-- server's moves into and out of a level (the hundred-and-thirty-seventh pass).
+		if payload.dip then
+			putAway()
+			UIService.dip(payload.time)
+		elseif payload.black == true then
+			putAway()
+			UIService.fadeToBlack(payload.time, payload.card)
+		elseif payload.black == false then
 			UIService.fadeFromBlack(payload.time)
+		elseif payload.card then
+			UIService.fadeCard(payload.card)
 		end
 	end)
 end
@@ -189,9 +216,26 @@ SlimeLaunch.OnClientEvent:Connect(function(launchVelocity: number)
 	end
 	-- Leave Running first: that state actively damps vertical velocity, so
 	-- assigning without it eats most of the launch.
-	humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+	-- A BOUNCE ADDS TO YOUR JUMP, NEVER TAKES FROM IT (the two-hundred-and-forty-fourth pass, from a sweep of every
+	-- material in the squish room). The server sees you land and sends the bounce; by the time it arrives you may
+	-- already have jumped, and setting your rise to the bounce's then CUT the jump: off a jellyfish a jump went 5.4
+	-- studs up against 7.3 off the floor. Now, rising from your own jump, you keep it and get a third of the bounce
+	-- on top, so a jump timed to the landing goes higher (the rhythm the jelly was made for); otherwise the bounce
+	-- is what it was.
 	local current = root.AssemblyLinearVelocity
-	root.AssemblyLinearVelocity = Vector3.new(current.X, launchVelocity, current.Z)
+	local rise = launchVelocity
+	if current.Y > 8 then
+		rise = math.max(current.Y, launchVelocity) + launchVelocity / 3
+	end
+	humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+	root.AssemblyLinearVelocity = Vector3.new(current.X, rise, current.Z)
+	-- FELT IN YOUR HANDS (the hundred-and-sixty-fourth pass): the fling swells up through a controller or a phone.
+	local haptics = Services:FindFirstChild("Haptics")
+	if haptics and haptics:IsA("ModuleScript") then
+		pcall(function()
+			(require(haptics) :: any).launch(launchVelocity)
+		end)
+	end
 	-- THE KICK: the picture widens as the slime flings you and settles as you rise, so the launch is
 	-- felt as speed rather than seen as a number. Only with the ordinary camera (not in a scene), and
 	-- from the same resting width however many launches come in a row.
@@ -201,8 +245,13 @@ SlimeLaunch.OnClientEvent:Connect(function(launchVelocity: number)
 		launchKick.token += 1
 		local token = launchKick.token
 		local base = launchKick.base :: number
+		-- LESS MOTION WHEN ASKED (the hundred-and-sixty-second pass, Roblox's Reduce Motion): a third of the widening.
+		local calm = false
+		pcall(function()
+			calm = game:GetService("GuiService").ReducedMotionEnabled == true
+		end)
 		game:GetService("TweenService"):Create(camera, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-			{ FieldOfView = base + 9 }):Play()
+			{ FieldOfView = base + (if calm then 3 else 9) }):Play()
 		task.delay(0.35, function()
 			if launchKick.token == token then
 				local back = game:GetService("TweenService"):Create(camera, TweenInfo.new(0.9, Enum.EasingStyle.Sine), { FieldOfView = base })
@@ -251,9 +300,12 @@ local CELEBRATION_COLOURS = ColorSequence.new({
 
 -- Respected if the platform exposes it. A celebration is exactly the kind of thing that
 -- should get quieter, not disappear, when someone has asked for less motion.
+-- (The hundred-and-sixty-second pass: Roblox's own Reduce Motion is GuiService.ReducedMotionEnabled, as Style.lessMotion
+-- reads it for every other screen; the game setting this read first is kept as a second way in.)
 local function reducedMotion(): boolean
 	local ok, value = pcall(function()
-		return UserSettings():GetService("UserGameSettings").ReducedMotion
+		return game:GetService("GuiService").ReducedMotionEnabled
+			or UserSettings():GetService("UserGameSettings").ReducedMotion
 	end)
 	return ok and value == true
 end

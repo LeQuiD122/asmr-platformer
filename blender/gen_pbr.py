@@ -1015,41 +1015,6 @@ def build_snow():
     }
 
 
-def build_slab():
-    """The solid body under the material layer: one neutral set for all six.
-
-    === Why this ColorMap is nearly white, when every other one is coloured ===
-
-    SurfaceAppearance in Overlay mode BLENDS over part.Color using the map's alpha, so those
-    maps can carry real colour. A MaterialVariant has no alpha mode -- its ColorMap is
-    MULTIPLIED by part.Color, exactly like a built-in material. Bake a colour in here and
-    every slab in the game comes out that colour no matter what MaterialAppearance says.
-
-    Kept between 0.72 and 1.0, so the six baseColors -- from dark brown butter to pale
-    lavender stable -- all survive the multiply and stay distinguishable.
-
-    One set rather than six, for the same reason: the slab is the cake, not the icing. It is
-    the same stone under every material and only its tint changes.
-    """
-    rng = np.random.default_rng(20260820)
-    pores = periodic_noise(rng, 30, 30, octaves=5)
-    swell = periodic_noise(rng, 5, 5, octaves=3) * 0.5
-    height = pores * 0.55 + swell
-
-    # Matte. This is structure, and structure that catches highlights competes with the
-    # material sitting on top of it -- which is the thing meant to look wet.
-    rough = 0.74 + 0.11 * pores
-    # Deliberately shallow: 0.72 to 1.0 rather than 0 to 1, so the multiply never crushes a
-    # dark baseColor into mud.
-    mix = 0.5 + 0.5 * (pores * 0.6 + swell * 0.4)
-    return {
-        "Slab_Color": colour_map((0.72, 0.72, 0.72), (1.0, 1.0, 1.0), mix, 1.0),
-        "Slab_Normal": normal_map(height, 1.2),
-        "Slab_Roughness": grey_map(np.clip(rough, 0, 1)),
-    }
-
-
-
 def build_water():
     """Ripple for the sea, RETUNED for a 200-stud repeat.
 
@@ -1082,101 +1047,6 @@ def build_water():
         "Water_Normal": normal_map(height, 1.8),
         "Water_Roughness": grey_map(np.clip(rough, 0, 1)),
     }
-
-
-def build_concrete():
-    """Weathered concrete, for the backdrop towers, colonnade and facades.
-
-    Board-marked rather than smooth: faint horizontal lines from the shuttering, plus
-    aggregate pitting and broad staining. Board marks are what stop a 2000-stud tower
-    reading as a painted box, and they are cheap -- one anisotropic octave.
-
-    Kept LOW CONTRAST on purpose. This sits 700 to 5200 studs away behind 0.26-density fog,
-    and detail authored to look right up close arrives as noise. What survives that distance
-    is the broad staining; the fine grain is there for the near band only.
-    """
-    rng = np.random.default_rng(20260822)
-    boards = periodic_noise(rng, 2, 26, octaves=3)
-    aggregate = periodic_noise(rng, 34, 34, octaves=5)
-    staining = periodic_noise(rng, 4, 4, octaves=3)
-    height = boards * 0.35 + aggregate * 0.55
-
-    rough = 0.68 + 0.12 * aggregate + 0.06 * staining
-    mix = 0.5 + 0.5 * (staining * 0.7 + boards * 0.3)
-    return {
-        # Near-white for the same reason the slab set is: these are tinted by the pastel
-        # palette in BackdropService, and a coloured map would flatten all six tints into one.
-        "Concrete_Color": colour_map((0.70, 0.70, 0.72), (1.0, 1.0, 1.0), mix, 1.0),
-        "Concrete_Normal": normal_map(height, 1.0),
-        "Concrete_Roughness": grey_map(np.clip(rough, 0, 1)),
-    }
-
-
-
-def build_pooltile():
-    """Small square mosaic tile, for the aquapark structures.
-
-    The single most aquapark thing there is. Concrete says municipal building; 20-stud
-    mosaic with grout lines between says LEISURE CENTRE, and it does it instantly and from
-    a long way off, because a regular grid at a legible size is a texture no natural surface
-    has.
-
-    Built from a square wave rather than noise: the grout has to be STRAIGHT and evenly
-    spaced or it reads as crazing. Fifteen tiles across the repeat, so at the 200-stud
-    StudsPerTile these end up around 13 studs each -- big enough to resolve at 900 studs and
-    small enough to still read as tiling rather than as panels.
-    """
-    rng = np.random.default_rng(20260823)
-    axis = np.arange(RES, dtype=np.float64) / RES
-    u, v = np.meshgrid(axis, axis, indexing="ij")
-
-    tiles = 15
-    # THE GRID IS OFFSET BY HALF A TILE, and the seam check is what found this.
-    #
-    # Without the +0.5 the texture edge falls in the MIDDLE of a tile, so tile 0's left half
-    # butts against tile 14's right half -- two different shades meeting with no grout line
-    # between them, which is a mosaic tile split down the middle repeated across the whole
-    # surface. Offset, both edges land on grout and both resolve to the same tile index.
-    su, sv = u * tiles + 0.5, v * tiles + 0.5
-
-    # Distance to the nearest grout line in each axis, as a 0-1 ramp.
-    fu = np.abs(su % 1.0 - 0.5) * 2.0
-    fv = np.abs(sv % 1.0 - 0.5) * 2.0
-    grout = np.clip((1.0 - fu) * 9.0, 0, 1) + np.clip((1.0 - fv) * 9.0, 0, 1)
-    grout = np.clip(grout, 0, 1)
-
-    # Per-tile shade variation, which is what stops a mosaic reading as printed wallpaper.
-    # Real pools are laid from mixed batches and no two tiles match. Modulo, not clip, so the
-    # lattice wraps with the grid above.
-    shade = rng.random((tiles, tiles))
-    iu = np.floor(su).astype(int) % tiles
-    iv = np.floor(sv).astype(int) % tiles
-    per_tile = shade[iu, iv] * 2.0 - 1.0
-
-    stain = periodic_noise(rng, 3, 3, octaves=4)
-    height = -grout * 0.9 + per_tile * 0.10
-
-    # Glazed tile is GLOSSY and the grout between it is not, which is the whole read: a
-    # uniform roughness over a tile pattern looks like printed lino.
-    rough = 0.16 + 0.62 * grout + 0.06 * stain
-    mix = 0.5 + 0.5 * (per_tile * 0.55 + stain * 0.45)
-    return {
-        # Near-white, because BackdropService tints these from the pastel palette and a
-        # MaterialVariant's ColorMap multiplies rather than replaces.
-        "PoolTile_Color": colour_map((0.66, 0.74, 0.78), (1.0, 1.0, 1.0), mix, 1.0),
-        "PoolTile_Normal": normal_map(height, 1.6),
-        "PoolTile_Roughness": grey_map(np.clip(rough, 0, 1)),
-    }
-
-
-# Maps that are ATLASES, not tiling samples, and must be exempt from the seam check.
-#
-# The check is right about them and wrong to fail them: an atlas has twenty-five different
-# keycaps in it, so of course its left edge does not continue into its right. It is never
-# tiled -- gen_keyboard addresses it by explicit per-cap UVs. Exempting it by name beats
-# the alternatives, which are deleting a check that catches a real and invisible bug on
-# every other map, or quietly loosening its threshold until nothing trips it.
-ATLAS_MAPS = {"Keyboard_Color"}
 
 
 def verify(pixels, name):
@@ -1226,10 +1096,9 @@ def main():
         ("oobleck", build_oobleck()),
         ("buttons", build_buttons()),
         ("snow", build_snow()),
-        ("slab", build_slab()),
         ("water", build_water()),
-        ("concrete", build_concrete()),
-        ("pool tile", build_pooltile()),
+        # (The slab, the backdrop's concrete and the pool tile are gen_surfaces.py's since the hundred-and-seventieth
+        # pass: twice the size, and made with the lobby's and the levels' other surfaces.)
     ):
         print(f"  --- {label} ---")
         for name, pixels in maps.items():
@@ -1238,7 +1107,7 @@ def main():
             print(f"    wrote {name}.png, mean rgb {mean:.3f}")
 
     print("")
-    print(f"  84 PNGs written to {OUT_DIR}")
+    print(f"  75 PNGs written to {OUT_DIR}")
     print("  Upload each to Roblox, then paste the asset ids into MaterialAppearance.")
     print("")
     print("Done." if all_ok else "!! a map failed its seam check -- it will tile visibly.")

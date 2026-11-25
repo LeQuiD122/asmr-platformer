@@ -604,6 +604,20 @@ local ARMS = { "RightShoulder", "RightElbow", "RightWrist", "LeftShoulder", "Lef
 
 -- Room inside a bubble's top for the speaker's name tag on its rim (dressBubble).
 local BUBBLE_TOP = 14
+-- Room at a bubble's sides (the two-hundredth pass: twelve let a full line's first letter touch the rim).
+local BUBBLE_SIDE = 14
+
+-- AS WIDE AS IT CAN BE BEFORE IT GROWS TALL (the two-hundredth pass, seen in play, from your note of 2026-11-05: "the
+-- speech boxes"). Sized to its own words on both sides with the wrapping left to Roblox, a bubble came out a narrow
+-- column, a hundred and sixty-odd pixels of the three hundred it may be, five lines deep for a line that fits in three.
+-- A line longer than WRAP_AT letters is laid at the whole SPEECH_WIDE and grows only in height; a short one is still as
+-- wide as its words.
+local WRAP_AT = 30
+local function laidOut(label: TextLabel, text: string)
+	local long = (utf8.len(text) or #text) > WRAP_AT
+	label.Size = if long then UDim2.fromOffset(SPEECH_WIDE, 0) else UDim2.new()
+	label.AutomaticSize = if long then Enum.AutomaticSize.Y else Enum.AutomaticSize.XY
+end
 
 -- THE ONE SPEECH BUBBLE (Style.BUBBLE, the hundred-and-nineteenth pass): `label`, over a head in `gui`, made the bubble
 -- everyone speaks in, its rim `rim`, with a tail under it pointing down at whoever said it.
@@ -623,7 +637,7 @@ local function asBubble(gui: BillboardGui, label: TextLabel, rim: Color3)
 	corner.CornerRadius = Style.BUBBLE.radius
 	corner.Parent = label
 	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 12), UDim.new(0, 12)
+	pad.PaddingLeft, pad.PaddingRight = UDim.new(0, BUBBLE_SIDE), UDim.new(0, BUBBLE_SIDE)
 	pad.PaddingTop, pad.PaddingBottom = UDim.new(0, BUBBLE_TOP), UDim.new(0, 9)
 	pad.Parent = label
 	-- THE TAIL: a square turned to a diamond at the bubble's bottom middle, behind it, so its lower point and its two
@@ -739,8 +753,7 @@ function Townsfolk.say(npc: Person, text: string, seconds: number?, shout: boole
 	label.Name = "Words"
 	label.AnchorPoint = Vector2.new(0.5, 1)
 	label.Position = UDim2.fromScale(0.5, 1)
-	label.Size = UDim2.new()
-	label.AutomaticSize = Enum.AutomaticSize.XY
+	laidOut(label, text)
 	label.TextWrapped = true
 	label.TextSize = if shout then SHOUT_TEXT else SPEECH_TEXT
 	label.Text = text
@@ -862,6 +875,51 @@ function Townsfolk.write(player: Player, key: string)
 	end
 end
 
+-- THEY THINK BEFORE THEY ANSWER (the two-hundredth pass; your note of 2026-10-13, "characters act and think"). When you
+-- have said your line they hear you out for `before` seconds, then three dots come up over their head in the one
+-- speech bubble, one by one (TalkClient, ThinkingBubble), for `hold` more, until they speak, which puts the dots
+-- away (say). The same 1.4 seconds between your line and their answer as before, the last of it seen to be thought.
+local THINK = { before = 0.6, hold = 0.8 }
+function Townsfolk.think(npc: Person)
+	if npc.bubble then
+		npc.bubble:Destroy()
+	end
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "Thinking"
+	gui.Size = UDim2.fromOffset(140, 90)
+	gui.SizeOffset = Vector2.new(0, 0.5)
+	gui.StudsOffset = Vector3.new(0, 2.8, 0)
+	gui.AlwaysOnTop = true
+	gui.MaxDistance = 48
+	gui.LightInfluence = 0
+	local label = Instance.new("TextLabel")
+	label.Name = "Words"
+	label.AnchorPoint = Vector2.new(0.5, 1)
+	label.Position = UDim2.fromScale(0.5, 1)
+	label.Size = UDim2.new()
+	label.AutomaticSize = Enum.AutomaticSize.XY
+	label.TextSize = SPEECH_TEXT
+	label.Text = "\u{2022} \u{2022} \u{2022}"
+	asBubble(gui, label, Style.BUBBLE.rim)
+	-- No name tag on a thought, so no room left for one at its top.
+	local pad = label:FindFirstChildOfClass("UIPadding")
+	if pad then
+		pad.PaddingTop = UDim.new(0, 9)
+	end
+	label.Parent = gui
+	gui.Adornee = npc.head
+	gui.Parent = npc.head
+	npc.bubble = gui
+	CollectionService:AddTag(gui, "ThinkingBubble")
+	-- Never outlives an answer that does not come (they were taken away mid-thought).
+	task.delay(THINK.before + THINK.hold + 3, function()
+		if npc.bubble == gui then
+			npc.bubble = nil
+		end
+		gui:Destroy()
+	end)
+end
+
 -- YOUR LINE, over your own head, for anyone near to see: in the one speech bubble everyone speaks in (since the
 -- hundred-and-nineteenth pass; it was the screen's dark panel), its rim the warm accent so it is still told from
 -- theirs, and the same size of text. And you TELL IT WITH YOUR BODY, as they do: the gesture its words call for and
@@ -888,8 +946,7 @@ function Townsfolk.speakAs(player: Player, text: string)
 	label.Name = "Words"
 	label.AnchorPoint = Vector2.new(0.5, 1)
 	label.Position = UDim2.fromScale(0.5, 1)
-	label.Size = UDim2.new()
-	label.AutomaticSize = Enum.AutomaticSize.XY
+	laidOut(label, text)
 	label.TextWrapped = true
 	label.TextSize = SPEECH_TEXT
 	label.Text = text
@@ -1006,7 +1063,12 @@ function Townsfolk.answer(player: Player, name: string, id: string)
 	end
 	TALK.busy[player] = true
 	Townsfolk.speakAs(player, said)
-	task.wait(1.4)
+	-- Heard out, then thought about (THINK): the dots over their head for the last of the wait.
+	task.wait(THINK.before)
+	if npc.model.Parent and not npc.busy then
+		Townsfolk.think(npc)
+	end
+	task.wait(THINK.hold)
 	for index, line in ipairs(replies) do
 		if not npc.model.Parent then
 			break
@@ -1641,5 +1703,5 @@ function Townsfolk.find(name: string): Person?
 	return if npc and npc.model.Parent then npc else nil
 end
 
-Townsfolk.STAMP = "0d6b3e76"
+Townsfolk.STAMP = "61b686e8"
 return Townsfolk

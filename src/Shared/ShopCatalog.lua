@@ -17,9 +17,9 @@ export type Item = {
 	tab: string,
 	name: string,
 	blurb: string,
-	kind: string, -- "trail", "aura", "steps", "sound", "emote", "pass", "product", "tokens", "background", "crate"
+	kind: string, -- "trail", "aura", "pal", "steps", "sound", "emote", "pass", "product", "tokens", "background", "crate"
 	price: number?, -- in tokens
-	robux: number?, -- shown price in Robux (the real price is whatever the Dashboard says)
+	robux: number?, -- the price in Robux shown until Roblox has said its own for you (robuxFor, below)
 	passId: number?,
 	productId: number?,
 	tokens: number?, -- what a token pack gives
@@ -38,9 +38,9 @@ export type Item = {
 local ShopCatalog = {}
 
 -- The tabs, in the order they are shown. Featured is a pick from the others.
-ShopCatalog.TABS = { "Featured", "Steps", "Trails", "Sounds", "Auras", "Emotes", "Passes", "Tokens", "Backgrounds" }
+ShopCatalog.TABS = { "Featured", "Pals", "Steps", "Trails", "Sounds", "Auras", "Emotes", "Passes", "Tokens", "Backgrounds", "Wear" }
 
-ShopCatalog.FEATURED = { "StarterPack", "VIP", "BgCrate", "DoubleTokens", "HoneyPaw", "Poppy", "HoneyDrip", "Embers",
+ShopCatalog.FEATURED = { "StarterPack", "VIP", "PalNeedoh", "PalLava", "BgCrate", "Aura", "DoubleTokens", "HoneyPaw", "Poppy", "HoneyDrip", "Embers",
 	"Pack300" }
 
 local function rgb(r: number, g: number, b: number): Color3
@@ -55,12 +55,21 @@ local ITEMS: { Item } = {
 		price = 90, colour = rgb(250, 199, 117), accent = rgb(99, 56, 6) },
 	{ id = "HoneyPaw", tab = "Steps", kind = "steps", name = "Honey paw", blurb = "Paw prints, slow to fill",
 		price = 120, colour = rgb(239, 159, 39), accent = rgb(99, 56, 6) },
+	-- CAT PAWS (the two-hundred-and-sixteenth pass): pink jelly toe beans pressed where you walk (Cos_CatPaw).
+	{ id = "CatPaw", tab = "Steps", kind = "steps", name = "Cat paws", blurb = "Soft pink toe beans where you walk",
+		price = 160, colour = rgb(255, 196, 214), accent = rgb(120, 40, 70) },
 	{ id = "BubbleSole", tab = "Steps", kind = "steps", name = "Bubble sole", blurb = "Prints that fizz away",
 		price = 150, colour = rgb(181, 212, 244), accent = rgb(12, 68, 124) },
 	{ id = "SlimeStep", tab = "Steps", kind = "steps", name = "Slime steps", blurb = "Green blobs that drip as they go",
 		price = 130, colour = rgb(151, 196, 89), accent = rgb(39, 80, 10) },
 	{ id = "EmberStep", tab = "Steps", kind = "steps", name = "Ember steps", blurb = "Glowing prints that cool to ash",
 		price = 170, colour = rgb(255, 128, 48), accent = rgb(113, 43, 19) },
+	-- PENGUIN STEPS (limited, January's into February, the two-hundred-and-fourteenth pass).
+	{ id = "PenguinSteps", tab = "Steps", kind = "steps", name = "Penguin steps", blurb = "A little penguin's prints in the snow",
+		price = 300, limited = { from = "2027-01-29", to = "2027-02-12" }, colour = rgb(206, 230, 250), accent = rgb(24, 50, 90) },
+	-- VIP ONLY (the two-hundred-and-thirteenth pass): never sold, yours while you have VIP (EconomyService.owns).
+	{ id = "GildedSteps", tab = "Steps", kind = "steps", name = "Gilded steps", blurb = "Gold leaf pressed where you walk. VIP only",
+		earn = "vip", colour = rgb(250, 214, 130), accent = rgb(110, 70, 8) },
 
 	-- TRAILS: a ribbon of your chosen material behind you, seen by everyone.
 	{ id = "SoapSuds", tab = "Trails", kind = "trail", name = "Soap suds", blurb = "A clean white ribbon",
@@ -77,6 +86,12 @@ local ITEMS: { Item } = {
 		price = 260, colour = rgb(255, 236, 246), accent = rgb(114, 36, 62) },
 	{ id = "LavaRibbon", tab = "Trails", kind = "trail", name = "Lava ribbon", blurb = "Molten, glowing, throwing sparks",
 		price = 320, colour = rgb(255, 128, 32), accent = rgb(113, 43, 19) },
+	-- THE TWO-HUNDRED-AND-SIXTEENTH PASS (from your note of 2026-11-14: "add more stuff to the shop for tokens"):
+	-- blossom petals drifting down behind you, and cookie crumbs tossed and bouncing (Cos_Petal, Cos_CookieBit).
+	{ id = "Petals", tab = "Trails", kind = "trail", name = "Blossom", blurb = "Cherry blossom petals drifting down behind you",
+		price = 280, colour = rgb(255, 206, 222), accent = rgb(130, 46, 80) },
+	{ id = "CookieCrumbs", tab = "Trails", kind = "trail", name = "Cookie crumbs", blurb = "Crumbs and chunks of cookie behind you",
+		price = 240, colour = rgb(226, 176, 110), accent = rgb(90, 52, 20) },
 	-- EARNED, NOT BOUGHT: the key's green ribbon, for finishing the story (EconomyService.finishStory). The shop shows
 	-- it with what it takes instead of a price.
 	{ id = "GreenRibbon", tab = "Trails", kind = "trail", name = "Green ribbon", blurb = "The key's ribbon. Finish the story",
@@ -87,6 +102,17 @@ local ITEMS: { Item } = {
 	-- IN THE STARTER PACK ONLY (the pass below), never sold on its own.
 	{ id = "SeaGlass", tab = "Trails", kind = "trail", name = "Sea glass", blurb = "Soft green glass. In the starter pack",
 		earn = "starter", colour = rgb(130, 212, 190), accent = rgb(8, 80, 65) },
+	-- HERE FOR A SEASON (the two-hundred-and-thirteenth pass, `limited`: on sale from the first day to the day before the
+	-- last, UTC; first in Featured while it is here; kept for good by whoever has it). AUTUMN LEAVES: real leaves turning
+	-- as they fall behind you.
+	{ id = "AutumnLeaves", tab = "Trails", kind = "trail", name = "Autumn leaves", blurb = "Leaves turning as they fall behind you",
+		price = 350, limited = { from = "2026-11-14", to = "2026-11-28" }, colour = rgb(252, 196, 140), accent = rgb(120, 46, 16) },
+	-- JANUARY'S (limited, the two-hundred-and-fourteenth pass): WINTER WOOL, a knitted cord and pom-poms tumbling behind.
+	{ id = "WinterWool", tab = "Trails", kind = "trail", name = "Winter wool", blurb = "Knitted wool, pom-poms tumbling behind you",
+		price = 350, limited = { from = "2027-01-01", to = "2027-01-15" }, colour = rgb(250, 200, 196), accent = rgb(130, 24, 36) },
+	-- VIP ONLY (the two-hundred-and-thirteenth pass).
+	{ id = "GoldLeaf", tab = "Trails", kind = "trail", name = "Gold leaf", blurb = "Ribbons of gold, flakes drifting down. VIP only",
+		earn = "vip", colour = rgb(255, 222, 140), accent = rgb(110, 70, 8) },
 
 	-- SOUNDS: what your steps sound like, in place of Roblox's own footsteps (StepService plays them).
 	{ id = "Crunchy", tab = "Sounds", kind = "sound", name = "Crunchy", blurb = "A soft salt and snow crunch now and then",
@@ -113,42 +139,100 @@ local ITEMS: { Item } = {
 		price = 280, colour = rgb(236, 244, 255), accent = rgb(12, 68, 124) },
 	{ id = "Fireflies", tab = "Auras", kind = "aura", name = "Fireflies", blurb = "Soft lights drifting round you",
 		price = 350, colour = rgb(220, 255, 140), accent = rgb(39, 80, 10) },
+	-- HERE FOR A SEASON (limited): the first frost, then lantern night to the year's end.
+	{ id = "FirstFrost", tab = "Auras", kind = "aura", name = "First frost", blurb = "Frost glinting round you, snowflakes turning",
+		price = 400, limited = { from = "2026-11-28", to = "2026-12-12" }, colour = rgb(214, 236, 250), accent = rgb(30, 70, 110) },
+	{ id = "LanternNight", tab = "Auras", kind = "aura", name = "Lantern night", blurb = "Warm lanterns drifting up round you",
+		price = 450, limited = { from = "2026-12-12", to = "2027-01-01" }, colour = rgb(255, 214, 160), accent = rgb(110, 50, 10) },
+	{ id = "HotCocoa", tab = "Auras", kind = "aura", name = "Hot cocoa", blurb = "Marshmallows bobbing up through the steam",
+		price = 400, limited = { from = "2027-01-15", to = "2027-01-29" }, colour = rgb(236, 206, 176), accent = rgb(96, 50, 24) },
+	-- RUBBER DUCKS (the two-hundred-and-sixteenth pass): a little parade of them going round you (Cos_Duck).
+	{ id = "RubberDucks", tab = "Auras", kind = "aura", name = "Duck parade", blurb = "Rubber ducks paddling round you in a ring",
+		price = 380, colour = rgb(255, 226, 110), accent = rgb(120, 76, 10) },
+	-- VIP ONLY (the two-hundred-and-fourteenth pass): THE GILDED CROWN, a real crown of gold over your head.
+	{ id = "GildedCrown", tab = "Auras", kind = "aura", name = "Gilded crown", blurb = "A crown of gold floating over you. VIP only",
+		earn = "vip", colour = rgb(255, 226, 150), accent = rgb(110, 70, 8) },
 	{ id = "Starlight", tab = "Auras", kind = "aura", name = "Starlight", blurb = "Stars twinkling all round you",
 		price = 450, colour = rgb(206, 196, 255), accent = rgb(38, 33, 92) },
 
+	-- PALS (the two-hundred-and-sixteenth pass, from your note of 2026-11-14: "add more stuff to the shop for tokens, make
+	-- it good quality"): a little friend made of one of the bay's materials, following you about at your side, seen by
+	-- everyone. Each a model made in Studio's generator (Assets.Cosmetics.Pal_*), moving its own way (PALS below,
+	-- CosmeticsClient): the squishy ones hop after you and squash as they land, the bee buzzes, the cloud drifts and the
+	-- lava rock floats, glowing. One at a time.
+	{ id = "PalNeedoh", tab = "Pals", kind = "pal", name = "Squish", blurb = "A squishy little ball that hops along after you",
+		price = 350, colour = rgb(170, 206, 246), accent = rgb(30, 70, 120) },
+	{ id = "PalSlime", tab = "Pals", kind = "pal", name = "Gloop", blurb = "A slime that splats along behind you",
+		price = 450, colour = rgb(170, 236, 120), accent = rgb(39, 90, 20) },
+	{ id = "PalJelly", tab = "Pals", kind = "pal", name = "Wibble", blurb = "A jelly cube that wobbles as it hops",
+		price = 550, colour = rgb(255, 170, 196), accent = rgb(120, 30, 64) },
+	{ id = "PalBee", tab = "Pals", kind = "pal", name = "Bumble", blurb = "A chubby honey bee buzzing at your shoulder",
+		price = 700, colour = rgb(255, 214, 96), accent = rgb(90, 60, 6) },
+	{ id = "PalCloud", tab = "Pals", kind = "pal", name = "Nimbus", blurb = "A sleepy cloud drifting along over you",
+		price = 850, colour = rgb(226, 236, 255), accent = rgb(60, 80, 140) },
+	{ id = "PalLava", tab = "Pals", kind = "pal", name = "Cinder", blurb = "A warm lava rock that glows and throws sparks",
+		price = 1200, colour = rgb(255, 150, 70), accent = rgb(90, 30, 12) },
+
 	-- EMOTES: played from the emote picker (G, D-pad right, or the pause menu), seen by everyone
 	-- (EmoteService poses them on every client; moving ends one).
-	{ id = "Wave", tab = "Emotes", kind = "emote", name = "Wave", blurb = "Say hello",
+	-- TEN NOW, every one in keys with the whole body in it (the hundred-and-fifty-eighth pass, from your notes of
+	-- 2026-10-31: "improve the existing emotes that can be bought, and add even more of them"; Poses, gen_poses.py).
+	{ id = "Wave", tab = "Emotes", kind = "emote", name = "Wave", blurb = "Say hello, and mean it",
 		price = 80, colour = rgb(159, 225, 203), accent = rgb(8, 80, 65) },
+	{ id = "Shrug", tab = "Emotes", kind = "emote", name = "Shrug", blurb = "Palms up: who knows",
+		price = 90, colour = rgb(214, 214, 230), accent = rgb(52, 52, 84) },
+	{ id = "Bow", tab = "Emotes", kind = "emote", name = "Bow", blurb = "A slow bow, a hand on your heart",
+		price = 100, colour = rgb(240, 214, 176), accent = rgb(96, 60, 20) },
 	{ id = "SitSquish", tab = "Emotes", kind = "emote", name = "Sit and squish", blurb = "Sit down, squeeze a toy",
 		price = 80, colour = rgb(244, 192, 209), accent = rgb(114, 36, 62) },
-	{ id = "Stretch", tab = "Emotes", kind = "emote", name = "Stretch", blurb = "A long slow stretch",
+	{ id = "Stretch", tab = "Emotes", kind = "emote", name = "Stretch", blurb = "Up on your toes, and a long slow stretch",
 		price = 100, colour = rgb(192, 221, 151), accent = rgb(39, 80, 10) },
-	{ id = "Spin", tab = "Emotes", kind = "emote", name = "Spin", blurb = "A happy spin",
+	{ id = "Cheer", tab = "Emotes", kind = "emote", name = "Cheer", blurb = "Both arms up, and a bounce",
+		price = 120, colour = rgb(255, 214, 120), accent = rgb(110, 64, 0) },
+	{ id = "Spin", tab = "Emotes", kind = "emote", name = "Spin", blurb = "A wind-up, a spin and a ta-da",
 		price = 150, colour = rgb(175, 169, 236), accent = rgb(38, 33, 92) },
+	{ id = "Flex", tab = "Emotes", kind = "emote", name = "Flex", blurb = "Show them what you've got",
+		price = 160, colour = rgb(246, 170, 150), accent = rgb(110, 40, 26) },
+	{ id = "Groove", tab = "Emotes", kind = "emote", name = "Groove", blurb = "A little dance on the spot",
+		price = 260, colour = rgb(160, 222, 246), accent = rgb(16, 72, 110) },
+	-- THE AURA: calm, slow and sure of itself, a hand on the hip and the other arm rolling in slow waves, and a warm glow
+	-- coming up round you while it plays (EmoteService). The one to want.
+	{ id = "Aura", tab = "Emotes", kind = "emote", name = "Aura", blurb = "Calm, slow, unbothered. A glow comes with it",
+		price = 450, colour = rgb(255, 228, 170), accent = rgb(120, 76, 10) },
+	-- THE ROYAL WAVE (VIP only, the two-hundred-and-thirteenth pass): a hand behind the back, the other raised and
+	-- turning at the wrist, the chin up and the head slowly crossing the crowd (gen_poses.py).
+	{ id = "RoyalWave", tab = "Emotes", kind = "emote", name = "Royal wave", blurb = "The wave of someone they came to see. VIP only",
+		earn = "vip", colour = rgb(206, 203, 246), accent = rgb(38, 33, 92) },
 
 	-- PASSES: bought once, kept forever.
 	-- THE STARTER PACK: a pass, so Roblox sells it only once; its tokens and the sea glass trail are given once a save
 	-- (EconomyService.grantStarter). First in Featured, and gone from there once it is yours.
 	{ id = "StarterPack", tab = "Passes", kind = "pass", name = "Starter pack", blurb = "500 tokens and the sea glass trail",
-		robux = 99, passId = 0, tokens = 500, gives = "SeaGlass", once = true, colour = rgb(130, 212, 190),
+		robux = 99, passId = 2088020365, tokens = 500, gives = "SeaGlass", once = true, colour = rgb(130, 212, 190),
 		accent = rgb(8, 80, 65) },
 	{ id = "DoubleTokens", tab = "Passes", kind = "pass", name = "2x tokens", blurb = "Every run pays double",
-		robux = 199, passId = 0, colour = rgb(250, 199, 117), accent = rgb(99, 56, 6) },
-	{ id = "VIP", tab = "Passes", kind = "pass", name = "VIP", blurb = "A VIP tag over your head and in chat, and the gold sparkle",
-		robux = 299, passId = 0, colour = rgb(206, 203, 246), accent = rgb(38, 33, 92) },
+		robux = 199, passId = 2088932368, colour = rgb(250, 199, 117), accent = rgb(99, 56, 6) },
+	{ id = "VIP", tab = "Passes", kind = "pass", name = "VIP",
+		blurb = "A fifth more every run, a free crate and half again from the chest daily, limited things early, the VIP "
+			.. "lounge, VIP-only things, and a VIP tag over your head",
+		robux = 299, passId = 2088644360, colour = rgb(206, 203, 246), accent = rgb(38, 33, 92) },
 	{ id = "SecondChance", tab = "Passes", kind = "product", name = "Second chance", blurb = "Hardcore: back to your last checkpoint once",
-		robux = 25, productId = 0, colour = rgb(247, 193, 193), accent = rgb(121, 31, 31) },
+		robux = 25, productId = 3730806011, colour = rgb(247, 193, 193), accent = rgb(121, 31, 31) },
 
 	-- TOKEN PACKS: developer products, bought as often as you like.
+	-- THE RUN BOOST (the two-hundred-and-thirteenth pass): your next finished run pays double, on top of anything else.
+	-- Free for watching a short ad (ADS below), a few a day, or bought; kept until a run is finished. Never tokens
+	-- outright, so an ad never floods the bay with them.
+	{ id = "RunBoost", tab = "Tokens", kind = "product", name = "Run boost", blurb = "Your next finished run pays double",
+		robux = 19, productId = 3731060443, ad = "boost", colour = rgb(176, 236, 160), accent = rgb(10, 70, 30) },
 	{ id = "Pack100", tab = "Tokens", kind = "tokens", name = "100 tokens", blurb = "A handful",
-		robux = 49, productId = 0, tokens = 100, colour = rgb(250, 199, 117), accent = rgb(99, 56, 6) },
+		robux = 49, productId = 3730806017, tokens = 100, colour = rgb(250, 199, 117), accent = rgb(99, 56, 6) },
 	{ id = "Pack300", tab = "Tokens", kind = "tokens", name = "300 tokens", blurb = "A jar full",
-		robux = 129, productId = 0, tokens = 300, colour = rgb(239, 159, 39), accent = rgb(99, 56, 6) },
+		robux = 129, productId = 3730806020, tokens = 300, colour = rgb(239, 159, 39), accent = rgb(99, 56, 6) },
 	{ id = "Pack800", tab = "Tokens", kind = "tokens", name = "800 tokens", blurb = "A bucket of them",
-		robux = 299, productId = 0, tokens = 800, colour = rgb(186, 117, 23), accent = rgb(65, 36, 2) },
+		robux = 299, productId = 3730806026, tokens = 800, colour = rgb(186, 117, 23), accent = rgb(65, 36, 2) },
 	{ id = "Pack2000", tab = "Tokens", kind = "tokens", name = "2000 tokens", blurb = "The whole till",
-		robux = 649, productId = 0, tokens = 2000, colour = rgb(133, 79, 11), accent = rgb(250, 238, 218) },
+		robux = 649, productId = 3730806031, tokens = 2000, colour = rgb(133, 79, 11), accent = rgb(250, 238, 218) },
 
 	-- BACKGROUNDS (the hundred-and-sixth pass, from your notes: "buy a very detailed highly sophisticated background
 	-- ... with rarities"): the shop's own backdrop, one of the game's materials drawn behind it (ShopLook.THEMES, by
@@ -161,7 +245,7 @@ local ITEMS: { Item } = {
 		theme = "honey", rarity = "common", earn = "crate", colour = rgb(250, 206, 96), accent = rgb(120, 66, 8) },
 	{ id = "BgSlime", tab = "Backgrounds", kind = "background", name = "Slime", blurb = "Wobbling blobs that splat where you press",
 		theme = "slime", rarity = "common", earn = "crate", colour = rgb(176, 244, 140), accent = rgb(30, 100, 40) },
-	{ id = "BgSand", tab = "Backgrounds", kind = "background", name = "Kinetic sand", blurb = "Soft grains, and a footprint or two",
+	{ id = "BgSand", tab = "Backgrounds", kind = "background", name = "Sculpting sand", blurb = "Soft grains, and a footprint or two",
 		theme = "sand", rarity = "common", earn = "crate", colour = rgb(240, 214, 160), accent = rgb(120, 86, 40) },
 	{ id = "BgJelly", tab = "Backgrounds", kind = "background", name = "Jelly", blurb = "Pink jelly wobbling behind everything",
 		theme = "jello", rarity = "rare", earn = "crate", colour = rgb(255, 150, 170), accent = rgb(120, 20, 50) },
@@ -177,7 +261,7 @@ local ITEMS: { Item } = {
 		earn = "crate", colour = rgb(222, 204, 116), accent = rgb(96, 84, 40) },
 	{ id = "BgHold", tab = "Backgrounds", kind = "background", name = "The Hold",
 		blurb = "The deep under Harrow Bay, where the light goes out. It looks back", theme = "hold", rarity = "mythic",
-		robux = 399, passId = 0, colour = rgb(30, 110, 110), accent = rgb(4, 10, 14) },
+		robux = 399, passId = 2088176373, colour = rgb(30, 110, 110), accent = rgb(4, 10, 14) },
 }
 
 local byId: { [string]: Item } = {}
@@ -198,6 +282,7 @@ ShopCatalog.REWARD = {
 	-- THE DAILY CHEST (EconomyService.claimDaily), by day of the streak; day seven's from then on while it lasts.
 	DAILY = { 20, 30, 40, 50, 60, 80, 120 },
 	CACHE = 25, -- a hidden cache found (one a level, Interactables.cache), once a save
+	TELEPRINTER = 75, -- the teleprinter answered YES on a creamy keyboard (EconomyService.answeredTeleprinter), once a save
 	MATERIAL = 5, -- a material stood on in a level for the first time (EconomyService.foundMaterial), once a save
 	MATERIALS_ALL = 100, -- the last of them all found, on top of its own, with the swatch trail
 	FRIEND = 1.2, -- a run finished with a Roblox friend in it (EconomyService.withFriend): a fifth more, before the 2x
@@ -264,6 +349,70 @@ function ShopCatalog.byProduct(productId: number): Item?
 		end
 	end
 	return nil
+end
+
+-- ===== THE PRICE ROBLOX CHARGES (the hundred-and-sixtieth pass) =====
+--
+-- An item's `robux` is a number written here, and the shop drew it as the price. Roblox sets its own prices now: each
+-- country's, and the ones it tries out by itself for you when price testing is on (the Creator Dashboard's price
+-- optimization, which wants the price shown to be the one Roblox gives), so for many players the button said one thing
+-- and Roblox's window another. Now each item's price is asked of Roblox once a session on your screen
+-- (askPrices, from ShopService), where Roblox answers with yours, and that is what is drawn (robuxFor); until it has
+-- answered, or if it cannot, the number here. Roblox's window is what charges either way. A pass Roblox says is not for
+-- sale (taken off sale on the Dashboard) is not on sale here either (onSale). On the server nothing is asked.
+local said: { [string]: { robux: number?, onSale: boolean } } = {}
+local asked = "not yet" -- "not yet", "asking", "answered"
+local whenSaid: { () -> () } = {}
+
+-- The Robux to show for `item`: Roblox's own price for you once it has said, this file's until then.
+function ShopCatalog.robuxFor(item: Item): number?
+	local known = said[item.id]
+	return if known and known.robux then known.robux else item.robux
+end
+
+-- False only when Roblox has said the item is not for sale.
+function ShopCatalog.onSale(item: Item): boolean
+	local known = said[item.id]
+	return not (known and not known.onSale)
+end
+
+-- Every Robux item with an id asked of Roblox, once; `answered` (if given) once they have been, or at once if they
+-- have already.
+function ShopCatalog.askPrices(answered: (() -> ())?)
+	if asked == "answered" then
+		if answered then
+			task.spawn(answered)
+		end
+		return
+	end
+	if answered then
+		table.insert(whenSaid, answered)
+	end
+	if asked == "asking" then
+		return
+	end
+	asked = "asking"
+	task.spawn(function()
+		local MarketplaceService = game:GetService("MarketplaceService")
+		for _, item in ipairs(ITEMS) do
+			local isPass = item.passId ~= nil
+			local id = if isPass then item.passId else item.productId
+			if item.robux and type(id) == "number" and id ~= 0 then
+				local ok, info = pcall(function()
+					return MarketplaceService:GetProductInfo(id, if isPass then Enum.InfoType.GamePass else Enum.InfoType.Product)
+				end)
+				if ok and type(info) == "table" then
+					local robux = tonumber((info :: any).PriceInRobux)
+					said[item.id] = { robux = robux, onSale = robux ~= nil and (info :: any).IsForSale ~= false }
+				end
+			end
+		end
+		asked = "answered"
+		for _, fn in ipairs(whenSaid) do
+			task.spawn(fn)
+		end
+		table.clear(whenSaid)
+	end)
 end
 
 -- ===== THE BACKGROUNDS' RARITIES AND THEIR CRATE (the hundred-and-sixth pass) =====
@@ -387,12 +536,17 @@ local swatchColours: { Color3 } = {}
 local LOOKS: { [string]: Look } = {
 	-- TRAILS
 	SoapSuds = {
-		ribbon = { colours = { rgb(255, 255, 255), rgb(222, 238, 252), rgb(180, 212, 240) }, width = 0.22, life = 0.85, light = 0.15,
-			-- Two threads of suds twisting round each other.
-			strands = { { at = Vector3.new(0, -0.3, 0), motion = "helix", radius = 0.7, speed = 5 },
-				{ at = Vector3.new(0, -0.3, 0), motion = "helix", radius = 0.7, speed = 5, phase = math.pi,
-					colours = { rgb(236, 226, 255), rgb(206, 220, 250) } } } },
+		-- NO LINES (the two-hundred-and-twentieth pass, from your note of 2026-11-18: "do the same for the other trails too"):
+		-- its wake on the ground instead (the first motes), as the cloud's.
+		ribbon = { colours = { rgb(255, 255, 255), rgb(222, 238, 252), rgb(180, 212, 240) }, width = 0, life = 0, light = 0, strands = {} },
 		motes = {
+			-- Suds on the ground, spreading and going, and little bubbles lifting off them.
+			{ texture = TEX.smoke, colours = { rgb(255, 255, 255), rgb(232, 244, 255) }, size = { 0.6, 1.3, 1.7 },
+				fade = { 0.35, 0.6, 1 }, life = { 1.2, 1.8 }, rate = 12, speed = { 0.3, 0.8 }, spread = 80,
+				accel = Vector3.new(0, 0.2, 0), drag = 1.6, spin = { -30, 30 }, at = Vector3.new(0, -2.6, 0), trailing = true },
+			{ texture = TEX.sparkle, colours = { rgb(255, 255, 255), rgb(206, 232, 255) }, size = { 0.22, 0.3, 0 },
+				fade = { 0.2, 0.5, 1 }, life = { 1, 1.6 }, rate = 6, speed = { 1, 2 }, spread = 30,
+				accel = Vector3.new(0, 1.4, 0), drag = 0.8, spin = { -30, 30 }, light = 0.3, at = Vector3.new(0, -2.2, 0), trailing = true },
 			{ texture = TEX.smoke, colours = { rgb(255, 255, 255), rgb(214, 234, 252) }, size = { 0.25, 0.45 },
 				fade = { 0.35, 0.6, 1 }, life = { 0.9, 1.5 }, rate = 7, speed = { 0.2, 0.7 }, spread = 180,
 				accel = Vector3.new(0, 1.4, 0), trailing = true },
@@ -401,10 +555,17 @@ local LOOKS: { [string]: Look } = {
 		},
 	},
 	HoneyDrip = {
-		ribbon = { colours = { rgb(255, 222, 130), rgb(239, 159, 39), rgb(168, 92, 10) }, width = 0.34, life = 1.3, light = 0.3,
-			-- One thick thread of honey, sagging slowly as it is drawn out.
-			strands = { { at = Vector3.new(0, -0.5, 0), motion = "bob", radius = 0.22, speed = 1.6 } } },
+		-- NO LINES (the two-hundred-and-twentieth pass, from your note of 2026-11-18: "do the same for the other trails too"):
+		-- its wake on the ground instead (the first motes), as the cloud's.
+		ribbon = { colours = { rgb(255, 222, 130), rgb(239, 159, 39), rgb(168, 92, 10) }, width = 0, life = 0, light = 0, strands = {} },
 		motes = {
+			-- A warm amber sheen low behind you, and drops of it falling off your heels.
+			{ texture = TEX.smoke, colours = { rgb(255, 214, 120), rgb(240, 160, 40) }, size = { 0.5, 1.1, 1.4 },
+				fade = { 0.45, 0.7, 1 }, life = { 1.4, 2.2 }, rate = 9, speed = { 0.1, 0.4 }, spread = 70,
+				accel = Vector3.new(0, -0.1, 0), drag = 2, spin = { -30, 30 }, light = 0.15, at = Vector3.new(0, -2.6, 0), trailing = true },
+			{ texture = TEX.sparkle, colours = { rgb(255, 196, 70), rgb(236, 150, 30) }, size = { 0.2, 0.16, 0 },
+				fade = { 0, 0.3, 1 }, life = { 0.6, 0.9 }, rate = 6, speed = { 0.2, 0.6 }, spread = 20,
+				accel = Vector3.new(0, -14, 0), drag = 0.4, spin = { -30, 30 }, light = 0.4, at = Vector3.new(0, -1.2, 0), trailing = true },
 			-- Honey dripping off it: round golden drops, falling.
 			{ texture = TEX.smoke, colours = { rgb(255, 206, 90), rgb(214, 128, 20) }, size = { 0.26, 0.2, 0.14 },
 				fade = { 0.05, 0.15, 1 }, life = { 0.7, 1.1 }, rate = 6, speed = { 0, 0.3 }, spread = 20,
@@ -416,71 +577,104 @@ local LOOKS: { [string]: Look } = {
 		glow = { colour = rgb(255, 190, 90), brightness = 0.5, range = 7 },
 	},
 	SlimeGlow = {
-		ribbon = { colours = { rgb(214, 255, 130), rgb(151, 196, 89), rgb(58, 140, 30) }, width = 0.3, life = 0.95, light = 0.85,
-			-- A wobbling string of slime, and a darker one under it, out of step.
-			strands = { { at = Vector3.new(0, -0.3, 0), motion = "wave", radius = 0.45, speed = 7 },
-				{ at = Vector3.new(0, -0.75, 0), motion = "wave", radius = 0.3, speed = 7, phase = 2.2, width = 0.18,
-					colours = { rgb(120, 200, 60), rgb(58, 140, 30) } } } },
+		-- NO LINES (the two-hundred-and-twentieth pass, from your note of 2026-11-18: "do the same for the other trails too"):
+		-- its wake on the ground instead (the first motes), as the cloud's.
+		ribbon = { colours = { rgb(214, 255, 130), rgb(151, 196, 89), rgb(58, 140, 30) }, width = 0, life = 0, light = 0, strands = {} },
 		motes = {
+			-- A green ooze low behind you, and goo flicked off your feet.
+			{ texture = TEX.smoke, colours = { rgb(190, 250, 120), rgb(120, 210, 70) }, size = { 0.6, 1.3, 1.6 },
+				fade = { 0.4, 0.65, 1 }, life = { 1.3, 2 }, rate = 11, speed = { 0.2, 0.6 }, spread = 80,
+				accel = Vector3.new(0, -0.05, 0), drag = 1.8, spin = { -30, 30 }, light = 0.25, at = Vector3.new(0, -2.6, 0), trailing = true },
+			{ texture = TEX.sparkle, colours = { rgb(170, 245, 90) }, size = { 0.24, 0.18, 0 },
+				fade = { 0, 0.3, 1 }, life = { 0.6, 1 }, rate = 6, speed = { 2, 3.5 }, spread = 45,
+				accel = Vector3.new(0, -16, 0), drag = 0.3, spin = { -30, 30 }, light = 0.5, at = Vector3.new(0, -2.2, 0), trailing = true },
 			{ texture = TEX.smoke, colours = { rgb(190, 255, 110), rgb(90, 180, 40) }, size = { 0.24, 0.16 },
 				fade = { 0.05, 1 }, life = { 0.6, 0.9 }, rate = 5, speed = { 0, 0.3 }, spread = 25,
 				accel = Vector3.new(0, -20, 0), light = 0.7, at = Vector3.new(0, -0.4, 0), trailing = true },
 		},
 		glow = { colour = rgb(160, 255, 100), brightness = 0.9, range = 8 },
 	},
+	-- NO LINES (the two-hundred-and-nineteenth pass, from your screenshot of 2026-11-18: "can you do something better
+	-- instead of the 3 lines tailing at the back?"): its three wisps were thin ribbons, and read as three lines drawn
+	-- behind you. Now a cloud's own wake: a soft mist rolling along the ground where you went, swelling as it thins, and
+	-- little wisps curling up off your feet, with its puffs (PIECES) dropped in it.
 	CloudPuff = {
-		ribbon = { colours = { rgb(255, 255, 255), rgb(232, 230, 252), rgb(206, 203, 246) }, width = 0.42, life = 1.3, light = 0.1,
-			-- Three faint wisps, drifting apart and together.
-			strands = { { at = Vector3.new(0, 0.6, 0), motion = "wave", radius = 0.35, speed = 1.1, fade = 0.45 },
-				{ at = Vector3.new(0, -0.2, 0), motion = "wave", radius = 0.4, speed = 0.9, phase = 2, fade = 0.4 },
-				{ at = Vector3.new(0, -1, 0), motion = "wave", radius = 0.3, speed = 1.3, phase = 4, fade = 0.5 } } },
+		ribbon = { colours = { rgb(255, 255, 255), rgb(232, 230, 252) }, width = 0, life = 0, light = 0, strands = {} },
 		motes = {
-			{ texture = TEX.smoke, colours = { rgb(255, 255, 255), rgb(228, 226, 252) }, size = { 0.6, 1.5 },
-				fade = { 0.5, 0.7, 1 }, life = { 1.2, 2 }, rate = 6, speed = { 0.1, 0.4 }, spread = 180,
-				accel = Vector3.new(0, 0.4, 0), drag = 2, trailing = true },
+			-- The mist on the ground: big soft puffs left behind, spreading low, white into lilac.
+			{ texture = TEX.smoke, colours = { rgb(246, 244, 255), rgb(226, 220, 255), rgb(200, 192, 248) }, size = { 1.1, 2.4, 3.2 },
+				fade = { 0.3, 0.55, 1 }, life = { 1.8, 2.6 }, rate = 14, speed = { 0.3, 0.9 }, spread = 80,
+				accel = Vector3.new(0, 0.12, 0), drag = 1.6, spin = { -20, 20 }, at = Vector3.new(0, -2.6, 0), trailing = true },
+			-- The wisps: small, curling up and gone.
+			{ texture = TEX.smoke, colours = { rgb(255, 255, 255), rgb(228, 226, 252) }, size = { 0.35, 0.9, 0 },
+				fade = { 0.3, 0.55, 1 }, life = { 1, 1.6 }, rate = 7, speed = { 0.8, 1.5 }, spread = 25,
+				accel = Vector3.new(0, 0.5, 0), drag = 1.2, spin = { -60, 60 }, at = Vector3.new(0, -2.2, 0), trailing = true },
+			-- And a glint or two, as the Sky Pools' clouds have in the sun.
+			{ texture = TEX.sparkle, colours = { rgb(255, 255, 255) }, size = { 0.16, 0 }, fade = { 0.3, 1 },
+				life = { 0.5, 0.9 }, rate = 2, speed = { 0.2, 0.6 }, spread = 180, light = 0.4, at = Vector3.new(0, -1.8, 0),
+				trailing = true },
 		},
 	},
 	GreenRibbon = {
-		ribbon = { colours = { rgb(150, 225, 160), rgb(58, 150, 88), rgb(30, 100, 60) }, width = 0.3, life = 1.05, light = 0.2,
-			-- The key's ribbon, fluttering in a figure of eight.
-			strands = { { at = Vector3.new(0, 0.2, 0), motion = "flutter", radius = 0.55, speed = 4 } } },
+		-- NO LINES (the two-hundred-and-twentieth pass, from your note of 2026-11-18: "do the same for the other trails too"):
+		-- its wake on the ground instead (the first motes), as the cloud's.
+		ribbon = { colours = { rgb(150, 225, 160), rgb(58, 150, 88), rgb(30, 100, 60) }, width = 0, life = 0, light = 0, strands = {} },
 		motes = {
+			-- The key's green, a soft haze behind you with gold glints turning in it.
+			{ texture = TEX.smoke, colours = { rgb(150, 230, 170), rgb(70, 170, 100) }, size = { 0.5, 1.1, 1.4 },
+				fade = { 0.5, 0.75, 1 }, life = { 1.3, 2 }, rate = 8, speed = { 0.2, 0.5 }, spread = 80,
+				accel = Vector3.new(0, 0.15, 0), drag = 1.6, spin = { -30, 30 }, at = Vector3.new(0, -2.6, 0), trailing = true },
+			{ texture = TEX.sparkle, colours = { rgb(255, 226, 140), rgb(120, 220, 150) }, size = { 0.2, 0.26, 0 },
+				fade = { 0.1, 0.4, 1 }, life = { 0.8, 1.4 }, rate = 5, speed = { 0.5, 1.2 }, spread = 60,
+				accel = Vector3.new(0, 0.6, 0), drag = 1, spin = { -200, 200 }, light = 0.6, at = Vector3.new(0, -2.2, 0), trailing = true },
 			{ texture = TEX.sparkle, colours = { rgb(200, 255, 200) }, size = { 0.2, 0 }, fade = { 0.3, 1 },
 				life = { 0.4, 0.7 }, rate = 3, speed = { 0, 0.2 }, light = 0.6, trailing = true },
 		},
 	},
 	SeaGlass = {
-		ribbon = { colours = { rgb(214, 250, 238), rgb(130, 212, 190), rgb(70, 160, 140) }, width = 0.24, life = 1, light = 0.4,
-			-- Two glassy threads turning slowly, one of them glinting all along.
-			strands = { { at = Vector3.new(0, -0.2, 0), motion = "helix", radius = 0.55, speed = 2.5 },
-				{ at = Vector3.new(0, -0.2, 0), motion = "helix", radius = 0.55, speed = 2.5, phase = math.pi, width = 0.4,
-					texture = TEX.sparkle, fade = 0.2, colours = { rgb(235, 255, 250), rgb(150, 230, 210) } } } },
+		-- NO LINES (the two-hundred-and-twentieth pass, from your note of 2026-11-18: "do the same for the other trails too"):
+		-- its wake on the ground instead (the first motes), as the cloud's.
+		ribbon = { colours = { rgb(214, 250, 238), rgb(130, 212, 190), rgb(70, 160, 140) }, width = 0, life = 0, light = 0, strands = {} },
 		motes = {
+			-- Sea foam on the ground behind you, pale green, and glints like wet glass.
+			{ texture = TEX.smoke, colours = { rgb(230, 252, 246), rgb(170, 232, 214) }, size = { 0.6, 1.3, 1.7 },
+				fade = { 0.4, 0.65, 1 }, life = { 1.3, 2 }, rate = 11, speed = { 0.3, 0.8 }, spread = 80,
+				accel = Vector3.new(0, 0.1, 0), drag = 1.6, spin = { -30, 30 }, at = Vector3.new(0, -2.6, 0), trailing = true },
+			{ texture = TEX.sparkle, colours = { rgb(220, 255, 246) }, size = { 0.2, 0 },
+				fade = { 0.1, 1 }, life = { 0.4, 0.8 }, rate = 5, speed = { 0.3, 0.8 }, spread = 90,
+				accel = Vector3.new(0, 0.4, 0), drag = 1, spin = { -30, 30 }, light = 0.6, at = Vector3.new(0, -2.2, 0), trailing = true },
 			{ texture = TEX.sparkle, colours = { rgb(235, 255, 250), rgb(150, 230, 210) }, size = { 0, 0.32, 0 },
 				fade = { 0.1, 1 }, life = { 0.4, 0.8 }, rate = 7, speed = { 0, 0.3 }, light = 1, trailing = true },
 		},
 	},
 	Swatch = {
-		ribbon = { colours = swatchColours, width = 0.16, life = 1.1, light = 0.25, spread = true,
-			-- Every material's colour, five threads one over another: a band of all of them, rippling.
-			strands = { { at = Vector3.new(0, 0.2, 0), motion = "wave", radius = 0.14, speed = 3 },
-				{ at = Vector3.new(0, 0.02, 0), motion = "wave", radius = 0.14, speed = 3, phase = 0.35 },
-				{ at = Vector3.new(0, -0.16, 0), motion = "wave", radius = 0.14, speed = 3, phase = 0.7 },
-				{ at = Vector3.new(0, -0.34, 0), motion = "wave", radius = 0.14, speed = 3, phase = 1.05 },
-				{ at = Vector3.new(0, -0.52, 0), motion = "wave", radius = 0.14, speed = 3, phase = 1.4 } } },
+		-- NO LINES (the two-hundred-and-twentieth pass, from your note of 2026-11-18: "do the same for the other trails too"):
+		-- its wake on the ground instead (the first motes), as the cloud's.
+		ribbon = { colours = { rgb(255, 255, 255) }, width = 0, life = 0, light = 0, strands = {} },
 		motes = {
+			-- Every material's colour in a soft mist behind you, glittering.
+			{ texture = TEX.smoke, colours = { rgb(255, 196, 214), rgb(196, 220, 255), rgb(214, 250, 190), rgb(255, 236, 170) }, size = { 0.6, 1.3, 1.6 },
+				fade = { 0.45, 0.7, 1 }, life = { 1.4, 2.1 }, rate = 11, speed = { 0.3, 0.7 }, spread = 80,
+				accel = Vector3.new(0, 0.15, 0), drag = 1.6, spin = { -30, 30 }, at = Vector3.new(0, -2.6, 0), trailing = true },
+			{ texture = TEX.sparkle, colours = { rgb(255, 150, 190), rgb(140, 200, 255), rgb(170, 240, 140), rgb(255, 220, 110) }, size = { 0.2, 0.26, 0 },
+				fade = { 0.1, 0.4, 1 }, life = { 0.7, 1.2 }, rate = 7, speed = { 0.8, 1.6 }, spread = 70,
+				accel = Vector3.new(0, 0.8, 0), drag = 1, spin = { -200, 200 }, light = 0.6, at = Vector3.new(0, -2.2, 0), trailing = true },
 			{ texture = TEX.sparkle, colours = { rgb(255, 255, 255) }, size = { 0.24, 0 }, fade = { 0.2, 1 },
 				life = { 0.4, 0.8 }, rate = 4, speed = { 0, 0.3 }, light = 0.8, trailing = true },
 		},
 	},
 	LavaRibbon = {
-		ribbon = { colours = { rgb(255, 236, 150), rgb(255, 128, 32), rgb(176, 34, 12), rgb(52, 22, 22) }, width = 0.26,
-			life = 1.05, light = 0.95,
-			-- A white-hot thread crackling, and the heat round it: dull red, wide and faint.
-			strands = { { at = Vector3.new(0, -0.4, 0), motion = "zigzag", radius = 0.22, speed = 9 },
-				{ at = Vector3.new(0, -0.4, 0), motion = "still", width = 0.7, fade = 0.6,
-					colours = { rgb(255, 120, 40), rgb(150, 30, 12), rgb(52, 22, 22) } } } },
+		-- NO LINES (the two-hundred-and-twentieth pass, from your note of 2026-11-18: "do the same for the other trails too"):
+		-- its wake on the ground instead (the first motes), as the cloud's.
+		ribbon = { colours = { rgb(255, 236, 150), rgb(255, 128, 32), rgb(176, 34, 12), rgb(52, 22, 22) }, width = 0, life = 0, light = 0, strands = {} },
 		motes = {
+			-- Smoke rolling off the ground where you went, dark into ash, and the heat shimmering low.
+			{ texture = TEX.smoke, colours = { rgb(120, 90, 80), rgb(70, 60, 60) }, size = { 0.6, 1.4, 2 },
+				fade = { 0.45, 0.7, 1 }, life = { 1.4, 2.2 }, rate = 9, speed = { 0.5, 1 }, spread = 50,
+				accel = Vector3.new(0, 1, 0), drag = 1.4, spin = { -30, 30 }, at = Vector3.new(0, -2.6, 0), trailing = true },
+			{ texture = TEX.fire, colours = { rgb(255, 170, 70), rgb(255, 110, 40) }, size = { 0.5, 1, 0 },
+				fade = { 0.6, 0.8, 1 }, life = { 0.4, 0.7 }, rate = 10, speed = { 0.2, 0.5 }, spread = 60,
+				accel = Vector3.new(0, 0.6, 0), drag = 1.2, spin = { -30, 30 }, light = 0.8, at = Vector3.new(0, -2.6, 0), trailing = true },
 			{ texture = TEX.spark, colours = { rgb(255, 214, 110), rgb(255, 96, 24) }, size = { 0.2, 0.12, 0 },
 				fade = { 0, 0.2, 1 }, life = { 0.5, 1.1 }, rate = 12, speed = { 1, 3 }, spread = 60,
 				accel = Vector3.new(0, 3, 0), spin = { -120, 120 }, light = 1, trailing = true },
@@ -490,25 +684,34 @@ local LOOKS: { [string]: Look } = {
 		glow = { colour = rgb(255, 128, 48), brightness = 1.1, range = 9 },
 	},
 	JellyRibbon = {
-		ribbon = { colours = { rgb(255, 196, 214), rgb(236, 96, 120), rgb(186, 50, 84) }, width = 0.28, life = 1, light = 0.4,
-			-- Two jelly threads hopping, one after the other.
-			strands = { { at = Vector3.new(-0.25, -0.9, 0), motion = "bounce", radius = 0.7, speed = 5 },
-				{ at = Vector3.new(0.25, -0.9, 0), motion = "bounce", radius = 0.7, speed = 5, phase = 1.57 } } },
+		-- NO LINES (the two-hundred-and-twentieth pass, from your note of 2026-11-18: "do the same for the other trails too"):
+		-- its wake on the ground instead (the first motes), as the cloud's.
+		ribbon = { colours = { rgb(255, 196, 214), rgb(236, 96, 120), rgb(186, 50, 84) }, width = 0, life = 0, light = 0, strands = {} },
 		motes = {
+			-- A pink jelly sheen low behind you, and beads of it bouncing off your feet.
+			{ texture = TEX.smoke, colours = { rgb(255, 196, 214), rgb(240, 120, 150) }, size = { 0.5, 1.1, 1.4 },
+				fade = { 0.45, 0.7, 1 }, life = { 1.3, 2 }, rate = 10, speed = { 0.2, 0.5 }, spread = 80,
+				accel = Vector3.new(0, -0.05, 0), drag = 1.8, spin = { -30, 30 }, light = 0.2, at = Vector3.new(0, -2.6, 0), trailing = true },
+			{ texture = TEX.sparkle, colours = { rgb(255, 150, 180) }, size = { 0.24, 0.2, 0 },
+				fade = { 0, 0.3, 1 }, life = { 0.7, 1.1 }, rate = 6, speed = { 2.5, 4 }, spread = 40,
+				accel = Vector3.new(0, -18, 0), drag = 0.2, spin = { -30, 30 }, light = 0.4, at = Vector3.new(0, -2.2, 0), trailing = true },
 			{ texture = TEX.smoke, colours = { rgb(255, 150, 180), rgb(236, 96, 120) }, size = { 0.3, 0.22 },
 				fade = { 0.15, 0.3, 1 }, life = { 0.6, 1 }, rate = 5, speed = { 0, 0.3 }, spread = 25,
 				accel = Vector3.new(0, -12, 0), light = 0.4, at = Vector3.new(0, -0.4, 0), trailing = true },
 		},
 	},
 	Sprinkles = {
-		ribbon = { colours = { rgb(255, 255, 255), rgb(255, 236, 246) }, width = 0.12, life = 0.8, light = 0.1,
-			-- A candy stripe: three thin threads, pink, blue and yellow, twisting fast.
-			strands = { { at = Vector3.new(0, -0.2, 0), motion = "helix", radius = 0.45, speed = 7, colours = { rgb(255, 120, 170) } },
-				{ at = Vector3.new(0, -0.2, 0), motion = "helix", radius = 0.45, speed = 7, phase = 2.09,
-					colours = { rgb(110, 190, 255) } },
-				{ at = Vector3.new(0, -0.2, 0), motion = "helix", radius = 0.45, speed = 7, phase = 4.19,
-					colours = { rgb(255, 214, 90) } } } },
+		-- NO LINES (the two-hundred-and-twentieth pass, from your note of 2026-11-18: "do the same for the other trails too"):
+		-- its wake on the ground instead (the first motes), as the cloud's.
+		ribbon = { colours = { rgb(255, 255, 255), rgb(255, 236, 246) }, width = 0, life = 0, light = 0, strands = {} },
 		motes = {
+			-- A dusting of sugar on the ground behind you, glittering.
+			{ texture = TEX.smoke, colours = { rgb(255, 246, 250), rgb(255, 226, 240) }, size = { 0.4, 0.9, 1.2 },
+				fade = { 0.5, 0.75, 1 }, life = { 1.1, 1.7 }, rate = 9, speed = { 0.2, 0.6 }, spread = 80,
+				accel = Vector3.new(0, 0.1, 0), drag = 1.6, spin = { -30, 30 }, at = Vector3.new(0, -2.6, 0), trailing = true },
+			{ texture = TEX.sparkle, colours = { rgb(255, 255, 255) }, size = { 0.14, 0 },
+				fade = { 0.1, 1 }, life = { 0.4, 0.8 }, rate = 6, speed = { 0.2, 0.6 }, spread = 90,
+				accel = Vector3.new(0, 0.2, 0), drag = 1, spin = { -30, 30 }, light = 0.7, at = Vector3.new(0, -2.2, 0), trailing = true },
 			{ texture = TEX.sparkle, colours = { rgb(255, 120, 170) }, size = { 0.2, 0.2 }, fade = { 0, 1 }, life = { 0.8, 1.2 },
 				rate = 5, speed = { 1, 2.5 }, spread = 70, accel = Vector3.new(0, -16, 0), spin = { -260, 260 }, trailing = true },
 			{ texture = TEX.sparkle, colours = { rgb(110, 190, 255) }, size = { 0.2, 0.2 }, fade = { 0, 1 }, life = { 0.8, 1.2 },
@@ -561,6 +764,97 @@ local LOOKS: { [string]: Look } = {
 		},
 		glow = { colour = rgb(255, 136, 56), brightness = 1.4, range = 11 },
 	},
+	-- AUTUMN LEAVES (limited): a rust and amber ribbon fluttering, and a little dust of gold off it.
+	AutumnLeaves = {
+		-- NO LINES (the two-hundred-and-twentieth pass, from your note of 2026-11-18: "do the same for the other trails too"):
+		-- its wake on the ground instead (the first motes), as the cloud's.
+		ribbon = { colours = { rgb(255, 214, 140), rgb(236, 128, 52), rgb(150, 50, 24) }, width = 0, life = 0, light = 0, strands = {} },
+		motes = {
+			-- A warm dust kicked up behind you, gold in the low sun.
+			{ texture = TEX.smoke, colours = { rgb(250, 214, 160), rgb(220, 150, 90) }, size = { 0.5, 1.2, 1.5 },
+				fade = { 0.5, 0.75, 1 }, life = { 1.3, 2 }, rate = 9, speed = { 0.3, 0.8 }, spread = 70,
+				accel = Vector3.new(0, 0.2, 0), drag = 1.5, spin = { -30, 30 }, at = Vector3.new(0, -2.6, 0), trailing = true },
+			{ texture = TEX.sparkle, colours = { rgb(255, 214, 150) }, size = { 0.16, 0 }, fade = { 0.2, 1 },
+				life = { 0.5, 0.9 }, rate = 3, speed = { 0, 0.2 }, light = 0.5, trailing = true },
+		},
+	},
+	-- FIRST FROST (limited): frost glinting round you and fine snow, cold and slow; a pale blue light.
+	FirstFrost = {
+		motes = {
+			{ texture = TEX.sparkle, colours = { rgb(240, 250, 255), rgb(190, 226, 255) }, size = { 0, 0.32, 0 },
+				fade = { 0, 1 }, life = { 0.8, 1.4 }, rate = 12, speed = { 0.6, 1.4 }, spread = 180, drag = 3, light = 0.8 },
+			{ texture = TEX.sparkle, colours = { rgb(255, 255, 255) }, size = { 0.12, 0.1 }, fade = { 0.2, 1 },
+				life = { 2, 3 }, rate = 8, speed = { 0.4, 0.9 }, spread = 180, accel = Vector3.new(0, -1.2, 0), drag = 1,
+				at = Vector3.new(0, 2.8, 0) },
+		},
+		glow = { colour = rgb(200, 230, 255), brightness = 0.45, range = 8 },
+	},
+	-- WINTER WOOL (limited, January's): two strands of wool, red and cream, twisting round each other like a knitted
+	-- cord, and a few snowflakes off it.
+	WinterWool = {
+		-- NO LINES (the two-hundred-and-twentieth pass, from your note of 2026-11-18: "do the same for the other trails too"):
+		-- its wake on the ground instead (the first motes), as the cloud's.
+		ribbon = { colours = { rgb(236, 90, 84), rgb(200, 40, 48), rgb(150, 24, 36) }, width = 0, life = 0, light = 0, strands = {} },
+		motes = {
+			-- A soft powder of snow kicked up behind you, and little flakes of it drifting down.
+			{ texture = TEX.smoke, colours = { rgb(255, 255, 255), rgb(255, 230, 230) }, size = { 0.5, 1.2, 1.5 },
+				fade = { 0.4, 0.7, 1 }, life = { 1.3, 2 }, rate = 11, speed = { 0.3, 0.8 }, spread = 80,
+				accel = Vector3.new(0, 0.15, 0), drag = 1.6, spin = { -30, 30 }, at = Vector3.new(0, -2.6, 0), trailing = true },
+			{ texture = TEX.sparkle, colours = { rgb(255, 255, 255) }, size = { 0.18, 0.12 },
+				fade = { 0.1, 1 }, life = { 1.4, 2.2 }, rate = 5, speed = { 0.2, 0.5 }, spread = 180,
+				accel = Vector3.new(0, -0.6, 0), drag = 1, spin = { -60, 60 }, light = 0.4, at = Vector3.new(0, 0, 0), trailing = true },
+			{ texture = TEX.sparkle, colours = { rgb(255, 255, 255) }, size = { 0.14, 0.1 }, fade = { 0.2, 1 },
+				life = { 1.2, 1.8 }, rate = 4, speed = { 0.1, 0.4 }, spread = 180, accel = Vector3.new(0, -1.2, 0),
+				trailing = true },
+		},
+	},
+	-- HOT COCOA (limited, January's): the steam curling up off you, and a warm, low light.
+	HotCocoa = {
+		motes = {
+			{ texture = TEX.smoke, colours = { rgb(255, 250, 244), rgb(240, 230, 220) }, size = { 0.3, 0.9 },
+				fade = { 0.6, 0.8, 1 }, life = { 2.2, 3.2 }, rate = 5, speed = { 0.3, 0.6 }, spread = 25,
+				accel = Vector3.new(0, 0.5, 0), drag = 0.6, at = Vector3.new(0, 1.2, 0) },
+		},
+		glow = { colour = rgb(255, 196, 140), brightness = 0.5, range = 8 },
+	},
+	-- THE GILDED CROWN (VIP): slow gold glints falling from the crown, and its light on your face.
+	GildedCrown = {
+		motes = {
+			{ texture = TEX.sparkle, colours = { rgb(255, 236, 170), rgb(250, 199, 117) }, size = { 0, 0.3, 0 },
+				fade = { 0, 1 }, life = { 0.8, 1.4 }, rate = 6, speed = { 0.2, 0.6 }, spread = 180,
+				accel = Vector3.new(0, -0.8, 0), light = 0.9, at = Vector3.new(0, 2.5, 0) },
+		},
+		glow = { colour = rgb(255, 214, 130), brightness = 0.55, range = 7 },
+	},
+	-- LANTERN NIGHT (limited): warm motes rising like sparks off paper lanterns, and their light.
+	LanternNight = {
+		motes = {
+			{ texture = TEX.sparkle, colours = { rgb(255, 220, 160), rgb(255, 170, 90) }, size = { 0, 0.3, 0 },
+				fade = { 0, 1 }, life = { 1.6, 2.6 }, rate = 7, speed = { 0.5, 1 }, spread = 40, accel = Vector3.new(0, 0.8, 0),
+				light = 0.9 },
+		},
+		glow = { colour = rgb(255, 196, 120), brightness = 0.7, range = 9 },
+	},
+	-- THE GOLD LEAF (VIP): two gold ribbons fluttering out of step, one glinting all along, gold flakes turning as they
+	-- drift down behind you, and a warm light.
+	GoldLeaf = {
+		-- NO LINES (the two-hundred-and-twentieth pass, from your note of 2026-11-18: "do the same for the other trails too"):
+		-- its wake on the ground instead (the first motes), as the cloud's.
+		ribbon = { colours = { rgb(255, 240, 190), rgb(250, 199, 117), rgb(196, 140, 40) }, width = 0, life = 0, light = 0, strands = {} },
+		motes = {
+			-- Gold dust settling behind you, catching the light.
+			{ texture = TEX.smoke, colours = { rgb(255, 236, 170), rgb(240, 196, 90) }, size = { 0.4, 1, 1.3 },
+				fade = { 0.5, 0.75, 1 }, life = { 1.3, 2 }, rate = 9, speed = { 0.2, 0.5 }, spread = 80,
+				accel = Vector3.new(0, 0.1, 0), drag = 1.6, spin = { -30, 30 }, light = 0.3, at = Vector3.new(0, -2.6, 0), trailing = true },
+			{ texture = TEX.sparkle, colours = { rgb(255, 226, 140), rgb(255, 246, 200) }, size = { 0.2, 0 },
+				fade = { 0.1, 1 }, life = { 1, 1.6 }, rate = 9, speed = { 0.2, 0.6 }, spread = 180,
+				accel = Vector3.new(0, -0.8, 0), drag = 1, spin = { -200, 200 }, light = 0.8, at = Vector3.new(0, -0.6, 0), trailing = true },
+			{ texture = TEX.sparkle, colours = { rgb(255, 240, 180), rgb(250, 199, 117) }, size = { 0.18, 0.26, 0 },
+				fade = { 0.1, 1 }, life = { 1.2, 1.8 }, rate = 8, speed = { 0.1, 0.4 }, spread = 180,
+				accel = Vector3.new(0, -1.4, 0), drag = 1.5, spin = { -120, 120 }, light = 0.7, trailing = true },
+		},
+		glow = { colour = rgb(255, 214, 140), brightness = 0.55, range = 8 },
+	},
 	Sparkle = {
 		motes = {
 			{ texture = TEX.sparkle, colours = { rgb(255, 240, 180), rgb(250, 199, 117) }, size = { 0, 0.4, 0 },
@@ -585,6 +879,39 @@ local LOOKS: { [string]: Look } = {
 		},
 		glow = { colour = rgb(220, 255, 140), brightness = 0.45, range = 7 },
 	},
+	-- THE TWO-HUNDRED-AND-SIXTEENTH PASS
+	Petals = {
+		-- NO LINES (the two-hundred-and-twentieth pass, from your note of 2026-11-18: "do the same for the other trails too"):
+		-- its wake on the ground instead (the first motes), as the cloud's.
+		ribbon = { colours = { rgb(255, 236, 242), rgb(255, 196, 214), rgb(240, 150, 180) }, width = 0, life = 0, light = 0, strands = {} },
+		motes = {
+			-- A blush of pink haze low behind you, where the petals fall.
+			{ texture = TEX.smoke, colours = { rgb(255, 230, 240), rgb(255, 196, 220) }, size = { 0.5, 1.2, 1.5 },
+				fade = { 0.45, 0.7, 1 }, life = { 1.4, 2.1 }, rate = 10, speed = { 0.3, 0.7 }, spread = 80,
+				accel = Vector3.new(0, 0.15, 0), drag = 1.6, spin = { -30, 30 }, at = Vector3.new(0, -2.6, 0), trailing = true },
+			{ texture = TEX.sparkle, colours = { rgb(255, 214, 228) }, size = { 0.18, 0 }, fade = { 0.2, 1 },
+				life = { 0.6, 1 }, rate = 3, speed = { 0, 0.3 }, light = 0.4, trailing = true },
+		},
+	},
+	CookieCrumbs = {
+		-- NO LINES (the two-hundred-and-twentieth pass, from your note of 2026-11-18: "do the same for the other trails too"):
+		-- its wake on the ground instead (the first motes), as the cloud's.
+		ribbon = { colours = { rgb(240, 206, 150), rgb(214, 160, 96) }, width = 0, life = 0, light = 0, strands = {} },
+		motes = {
+			-- A puff of flour and fine crumbs behind you.
+			{ texture = TEX.smoke, colours = { rgb(250, 236, 214), rgb(226, 196, 150) }, size = { 0.4, 1, 1.3 },
+				fade = { 0.45, 0.7, 1 }, life = { 1.1, 1.8 }, rate = 10, speed = { 0.4, 1 }, spread = 70,
+				accel = Vector3.new(0, 0.1, 0), drag = 1.8, spin = { -30, 30 }, at = Vector3.new(0, -2.6, 0), trailing = true },
+			{ texture = TEX.sparkle, colours = { rgb(226, 182, 120), rgb(110, 66, 36) }, size = { 0.14, 0.1 }, fade = { 0, 1 },
+				life = { 0.5, 0.9 }, rate = 6, speed = { 1, 2 }, spread = 60, accel = Vector3.new(0, -18, 0), trailing = true },
+		},
+	},
+	RubberDucks = {
+		motes = {
+			{ texture = TEX.smoke, colours = { rgb(220, 240, 255) }, size = { 0.2, 0.5, 0 }, fade = { 0.6, 0.85, 1 },
+				life = { 1.2, 2 }, rate = 4, speed = { 0.2, 0.5 }, spread = 180, at = Vector3.new(0, -2.4, 0) },
+		},
+	},
 	Starlight = {
 		motes = {
 			{ texture = TEX.sparkle, colours = { rgb(255, 255, 255), rgb(206, 196, 255) }, size = { 0, 0.42, 0 },
@@ -608,7 +935,7 @@ local LOOKS: { [string]: Look } = {
 -- "flutter" (drifts down turning); an aura's "orbit" (circling, twinkling), "rise", "fall", "hover" (wandering) and
 -- "drift" (low, slow, at your feet); steps' "press" (pressed into the ground).
 export type Piece = { mesh: string, size: number, colours: { Color3 }, material: string?, alpha: number?, shine: number?,
-	cool: Color3?, wings: string?, light: Color3?, lights: number? }
+	cool: Color3?, wings: string?, light: Color3?, lights: number?, yaw: number? }
 -- AN AURA'S RING (the hundred-and-seventh pass: "auras ... even cooler, more pronounced"): `count` of `piece` lying in a
 -- circle round your feet, `radius` out, turning `spin` a second; or with `halo`, over your head, `height` above your
 -- middle.
@@ -618,37 +945,51 @@ export type Pieces = { motion: string, life: number, every: number?, count: numb
 local ASH = rgb(70, 62, 60)
 local PIECES: { [string]: Pieces } = {
 	-- TRAILS
-	SoapSuds = { motion = "rise", every = 1.1, life = 1.7, pieces = {
-		{ mesh = "Ball", size = 0.5, colours = { rgb(244, 250, 255), rgb(214, 236, 255), rgb(236, 226, 255) }, material = "Glass",
-			alpha = 0.6, shine = 0.45 } } },
+	-- MADE FOR THEM (the two-hundred-and-fourteenth pass, from your note of 2026-11-14: "improve the existing trails and
+	-- steps with your new tools"): every piece below a textured mesh from Studio's generator (Assets.Cosmetics: soap
+	-- foam, a slime blob, a cloud, a jelly bean, a satin bow, sea glass; for the steps a jelly heart, a star
+	-- cookie, a honey paw, a foam sole), where there were glass beads and plain shapes. A textured piece is its own
+	-- colour; its `colours` are what a screen without it draws.
+	SoapSuds = { motion = "rise", every = 1.0, life = 1.8, pieces = {
+		{ mesh = "Cos_SoapFoam", size = 0.55, colours = { rgb(244, 250, 255) }, shine = 0.08 } } },
 	HoneyDrip = { motion = "drip", every = 1.0, life = 3.2, pieces = {
-		{ mesh = "Cos_HoneyDrop", size = 0.44, colours = { rgb(255, 196, 70), rgb(236, 154, 32) }, material = "Glass",
-			alpha = 0.1, shine = 0.3 } } },
-	SlimeGlow = { motion = "splat", every = 1.5, life = 3.4, pieces = {
-		{ mesh = "Cos_SlimeSplat", size = 0.9, colours = { rgb(170, 245, 90), rgb(126, 214, 64) }, material = "Glass",
-			alpha = 0.15, shine = 0.35 } } },
-	CloudPuff = { motion = "puff", every = 1.3, life = 2.2, pieces = {
-		{ mesh = "Cos_Cloud_1", size = 0.95, colours = { rgb(255, 255, 255), rgb(238, 236, 252) }, alpha = 0.1, shine = 0 },
-		{ mesh = "Cos_Cloud_2", size = 0.85, colours = { rgb(255, 255, 255), rgb(230, 228, 250) }, alpha = 0.1, shine = 0 } } },
-	JellyRibbon = { motion = "bounce", every = 0.9, life = 2.4, pieces = {
-		{ mesh = "Ball", size = 0.36, colours = { rgb(255, 150, 180), rgb(240, 100, 128), rgb(255, 196, 214) }, material = "Glass",
-			alpha = 0.22, shine = 0.35 } } },
+		-- (Its own drop, amber and glossy: the generator made honey red, twice.)
+		{ mesh = "Cos_HoneyDrop", size = 0.46, colours = { rgb(255, 196, 70), rgb(236, 154, 32) }, shine = 0.35 } } },
+	SlimeGlow = { motion = "splat", every = 1.4, life = 3.4, pieces = {
+		{ mesh = "Cos_SlimeBlob", size = 0.95, colours = { rgb(170, 245, 90) }, shine = 0.3 } } },
+	CloudPuff = { motion = "puff", every = 1.2, life = 2.3, pieces = {
+		{ mesh = "Cos_CloudPuff", size = 1.0, colours = { rgb(255, 255, 255) }, shine = 0 } } },
+	JellyRibbon = { motion = "bounce", every = 0.8, life = 2.4, pieces = {
+		{ mesh = "Cos_JellyBean", size = 0.42, colours = { rgb(255, 150, 180) }, shine = 0.3 } } },
 	Sprinkles = { motion = "toss", every = 0.45, life = 2.6, pieces = {
 		{ mesh = "Cos_Sprinkle", size = 0.34, colours = { rgb(255, 120, 170), rgb(110, 190, 255), rgb(255, 214, 90),
 			rgb(255, 255, 255), rgb(140, 230, 140), rgb(196, 150, 255) }, shine = 0.15 } } },
 	LavaRibbon = { motion = "toss", every = 0.85, life = 2.2, pieces = {
 		{ mesh = "Cos_Ember_1", size = 0.34, colours = { rgb(255, 170, 70), rgb(255, 120, 40) }, cool = ASH, shine = 0.05 },
 		{ mesh = "Cos_Ember_2", size = 0.3, colours = { rgb(255, 196, 96), rgb(255, 140, 50) }, cool = ASH, shine = 0.05 } } },
-	GreenRibbon = { motion = "flutter", every = 1.2, life = 1.9, pieces = {
-		{ mesh = "Cos_Gem", size = 0.24, colours = { rgb(160, 232, 170), rgb(96, 196, 126) }, material = "Glass", alpha = 0.2,
-			shine = 0.45 } } },
+	GreenRibbon = { motion = "flutter", every = 1.1, life = 2.0, pieces = {
+		{ mesh = "Cos_Bow", size = 0.4, colours = { rgb(96, 196, 126) }, shine = 0.3 } } },
 	Swatch = { motion = "toss", every = 0.75, life = 2.3, pieces = {
 		{ mesh = "Cos_Gem", size = 0.3, colours = swatchColours, shine = 0.2 } } },
-	SeaGlass = { motion = "toss", every = 0.95, life = 2.6, pieces = {
-		{ mesh = "Cos_SeaGlass_1", size = 0.4, colours = { rgb(160, 232, 214), rgb(110, 204, 182) }, material = "Glass",
-			alpha = 0.3, shine = 0.35 },
-		{ mesh = "Cos_SeaGlass_2", size = 0.36, colours = { rgb(186, 236, 226), rgb(126, 196, 210) }, material = "Glass",
-			alpha = 0.3, shine = 0.35 } } },
+	SeaGlass = { motion = "toss", every = 0.9, life = 2.6, pieces = {
+		{ mesh = "Cos_SeaPebble", size = 0.42, colours = { rgb(160, 232, 214) }, shine = 0.3 },
+		{ mesh = "Cos_SeaPebble", size = 0.3, colours = { rgb(186, 236, 226) }, shine = 0.3 } } },
+	-- WINTER WOOL (limited, January's): knitted pom-poms tumbling off behind you.
+	WinterWool = { motion = "toss", every = 0.7, life = 2.6, pieces = {
+		{ mesh = "Cos_PomPom", size = 0.45, colours = { rgb(220, 60, 60) }, shine = 0 } } },
+	-- AUTUMN LEAVES (limited): maple leaves, made for it (Cos_Leaf), let go behind you and turning as they fall.
+	AutumnLeaves = { motion = "flutter", every = 0.45, life = 2.8, pieces = {
+		{ mesh = "Cos_Leaf", size = 0.6, colours = { rgb(236, 128, 52), rgb(214, 76, 40), rgb(246, 176, 64) }, shine = 0.05 } } },
+	-- THE GOLD LEAF (VIP): little leaves of gold tossed behind you, glinting.
+	GoldLeaf = { motion = "flutter", every = 0.7, life = 2.4, pieces = {
+		{ mesh = "Cos_Gem", size = 0.26, colours = { rgb(255, 226, 140), rgb(250, 199, 117), rgb(232, 176, 70) }, shine = 0.6 },
+		{ mesh = "Cos_Star", size = 0.24, colours = { rgb(255, 236, 170) }, shine = 0.5 } } },
+	-- BLOSSOM and COOKIE CRUMBS (the two-hundred-and-sixteenth pass), made for them.
+	Petals = { motion = "flutter", every = 0.4, life = 2.8, pieces = {
+		{ mesh = "Cos_Petal", size = 0.5, colours = { rgb(255, 206, 222), rgb(255, 226, 236) }, shine = 0.05 } } },
+	CookieCrumbs = { motion = "toss", every = 0.6, life = 2.4, pieces = {
+		{ mesh = "Cos_CookieBit", size = 0.5, colours = { rgb(214, 160, 96) }, shine = 0.02 },
+		{ mesh = "Cos_CookieBit", size = 0.3, colours = { rgb(226, 176, 110) }, shine = 0.02 } } },
 	-- AURAS
 	Bubbles = { motion = "rise", count = 6, radius = 2.1, life = 3.2, pieces = {
 		{ mesh = "Ball", size = 0.55, colours = { rgb(244, 250, 255), rgb(206, 230, 255) }, material = "Glass", alpha = 0.6,
@@ -672,6 +1013,27 @@ local PIECES: { [string]: Pieces } = {
 		-- A crown of gold over your head.
 		ring = { count = 8, radius = 0.85, spin = 0.9, halo = true, height = 3, piece = { mesh = "Cos_Gem", size = 0.17,
 			colours = { rgb(255, 226, 140), rgb(250, 199, 117) }, material = "Glass", alpha = 0.1, shine = 0.6 } } },
+	-- FIRST FROST (limited): flakes and glints of ice circling you, and a ring of frost at your feet.
+	FirstFrost = { motion = "orbit", count = 6, radius = 2.1, life = 1.2, spin = 0.5, pieces = {
+		{ mesh = "Cos_Snowflake", size = 0.42, colours = { rgb(236, 246, 255), rgb(210, 232, 255) }, shine = 0.5 },
+		{ mesh = "Cos_Gem", size = 0.24, colours = { rgb(206, 232, 255) }, shine = 0.6 } },
+		ring = { count = 12, radius = 1.6, spin = -0.25, piece = { mesh = "Cos_Snowflake", size = 0.26,
+			colours = { rgb(244, 250, 255), rgb(214, 236, 255) }, shine = 0.4 } } },
+	-- HOT COCOA (limited, January's): marshmallows bobbing up round you through the steam, and a ring of them at your feet.
+	HotCocoa = { motion = "rise", count = 5, radius = 1.9, life = 3.4, pieces = {
+		{ mesh = "Cos_Marshmallow", size = 0.42, colours = { rgb(252, 246, 236) }, shine = 0.05 } },
+		ring = { count = 8, radius = 1.6, spin = 0.25, piece = { mesh = "Cos_Marshmallow", size = 0.3,
+			colours = { rgb(252, 246, 236) }, shine = 0.05 } } },
+	-- THE GILDED CROWN (VIP): a crown of gold floating over your head, turning slowly, with gold glints going round you.
+	GildedCrown = { motion = "orbit", count = 4, radius = 1.9, life = 1, spin = 0.6, pieces = {
+		{ mesh = "Cos_Gem", size = 0.22, colours = { rgb(255, 226, 140), rgb(250, 199, 117) }, shine = 0.6 } },
+		ring = { count = 1, radius = 0, spin = 0.5, halo = true, height = 2.55, piece = { mesh = "Cos_Crown", size = 1.3,
+			colours = { rgb(240, 196, 80) }, shine = 0.3 } } },
+	-- LANTERN NIGHT (limited): little paper lanterns rising round you, warm and slow, and a ring of them at your feet.
+	LanternNight = { motion = "rise", count = 5, radius = 2, life = 3.6, pieces = {
+		{ mesh = "Ball", size = 0.45, colours = { rgb(255, 200, 120), rgb(255, 170, 96), rgb(255, 222, 160) }, shine = 0.2 } },
+		ring = { count = 8, radius = 1.7, spin = 0.2, piece = { mesh = "Ball", size = 0.28,
+			colours = { rgb(255, 196, 120), rgb(255, 214, 150) }, shine = 0.2 } } },
 	Snowfall = { motion = "fall", count = 8, radius = 2.5, life = 3.4, pieces = {
 		{ mesh = "Cos_Snowflake", size = 0.42, colours = { rgb(255, 255, 255), rgb(226, 238, 255) }, shine = 0.3 } },
 		-- A circle of frost at your feet.
@@ -685,20 +1047,62 @@ local PIECES: { [string]: Pieces } = {
 		-- A halo of little stars over your head, turning against the ones round you.
 		ring = { count = 7, radius = 1, spin = -0.6, halo = true, height = 3.1, piece = { mesh = "Cos_Star", size = 0.2,
 			colours = { rgb(255, 255, 255), rgb(214, 204, 255) }, shine = 0.35 } } },
-	-- STEPS
-	HeartStep = { motion = "press", life = 6, pieces = { { mesh = "Cos_Heart", size = 1.1, colours = { rgb(240, 150, 182) },
-		shine = 0.2 } } },
-	StarStep = { motion = "press", life = 6, pieces = { { mesh = "Cos_Star", size = 1.15, colours = { rgb(250, 202, 120) },
+	-- THE DUCK PARADE (the two-hundred-and-sixteenth pass): rubber ducks going round you at your feet, nose to tail.
+	RubberDucks = { motion = "orbit", count = 5, radius = 2.4, life = 1, spin = 0.5, pieces = {
+		{ mesh = "Cos_Duck", size = 0.62, colours = { rgb(255, 214, 60) }, shine = 0.25 } } },
+	-- STEPS. How long a print lies (the two-hundred-and-thirty-second pass, from your note of 2026-11-20, "not sure the
+	-- paws should stay for that long"): five to ten seconds left a long trail of twenty-odd pieces behind you, over
+	-- the marks the ground itself now keeps (GroundMarks). About three seconds now, a few steps behind you; the honey
+	-- paw, "slow to fill", and the VIP's gold a little longer.
+	HeartStep = { motion = "press", life = 3, pieces = { { mesh = "Cos_JellyHeart", size = 1.1, colours = { rgb(240, 150, 182) },
 		shine = 0.25 } } },
-	HoneyPaw = { motion = "press", life = 10, pieces = { { mesh = "Cos_PawPrint", size = 1.2, colours = { rgb(246, 170, 50) },
-		material = "Glass", alpha = 0.08, shine = 0.3 } } },
-	BubbleSole = { motion = "press", life = 2.6, pieces = { { mesh = "Cos_Sole", size = 1.5, colours = { rgb(190, 220, 248) },
-		material = "Glass", alpha = 0.45, shine = 0.4 } } },
-	SlimeStep = { motion = "press", life = 5, pieces = { { mesh = "Cos_SlimeSplat", size = 1.35, colours = { rgb(160, 214, 96) },
-		material = "Glass", alpha = 0.12, shine = 0.35 } } },
-	EmberStep = { motion = "press", life = 5, pieces = { { mesh = "Cos_Sole", size = 1.5, colours = { rgb(255, 140, 56) },
+	StarStep = { motion = "press", life = 3, pieces = { { mesh = "Cos_StarCookie", size = 1.15, colours = { rgb(250, 202, 120) },
+		shine = 0.1 } } },
+	-- (yaw 180: made toe forward, where the old prints were made toe back; the two-hundred-and-fifteenth pass, from your
+	-- note of 2026-11-14: "the steps are 180 degrees reversed".)
+	HoneyPaw = { motion = "press", life = 4.5, pieces = { { mesh = "Cos_HoneyPaw", size = 1.2, colours = { rgb(246, 170, 50) },
+		shine = 0.3, yaw = 180 } } },
+	-- (Its own sole again, foam blue and a little see-through, not glass: the generated "foam sole" was a whole shoe.)
+	BubbleSole = { motion = "press", life = 2.6, pieces = { { mesh = "Cos_Sole", size = 1.5, colours = { rgb(206, 230, 252) },
+		alpha = 0.25, shine = 0.15 } } },
+	SlimeStep = { motion = "press", life = 3, pieces = { { mesh = "Cos_SlimeBlob", size = 1.35, colours = { rgb(160, 214, 96) },
+		shine = 0.3 } } },
+	-- PENGUIN STEPS (limited, January's): a little penguin's three-toed print, pressed in the snow.
+	PenguinSteps = { motion = "press", life = 3.2, pieces = { { mesh = "Flat", size = 1.0, colours = { rgb(206, 230, 250) },
+		shine = 0.1 } } },
+	-- CAT PAWS (the two-hundred-and-sixteenth pass): pink toe beans.
+	CatPaw = { motion = "press", life = 3, pieces = { { mesh = "Cos_CatPaw", size = 1.0, colours = { rgb(255, 190, 210) },
+		shine = 0.2 } } },
+	-- GILDED (VIP): a print of beaten gold, catching the light, slow to go.
+	GildedSteps = { motion = "press", life = 4, pieces = { { mesh = "Cos_Sole", size = 1.5, colours = { rgb(250, 206, 110),
+		rgb(240, 190, 90) }, material = "Foil", shine = 0.55 } } },
+	EmberStep = { motion = "press", life = 3, pieces = { { mesh = "Cos_Sole", size = 1.5, colours = { rgb(255, 140, 56) },
 		cool = ASH, shine = 0.05 } } },
 }
+
+-- ===== THE PALS (the two-hundred-and-sixteenth pass) =====
+--
+-- Each: its model (Assets.Cosmetics), its largest side in studs, how it moves, where it keeps to (`side` studs to your
+-- right, `back` behind, `height` over your middle for the ones that fly; the hoppers keep to the ground), how quickly it
+-- catches you up (`follow`, a second), `yaw` (degrees) if its model was made facing another way, and for the warm one
+-- a light and sparks. Moves: "hop" (hops after you, squashes as it lands, a small hop now and then standing), "buzz"
+-- (hovers, darting a little), "drift" (floats slow and high, swaying), "float" (bobs at your shoulder).
+export type Pal = { mesh: string, size: number, motion: string, side: number, back: number, height: number?, follow: number,
+	yaw: number?, squash: number?, light: Color3?, sparks: boolean? }
+local PALS: { [string]: Pal } = {
+	PalNeedoh = { mesh = "Pal_Needoh", size = 1.5, motion = "hop", side = 2.6, back = 1.4, follow = 6, squash = 0.3 },
+	PalSlime = { mesh = "Pal_Slime", size = 1.7, motion = "hop", side = 2.8, back = 1.6, follow = 5, squash = 0.42 },
+	PalJelly = { mesh = "Pal_Jelly", size = 1.5, motion = "hop", side = 2.6, back = 1.4, follow = 6, squash = 0.36 },
+	PalBee = { mesh = "Pal_Bee", size = 1.4, motion = "buzz", side = 2.4, back = 0.8, height = 1.4, follow = 7 },
+	PalCloud = { mesh = "Pal_Cloud", size = 2.2, motion = "drift", side = 2.2, back = 1.8, height = 3.2, follow = 2.6 },
+	PalLava = { mesh = "Pal_Lava", size = 1.5, motion = "float", side = 2.6, back = 1.2, height = 1.1, follow = 5,
+		light = rgb(255, 140, 60), sparks = true },
+}
+
+-- What a pal is made of and how it moves (nil for anything that is not one).
+function ShopCatalog.pal(id: any): Pal?
+	return if typeof(id) == "string" then PALS[id] else nil
+end
 
 -- What a trail, an aura or a set of steps is made of (nil for anything that has no pieces).
 function ShopCatalog.pieces(id: any): Pieces?
@@ -775,11 +1179,20 @@ end
 -- PUTS A TRAIL AND AN AURA ON A CHARACTER'S ROOT, after taking off whatever this `tag` put there
 -- before. The server wears what you own with tag "Cosmetic" (everyone sees it); the shop's try-on
 -- wears with tag "ShopPreview" on your own screen only. One builder, so the preview is the real thing.
-function ShopCatalog.wear(root: BasePart, trail: Item?, aura: Item?, tag: string)
+function ShopCatalog.wear(root: BasePart, trail: Item?, aura: Item?, tag: string, pal: Item?)
 	for _, old in ipairs(root:GetChildren()) do
 		if old:GetAttribute(tag) then
 			old:Destroy()
 		end
+	end
+	-- A PAL (the two-hundred-and-sixteenth pass): only named here, on an attachment of its own (PiecePal); CosmeticsClient
+	-- makes it and moves it on every screen.
+	if pal and pal.kind == "pal" and PALS[pal.id] then
+		local at = Instance.new("Attachment")
+		at.Name = tag .. "Pal"
+		at:SetAttribute(tag, true)
+		at:SetAttribute("PiecePal", pal.id)
+		at.Parent = root
 	end
 	if trail and trail.kind == "trail" then
 		local look = LOOKS[trail.id]
@@ -788,6 +1201,15 @@ function ShopCatalog.wear(root: BasePart, trail: Item?, aura: Item?, tag: string
 		-- CosmeticsClient moves about you every frame by the strand's motion (named on the top one: StrandMotion and the
 		-- rest). The first top is the trail's own (PieceTrail, for its pieces). A trail with no look is one still strand.
 		local strands: { Strand } = if ribbon then ribbon.strands else { { at = Vector3.new(0, -0.2, 0), motion = "still" } }
+		-- NONE AT ALL (a trail that is mist, not ribbons: the cloud's): only the marker its pieces are drawn by.
+		if #strands == 0 then
+			local marker = Instance.new("Attachment")
+			marker.Name = tag .. "TrailTop"
+			marker.Position = Vector3.new(0, -0.2, 0)
+			marker:SetAttribute(tag, true)
+			marker:SetAttribute("PieceTrail", trail.id)
+			marker.Parent = root
+		end
 		for index, strand in ipairs(strands) do
 			local suffix = if index == 1 then "" else tostring(index)
 			local half = (strand.width or (if ribbon then ribbon.width else 0.3)) / 2
@@ -830,6 +1252,10 @@ function ShopCatalog.wear(root: BasePart, trail: Item?, aura: Item?, tag: string
 			band.WidthScale = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0) })
 			band.Lifetime = if ribbon then ribbon.life else 0.7
 			band.MinLength = 0.05
+			-- NEVER A COLUMN (the hundred-and-eighty-first pass, from your test of 2026-11-04: "big white columns"): falling,
+			-- a ribbon that lives a second and more drew a white pillar a hundred studs up over you. Running, it is still
+			-- its whole length; falling or flung, it stops at this. (A teleport is cleared on every screen: CosmeticsClient.)
+			band.MaxLength = 16
 			band.LightEmission = if ribbon then ribbon.light else 0.25
 			band.FaceCamera = true
 			if strand.texture then
@@ -943,11 +1369,15 @@ end
 -- journal) and a colour for its swatch on the board. Found by standing on one in a level (EconomyService.foundMaterial,
 -- seen by the server itself); each pays REWARD.MATERIAL once a save, and the last of them REWARD.MATERIALS_ALL and the
 -- swatch trail.
+--
+-- NO BRAND NAMES (the hundred-and-fiftieth pass, from your notes of 2026-10-31): four of these were trade marks (Lego,
+-- NeeDoh, Kinetic Sand, Jell-O), and a game that sells things should not put another company's mark on its board. The
+-- names a player reads are plain words now; the keys (what a save and every script know them by) are unchanged.
 export type Material = { key: string, name: string, colour: Color3 }
 ShopCatalog.MATERIALS = {
 	{ key = "Honey", name = "Honey", colour = rgb(228, 158, 40) },
 	{ key = "ButterWax", name = "Waxed butter", colour = rgb(244, 222, 150) },
-	{ key = "KineticSand", name = "Kinetic sand", colour = rgb(214, 180, 140) },
+	{ key = "KineticSand", name = "Sculpting sand", colour = rgb(214, 180, 140) },
 	{ key = "Slime", name = "Slime", colour = rgb(130, 214, 90) },
 	{ key = "Soap", name = "Soap", colour = rgb(236, 232, 246) },
 	{ key = "Cookie", name = "Cookie", colour = rgb(212, 156, 92) },
@@ -959,7 +1389,7 @@ ShopCatalog.MATERIALS = {
 	{ key = "Snow", name = "Snow", colour = rgb(246, 250, 255) },
 	{ key = "Foam", name = "Memory foam", colour = rgb(238, 226, 200) },
 	{ key = "LightSwitch", name = "Light switches", colour = rgb(244, 244, 236) },
-	{ key = "Lego", name = "Lego", colour = rgb(220, 50, 50) },
+	{ key = "Lego", name = "Toy bricks", colour = rgb(220, 50, 50) },
 	{ key = "Charcoal", name = "Charcoal", colour = rgb(60, 58, 58) },
 	{ key = "Chocolate", name = "Chocolate", colour = rgb(110, 64, 36) },
 	{ key = "ChocolateSolid", name = "Solid chocolate", colour = rgb(84, 48, 26) },
@@ -967,11 +1397,11 @@ ShopCatalog.MATERIALS = {
 	{ key = "Cloud", name = "Cloud", colour = rgb(236, 240, 252) },
 	{ key = "LambsEar", name = "Lamb's ear", colour = rgb(176, 190, 170) },
 	{ key = "Ice", name = "Ice", colour = rgb(190, 226, 246) },
-	{ key = "JelloSoda", name = "Jello", colour = rgb(236, 96, 120) },
+	{ key = "JelloSoda", name = "Jelly", colour = rgb(236, 96, 120) },
 	{ key = "Jellyfish", name = "Jellyfish", colour = rgb(200, 170, 240) },
 	{ key = "LavaKeys", name = "Keys over lava", colour = rgb(70, 66, 72) },
 	{ key = "ButterStick", name = "Butter", colour = rgb(248, 226, 130) },
-	{ key = "Needoh", name = "Needoh", colour = rgb(247, 170, 200) },
+	{ key = "Needoh", name = "Stress ball", colour = rgb(247, 170, 200) },
 	{ key = "BubbleWrap", name = "Bubble wrap", colour = rgb(210, 236, 248) },
 } :: { Material }
 
@@ -1080,6 +1510,83 @@ function ShopCatalog.storyReward(hardcore: boolean, double: boolean): number
 	return amount
 end
 
+-- WHAT VIP GIVES (the two-hundred-and-thirteenth pass, from your note of 2026-11-13: VIP should be worth having): every
+-- run's tokens a fifth more (after the 2x, so the two stack), a free background crate once a day in the VIP lounge (or
+-- `crateTokens` when there is no background left for you, or crates are not offered where you are), the lounge itself,
+-- and the things marked earn = "vip" (the Royal wave, the Gold leaf trail, Gilded steps) with the gold sparkle.
+-- THE BOUTIQUE (the two-hundred-and-thirteenth pass, the shop's Wear tab): real avatar items from the Roblox catalog, in
+-- the bay's own collections, found by the server with these words (EconomyService, AvatarEditorService) and sold in
+-- Roblox's own window; the game's owner earns 40% of each. `per` items for each word, at `min` Robux or more, of the
+-- kinds a character wears (`kinds`, the catalog's AssetType names); the shelves found again every `refresh` seconds.
+-- A new collection is a new line here (a new level's: its own words and colours).
+ShopCatalog.BOUTIQUE = {
+	collections = {
+		{ name = "Seaside", words = { "sailor hat", "yellow raincoat", "seashell" }, colour = rgb(170, 224, 230),
+			accent = rgb(14, 80, 96) },
+		{ name = "Squishy", words = { "slime", "jelly", "bubble wrap" }, colour = rgb(248, 196, 220), accent = rgb(110, 30, 70) },
+		{ name = "Lighthouse keeper", words = { "lighthouse", "lantern", "fisherman" }, colour = rgb(250, 214, 140),
+			accent = rgb(100, 60, 8) },
+		{ name = "Cosy", words = { "knit beanie", "cozy scarf", "cozy sweater" }, colour = rgb(214, 204, 246),
+			accent = rgb(52, 40, 110) },
+	},
+	per = 3,
+	min = 1,
+	refresh = 3600,
+	kinds = { Hat = true, HairAccessory = true, FaceAccessory = true, NeckAccessory = true, ShoulderAccessory = true,
+		FrontAccessory = true, BackAccessory = true, WaistAccessory = true, JacketAccessory = true, SweaterAccessory = true,
+		ShirtAccessory = true, TShirtAccessory = true, PantsAccessory = true, ShortsAccessory = true,
+		DressSkirtAccessory = true },
+}
+
+-- HERE FOR A SEASON (the two-hundred-and-thirteenth pass): a limited item's window, its first and last days as UTC
+-- dates ("2026-11-14"), on sale from the first day's start to the last day's start. The same answer on the server
+-- (which refuses a buy outside it) and on every screen (which shows the time left and hides it once it is gone).
+local function dayStart(text: string): number
+	local y, m, d = string.match(text, "^(%d+)%-(%d+)%-(%d+)$")
+	return DateTime.fromUniversalTime(tonumber(y) or 1970, tonumber(m) or 1, tonumber(d) or 1).UnixTimestamp
+end
+
+-- "soon", "on" or "gone" for a limited item at `now` (seconds, UTC; os.time() by default), and the second it ends.
+function ShopCatalog.season(item: any, now: number?, vip: boolean?): (string, number)
+	local window = item and item.limited
+	if not window then
+		return "on", math.huge
+	end
+	local at = now or os.time()
+	local from, to = dayStart(window.from), dayStart(window.to)
+	-- VIP EARLY (the two-hundred-and-fourteenth pass): on sale to a VIP ShopCatalog.VIP.early days before its first day.
+	if vip and at < from and at >= from - ShopCatalog.VIP.early * 86400 then
+		return "early", to
+	end
+	return (if at < from then "soon" elseif at < to then "on" else "gone"), to
+end
+
+-- The limited items on sale now, newest first (Featured shows them before anything else).
+function ShopCatalog.inSeason(now: number?, vip: boolean?): { Item }
+	local list = {}
+	for _, item in ipairs(ITEMS) do
+		local state = if item.limited then ShopCatalog.season(item, now, vip) else "gone"
+		if state == "on" or state == "early" then
+			table.insert(list, item)
+		end
+	end
+	return list
+end
+
+-- REWARDED VIDEO ADS (the two-hundred-and-thirteenth pass): what an ad can be watched for, and how many a day each:
+-- a second chance on the hardcore card, and a run boost in the shop. Their products are the ones sold (SecondChance,
+-- RunBoost), as Roblox asks: an ad gives what Robux would buy, never something only an ad gives, never at random.
+ShopCatalog.ADS = { chance = { product = "SecondChance", perDay = 3 }, boost = { product = "RunBoost", perDay = 3 } }
+
+-- And since the two-hundred-and-fourteenth pass: the daily chest pays half as much again (`daily`), every season's thing
+-- is on sale to a VIP `early` days before anyone else, and the Gilded crown.
+ShopCatalog.VIP = { tokens = 1.2, crateTokens = 250, daily = 1.5, early = 3,
+	items = { "RoyalWave", "GoldLeaf", "GildedSteps", "GildedCrown", "Sparkle" } }
+
+function ShopCatalog.vipReward(amount: number): number
+	return math.floor(amount * ShopCatalog.VIP.tokens + 0.5)
+end
+
 function ShopCatalog.reward(length: string, hardcore: boolean, best: boolean, double: boolean, friend: boolean?): number
 	local base = ShopCatalog.REWARD.BASE[length] or ShopCatalog.REWARD.BASE.medium
 	local amount = base
@@ -1098,5 +1605,5 @@ function ShopCatalog.reward(length: string, hardcore: boolean, best: boolean, do
 	return amount
 end
 
-ShopCatalog.STAMP = "a893da9c"
+ShopCatalog.STAMP = "4bba8e94"
 return ShopCatalog

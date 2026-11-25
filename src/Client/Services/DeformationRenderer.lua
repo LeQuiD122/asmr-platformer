@@ -272,6 +272,9 @@ export type RippleProfile = {
 	ringStagger: number,
 	-- Ring diameter in studs at the end of its travel.
 	ringEnd: number,
+	-- more swings past rest after the first (a jelly), and how much of each swing the next keeps
+	wobbles: number?,
+	damping: number?,
 }
 
 local RippleProfiles: { [string]: RippleProfile } = {
@@ -345,13 +348,17 @@ local RippleProfiles: { [string]: RippleProfile } = {
 	},
 	Slime = {
 		speed = 6.5,
-		falloff = 7.0,
-		amplitude = 0.6,
+		falloff = 10.0,
+		amplitude = 1.0,
 		dip = 0.13,
 		overshoot = 0.85,
 		rings = 3,
 		ringStagger = 0.09,
 		ringEnd = 11.0,
+		-- JIGGLES ON (the two-hundred-and-eighth pass): five more swings, each seven tenths of the last, higher than it
+		-- was and across more of the platform (amplitude 0.6 -> 1.0, falloff 7 -> 10).
+		wobbles = 5,
+		damping = 0.7,
 	},
 }
 
@@ -476,13 +483,40 @@ local function rippleFrom(slab: BasePart, originPos: Vector3, profile: RipplePro
 					if rippleToken[bone] ~= token or heldSink[bone] or not bone.Parent then
 						return
 					end
-					-- Returns to the cell's residual level, not to flat, so a passing
-					-- wave cannot iron out a footprint that has not decayed yet.
-					boneOffset(
-						bone,
-						TweenInfo.new(profile.dip * 2.8, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
-						residualSink[bone] or 0
-					)
+					-- AND A JELLY GOES ON (profile.wobbles, the two-hundred-and-eighth pass, from your note of 2026-11-12:
+					-- "I want the slime chunk to jiggle way more when I touch it"). One rise, one sag and it lay still:
+					-- a struck drum. Slime swings on past its rest that many more times, each swing `damping` of the
+					-- last, before it settles.
+					local left = profile.wobbles or 0
+					local reach = amplitude * profile.overshoot * (profile.damping or 0.6)
+					local up = true
+					local function swing()
+						if rippleToken[bone] ~= token or heldSink[bone] or not bone.Parent then
+							return
+						end
+						if left <= 0 or reach < RIPPLE_MIN then
+							-- Returns to the cell's residual level, not to flat, so a passing
+							-- wave cannot iron out a footprint that has not decayed yet.
+							boneOffset(
+								bone,
+								TweenInfo.new(profile.dip * 2.8, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+								residualSink[bone] or 0
+							)
+							return
+						end
+						left -= 1
+						local to = (residualSink[bone] or 0) + (if up then reach else -reach)
+						up = not up
+						reach *= profile.damping or 0.6
+						local over = TweenService:Create(
+							bone,
+							TweenInfo.new(profile.dip * 1.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+							{ Transform = CFrame.new(0, to, 0) }
+						)
+						over.Completed:Once(swing)
+						over:Play()
+					end
+					swing()
 				end)
 				sag:Play()
 			end)
@@ -1622,6 +1656,11 @@ end
 -- module runs close to Luau's 200-register limit for a single scope, and constants
 -- are the cheapest thing to fold. Every name and comment below is unchanged.
 local FOOT = {}
+-- PAINTED, NOT STOOD UP (the two-hundred-and-forty-fifth pass, from your list of 2026-11-22). On these the print laid as a
+-- part was measured on the surface before the surface sank under the foot, so it was left standing proud of the dent: hard
+-- grey and brown curls on the snow, the foam and the clay, and on the chocolate a see-through sheen that showed the room's
+-- purple. GroundMarks paints their prints into the surface itself, and the surface's own dent is the hollow.
+FOOT.PAINTED = { Clay = true, Snow = true, Foam = true, Chocolate = true, ButterWax = true }
 FOOT.PRINT_SPREAD = 1.34
 
 FOOT.MESH_NAME = "Footprint_Sole"
@@ -1706,6 +1745,9 @@ export type FootprintProfile = {
 local SAND = {}
 SAND.PRINT_LIFE = 1e6
 SAND.PRINT_CAP = 90
+-- THE CELLS THAT HAVE POURED AWAY and not yet filled back in (collapseSand marks one, SAND.refill clears it). Weak, as
+-- every other record of a tile here is: a chunk torn down takes its tiles with it.
+SAND.holes = (setmetatable({}, { __mode = "k" }) :: any) :: { [BasePart]: boolean }
 local sandPrints: { { part: BasePart, tile: BasePart } } = {}
 
 local function retireOldestPrint()
@@ -1978,6 +2020,15 @@ local function spawnFootprint(
     lifetime: number,
     sink: number?
 )
+    if FOOT.PAINTED[materialName] then
+        return
+    end
+    -- YOUR OWN PRINT ONLY (the two-hundred-and-forty-sixth pass, "the pattern of the selected paw/footprint matches the one
+    -- being put onto the chunk"): with a footprint from the shop on, a shoe-shaped hollow beside your paw was a second,
+    -- different print. StepService lays yours, and GroundMarks presses its shape into the materials that keep marks.
+    if typeof(player:GetAttribute("Footprint")) == "string" then
+        return
+    end
     local profile = FootprintProfiles[materialName] or FootprintProfiles.Honey
     local template = footprintTemplate(profile.mesh)
     if not template then
@@ -2089,7 +2140,7 @@ end
 
 -- === Effects ===
 
-type Ctx = { tile: BasePart, state: string, material: string, popCount: number?, layer: number?, stepCount: number?,
+type Ctx = { tile: BasePart, state: string, material: string, popCount: number?, layer: number?, stepCount: number?, wear: number?,
 	depth: number?, push: number?, lean: Vector3?, cause: string?, combo: string?, charge: number?,
 	fire: string?, wade: number?, origin: Vector2?, mine: boolean?, who: Player? }
 
@@ -2205,6 +2256,9 @@ local DEBRIS: { [string]: DebrisKind } = {
 	-- takes nearly twice as long to reach the sea as a shard of obsidian thrown just as hard.
 	FoamBit = { colour = Color3.fromRGB(248, 244, 232), material = Enum.Material.Foil,
 		scale = 0.30, speed = 7, spin = 6, buoyancy = 0.72, glow = 0, chunky = false, life = 5.0 },
+	-- A curl of soft butter turned up by a foot (the hundred-and-fifty-third pass): small, slow, and it does not go far.
+	ButterCurl = { colour = Color3.fromRGB(250, 234, 170), material = Enum.Material.SmoothPlastic,
+		scale = 0.14, speed = 5, spin = 9, buoyancy = 0, glow = 0, chunky = false, life = 1.4 },
 }
 
 local function flingDebris(tile: BasePart, kindName: string, count: number)
@@ -2882,6 +2936,151 @@ local function collapseSand(tile: BasePart)
 	end
 
 	spillThroughHole(tile)
+
+	-- A HOLE NOW, until the server fills it (SAND.refill).
+	SAND.holes[tile] = true
+	-- AND ITS PRINTS GO WITH IT. A stamped sole is a part of its own, not a piece of the skin: left where it was, a
+	-- footprint hung in the air over the hole it had been pressed into.
+	for index = #sandPrints, 1, -1 do
+		local stamp = sandPrints[index]
+		if stamp.tile == tile then
+			table.remove(sandPrints, index)
+			if stamp.part.Parent then
+				TweenService:Create(stamp.part, TweenInfo.new(0.2), { Transparency = 1 }):Play()
+				Debris:AddItem(stamp.part, 0.25)
+			end
+		end
+	end
+end
+
+-- THE HOLE FILLS BACK IN (the two-hundred-and-seventh pass, from your note of 2026-11-06 about the sand chunks' models,
+-- and the capture of one on the Sky Pools: a platform of long flat triangles). The server has put a poured-away cell
+-- back six seconds later since the hundred-and-fifty-first pass, floor and all; this screen never did. Every bone of a
+-- collapsed cell stayed where the collapse had left it, up to ten studs down and pinched to a point, so the skin stayed
+-- stretched from the hole's rim to that point for the rest of the run: sheets of sand a cell wide hanging under a floor
+-- you could walk across again, and after a few holes a whole platform of them. Now the sand comes back as the floor
+-- does: poured in from the rim toward the middle over half a second, the slumped ground round it lifting level again,
+-- and a few crumbs shaken out of it as it settles. (Prints elsewhere on the platform are kept, as they always are.)
+SAND.refill = function(tile: BasePart)
+	SAND.holes[tile] = nil
+	local bones = sandBonesFor(tile)
+	if #bones == 0 or not restSize[tile] or not restCFrame[tile] then
+		return
+	end
+	local half = restSize[tile] * 0.5
+	local centre = restCFrame[tile].Position
+	local span = math.max(half.X, half.Z, 0.5)
+	for _, bone in ipairs(bones) do
+		if sandOffset[bone] ~= nil then
+			local at = bone.WorldPosition
+			local dx = math.abs(at.X - centre.X) - half.X
+			local dz = math.abs(at.Z - centre.Z) - half.Z
+			if dx <= SLUMP_REACH and dz <= SLUMP_REACH then
+				-- A neighbour still open keeps what is its own: its cell's bones, and the sag toward it.
+				local keep = false
+				for other in pairs(SAND.holes) do
+					local size, rest = restSize[other], restCFrame[other]
+					if other.Parent and size and rest
+						and math.abs(at.X - rest.Position.X) <= size.X * 0.5 + SLUMP_REACH
+						and math.abs(at.Z - rest.Position.Z) <= size.Z * 0.5 + SLUMP_REACH then
+						keep = true
+						break
+					end
+				end
+				if not keep then
+					sandOffset[bone] = nil
+					-- The rim first and the middle last: sand runs in from the edge of a hole.
+					local inward = 1 - math.clamp(math.max(math.abs(at.X - centre.X), math.abs(at.Z - centre.Z)) / span, 0, 1)
+					task.delay(inward * 0.22, function()
+						if bone.Parent and sandOffset[bone] == nil then
+							TweenService:Create(bone, TweenInfo.new(0.42, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+								{ Transform = CFrame.identity }):Play()
+						end
+					end)
+				end
+			end
+		end
+	end
+	local anchor = Instance.new("Attachment")
+	anchor.Name = "SandRefillOrigin"
+	anchor.Position = Vector3.new(0, half.Y, 0)
+	anchor.Parent = tile
+	local crumbs = Instance.new("ParticleEmitter")
+	crumbs.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	crumbs.Color = ColorSequence.new(Color3.fromRGB(186, 158, 112))
+	crumbs.Size = NumberSequence.new(0.2)
+	crumbs.Lifetime = NumberRange.new(0.25, 0.45)
+	crumbs.Speed = NumberRange.new(1, 3)
+	crumbs.SpreadAngle = Vector2.new(60, 60)
+	crumbs.Rate = 0
+	crumbs.Acceleration = Vector3.new(0, -60, 0)
+	crumbs.Parent = anchor
+	task.delay(0.3, function()
+		if crumbs.Parent then
+			crumbs:Emit(8)
+		end
+	end)
+	Debris:AddItem(anchor, 1.5)
+end
+
+-- SAND ON YOUR SHOES (the two-hundred-and-forty-eighth pass, "sand ... a look and feel pass"): kinetic sand clings. After
+-- a step in it, a few grains trickle off your feet for a few seconds wherever you go next, fewer as they run out. Your
+-- own feet, on your screen; each step in sand tops them up.
+function SAND.shoes()
+	local character = player.Character
+	if not character then
+		return
+	end
+	SAND.until_ = os.clock() + 3.5
+	for _, name in ipairs({ "LeftFoot", "RightFoot", "Left Leg", "Right Leg" }) do
+		local foot = character:FindFirstChild(name)
+		if foot and foot:IsA("BasePart") then
+			local emitter = foot:FindFirstChild("SandOnShoes")
+			if not emitter then
+				local made = Instance.new("ParticleEmitter")
+				made.Name = "SandOnShoes"
+				made.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+				made.Color = ColorSequence.new(Color3.fromRGB(214, 176, 120), Color3.fromRGB(180, 140, 90))
+				made.LightEmission = 0
+				made.LightInfluence = 1
+				made.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.12), NumberSequenceKeypoint.new(1, 0.06) })
+				made.Lifetime = NumberRange.new(0.4, 0.7)
+				made.Speed = NumberRange.new(0.2, 1)
+				made.SpreadAngle = Vector2.new(40, 40)
+				made.Acceleration = Vector3.new(0, -40, 0)
+				made.EmissionDirection = Enum.NormalId.Bottom
+				made.Rate = 0
+				made.Parent = foot
+				emitter = made
+			end
+			(emitter :: ParticleEmitter).Rate = 9
+		end
+	end
+	local token = os.clock()
+	SAND.token = token
+	task.spawn(function()
+		while SAND.token == token and os.clock() < SAND.until_ do
+			task.wait(0.25)
+			local left = math.clamp((SAND.until_ - os.clock()) / 3.5, 0, 1)
+			local c = player.Character
+			if c then
+				for _, d in ipairs(c:GetDescendants()) do
+					if d:IsA("ParticleEmitter") and d.Name == "SandOnShoes" then
+						d.Rate = if SAND.token == token then 9 * left else d.Rate
+					end
+				end
+			end
+		end
+		-- Run out: none left on them.
+		local c = player.Character
+		if SAND.token == token and c then
+			for _, d in ipairs(c:GetDescendants()) do
+				if d:IsA("ParticleEmitter") and d.Name == "SandOnShoes" then
+					d.Rate = 0
+				end
+			end
+		end
+	end)
 end
 
 Effects.KineticSand = function(ctx: Ctx)
@@ -2889,6 +3088,9 @@ Effects.KineticSand = function(ctx: Ctx)
 
 	if ctx.state == "deformed" then
 		flingDebris(tile, "SandClod", 3)
+		if ctx.mine then
+			SAND.shoes()
+		end
 		local info = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 		-- THE SURFACE ITSELF TAKES THE PRINT, so the cell barely gives. Sand is packed:
@@ -2963,6 +3165,10 @@ Effects.KineticSand = function(ctx: Ctx)
 		-- pristine on its timer and the client simply declines to undo the sand -- the
 		-- two disagree on purpose. `releaseSand` is kept for a level teardown, which is
 		-- the only moment tracks should ever be erased.
+		-- BUT A HOLE IS FILLED (SAND.refill): a cell that poured away and has its floor back gets its sand back too.
+		if SAND.holes[tile] then
+			SAND.refill(tile)
+		end
 		settleTile(tile, 0.5)
 	end
 end
@@ -3008,7 +3214,9 @@ local SHELL_FEEL = {
 	ButterWax = {
 		spread = 0.16,      -- how far a plate slides off its rest position
 		sideSpread = 2.2,
-		tilt = 0.13,        -- radians, the lift on one edge of a plate
+		-- radians, the lift on one edge of a plate. Halved in the two-hundred-and-forty-fifth pass: at 0.13 a big plate's
+		-- edge stood up out of the butter like a dropped tile.
+		tilt = 0.07,
 	},
 
 	-- ICE FAILS IN STAGES, and each stage is a promise about the next one. The first
@@ -3310,6 +3518,24 @@ end
 
 Effects.ButterWax = function(ctx: Ctx)
 	local tile = ctx.tile
+	-- THE PRINT ON THE WRAPPER BREAKS WITH IT (the two-hundred-and-forty-fifth pass, from your list of 2026-11-22: the
+	-- "BUTTER" lettering stayed crisp and flat over a heap of broken wax). A break smudges it most of the way out; once
+	-- every cell of the slab is whole again it comes back.
+	local slabNow = tile.Parent
+	local wrapper = slabNow and slabNow:FindFirstChild("WrapperPrint_Top")
+	local ink = wrapper and wrapper:FindFirstChildWhichIsA("TextLabel", true)
+	if ink and ink:IsA("TextLabel") then
+		local whole = ctx.state == "pristine"
+		if whole then
+			for _, other in ipairs((slabNow :: Instance):GetChildren()) do
+				if other:IsA("BasePart") and other ~= tile and lastState[other] and lastState[other] ~= "pristine" then
+					whole = false
+					break
+				end
+			end
+		end
+		TweenService:Create(ink, TweenInfo.new(if whole then 2 else 0.2), { TextTransparency = if whole then 0.35 else 0.85 }):Play()
+	end
 
 	if ctx.state == "deformed" then
 		flingDebris(tile, "WaxFlake", 3)
@@ -3373,6 +3599,10 @@ Effects.ButterWax = function(ctx: Ctx)
 		-- server's decay to pristine takes the surface fully back.
 		local recover = TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 		local held = if ctx.state == "pristine" then 0 else -WAX.SINK * WAX.RESIDUAL
+		-- BUTTER NOW, NOT WAX (the two-hundred-and-seventh pass): a cell stepped off with its wax broken is soft underfoot
+		-- until the server takes it back to pristine. Marked on the tile, on this screen, for RunFeel: no slide on it
+		-- (the server slows whoever steps back onto it: MaterialConfig's softSpeed).
+		tile:SetAttribute("Soft", if ctx.state == "pristine" then nil else true)
 		local bone = boneFor(tile)
 		if bone then
 			setResidual(tile, bone, recover, held)
@@ -3454,6 +3684,37 @@ function SLIME.glow(tile: BasePart)
 	Debris:AddItem(motes, 3)
 end
 
+-- SODA FIZZES (the two-hundred-and-fifth pass, from your note of 2026-11-07: on a soda chunk "I have green waves coming
+-- out of my feet as though I'm on slime chunk, change that"). Jello soda shares slime's step below, and its rings were
+-- drawn in slime's green and slime's green goo hung under it. Its rings are its own foam now, and in place of the goo a
+-- step lets go a burst of small bubbles that rise out of it and pop: a film with a glint (SODA_BUBBLE, drawn for it).
+SLIME.SODA_BUBBLE = "rbxassetid://95411852056803"
+SLIME.SODA_BURST = 14
+function SLIME.fizz(tile: BasePart, at: Vector3)
+	local host = Instance.new("Attachment")
+	host.Name = "SodaFizz"
+	host.Parent = tile
+	host.WorldPosition = at
+	local bubbles = Instance.new("ParticleEmitter")
+	bubbles.Name = "Fizz"
+	bubbles.Texture = SLIME.SODA_BUBBLE
+	bubbles.Color = ColorSequence.new(Color3.fromRGB(255, 238, 220), Color3.fromRGB(255, 255, 255))
+	bubbles.LightEmission = 0.2
+	bubbles.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.12), NumberSequenceKeypoint.new(0.7, 0.3),
+		NumberSequenceKeypoint.new(1, 0.36) })
+	bubbles.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(0.85, 0.3),
+		NumberSequenceKeypoint.new(1, 1) })
+	bubbles.Lifetime = NumberRange.new(0.6, 1.3)
+	bubbles.Speed = NumberRange.new(1.5, 4)
+	bubbles.SpreadAngle = Vector2.new(35, 35)
+	bubbles.Acceleration = Vector3.new(0, 6, 0)
+	bubbles.EmissionDirection = Enum.NormalId.Top
+	bubbles.Rate = 0
+	bubbles.Parent = host
+	bubbles:Emit(SLIME.SODA_BURST)
+	Debris:AddItem(host, 2)
+end
+
 Effects.Slime = function(ctx: Ctx)
 	local tile = ctx.tile
 	local size = restSize[tile]
@@ -3532,10 +3793,15 @@ Effects.Slime = function(ctx: Ctx)
 			-- Derived from the material's own colour, darkened rather than saturated:
 			-- a disturbance in slime differs from the slime around it by depth, not
 			-- by hue.
+			-- (Soda's rings are its own foam, its colour taken toward white: never slime's green.)
 			local ringColour = if ctx.material == "Jellyfish" then SLIME.JELLY_RING
+				elseif ctx.material == "JelloSoda" then MaterialAppearance.Appearances.JelloSoda.color:Lerp(Color3.new(1, 1, 1), 0.55)
 				else MaterialAppearance.Appearances.Slime.color:Lerp(Color3.new(0, 0, 0), 0.26)
 			local feet = localFootWorldPoints(tile)
 			spawnRipple(onSlab, tile, feet[1] and feet[1].position or tile.Position, ringColour, SLIME.RIPPLE)
+			if ctx.material == "JelloSoda" then
+				SLIME.fizz(tile, feet[1] and feet[1].position or tile.Position)
+			end
 
 			-- Prints, same as honey's but shallower (see FootprintProfiles.Slime).
 			for _, foot in ipairs(feet) do
@@ -3545,8 +3811,8 @@ Effects.Slime = function(ctx: Ctx)
 
 		-- Goo strands trailing off the underside of the sagging cell. Thin,
 		-- tapering, slightly random, and they hang below the platform, which is
-		-- what makes it read as viscous rather than springy.
-		if not marks[tile] or #marks[tile] < 3 then
+		-- what makes it read as viscous rather than springy. Not soda's: soda fizzes.
+		if ctx.material ~= "JelloSoda" and (not marks[tile] or #marks[tile] < 3) then
 			local top = tileTop(tile)
 			for _ = 1, 3 do
 				local ox = (math.random() - 0.5) * size.X * 0.5
@@ -4049,6 +4315,16 @@ POCKET.SWELL = 0.4
 -- itself. 1.05 is a foot half-width plus a pocket radius, so a pocket goes when the
 -- foot is genuinely over it and not otherwise.
 POCKET.REACH = 1.05
+-- POPPED WRAP IS LOWER, AND TORN WRAP HANGS (the two-hundred-and-eighth pass, from your notes of 2026-11-07 and
+-- 2026-11-10: the bubble wrap "should seem less solid", "work further on the bubble wrap chunk"). A popped cell jolted
+-- down a third of a stud and came straight back, so the sheet was as firm after you as before you: the pockets lay flat
+-- and the floor stood where their tops had been. Now the floor of a popped cell stays SAG down, on the film, until the
+-- cell is whole again: you sink into the wrap as it goes, and your own trail is a trodden-down path through it. And a
+-- cell that gives way under you is seen to: its pockets dragged TEAR down through the sheet and in toward its middle,
+-- the film round the hole stretched after them, where it used to drop you through a sheet that looked whole.
+POCKET.SAG = 0.32
+POCKET.TEAR = 2.8
+POCKET.PINCH = 0.6
 
 -- REACH IS MEASURED OFF THE SHEET, not taken from the constant above.
 --
@@ -4062,7 +4338,8 @@ POCKET.REACH = 1.05
 -- apart, so the pitch can be measured rather than declared, and any future sheet at any
 -- spacing gets a sensible reach without being told. Cached per bone list, and only ever
 -- as large as needed to cover half the diagonal of one cell.
-local reachCache: { [any]: number } = {}
+-- WEAK-KEYED (the hundred-and-forty-fifth pass): a bone list goes when its sheet's level does, and this kept every one.
+local reachCache: { [any]: number } = setmetatable({}, { __mode = "k" }) :: any
 
 local function reachFor(pockets: { Bone }): number
 	local cached = reachCache[pockets]
@@ -4257,6 +4534,26 @@ end
 --
 -- 85ms of wind-up before the collapse, which is under the threshold where a response to
 -- your own footfall starts to feel disconnected from it.
+-- ITS MARK ON THE FILM (the two-hundred-and-thirty-sixth pass, from your note of 2026-11-10, "work on the bubble wrap
+-- further"): a popped pocket and a whole one looked alike. GroundMarks paints the flattened, creased film where it was,
+-- and lifts it off again as the sheet refills. (Kept on POCKET: this file is near Luau's two hundred locals.)
+function POCKET.mark(pockets: { Bone }, bone: Bone, popped: boolean)
+	local found = script.Parent:FindFirstChild("GroundMarks")
+	local ok, marks = pcall(function()
+		return if found and found:IsA("ModuleScript") then require(found) :: any else nil
+	end)
+	local sheet = bone:FindFirstAncestorWhichIsA("BasePart")
+	if not (ok and marks and sheet) then
+		return
+	end
+	local radius = reachFor(pockets) * 0.8
+	if popped and marks.pop then
+		marks.pop(sheet, bone.WorldPosition, radius)
+	elseif not popped and marks.unpop then
+		marks.unpop(sheet, bone.WorldPosition, radius)
+	end
+end
+
 local function burstPocket(tile: BasePart, pockets: { Bone }, bone: Bone)
 	if burstBones[bone] then
 		return
@@ -4277,6 +4574,7 @@ local function burstPocket(tile: BasePart, pockets: { Bone }, bone: Bone)
 		}):Play()
 		popPuff(tile, origin)
 		shockNeighbours(pockets, origin)
+		POCKET.mark(pockets, bone, true)
 
 		task.delay(0.04, function()
 			-- Still burst: a decay to pristine in between clears the flag and
@@ -4292,169 +4590,7 @@ local function burstPocket(tile: BasePart, pockets: { Bone }, bone: Bone)
 	end)
 end
 
--- ===== Creamy keyboard =====
---
--- ONE LOCAL FOR THE WHOLE MATERIAL, and that is a hard constraint rather than a style.
---
--- Luau allocates at most 200 local registers per function scope, and this module's main
--- chunk was already within a handful of that ceiling. The keyboard originally declared
--- eight top-level locals and the compiler gave up partway through them:
---
---   Out of local registers when trying to allocate keysFor: exceeded limit 200
---
--- which is a COMPILE error, so the module never loaded and every client service that
--- requires it went down with it.
---
--- Wrapping the section in a `do` block did NOT fix it, and the reason is worth writing
--- down: a block releases its registers when it ENDS. The failure is at the peak, inside
--- the block, where the main chunk's own locals are all still live and the block's are
--- stacked on top of them. Scoping changes what is reachable afterwards, never the high
--- water mark during.
---
--- Collapsing everything into a single table is what actually reduces the count -- eight
--- registers become one, and the fields cost nothing because they live in the table rather
--- than in the enclosing scope.
---
--- A FUNCTION does what the block could not. Its body has its own 200, and the main chunk pays
--- one local for it while it runs. So every section in this file that keeps locals of its own is
--- written `do local function section() ... end section() end`, and a new one must be too. The
--- keypads were a bare do-block when they grew a capacitor and a spring: 205 locals live at once,
--- and the module failed to load with "Out of local registers when trying to allocate _". A count
--- of top-level locals alone said 188 and passed. check_lua now counts what the compiler counts
--- -- every local in scope, blocks and loop variables included -- and fails the file at 200.
-do
-	-- Its own function, so these locals do not count against the main chunk's 200.
-	local function section()
-		local Keys = {
-			-- How far a key travels, as a fraction of its height. Not all the way: a cap that
-			-- sank until its top was level with the chassis would read as a hole in the field,
-			-- and real switches bottom out with the cap still proud of the plate.
-			PRESS = 0.42,
-			-- gen_keyboard.py's KEY_HEIGHT. A plain number rather than read off the mesh: an
-			-- attribute nothing sets is not configuration, it is a lie with a default behind it.
-			HEIGHT = 0.75,
-			-- Reach as a fraction of the measured lattice pitch. See the note where it is used.
-			REACH_SCALE = 0.55,
-
-			-- THE TIMING IS THE MATERIAL. "Creamy" is a keyboard word for a specific feel:
-			-- smooth travel, damped bottom-out, no ping and no bounce. So the press is fast and
-			-- the return is slower and completely overshoot-free -- a Back or Elastic curve
-			-- here would turn a creamy linear into a rattly clicky, which is a different
-			-- keyboard and a worse ASMR.
-			--
-			-- 90ms down is inside the 100ms window a tap needs its feedback in; 380ms up sits
-			-- just past the 150-300ms micro-interaction band on purpose, because the SLOW
-			-- return is what the eye and ear read as damping.
-			DOWN = TweenInfo.new(0.09, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-			UP = TweenInfo.new(0.38, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-
-			cache = {},
-			held = {},
-			warned = false,
-		}
-
-		function Keys.bonesFor(tile: BasePart)
-			local slab = tile.Parent
-			if not (slab and slab:IsA("BasePart") and slab:GetAttribute("SkinnedVisual")) then
-				return {}
-			end
-			local field = slab:FindFirstChild("SkinnedVisual")
-			if not (field and field:IsA("BasePart")) then
-				return {}
-			end
-			local cached = Keys.cache[field]
-			if cached then
-				return cached
-			end
-			local list = {}
-			for _, descendant in ipairs(field:GetDescendants()) do
-				if descendant:IsA("Bone") and descendant.Name:sub(1, 4) == "Key_" then
-					table.insert(list, descendant)
-				end
-			end
-			Keys.cache[field] = list
-			return list
-		end
-
-		-- Reach measured off the lattice, so no constant here has to be kept in step with the
-		-- generator: the two closest keys on a regular grid are exactly one pitch apart.
-		function Keys.reachFor(keys)
-			local closest = math.huge
-			for i = 1, #keys do
-				local a = keys[i].WorldPosition
-				for j = i + 1, #keys do
-					local b = keys[j].WorldPosition
-					local dx, dz = a.X - b.X, a.Z - b.Z
-					local distance = dx * dx + dz * dz
-					if distance < closest then
-						closest = distance
-					end
-				end
-			end
-			return if closest == math.huge then 2.0 else math.sqrt(closest) * Keys.REACH_SCALE
-		end
-
-		Effects.CreamyKeyboard = function(ctx: Ctx)
-			local tile = ctx.tile
-			local keys = Keys.bonesFor(tile)
-			if #keys == 0 then
-				if not Keys.warned then
-					Keys.warned = true
-					warn(
-						"DeformationRenderer: a CreamyKeyboard tile has no skinned field, so no keys will press. "
-							.. "Import Keyboard_Field_*.fbx into ReplicatedStorage/Assets/TileMeshes WITH its Bone children."
-					)
-				end
-				return
-			end
-
-			local points = {}
-			for _, hit in ipairs(localFootWorldPoints(tile)) do
-				table.insert(points, hit.position)
-			end
-			if #points == 0 then
-				table.insert(points, tile.Position)
-			end
-
-			local reach = Keys.reachFor(keys)
-			local depth = Keys.HEIGHT * Keys.PRESS
-
-			for _, bone in ipairs(keys) do
-				local at = bone.WorldPosition
-				local nearest = math.huge
-				for _, foot in ipairs(points) do
-					local dx, dz = at.X - foot.X, at.Z - foot.Z
-					nearest = math.min(nearest, dx * dx + dz * dz)
-				end
-				if nearest <= reach * reach then
-					-- A token per key, so a second footfall on a key that is still returning
-					-- takes it over cleanly instead of the two tweens fighting and the key
-					-- stalling half pressed.
-					local token = (Keys.held[bone] or 0) + 1
-					Keys.held[bone] = token
-
-					TweenService:Create(bone, Keys.DOWN, { Transform = CFrame.new(0, -depth, 0) }):Play()
-					task.delay(0.11, function()
-						if bone.Parent and Keys.held[bone] == token then
-							TweenService:Create(bone, Keys.UP, { Transform = CFrame.identity }):Play()
-						end
-					end)
-				end
-			end
-
-			-- The chassis takes the weight too, very slightly. A field of keys moving over a
-			-- perfectly rigid plate reads as a screen; a plate that gives a hundredth of a stud
-			-- reads as a board sitting on a desk.
-			moveTile(tile, Keys.DOWN, -0.05, 0.98, 1.0)
-			task.delay(0.14, function()
-				if tile.Parent then
-					settleTile(tile, 0.3)
-				end
-			end)
-		end
-	end
-	section()
-end
+-- (THE CREAMY KEYBOARD is with the keys over lava now, key by key: THE KEYBOARDS, KEY BY KEY, further down.)
 
 -- ICE CRACKS LIKE WAX; JELLO WOBBLES LIKE SLIME.
 --
@@ -4604,7 +4740,9 @@ local NEW_MATS = {
 	-- `rate` is how long that takes, and `rebound` is the slow rise afterwards -- slower
 	-- than the press, because memory foam recovers visibly slower than it compresses and
 	-- that asymmetry is the entire character of the material.
-	Foam = { press = 0.9, dwell = 2.6, rate = 2.2, rebound = 1.6, tick = 0.1,
+	-- `drop`: how far a cell that gives out is pressed through (under three studs: a bone pulled further turns the bed
+	-- inside out).
+	Foam = { press = 0.9, dwell = 2.6, rate = 2.2, rebound = 1.6, tick = 0.1, drop = 2.9,
 		-- Torn cell walls. Slow and few: foam is almost weightless, so what comes off it
 		-- drifts rather than flies, and `throw` is the lowest here by a distance.
 		shed = 3, throw = 7 },
@@ -4619,7 +4757,10 @@ local NEW_MATS = {
 	-- still sit well short of the flat white the first version produced. 0.5 turned out to
 	-- be an over-correction -- readable, but so faint that a switch you had thrown from a
 	-- distance was hard to pick out from one you had not.
-	Switch = { drop = 0.55, time = 0.07, glow = Color3.fromRGB(255, 226, 150), range = 7, bright = 0.85 },
+	-- (Warmer and brighter, the two-hundred-and-thirty-sixth pass: on was hard to see in a lit room. Kept to its own plate:
+	-- at a range of nine one switch lit its neighbours too, and the whole pad looked on.)
+	Switch = { drop = 0.55, time = 0.07, glow = Color3.fromRGB(255, 200, 110), range = 4, bright = 1.2,
+		well = Color3.fromRGB(150, 104, 52) },
 	-- LEGO NEVER MOVES ITS MESH, and now it does not need to.
 	--
 	-- Two wrong answers came before this one. First the cell bone was lifted a few
@@ -4825,6 +4966,22 @@ local capRest = (setmetatable({}, { __mode = "k" }) :: any) :: { [BasePart]: CFr
 -- because charcoal has no shape of its own -- it only has the shape it broke into.
 Effects.Foam = function(ctx: Ctx)
 	local tile = ctx.tile
+	-- IT GIVES OUT (the two-hundred-and-fifth pass, from your note of 2026-11-07: foam "should seem less solid and have its
+	-- own effect or drop me just how other chunks do"). It sank under you and never let go, a floor that only slowed you.
+	-- Now a cell you have pressed gives out a moment later (MaterialConfig, crumbleAfter), shaken first like every cell
+	-- that goes: pressed flat through, the torn foam drifting off; and a while later it swells back up out of the hole.
+	if ctx.state == "exhausted" then
+		local give = TweenInfo.new(0.24, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		local bone = boneFor(tile)
+		if bone then
+			setResidual(tile, bone, give, -NEW_MATS.Foam.drop)
+		else
+			moveTile(tile, give, -NEW_MATS.Foam.drop, 1, 1)
+		end
+		puff(tile, MaterialAppearance.Appearances.Foam.color, 1.2, 3, 2, 10)
+		flingDebris(tile, "FoamBit", NEW_MATS.Foam.shed * 2)
+		return
+	end
 	if ctx.state == "deformed" then
 		puff(tile, MaterialAppearance.Appearances.Foam.color, 0.26, 2, 5, 4)
 		local press = TweenInfo.new(0.18, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
@@ -4865,23 +5022,186 @@ Effects.Foam = function(ctx: Ctx)
 	end
 end
 
+-- ===== THE ROCKERS, WORKED BY THE FOOT (the two-hundred-and-eighth pass) =====
+--
+-- From your note of 2026-11-10: "work further on the bubble wrap chunk, and the light switches". A switch threw over
+-- once, as the server said you had come onto its cell, by where your foot was at that moment: walk in over its low
+-- half and it did nothing whatever you then trod on, and nothing about it answered the foot actually on it. Now every
+-- rocker (ChunkBuilder tags them "SwitchRocker", and they collide) is watched against every foot near you, every frame:
+-- a sole down on a rocker's RAISED half throws it, there and then, with its clack, the pilot light and a breath of
+-- dust; a sole on the half already down does nothing; and feet on both halves at once hold it where it is. So a
+-- switch crossed the way you are going ends thrown the way you went, one jumped onto ends as you landed on it, and
+-- the travel is under your foot, a drop of a third of a stud as it goes. Everybody's feet, on every screen, so what
+-- you see another player's switches do is what they see. The server's part is only to put a switch nobody has
+-- touched for its whole decay back to off (Effects.LightSwitch, "pristine").
+local ROCKERS = {
+	list = {} :: { [BasePart]: boolean },
+	feet = {} :: { { at: Vector3, mine: boolean } },
+	names = { "LeftFoot", "RightFoot", "Left Leg", "Right Leg" },
+	REACH = 90, -- studs from you: nobody further off has their feet looked at
+	OVER = 0.62, -- a sole this far over the plate, or less, is on the switch
+	EDGE = 0.12, -- but not one this near the pivot: it bears on both halves
+	WIDE = 0.3, -- studs past the paddle's sides a sole still counts (it is wider than its middle)
+}
+
+-- A switch shown thrown or not: the paddle tipped over all of a piece, its pilot with it, and the light in it.
+function ROCKERS.show(tile: BasePart, on: boolean)
+	local rocker = tile:FindFirstChild("Rocker")
+	local hinge = rocker and rocker:GetAttribute("Pivot")
+	if not (rocker and rocker:IsA("BasePart") and typeof(hinge) == "CFrame") then
+		return
+	end
+	-- Where it turns, in the world: kept in its tile's space (ChunkBuilder), found from where the tile stands now.
+	local pivot = tile.CFrame * (hinge :: CFrame)
+	local tilt = rocker:GetAttribute("Tilt") or math.rad(9)
+	local rise = rocker:GetAttribute("Rise") or 0.08
+	local goal = (pivot :: CFrame) * CFrame.Angles(if on then tilt else -tilt, 0, 0) * CFrame.new(0, rise, 0)
+	local snap = TweenInfo.new(NEW_MATS.Switch.time, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	-- ITS OWN TWEENS, not the tile's (`play` keeps a tile's, and the cell's next word from the server cancels them: a
+	-- foot throws a rocker in the same moment the server says the cell is stood on, so the throw was stopped before it
+	-- had moved, the light on and the paddle where it was).
+	TweenService:Create(rocker, snap, { CFrame = goal }):Play()
+	local pilot = rocker:FindFirstChild("Pilot")
+	local offset = pilot and pilot:GetAttribute("Offset")
+	if pilot and pilot:IsA("BasePart") and typeof(offset) == "CFrame" then
+		TweenService:Create(pilot, snap, { CFrame = goal * offset,
+			Color = if on then NEW_MATS.Switch.glow else Color3.fromRGB(96, 84, 70) }):Play()
+	end
+	local throw = TweenInfo.new(NEW_MATS.Switch.time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	-- THE WELL ROUND THE PADDLE lit from the pilot when it is on, dark when it is off: on is seen from across the room.
+	local well = tile:FindFirstChild("SwitchWell")
+	if well and well:IsA("BasePart") then
+		TweenService:Create(well, throw, { Color = if on then NEW_MATS.Switch.well else Color3.fromRGB(62, 58, 54) }):Play()
+	end
+	local glow = tile:FindFirstChild("SwitchGlow")
+	if on then
+		if not (glow and glow:IsA("PointLight")) then
+			local light = Instance.new("PointLight")
+			light.Name = "SwitchGlow"
+			light.Color = NEW_MATS.Switch.glow
+			light.Brightness = 0
+			light.Range = NEW_MATS.Switch.range
+			light.Shadows = false
+			light.Parent = tile
+			glow = light
+		end
+		TweenService:Create(glow, throw, { Brightness = NEW_MATS.Switch.bright }):Play()
+	elseif glow then
+		-- (Named away at once, so a switch thrown on again before this one has gone gets a light of its own.)
+		glow.Name = "SwitchGlowGoing"
+		TweenService:Create(glow, throw, { Brightness = 0 }):Play()
+		Debris:AddItem(glow, NEW_MATS.Switch.time + 0.05)
+	end
+end
+
+-- THROWN BY A FOOT: over it goes, with its clack (yours flat in your ears, anyone else's where it is) and a breath of
+-- dust off the plate.
+function ROCKERS.throw(tile: BasePart, on: boolean, mine: boolean)
+	switchOn[tile] = on
+	ROCKERS.show(tile, on)
+	AudioService.playSfx("LightSwitch", tile, mine, { force = true })
+	puff(tile, Color3.fromRGB(250, 248, 240), 0.18, 1.5, 1, 3)
+end
+
+-- EVERY FRAME: the soles near you, against every rocker.
+function ROCKERS.step()
+	if next(ROCKERS.list) == nil then
+		return
+	end
+	local me = Players.LocalPlayer
+	local own = me.Character
+	local here = own and own:FindFirstChild("HumanoidRootPart")
+	if not (here and here:IsA("BasePart")) then
+		return
+	end
+	local feet = ROCKERS.feet
+	table.clear(feet)
+	for _, player in ipairs(Players:GetPlayers()) do
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if character and root and root:IsA("BasePart") and (root.Position - here.Position).Magnitude <= ROCKERS.REACH then
+			for _, name in ipairs(ROCKERS.names) do
+				local part = character:FindFirstChild(name)
+				if part and part:IsA("BasePart") then
+					table.insert(feet, { at = part.Position - part.CFrame.UpVector * (part.Size.Y / 2), mine = player == me })
+				end
+			end
+		end
+	end
+	for rocker in pairs(ROCKERS.list) do
+		local tile = rocker.Parent
+		local hinge = rocker:GetAttribute("Pivot")
+		if tile and tile:IsA("BasePart") and typeof(hinge) == "CFrame" and lastState[tile] ~= "exhausted"
+			and (tile.Position - here.Position).Magnitude <= ROCKERS.REACH then
+			local pivot = (tile :: BasePart).CFrame * (hinge :: CFrame)
+			local halfX, halfZ = rocker.Size.X / 2 + ROCKERS.WIDE, rocker.Size.Z / 2
+			local near, far, mine = false, false, false
+			for _, foot in ipairs(feet) do
+				local at = (pivot :: CFrame):PointToObjectSpace(foot.at)
+				if math.abs(at.X) <= halfX and math.abs(at.Z) <= halfZ and math.abs(at.Z) >= ROCKERS.EDGE
+					and at.Y >= -0.4 and at.Y <= ROCKERS.OVER then
+					if at.Z > 0 then
+						far = true
+					else
+						near = true
+					end
+					mine = mine or foot.mine
+				end
+			end
+			-- One half borne on, and it the raised one: over it goes. (Its far half down is ON.)
+			if near ~= far and (switchOn[tile] == true) ~= far then
+				ROCKERS.throw(tile, far, mine)
+			end
+		end
+	end
+end
+
+function ROCKERS.start()
+	local tags = game:GetService("CollectionService")
+	for _, rocker in ipairs(tags:GetTagged("SwitchRocker")) do
+		if rocker:IsA("BasePart") then
+			ROCKERS.list[rocker] = true
+		end
+	end
+	tags:GetInstanceAddedSignal("SwitchRocker"):Connect(function(rocker: Instance)
+		if rocker:IsA("BasePart") then
+			ROCKERS.list[rocker] = true
+		end
+	end)
+	tags:GetInstanceRemovedSignal("SwitchRocker"):Connect(function(rocker: Instance)
+		ROCKERS.list[rocker :: any] = nil
+	end)
+	game:GetService("RunService").Heartbeat:Connect(function()
+		local ok, err = pcall(ROCKERS.step)
+		if not ok then
+			warnOnce("DeformationRenderer: the light switches' rockers failed: " .. tostring(err))
+		end
+	end)
+end
+
 Effects.LightSwitch = function(ctx: Ctx)
 	local tile = ctx.tile
-
-	if ctx.state == "pristine" then
-		-- The server decayed the cell, so the switch resets whatever the player left it at.
-		switchOn[tile] = nil
-	elseif ctx.state == "deformed" then
-		-- TOGGLED, NOT LATCHED ON. Latching made every switch a one-way trip, so a platform
-		-- filled up with light and could never be emptied -- and a switch you cannot turn
-		-- off is not a switch, it is a button that sticks.
-		--
-		-- The flip happens ONLY on "deformed", which the server sends once per genuine
-		-- entry into the cell. Stepping off sends "decaying" and is deliberately not handled
-		-- below, because a rocker does not throw itself back when you take your foot away.
-		switchOn[tile] = not switchOn[tile]
+	-- A ROCKER OF ITS OWN (ChunkBuilder's attachRocker) is worked by the foot, not by the cell (ROCKERS above): all the
+	-- server's word does to one is put it back to off once nobody has touched it for the whole of its decay.
+	local rocker = tile:FindFirstChild("Rocker")
+	if rocker and rocker:IsA("BasePart") and typeof(rocker:GetAttribute("Pivot")) == "CFrame" then
+		if ctx.state == "pristine" and switchOn[tile] then
+			switchOn[tile] = nil
+			ROCKERS.show(tile, false)
+		end
+		return
 	end
 
+	-- NO ROCKER (a chunk built before there were any): the old flip, the cell itself going down.
+	if ctx.state == "pristine" then
+		switchOn[tile] = nil
+	elseif ctx.state == "deformed" then
+		-- TOGGLED, NOT LATCHED ON. Latching made every switch a one-way trip, so a platform filled up with light and
+		-- could never be emptied. The flip happens ONLY on "deformed", which the server sends once per genuine entry
+		-- into the cell; stepping off sends "decaying" and is deliberately not handled, because a switch does not
+		-- throw itself back when you take your foot away.
+		switchOn[tile] = not switchOn[tile]
+	end
 	local on = switchOn[tile] == true
 	local throw = TweenInfo.new(NEW_MATS.Switch.time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	local bone = boneFor(tile)
@@ -4891,7 +5211,6 @@ Effects.LightSwitch = function(ctx: Ctx)
 	else
 		moveTile(tile, throw, drop, 1, 1)
 	end
-
 	local glow = tile:FindFirstChild("SwitchGlow")
 	if on then
 		if not glow then
@@ -4965,7 +5284,9 @@ local function fallingCompanions(tile: BasePart)
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local velocity = (root and root:IsA("BasePart")) and root.AssemblyLinearVelocity or Vector3.zero
 	local origin = restCFrame[tile] or tile.CFrame
-	local colour = MaterialAppearance.Appearances.Lego.color
+	-- (The brick's own colour since the two-hundred-and-forty-fifth pass: the bricks come in five.)
+	local own = tile:FindFirstChild("Brick")
+	local colour = if own and own:IsA("BasePart") then own.Color else MaterialAppearance.Appearances.Lego.color
 
 	for index = 1, NEW_MATS.Lego.companions do
 		local piece = Instance.new("Part")
@@ -5089,7 +5410,9 @@ Effects.Lego = function(ctx: Ctx)
 		origin.Parent = tile
 		local chips = Instance.new("ParticleEmitter")
 		chips.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-		chips.Color = ColorSequence.new(MaterialAppearance.Appearances.Lego.color)
+		local chipFrom = tile:FindFirstChild("Brick")
+		chips.Color = ColorSequence.new(if chipFrom and chipFrom:IsA("BasePart") then chipFrom.Color
+			else MaterialAppearance.Appearances.Lego.color)
 		chips.Size = NumberSequence.new(0.12)
 		chips.Lifetime = NumberRange.new(0.3, 0.6)
 		chips.Speed = NumberRange.new(5, 12)
@@ -5476,8 +5799,104 @@ Effects.Chocolate = function(ctx: Ctx)
 	end
 end
 
+-- ===== A BAR OF CHOCOLATE, CRUMBLING (the two-hundred-and-tenth pass) =====
+--
+-- ChunkBuilder makes each cell a rigid square (CHUNKED). Stood on, it cracks: a hard little jolt, crumbs off its edge,
+-- and a dark crack line across its top. When it goes, it breaks: the square is hidden on this screen and in its place
+-- four to six lumps of it, cut from where it stood, fall away tumbling, with a cloud of cocoa dust and the shards.
+-- When the cell is whole again the square comes back up into its place.
+-- (`ink` is the crack's colour: CHOCBAR.crack is the function that draws one.)
+local CHOCBAR = { lumps = 5, ink = Color3.fromRGB(34, 18, 10) }
+function CHOCBAR.hide(square: BasePart, on: boolean)
+	square.LocalTransparencyModifier = if on then 1 else 0
+	for _, piece in ipairs(square:GetDescendants()) do
+		if piece:IsA("BasePart") then
+			piece.LocalTransparencyModifier = if on then 1 else 0
+		end
+	end
+end
+function CHOCBAR.crack(square: BasePart)
+	if square:FindFirstChild("ChocCrack") then
+		return
+	end
+	local top = square.Size.Y / 2 + 0.33
+	for k = 1, 2 do
+		local line = Instance.new("Part")
+		line.Name = "ChocCrack"
+		line.Anchored = true
+		line.CanCollide, line.CanTouch, line.CanQuery = false, false, false
+		line.CastShadow = false
+		line.Material = Enum.Material.SmoothPlastic
+		line.Color = CHOCBAR.ink
+		line.Size = Vector3.new(0.07, 0.04, square.Size.Z * (0.5 + math.random() * 0.4))
+		line.CFrame = square.CFrame * CFrame.new((math.random() - 0.5) * square.Size.X * 0.5, top, 0)
+			* CFrame.Angles(0, (k - 1.5) * 1.1 + (math.random() - 0.5) * 0.5, 0)
+		line.Parent = square
+	end
+end
+function CHOCBAR.breakUp(tile: BasePart, square: BasePart)
+	CHOCBAR.hide(square, true)
+	local size = square.Size + Vector3.new(0, 0.32, 0)
+	local cols, rows = 2, 3
+	for i = 1, cols do
+		for j = 1, rows do
+			if math.random() < 0.85 then
+				local lump = Instance.new("Part")
+				lump.Name = "ChocLump"
+				lump.Material = square.Material
+				lump.MaterialVariant = square.MaterialVariant
+				lump.Color = square.Color
+				lump.Size = Vector3.new(size.X / cols * (0.75 + math.random() * 0.25), size.Y * (0.45 + math.random() * 0.4),
+					size.Z / rows * (0.75 + math.random() * 0.25))
+				lump.CFrame = square.CFrame * CFrame.new((i - 1.5) * size.X / cols, (math.random() - 0.3) * size.Y * 0.3,
+					(j - 2) * size.Z / rows) * CFrame.Angles((math.random() - 0.5) * 0.4, math.random() * 0.6, (math.random() - 0.5) * 0.4)
+				lump.Anchored = false
+				lump.CanCollide = false
+				lump.CanTouch = false
+				lump.CanQuery = false
+				lump.AssemblyLinearVelocity = Vector3.new((math.random() - 0.5) * 6, 1 + math.random() * 3, (math.random() - 0.5) * 6)
+				lump.AssemblyAngularVelocity = Vector3.new((math.random() - 0.5) * 8, (math.random() - 0.5) * 8, (math.random() - 0.5) * 8)
+				lump.Parent = workspace
+				Debris:AddItem(lump, 4)
+			end
+		end
+	end
+end
+
 Effects.ChocolateSolid = function(ctx: Ctx)
 	local tile = ctx.tile
+	local square = tile:FindFirstChild("ChocSquare")
+	if square and square:IsA("BasePart") then
+		if ctx.state == "exhausted" then
+			puff(tile, MaterialAppearance.Appearances.ChocolateSolid.color, 0.3, 4, -20, 10)
+			flingDebris(tile, "ChocolateShard", NEW_MATS.ChocolateSolid.pieces + 2)
+			CHOCBAR.breakUp(tile, square)
+		elseif ctx.state == "deformed" then
+			-- A hard jolt and a crack across it, and crumbs off its edge: the warning.
+			local rest = brickRest[square] or square.CFrame
+			brickRest[square] = rest
+			square.CFrame = rest * CFrame.new(0, -0.08, 0) * CFrame.Angles((math.random() - 0.5) * 0.03, 0, (math.random() - 0.5) * 0.03)
+			task.delay(0.08, function()
+				if square.Parent then
+					square.CFrame = rest
+				end
+			end)
+			CHOCBAR.crack(square)
+			puff(tile, MaterialAppearance.Appearances.ChocolateSolid.color, 0.12, 3, -30, 4)
+		elseif ctx.state == "pristine" then
+			for _, line in ipairs(square:GetChildren()) do
+				if line.Name == "ChocCrack" then
+					line:Destroy()
+				end
+			end
+			local rest = brickRest[square] or square.CFrame
+			brickRest[square] = rest
+			CHOCBAR.hide(square, false)
+			square.CFrame = rest * CFrame.new(0, -1.5, 0)
+			TweenService:Create(square, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { CFrame = rest }):Play()
+		end
+		return
+	end
 	if ctx.state == "exhausted" then
 		puff(tile, MaterialAppearance.Appearances.ChocolateSolid.color, 0.18, 6, -30, 8)
 		-- Quint IN, like ice: barely moves for the first half of the tween and then goes.
@@ -5546,6 +5965,9 @@ function lavaLife.add(platform: BasePart)
 	if lavaLife.platforms[platform] then
 		return
 	end
+	-- THE KEYS OVER LAVA (the hundred-and-fifty-sixth pass): their lava is a pool under the keys (ChunkBuilder), so what
+	-- comes off it comes off its surface, its skin flows, and its keys float on it.
+	local pool = platform:FindFirstChild("LavaPool")
 	local skin = Instance.new("Part")
 	skin.Name = "LavaLife"
 	skin.Anchored = true
@@ -5555,7 +5977,8 @@ function lavaLife.add(platform: BasePart)
 	skin.CastShadow = false
 	skin.Transparency = 1
 	skin.Size = Vector3.new(math.max(1, platform.Size.X - 1), 0.3, math.max(1, platform.Size.Z - 1))
-	skin.CFrame = platform.CFrame * CFrame.new(0, platform.Size.Y / 2 + 0.2, 0)
+	skin.CFrame = if pool and pool:IsA("BasePart") then pool.CFrame * CFrame.new(0, pool.Size.Y / 2 + 0.05, 0)
+		else platform.CFrame * CFrame.new(0, platform.Size.Y / 2 + 0.2, 0)
 	skin.Parent = platform
 	local glow = Instance.new("PointLight")
 	glow.Color = Color3.fromRGB(255, 118, 42)
@@ -5594,8 +6017,23 @@ function lavaLife.add(platform: BasePart)
 	smoke.EmissionDirection = Enum.NormalId.Top
 	smoke.Rate = 1.5
 	smoke.Parent = skin
+	local flow: { Texture } = {}
+	local keys: { { cap: BasePart, phase: number } } = {}
+	if pool then
+		for _, item in ipairs(pool:GetChildren()) do
+			if item:IsA("Texture") then
+				table.insert(flow, item)
+			end
+		end
+		for _, tile in ipairs(platform:GetChildren()) do
+			local cap = tile:FindFirstChild("Keycap")
+			if cap and cap:IsA("BasePart") then
+				table.insert(keys, { cap = cap, phase = math.random() * 6.28 })
+			end
+		end
+	end
 	lavaLife.platforms[platform] = { skin = skin, glow = glow, embers = embers, smoke = smoke, nextBubble = os.clock() + math.random(),
-		phase = math.random() * 6, flare = 0 }
+		phase = math.random() * 6, flare = 0, flow = flow, keys = keys }
 end
 
 -- A bubble of melt swelling out of the surface at `at` and popping.
@@ -5663,6 +6101,30 @@ function lavaLife.step()
 		life.flare = math.max(0, life.flare - 0.05)
 		life.glow.Brightness = if near then 0.85 + 0.3 * math.sin(now * 1.7 + life.phase) + 0.18 * math.sin(now * 5.3 + life.phase)
 			+ 2.5 * life.flare else 0
+		-- THE POOL FLOWS, and its keys float on it, each in its own time; a key something has (KeyHeld: pressed, sinking,
+		-- coming back up) is left to it.
+		if near then
+			for _, skinTexture in ipairs(life.flow) do
+				skinTexture.OffsetStudsU = (now * 0.35) % 7
+				skinTexture.OffsetStudsV = (now * 0.16) % 7
+			end
+			for _, key in ipairs(life.keys) do
+				local cap = key.cap
+				if cap.Parent and not cap:GetAttribute("KeyHeld") then
+					local rest = cap:GetAttribute("KeyRest")
+					if typeof(rest) ~= "CFrame" then
+						rest = cap.CFrame
+						cap:SetAttribute("KeyRest", rest)
+					end
+					-- LIVELIER (the hundred-and-ninety-first pass, from your note of 2026-11-05: "keys over lava should move
+					-- faster up and down"): six hundredths of a stud on a five-second swell could not be seen. Now each key
+					-- rides the lava a fifth of a stud up and down, twice as fast, rocking with it.
+					local t = now * 2.6 + key.phase
+					cap.CFrame = (rest :: CFrame) * CFrame.new(0, 0.2 * math.sin(t), 0)
+						* CFrame.Angles(0.04 * math.sin(t * 0.8 + 1), 0, 0.04 * math.cos(t * 0.7))
+				end
+			end
+		end
 		if near and now >= life.nextBubble then
 			life.nextBubble = now + 0.5 + math.random() * 1.1
 			local size = life.skin.Size
@@ -5687,7 +6149,8 @@ function lavaLife.start()
 	end
 	lavaLife.started = true
 	local function consider(item: Instance)
-		if not (item:IsA("BasePart") and item:GetAttribute("Material") == "Lava") then
+		local material = if item:IsA("BasePart") then item:GetAttribute("Material") else nil
+		if material ~= "Lava" and material ~= "LavaKeys" then
 			return
 		end
 		-- The platform itself, the part its cells hang off, not something else carrying the name.
@@ -6175,24 +6638,33 @@ do
 			end)
 		end
 
-		-- A SHORT CAMERA SHAKE for the player who set it off, through the humanoid's camera offset, which
-		-- nothing else in the game uses.
+		-- A SHORT CAMERA SHAKE for the player who set it off. Handed to the view as the humanoid's "CameraShake"
+		-- attribute, which ViewModeService adds to the camera offset (the two-hundred-and-fortieth pass, from your
+		-- video of 2026-11-21: with the cursor locked the screen shook from side to side on the buttons). This used to
+		-- write the camera offset itself, back when nothing else did; since the over-the-shoulder view, ViewModeService
+		-- writes it every frame, and the two took turns: the shoulder one frame, near zero the next.
 		local function shake(strength: number, time: number)
 			local character = player.Character
 			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 			if not humanoid then
 				return
 			end
+			-- LESS MOTION WHEN ASKED (the hundred-and-sixty-second pass, Roblox's Reduce Motion): a fifth of it.
+			pcall(function()
+				if game:GetService("GuiService").ReducedMotionEnabled == true then
+					strength *= 0.2
+				end
+			end)
 			task.spawn(function()
 				local started = os.clock()
 				while os.clock() - started < time and humanoid.Parent do
 					local fade = 1 - (os.clock() - started) / time
-					humanoid.CameraOffset = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5)
-						* strength * fade
+					humanoid:SetAttribute("CameraShake", Vector3.new(math.random() - 0.5, math.random() - 0.5,
+						math.random() - 0.5) * strength * fade)
 					task.wait(0.03)
 				end
 				if humanoid.Parent then
-					humanoid.CameraOffset = Vector3.zero
+					humanoid:SetAttribute("CameraShake", nil)
 				end
 			end)
 		end
@@ -7106,7 +7578,15 @@ local BUTTER_STICK = {}
 BUTTER_STICK.PRESS = 0.9
 BUTTER_STICK.RESIDUAL_FRACTION = 0.6
 BUTTER_STICK.RIPPLE = nil
+-- NO WRAPPER (the hundred-and-fifty-third pass): the sticks are bare butter now (see WAX_SHELLS in ChunkBuilder), and what
+-- a foot does is turn up a curl or two of it, the way a knife does.
+BUTTER_STICK.SHELL = false
+BUTTER_STICK.CURLS = 2
+-- WAXED AGAIN, AND IT CRACKS (the two-hundred-and-forty-third pass, "add a crackable wax shell to this chunk"): the
+-- sticks wear the draped wax shell (ChunkBuilder, WAX_SHELLS.ButterStick), and a foot breaks it: the shards round the
+-- step part and go down into the dent with the butter, and stay broken while the dent is held. BUTTER_STICK.CRACK.
 BUTTER_STICK.SHELL = true
+BUTTER_STICK.CRACK = true
 
 -- ONE DRIVER, TWO MATERIALS. They differ by four numbers and a name, so writing them out
 -- twice would mean two places to fix the next time the press is retuned.
@@ -7125,9 +7605,12 @@ local function softBedEffect(profile: any)
 			if bone and onSlab and profile.RIPPLE then
 				rippleFrom(onSlab, bone.WorldPosition, profile.RIPPLE)
 			end
+			if profile.CURLS then
+				flingDebris(tile, "ButterCurl", profile.CURLS)
+			end
 			-- THE WRAPPER GOES DOWN WITH IT: the same dent, on the same falloff as the bed's own bones.
 			if profile.SHELL then
-				driveShell(tile, down, -profile.PRESS, false)
+				driveShell(tile, down, -profile.PRESS, profile.CRACK == true)
 			end
 		elseif ctx.state == "decaying" then
 			-- Stepped off, and the dent stays. On the Needoh it eases back most of the way;
@@ -7139,7 +7622,7 @@ local function softBedEffect(profile: any)
 				settleTile(tile, 0.8)
 			end
 			if profile.SHELL then
-				driveShell(tile, keep, -profile.PRESS * profile.RESIDUAL_FRACTION, false)
+				driveShell(tile, keep, -profile.PRESS * profile.RESIDUAL_FRACTION, profile.CRACK == true)
 			end
 		else
 			-- pristine: the decay window closed and the surface has come back.
@@ -7156,36 +7639,298 @@ local function softBedEffect(profile: any)
 	end
 end
 
--- MOLTEN KEYS: the squish of a soft bed, plus lava's heat on top.
+-- ===== THE KEYBOARDS, KEY BY KEY (the hundred-and-fifty-fifth and fifty-sixth passes) =====
 --
--- Written as a wrapper rather than as a whole new effect, because the two halves are
--- genuinely independent -- one moves the geometry, the other moves the colour -- and the
--- movement half is already solved by softBedEffect. Anything that retunes the press later
--- retunes this for free.
-local LAVA_KEYS = {}
--- Shallow. A keycap bottoms out on its chassis; the give is a fraction of a stud and
--- pretending otherwise turns the keyboard into a mattress.
-LAVA_KEYS.PRESS = 0.55
-LAVA_KEYS.RESIDUAL_FRACTION = 0.20
-LAVA_KEYS.RIPPLE = RippleProfiles.Needoh
+-- A keyboard's keys are parts of their own now, one to a cell, cut from one sculpted cap (attachKeycap in ChunkBuilder),
+-- so a key moves as the solid thing it is and on its own; the rigged field it was, a bone to a key, could only drag the
+-- plate round a key with it. Each key's rest is kept on it (KeyRest), and whether something has it (KeyHeld), so the
+-- lava's bob (lavaLife) leaves a key alone while it is pressed, sinking or coming back up.
+--
+--   THE CREAMY BOARDS, from your test of 2026-10-31 ("a better key movement animation"): a key goes down fast with the
+--   foot, all the way, and STAYS down while the foot is on it; the moment the foot leaves it springs back, a hair past
+--   rest and settled, the way a spring under a cap returns. The keys round it dip a little with it, a board taking a
+--   weight, and come back.
+--   THE KEYS OVER LAVA ("way more functionality and looks"): a key stood on SINKS into the lava, slowly and then faster,
+--   heating as it goes, red, its letter going white-hot, smoke coming off it; stand on it until it is under
+--   (DeformationService's clock, the material's dissolveTime) and it takes you with it, in a splash of the lava. Let it
+--   go and it comes back up to float again, cooling as it rises. A key gone under bobs back up out of the lava when the
+--   hole fills in.
+--
+-- Its own function, so these locals do not count against the main chunk's 200.
+do
+	local function section()
+		local Keys = {
+			DEPTH = 0.3, -- how far a key travels to bottom out: a third of its height, so it stays proud of its case
+			DOWN = TweenInfo.new(0.05, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			UP = TweenInfo.new(0.26, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+			NUDGE = 0.04, -- how far the keys round a pressed one dip with it
+			NUDGE_IN = TweenInfo.new(0.05, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			NUDGE_OUT = TweenInfo.new(0.22, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+			SINK = 0.95, -- how far down a key over lava has gone by the time it is under
+			UNDER = 1.7, -- and once it is
+			HOT = Color3.fromRGB(150, 54, 26), -- a key as hot as it gets
+			HOT_INK = Color3.fromRGB(255, 232, 150), -- its letter then
+			COOL = TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+			-- (Back up in half the time it took, the hundred-and-ninety-first pass.)
+			RISE = TweenInfo.new(0.38, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+			BACK = TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+			warned = false,
+		}
 
-local HOT_KEY = Color3.fromRGB(255, 138, 44)
-local COOL_KEY = Color3.fromRGB(46, 40, 38)
+		function Keys.capOf(tile: BasePart): BasePart?
+			local cap = tile:FindFirstChild("Keycap")
+			return if cap and cap:IsA("BasePart") then cap else nil
+		end
 
-local pressKeys = softBedEffect(LAVA_KEYS)
+		-- Where a key rests: read the first time it is moved, and kept on it.
+		function Keys.rest(cap: BasePart): CFrame
+			local at = cap:GetAttribute("KeyRest")
+			if typeof(at) == "CFrame" then
+				return at
+			end
+			cap:SetAttribute("KeyRest", cap.CFrame)
+			return cap.CFrame
+		end
 
-Effects.LavaKeys = function(ctx: Ctx)
-	pressKeys(ctx)
-	local tile = ctx.tile
-	if ctx.state == "deformed" then
-		-- Set instantly and cooled slowly. Heat arrives at the speed of the foot and leaves
-		-- at the speed of the material, and reversing those is what makes a glow read as a
-		-- light being switched rather than as something being heated.
-		tile.Color = HOT_KEY
-		TweenService:Create(tile,
-			TweenInfo.new(2.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-			{ Color = COOL_KEY }):Play()
+		-- A key to `y` below its rest. Held until it is back at rest, so nothing else moves it on the way.
+		function Keys.move(cap: BasePart, info: TweenInfo, y: number)
+			cap:SetAttribute("KeyHeld", true)
+			local tween = TweenService:Create(cap, info, { CFrame = Keys.rest(cap) * CFrame.new(0, y, 0) })
+			if y == 0 then
+				tween.Completed:Once(function(done: Enum.PlaybackState)
+					if done == Enum.PlaybackState.Completed and cap.Parent then
+						cap:SetAttribute("KeyHeld", nil)
+					end
+				end)
+			end
+			tween:Play()
+		end
+
+		-- The keys of the eight cells round `tile`, on its own board.
+		function Keys.around(tile: BasePart): { BasePart }
+			local found: { BasePart } = {}
+			local slab = tile.Parent
+			local col, row = tile:GetAttribute("Col"), tile:GetAttribute("Row")
+			if not (slab and typeof(col) == "number" and typeof(row) == "number") then
+				return found
+			end
+			for dc = -1, 1 do
+				for dr = -1, 1 do
+					local other = if dc ~= 0 or dr ~= 0 then slab:FindFirstChild(("SubRegion_%d_%d"):format(col + dc, row + dr)) else nil
+					local cap = if other and other:IsA("BasePart") then Keys.capOf(other) else nil
+					if cap then
+						table.insert(found, cap)
+					end
+				end
+			end
+			return found
+		end
+
+		function Keys.missing(material: string)
+			if not Keys.warned then
+				Keys.warned = true
+				warn("DeformationRenderer: a " .. material .. " cell has no Keycap, so no key moves. Its chunk was built by an "
+					.. "older ChunkBuilder (keys of their own came in the hundred-and-fifty-fifth pass): paste "
+					.. "src/Server/ChunkBuilder.server.lua and play again.")
+			end
+		end
+
+		Effects.CreamyKeyboard = function(ctx: Ctx)
+			local tile = ctx.tile
+			local cap = Keys.capOf(tile)
+			if not cap then
+				Keys.missing("CreamyKeyboard")
+				return
+			end
+			if ctx.state == "deformed" then
+				local pressed = cap:GetAttribute("KeyHeld") == true
+				Keys.move(cap, Keys.DOWN, -Keys.DEPTH)
+				if not pressed then
+					for _, other in ipairs(Keys.around(tile)) do
+						if not other:GetAttribute("KeyHeld") then
+							local rest = Keys.rest(other)
+							TweenService:Create(other, Keys.NUDGE_IN, { CFrame = rest * CFrame.new(0, -Keys.NUDGE, 0) }):Play()
+							task.delay(0.06, function()
+								if other.Parent and not other:GetAttribute("KeyHeld") then
+									TweenService:Create(other, Keys.NUDGE_OUT, { CFrame = rest }):Play()
+								end
+							end)
+						end
+					end
+				end
+			else
+				-- Let go (or the board come back to rest): up, a hair past, settled.
+				Keys.move(cap, Keys.UP, 0)
+			end
+		end
+
+		-- KEYS AFLOAT (the two-hundred-and-forty-eighth pass, from "keys over lava ... a look and feel pass"). They sat
+		-- dead still on a liquid. Each key nobody is moving rides the lava now: a slow bob and a little rock, every key on
+		-- its own beat, so the board breathes. Only near you, only while the key is free (KeyHeld is the moves' own claim).
+		Keys.afloat = {} :: { [BasePart]: number }
+		task.spawn(function()
+			local function gather()
+				local found: { [BasePart]: number } = {}
+				for _, rootName in ipairs({ "Levels", "SquishRoom" }) do
+					local root = workspace:FindFirstChild(rootName)
+					if root then
+						for _, slab in ipairs(root:GetDescendants()) do
+							if slab:IsA("BasePart") and slab:GetAttribute("Material") == "LavaKeys" then
+								for _, tile in ipairs(slab:GetChildren()) do
+									local cap = if tile:IsA("BasePart") then Keys.capOf(tile) else nil
+									if cap then
+										Keys.rest(cap)
+										found[cap] = Keys.afloat[cap] or math.random() * math.pi * 2
+									end
+								end
+							end
+						end
+					end
+				end
+				Keys.afloat = found
+			end
+			local nextGather = 0
+			game:GetService("RunService").Heartbeat:Connect(function()
+				local now = os.clock()
+				if now >= nextGather then
+					nextGather = now + 3
+					pcall(gather)
+				end
+				local camera = workspace.CurrentCamera
+				local eye = if camera then camera.CFrame.Position else Vector3.zero
+				for cap, phase in pairs(Keys.afloat) do
+					if cap.Parent and not cap:GetAttribute("KeyHeld") then
+						local rest = Keys.rest(cap)
+						if (rest.Position - eye).Magnitude < 140 then
+							local t = now * 1.3 + phase
+							cap.CFrame = rest * CFrame.new(0, math.sin(t) * 0.07, 0)
+								* CFrame.Angles(math.sin(t * 0.7) * 0.025, 0, math.cos(t * 0.9) * 0.025)
+						end
+					end
+				end
+			end)
+		end)
+
+		-- WORN KEYS (the two-hundred-and-forty-ninth pass, "make it so that keys over lava will degrade after"). Every foot
+		-- the server counts (`wear`) chars a key further toward ash, opens one more glowing crack across its face, and takes
+		-- a little off its size; none of that cools away. Fresh again only when it comes back up out of the lava.
+		Keys.CHAR = Color3.fromRGB(46, 34, 30)
+		function Keys.wornColour(colour: Color3, wear: number): Color3
+			return colour:Lerp(Keys.CHAR, math.clamp(wear * 0.22, 0, 0.75))
+		end
+		function Keys.wearLook(cap: BasePart, wear: number)
+			local size = cap:GetAttribute("KeySize")
+			if typeof(size) ~= "Vector3" then
+				size = cap.Size
+				cap:SetAttribute("KeySize", size)
+			end
+			local shrink = 1 - math.clamp(wear, 0, 4) * 0.045
+			TweenService:Create(cap, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+				Size = Vector3.new((size :: Vector3).X * shrink, (size :: Vector3).Y, (size :: Vector3).Z * shrink),
+			}):Play()
+			local gui = cap:FindFirstChild("Legend")
+			if not (gui and gui:IsA("SurfaceGui")) then
+				return
+			end
+			-- Exactly `wear` cracks (at most four): the extras taken off, the missing ones opened.
+			local cracks: { Instance } = {}
+			for _, child in ipairs(gui:GetChildren()) do
+				if child.Name == "WearCrack" then
+					table.insert(cracks, child)
+				end
+			end
+			local want = math.min(wear, 4)
+			while #cracks > want do
+				(table.remove(cracks) :: Instance):Destroy()
+			end
+			for k = #cracks + 1, want do
+				-- A split across the cap, glowing from the lava under it: a thin bar, turned, off the middle.
+				local crack = Instance.new("Frame")
+				crack.Name = "WearCrack"
+				crack.AnchorPoint = Vector2.new(0.5, 0.5)
+				crack.Position = UDim2.fromScale(0.3 + math.random() * 0.4, 0.3 + math.random() * 0.4)
+				crack.Size = UDim2.fromScale(0.5 + math.random() * 0.35, 0.035)
+				crack.Rotation = math.random(-70, 70) + k * 40
+				crack.BorderSizePixel = 0
+				crack.BackgroundColor3 = Color3.fromRGB(255, 132, 44)
+				crack.BackgroundTransparency = 0.1
+				crack.ZIndex = 2
+				crack.Parent = gui
+			end
+		end
+
+		Effects.LavaKeys = function(ctx: Ctx)
+			local tile = ctx.tile
+			local cap = Keys.capOf(tile)
+			if not cap then
+				Keys.missing("LavaKeys")
+				return
+			end
+			local wear = ctx.wear or 0
+			if ctx.state ~= "exhausted" then
+				Keys.wearLook(cap, wear)
+			end
+			local gui = cap:FindFirstChild("Legend")
+			local letter = gui and gui:FindFirstChild("Letter")
+			local colour = cap:GetAttribute("KeyColour")
+			local ink = cap:GetAttribute("KeyInk")
+			local own = Materials.LavaKeys
+			local clock = (own and own.dissolveTime) or 1.3
+			if ctx.state == "deformed" then
+				-- SINKING while you stand on it, slowly and then faster, heating as it goes.
+				Keys.move(cap, TweenInfo.new(clock, Enum.EasingStyle.Quad, Enum.EasingDirection.In), -Keys.SINK)
+				TweenService:Create(cap, TweenInfo.new(clock, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Color = Keys.HOT }):Play()
+				if letter and letter:IsA("TextLabel") then
+					TweenService:Create(letter, TweenInfo.new(clock * 0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+						{ TextColor3 = Keys.HOT_INK }):Play()
+				end
+				lavaLife.flare(tile, 0.45)
+				puff(tile, Color3.fromRGB(96, 82, 78), 0.7, 2, 3, 4)
+				AudioService.playSfx("Lava", tile, ctx.mine, { gain = 0.45 })
+			elseif ctx.state == "exhausted" then
+				-- UNDER, and you with it: down into the lava in a splash of it, the glow flaring.
+				cap:SetAttribute("KeyHeld", true)
+				TweenService:Create(cap, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+					{ CFrame = Keys.rest(cap) * CFrame.new(0, -Keys.UNDER, 0) }):Play()
+				lavaLife.flare(tile, 1)
+				-- AND THE LAVA SHOVES ITS NEIGHBOURS (same pass): the keys round it dip and come back up, as a heavy
+				-- thing going under pushes the liquid it went into.
+				for _, other in ipairs(Keys.around(tile)) do
+					if not other:GetAttribute("KeyHeld") then
+						local rest = Keys.rest(other)
+						other:SetAttribute("KeyHeld", true)
+						local dip = TweenService:Create(other, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+							{ CFrame = rest * CFrame.new(0, -0.22, 0) * CFrame.Angles(math.random() * 0.12 - 0.06, 0, math.random() * 0.12 - 0.06) })
+						dip:Play()
+						dip.Completed:Once(function()
+							local back = TweenService:Create(other, TweenInfo.new(0.7, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { CFrame = rest })
+							back:Play()
+							back.Completed:Once(function()
+								other:SetAttribute("KeyHeld", nil)
+							end)
+						end)
+					end
+				end
+				local slab = tile.Parent
+				if slab and slab:IsA("BasePart") then
+					lavaLife.bubble(slab, Keys.rest(cap).Position - Vector3.new(0, 0.2, 0))
+				end
+				puff(tile, Color3.fromRGB(255, 150, 64), 0.5, 8, -16, 12)
+			else
+				-- LET GO, or back up out of the lava as the hole fills in: up to float again, cooling as it comes.
+				local fromUnder = (cap:GetAttribute("KeyHeld") == true) and ctx.state == "pristine"
+				Keys.move(cap, if fromUnder then Keys.BACK else Keys.RISE, 0)
+				if typeof(colour) == "Color3" then
+					-- Cools to its wear, not to new: the char stays (new only when it came back up out of the lava).
+					TweenService:Create(cap, Keys.COOL, { Color = if fromUnder then colour else Keys.wornColour(colour, wear) }):Play()
+				end
+				if letter and letter:IsA("TextLabel") and typeof(ink) == "Color3" then
+					TweenService:Create(letter, Keys.COOL, { TextColor3 = ink }):Play()
+				end
+			end
+		end
 	end
+	section()
 end
 
 -- ===== NEEDOH: the squeeze =====
@@ -7268,6 +8013,33 @@ do
 			local before = shownCharge[tile] or 0
 			shownCharge[tile] = charge
 
+			-- THE SKIN STRETCHES THIN (the two-hundred-and-forty-eighth pass, "stress ball ... a look and feel pass"): a
+			-- squeezed stress ball goes paler and glossier where the dough pushes its skin out. The whole ball, by how
+			-- hard it is held, back as it lets go.
+			if ctx.cause == "charge" and onSlab then
+				local skin = onSlab:FindFirstChild("SkinnedVisual")
+				if skin and skin:IsA("BasePart") then
+					local base = skin:GetAttribute("SkinColour")
+					if typeof(base) ~= "Color3" then
+						base = skin.Color
+						skin:SetAttribute("SkinColour", base)
+						skin:SetAttribute("SkinShine", skin.Reflectance)
+					end
+					local shine = skin:GetAttribute("SkinShine")
+					-- By the hardest-held cell on the ball: each cell under a foot reports its own squeeze, and the
+					-- lightest last would otherwise set the whole skin back.
+					local hardest = 0
+					for _, cell in ipairs(onSlab:GetChildren()) do
+						if cell:IsA("BasePart") then
+							hardest = math.max(hardest, shownCharge[cell] or 0)
+						end
+					end
+					TweenService:Create(skin, TweenInfo.new(0.4, Enum.EasingStyle.Sine), {
+						Color = (base :: Color3):Lerp(Color3.new(1, 1, 1), 0.25 * hardest),
+						Reflectance = (if typeof(shine) == "number" then shine else 0) + 0.12 * hardest,
+					}):Play()
+				end
+			end
 			if ctx.cause == "charge" then
 				if charge > 0 then
 					local sink = -(NEEDOH.PRESS + (SQUEEZE.deep - NEEDOH.PRESS) * charge)
@@ -7323,6 +8095,19 @@ Effects.Jellyfish = Effects.Slime
 
 Effects.BubbleWrap = function(ctx: Ctx)
 	local tile = ctx.tile
+	-- A LANDING'S RING (the hundred-and-fifty-fourth pass: BUBBLE WRAP in DeformationService). This cell is one of the eight
+	-- round a landing: its pockets go a beat after the landing's own, each cell at its own moment, with a pop of its own,
+	-- so the ring crackles outward instead of landing as one thud.
+	if ctx.cause == "ring" then
+		ctx.cause = "rung"
+		task.delay(0.05 + math.random() * 0.07, function()
+			if tile.Parent and lastState[tile] ~= "exhausted" then
+				AudioService.playSfx("BubbleWrap", tile, ctx.mine, { force = true, gain = 0.6 })
+				Effects.BubbleWrap(ctx)
+			end
+		end)
+		return
+	end
 	local pockets = pocketsFor(tile, ctx.layer)
 	-- THE AIR OUT OF THE POCKET, and the only reason this material has particles at all --
 	-- the plastic itself sheds nothing. Guarded here rather than in a branch because this
@@ -7347,9 +8132,33 @@ Effects.BubbleWrap = function(ctx: Ctx)
 			if burstBones[bone] then
 				burstBones[bone] = nil
 				TweenService:Create(bone, info, { Transform = CFrame.identity }):Play()
+				POCKET.mark(pockets, bone, false)
 			end
 		end
 		settleTile(tile, 0.25)
+		return
+	end
+
+	-- TORN THROUGH (POCKET.TEAR): the cell has given way. Every pocket over it goes down through the sheet and in toward
+	-- the cell's middle, the film stretching after it, and the floor with them; put back when the cell is (pristine).
+	if ctx.state == "exhausted" then
+		local size, rest = restSize[tile], restCFrame[tile]
+		if size and rest then
+			local half, centre = size * 0.5, rest.Position
+			local tear = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			for _, bone in ipairs(pockets) do
+				local at = bone.WorldPosition
+				if math.abs(at.X - centre.X) <= half.X and math.abs(at.Z - centre.Z) <= half.Z then
+					burstBones[bone] = true
+					local pull = Vector3.new(centre.X - at.X, 0, centre.Z - at.Z) * POCKET.PINCH
+					local sheet = bone:FindFirstAncestorWhichIsA("BasePart")
+					local inward = if sheet then sheet.CFrame:VectorToObjectSpace(pull) else pull
+					TweenService:Create(bone, tear, { Transform = CFrame.new(inward.X, -POCKET.TEAR, inward.Z) }):Play()
+				end
+			end
+			moveTile(tile, tear, -POCKET.TEAR, 1, 1)
+		end
+		puff(tile, Color3.fromRGB(236, 250, 254), 0.4, 9, 4, 8)
 		return
 	end
 
@@ -7414,11 +8223,13 @@ Effects.BubbleWrap = function(ctx: Ctx)
 
 	-- The sheet gives where it collapsed. The pockets carry the event themselves now, so
 	-- this only has to be the give underfoot rather than the whole punch.
+	-- AND IT STAYS DOWN (POCKET.SAG): a jolt under the foot, and then the floor of the cell left on the film, where the
+	-- pockets' tops no longer are.
 	local jolt = TweenInfo.new(0.05, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	moveTile(tile, jolt, -0.3, 0.95, 1.0)
+	moveTile(tile, jolt, -(POCKET.SAG + 0.12), 0.95, 1.0)
 	task.delay(0.09, function()
-		if tile.Parent then
-			settleTile(tile, 0.16)
+		if tile.Parent and lastState[tile] ~= "pristine" and lastState[tile] ~= "exhausted" then
+			moveTile(tile, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), -POCKET.SAG, 1, 1)
 		end
 	end)
 end
@@ -7449,6 +8260,53 @@ local function revive(tile: BasePart, material: string?)
 	puff(tile, if look then look.color else Color3.fromRGB(230, 230, 235), 0.45, 3, 5, 9)
 end
 
+-- ===== A CELL ABOUT TO GO (the hundred-and-fifty-first pass) =====
+--
+-- The server says a crumbling cell is a moment from giving way (CRUMBLE in DeformationService): it judders where it stands,
+-- a quick shiver down and up around wherever it is now, and sheds a little of itself, dust falling (vapour rising off a
+-- cloud), so a floor going behind you is seen going and a floor going under you is seen before it goes. Nothing is pressed
+-- and nothing is heard: the give itself is the sound.
+-- Built in a function of its own and handed back, so its locals do not count against the main chunk's 200.
+DeformationRenderer.tremble = (function()
+	local SHIVER = { amount = 0.08, beats = 6, beat = 0.045 }
+	return function(tile: BasePart, material: string?)
+		local look = material and MaterialAppearance.Appearances[material]
+		local colour = if look then look.color else Color3.fromRGB(230, 226, 220)
+		if material == "Cloud" then
+			puff(tile, colour, 0.9, 2, 2.5, 5)
+		else
+			puff(tile, colour, 0.32, 4, -10, 7)
+		end
+		local bone = boneFor(tile)
+		local base = if bone then heldSink[bone] or residualSink[bone] or 0 else 0
+		local from = tile.CFrame
+		task.spawn(function()
+			for beat = 1, SHIVER.beats do
+				if not tile.Parent then
+					return
+				end
+				local fade = 1 - (beat - 1) / SHIVER.beats * 0.5
+				local by = (if beat % 2 == 1 then -1 else 0.55) * SHIVER.amount * fade
+				local info = TweenInfo.new(SHIVER.beat, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+				if bone then
+					boneOffset(bone, info, base + by)
+				else
+					play(tile, tile, info, { CFrame = from * CFrame.new(0, by, 0) })
+				end
+				task.wait(SHIVER.beat)
+			end
+			if tile.Parent and lastState[tile] ~= "exhausted" then
+				local info = TweenInfo.new(SHIVER.beat, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+				if bone then
+					boneOffset(bone, info, base)
+				else
+					play(tile, tile, info, { CFrame = from })
+				end
+			end
+		end)
+	end
+end)()
+
 -- === Entry point ===
 
 function DeformationRenderer.onDeformationUpdate(payload)
@@ -7464,6 +8322,11 @@ function DeformationRenderer.onDeformationUpdate(payload)
 	remember(tile)
 	if mended then
 		revive(tile, material)
+	end
+	-- ABOUT TO GIVE WAY (see the tremble above): shaken, and nothing else. Not a footstep, not a new state.
+	if payload.cause == "warn" then
+		DeformationRenderer.tremble(tile, material)
+		return
 	end
 
 	-- THE FLOOR GOES AND YOU GO WITH IT, AT ONCE, on every material that can drop you. When a cell
@@ -7586,6 +8449,8 @@ function DeformationRenderer.onDeformationUpdate(payload)
 	local footfall = cause == nil or cause == "step" or cause == "creep"
 	-- (Your own pop on bubble wrap was already heard the moment your foot touched: BUBBLE WRAP POPS.)
 	local heard = material == "BubbleWrap" and mine and state == "deformed" and os.clock() - (pops.heard[tile] or 0) < pops.ahead
+	-- (Nor a light switch's as you come onto its cell: its clack is its rocker going over, under a foot. ROCKERS.)
+	heard = heard or (material == "LightSwitch" and state == "deformed" and tile:FindFirstChild("Rocker") ~= nil)
 	if material and ((state == "deformed" and footfall) or state == "exhausted") then
 		if not heard then
 			AudioService.playSfx(material, tile, mine, { pitch = note, event = event, force = loud })
@@ -7642,6 +8507,7 @@ function DeformationRenderer.onDeformationUpdate(payload)
 			popCount = payload.popCount,
 			layer = payload.layer,
 			stepCount = payload.stepCount,
+			wear = payload.wear,
 			depth = payload.depth,
 			push = payload.push,
 			lean = payload.lean,
@@ -7699,10 +8565,34 @@ workspace.DescendantAdded:Connect(function(item: Instance)
 	task.defer(pops.watch, item)
 end)
 
+-- THE TILES OF A LEVEL TAKEN DOWN, LET GO OF (the hundred-and-forty-fifth pass). These tables keep what each tile, slab
+-- and bone was and is doing (its rest, its bones, its marks, its last state, its tweens) by the part itself, and nothing
+-- let go of one when its level came down: every run's slabs stayed in them, and so in memory, for as long as you played.
+-- The newer tables here are weak-keyed. These are swept instead, every fifteen seconds, of whatever is no longer in the
+-- world (a level's part taken down, or streamed away: one streamed back in is a new part, and met afresh), which does
+-- not depend on when a part is collected.
+task.spawn(function()
+	local kept: { { [any]: any } } = { restCFrame, restSize, lastState, activeTweens, marks, visualOffset,
+		slimeVisualRest, floorCache, floorChecked, floorRest, boneCache, boneChecked, heldSink, residualSink,
+		rippleToken, platformBones, platformTiles, visualToken, heldVisual, crackGuis, microTiles, microRest,
+		rippleCanvas, sandBones, sandOffset, granuleRest, granuleLook, granuleTotal, crumbling, sheetBones, burstBones }
+	while true do
+		task.wait(15)
+		for _, list in ipairs(kept) do
+			for item in pairs(list) do
+				if typeof(item) == "Instance" and item.Parent == nil then
+					list[item] = nil
+				end
+			end
+		end
+	end
+end)
+
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local DeformationUpdate = RemoteEvents:WaitForChild("DeformationUpdate")
 DeformationUpdate.OnClientEvent:Connect(DeformationRenderer.onDeformationUpdate)
 lavaLife.start()
+ROCKERS.start()
 
-DeformationRenderer.STAMP = "2c44d45e"
+DeformationRenderer.STAMP = "9425438f"
 return DeformationRenderer

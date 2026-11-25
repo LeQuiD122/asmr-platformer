@@ -53,6 +53,7 @@ GIRTH = 8.0          # SunkenCityService's MONSTER_GIRTH
 SWAY_TURN = 0.42     # the most the body turns off the path: the sway's slope and the wander's
 MIDDLE = (SEGMENTS - 1) / 2 * SPACING   # the middle of the body, `behind` the head's centre
 SNOUT = 8.8          # how far the head reaches in front of the first segment's centre
+CREST_STEP = 1.4     # the crest's pieces along the keel, as the body's rings are
 TAIL = (SEGMENTS - 1) * SPACING + 8.4   # where the body ends and the fluke begins
 CREST_TOP = 10.0     # the crest's highest spine over the centre line (the checker allows 1.3 girths)
 
@@ -148,28 +149,69 @@ def head(bm):
 
 
 def crest(bm):
-    """A scalloped crest of raked spines along the keel, highest behind the head, gone by the tail."""
+    """A scalloped crest of raked spines along the keel, highest behind the head, gone by the tail.
+
+    BUILT AS A STRIP (the two-hundred-and-second pass, seen in play). It was one plate, an outline
+    filled with a single face each side, and so with long triangles running from near the head to
+    near the tail, each of their corners on its own bone. Laid straight that is a crest; bent over
+    into the turn at either end of the patrol, those triangles cut straight across the loop and the
+    whole crest stretched into a flat striped web filling it. Now it is a strip of short pieces, one
+    every CREST_STEP studs along the keel and one at every peak and valley of the scallops, so each
+    piece bends with the bit of body under it."""
     start, end = 4.0, 150.0
     spines = 13
-    top_line, base_line = [], []
+
+    def base_top(s):
+        return 0.75 * girth(s) * (1 + 0.08 * 1.0) * 0.98   # the keel's top, just inside
+
+    # The scalloped top, as (s, height) along the keel: the same peaks and valleys as before.
+    profile = []
     for j in range(spines):
         u0 = j / spines
         u1 = (j + 1) / spines
         s0 = start + (end - start) * u0
         s_peak = s0 + (end - start) / spines * 0.55   # raked back
         s1 = start + (end - start) * u1
-        base_top = lambda s: 0.75 * girth(s) * (1 + 0.08 * 1.0) * 0.98   # the keel's top, just inside
         fade = (1 - (s_peak - start) / (end - start)) ** 0.5
         peak = base_top(s_peak) + (CREST_TOP - base_top(s_peak)) * fade * (0.8 + 0.2 * math.sin(j * 1.9))
         valley = base_top(s1) + 0.3 * (peak - base_top(s1))
         if j == 0:
-            top_line.append((0, y_of(s0), base_top(s0) + 0.2))
-        top_line.append((0, y_of(s_peak), peak))
-        top_line.append((0, y_of(s1), valley if j < spines - 1 else base_top(s1) + 0.1))
-    for k in range(spines, -1, -1):
-        s = start + (end - start) * k / spines
-        base_line.append((0, y_of(s), 0.75 * girth(s) - 0.6))
-    G.plate(bm, top_line + base_line, (1, 0, 0), 0.3)
+            profile.append((s0, base_top(s0) + 0.2))
+        profile.append((s_peak, peak))
+        profile.append((s1, valley if j < spines - 1 else base_top(s1) + 0.1))
+
+    def top_at(s):
+        for (sa, ha), (sb, hb) in zip(profile, profile[1:]):
+            if sa <= s <= sb:
+                return ha + (hb - ha) * (s - sa) / max(1e-6, sb - sa)
+        return profile[-1][1]
+
+    stations = []
+    s = start
+    while s < end:
+        stations.append(s)
+        s += CREST_STEP
+    stations = sorted(set([round(x, 4) for x in stations] + [round(p[0], 4) for p in profile] + [end]))
+    half = 0.15   # 0.3 thick, as the plate was
+    flat = G.flat_layer(bm)
+    right, left = [], []
+    for s in stations:
+        y = y_of(s)
+        top, base = top_at(s), 0.75 * girth(s) - 0.6
+        right.append((bm.verts.new((half, y, top)), bm.verts.new((half, y, base))))
+        left.append((bm.verts.new((-half, y, top)), bm.verts.new((-half, y, base))))
+    made = []
+    for i in range(len(stations) - 1):
+        (rt0, rb0), (rt1, rb1) = right[i], right[i + 1]
+        (lt0, lb0), (lt1, lb1) = left[i], left[i + 1]
+        made.append(bm.faces.new((rt0, rt1, rb1, rb0)))   # one face
+        made.append(bm.faces.new((lb0, lb1, lt1, lt0)))   # the other
+        made.append(bm.faces.new((lt0, lt1, rt1, rt0)))   # its top edge
+        made.append(bm.faces.new((rb0, rb1, lb1, lb0)))   # where it meets the keel
+    made.append(bm.faces.new((right[0][0], right[0][1], left[0][1], left[0][0])))
+    made.append(bm.faces.new((left[-1][0], left[-1][1], right[-1][1], right[-1][0])))
+    for face in made:
+        face[flat] = 1
 
 
 def fluke(bm):
@@ -236,6 +278,19 @@ def preview(mesh, rig):
         cam_data.ortho_scale = scale
         d = Vector(direction).normalized()
         cam.location = Vector(centre) + d * 300
+        cam.rotation_euler = (-d).to_track_quat("-Z", "Y").to_euler()
+        scene.render.filepath = os.path.join(HERE, "serpent_%s.png" % tag)
+        bpy.ops.render.render(write_still=True)
+    # THE TURN (the two-hundred-and-second pass): bent over into a U, as at each end of its patrol, from the side and
+    # from above. Where the crest was one plate, this showed the web it stretched into across the loop; the strip
+    # bends with the body.
+    turn = {"Spine_%d" % k: ("x", math.pi / 7) for k in range(6, 13)}
+    G.pose(rig, turn, 1.0)
+    mesh.color = (0.16, 0.22, 0.26, 1.0)
+    cam_data.ortho_scale = 240
+    for tag, direction in (("turn_side", (1.0, 0.0, 0.0)), ("turn_angle", (0.8, -0.35, 0.5))):
+        d = Vector(direction).normalized()
+        cam.location = Vector((0, 0, 0)) + d * 400
         cam.rotation_euler = (-d).to_track_quat("-Z", "Y").to_euler()
         scene.render.filepath = os.path.join(HERE, "serpent_%s.png" % tag)
         bpy.ops.render.render(write_still=True)

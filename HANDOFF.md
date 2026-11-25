@@ -9,9 +9,18 @@ chunks, there are four levels plus a Sandbox, and players choose a run in a lobb
 being dropped into a hardcoded level. See **Levels and the lobby** and **The Flooded Halls**
 below for the parts this file did not cover before.
 
-Last updated: 2026-10-22. **Everything up to and including the ninety-second pass has been played in Studio (you).**
-Built since, waiting for a test: the hundred-and-thirtieth to thirty-sixth passes, from your test of 2026-10-23 and its
-video (**Your test of 2026-10-23**, first below); the hundred-and-twenty-third to twenty-ninth passes, from your test of
+Last updated: 2026-11-04. **Everything up to and including the ninety-second pass has been played in Studio (you)**, and
+93 to 129 since (your tests of 2026-10-21 to 2026-10-23). Built since, waiting for a test: the hundred-and-seventy-third
+to seventy-seventh passes, the surfaces reaching the levels, the squish room and your own slab variants, and his letters in order, from your note
+of 2026-11-04 (**Where the surfaces reach, and his letters in order**, first below); the hundred-and-sixty-sixth to
+seventy-second passes, the camera everywhere, his hands, the halls' own light, Harrow Bay's surfaces and the story's
+letters and Watcher, from your note of 2026-11-03 (**The camera, the catch, the light, the surfaces and the story**); the hundred-and-sixty-fourth and sixty-fifth passes, the game felt in your hands and the keyboard that types, from your note of 2026-11-02 (**Felt, and
+typed**, first below); the hundred-and-fifty-ninth to sixty-third passes, what good Roblox games do, from the note before
+it (**What good Roblox games do**); the hundred-and-fiftieth to fifty-eighth passes, from your video and notes of 2026-10-31 (**The chunks, the keys and the
+bodies**); the
+hundred-and-forty-third to forty-ninth passes, the second polish round (**Polishing the game, the second round**); the
+hundred-and-thirty-seventh to forty-second passes, the polish round you asked for on 2026-10-30 (**Polishing the game**); the
+hundred-and-thirtieth to thirty-sixth passes, from your test of 2026-10-23 and its video (**Your test of 2026-10-23**); the hundred-and-twenty-third to twenty-ninth passes, from your test of
 2026-10-22 (**Your test of 2026-10-22**); the hundred-and-seventeenth to twenty-second passes, from your test of
 2026-10-21 (**Your test of 2026-10-21**); the hundred-and-fourteenth to sixteenth passes, the true ending (**Clocking in, and
 his face**); the hundred-and-thirteenth pass, Hill House's people (**Mr Gale and Mrs Dunn**); the hundred-and-twelfth pass, Hill House's hall (**His key and his clock**); the hundred-and-eleventh pass, Hill House from the outside (**Hill House**); the hundred-and-tenth pass, the
@@ -681,6 +690,1419 @@ running under the room's haze (density 0.32, haze 1.6, lilac decay) all along.
 - **Slabs under any hole-opening material no longer collide** (`ChunkBuilder`: step counts,
   displacement, wading and embers join the dissolve clock), and a re-inflated bubble wrap cell
   now gets its floor back -- it used to look whole and let you fall straight through.
+
+## What you leave behind (two-hundred-and-thirtieth pass, 2026-11-20)
+
+From "film the serpent in a real sunken city run, and do other points from the 5". The serpent filmed in a real
+Sunken City run (DevPanel "level", 3), its jaw working (release/clips/raw/serpent_run_229.mp4). New client module
+GroundMarks (started by the client Bootstrap, in CLIENT_MODULES): every STRIDE of your own walking, a ray under the
+foot; on a slab whose Material is KineticSand, Snow, Clay or Salt a footprint is PRESSED (heel, arch, ball, toes, the
+way you go, alternate feet), on Chocolate, ChocolateSolid, ButterWax, Ice or Cookie a CRACK runs out and forks. Painted
+into an EditableImage on a Top Decal of the surface (its Visual mesh where it has one), kept for as long as the slab is
+(the run); oldest wiped past 4,000,000 pixels kept. Local only, your own steps. The mesh budget (about one editable mesh
+free in a run, beside the three monsters) rules out real dents, so marks are painted; images have plenty of room.
+Tested in the squish room: 36 surfaces painted before the pixel budget replaced a 36-image cap; NOT SEEN on screen yet
+(Studio stopped rendering). Point 5 (painting/drawing) not started. Pasted (GroundMarks, both Bootstraps), verified.
+
+Pass 231 (2026-11-20): GroundMarks seen and fixed. Marks were painted on the pads' invisible floor tiles, under the
+visible surface, so most never showed: surfaceOf now looks up to three levels for "Visual", "WaxShell" (Ice, ButterWax)
+or "SkinnedVisual" (every soft pad) and paints that, so prints follow the sand's dunes. Prints redrawn as a shoe sole:
+a light ridge pushed up ahead of the toe and behind the heel, then six faint overlapping discs heel to toe (deepest at
+heel and ball) and three tread lines, 1.35 studs long; PER_STUD 26 (14 drew blocky boxes), MAX_PIXELS_KEPT 8M. Sand
+ink 150,112,64; snow ink 112,134,172 at 0.56. Seen in play: sand, clay prints; chocolate, wax, ice cracks (stills in
+release/clips/raw/marks_231_*.jpg). Snow after its last darkening not re-seen. The moving clip failed: Studio fell to
+1 fps mid-take. Pasted (GroundMarks, Bootstrap), verified, baseline marked.
+
+Pass 232 (2026-11-20): THE EASEL, free drawing in the squish room. SquishRoomService.buildEasel stands it against the
+front wall, 26 studs right of the hall's middle (the shelf is 26 left): two feet, two posts, a 12x7 DrawingPaper
+(tagged DrawingPaper, Roblox prompt "Draw"), a DRAW rail, a tray with seven PaintPot pots (Plum, Rose, Honey, Mint, Sky,
+Soot, Chalk; attribute Paint), a Rubber (Tool=rubber) and a Sponge (Tool=wipe). DrawingBoard.lua (client, new): the
+prompt eases the view square onto the paper (a fifth of the screen left clear for the vote card), frees the cursor (its
+ScreenGui "Easel" is in ViewModeService.menuOpen), hides your own body, name tags, crown and pal on your screen only,
+and paints on a 768x448 EditableImage decal (brush 5 px, rubber 16 px, sponge wipes). Mouse and touch drag; a
+controller: left stick moves a ring, R2 paints, R1 next pot, d-pad down wipes, B steps back (A, X, Y left alone, per
+check_devices). Done, walking or jumping steps back. The picture is local only, kept per easel by position for the
+server's life. Step cosmetics now last about 3 s (HoneyPaw 4.5, Gilded 4, Penguin 3.2, BubbleSole 2.6), from the note
+that the paws stayed too long; not yet seen in play. Seen in play and filmed (release/clips/raw/easel_232.mp4):
+painting, pot picking, rubber, sponge, Done. No sound yet. Pasted (SquishRoomService, DrawingBoard, both Bootstraps,
+ViewModeService, ShopCatalog), verified, baseline marked.
+
+Pass 233 (2026-11-20): THE EASEL, SHARED. Each player's drawing is its own see-through layer (Decal Drawing_<userId>,
+yours ZIndex 2) on the same paper. DrawingBoard sends strokes as segments {code 1-7 paint / 8 rubber, {x,y,...}} in
+batches every 0.1 s over RemoteEvents.Easel (made by the server Bootstrap); SquishRoomService checks them (a known
+easel key, InSquishRoom, within 24 studs, 30 messages a second, 24 segments a batch, 200 points a segment, points
+clamped to the 768x448 sheet, 20000 points kept a player), keeps them, and passes them to everyone else; a client asks
+"sync" when the paper streams in and gets "all". Rubber and sponge only touch your own layer. A player's layer goes
+when they leave ("gone"); blocked users' layers are never made (GetBlockedUserIds, PlayerBlockedEvent). Pots carry
+PaintIndex. Tested in one-player Studio: strokes reach the server, a server-sent second author shows as its own layer,
+the sponge leaves others' layers, sync rebuilds from the server. Not yet tried with two real players.
+
+Pass 234 (2026-11-20): EVERYONE'S OR ONLY MINE, and polish. A sign on an arm off the easel's left post (EaselToggle,
+TogglePrompt "Hide others' drawings"); DrawingBoard turns it per player, on their screen only: other layers'
+decals go Transparency 1 (still drawn into, so turning back shows them current), the sign reads ONLY MINE /
+EVERYONE'S. The easel taps now (AudioService.press: open/close on Draw and Done, tap on a pot and the sign, close on
+the sponge). Squish room arrival: you used to step out into a cold blue hall for several seconds (the renderer had
+not yet found the hall closed in, so sky light filled it) with the camera inside the lift looking through its bars.
+Now SquishRoomClient, while InSquishRoom, sets Lighting.OutdoorAmbient 196,180,164, EnvironmentDiffuseScale 0.1 and
+EnvironmentSpecularScale 0.25 (put back on leaving unless something else changed them); the fade holds 1 s after
+arriving and the camera is set behind you; the server sets you down 19 studs in (was 15; the cabin front is at 12.5)
+facing (0.77, 0, 0.64) into the hall, and facing +X out of the lobby lift. All seen in play; lobby light restored.
+
+Pass 235 (2026-11-21): THE CITY SHORE LAMP AND THE SKY POOLS CHEST, seen in play and fixed. Lamp: under water after
+the high dive there was only a pale disc (the lit 34-stud LampPool) and a 15-stud pale halo, seen from almost straight
+above; no post or lantern read. Now the street is 40 studs ahead of the splash (was 22), a dark Cobblestone LampStreet
+with a kerb, a 20-stud post in lighter iron (70,86,84) with a crossbar, a lantern (warm head, four dark corner bars,
+sill, band, stepped cap, finial), the pool light under it (Brightness 7, Range 30), the lens light beside it, and two
+small amber halos (4.6, 7.4). The under-water shot leans 0.92 of the way to it at FOV 62 (was 0.7, 66); shots_shore.py
+restated. Chest: the lever scene works; the shot now aims 1.5 over the lid and 1.9 toward you, FOV 56 - 5*build (your
+head was above the frame). The reveal looks into the box at the photograph, rise 2.2, eye at (1.2, 2.6, -3.4) (it was
+ten seconds of the box's rusted side). Clips: release/clips/raw/shore_lamp_235.mp4, chest_235.mp4.
+
+Pass 236 (2026-11-21): the 2026-11-10 list. BACK ROOMS EXIT tested in play, no change needed: the WAY OUT puts a Chill
+runner at their checkpoint (Hardcore: the run's start, as any fall), and being caught puts you in the lobby with
+InLevel cleared. LEAVING DURING AN ENDING tested (City Shore dive, Leave to the lobby under water): one move home
+0.8 s after, none after in 22 s, camera Custom, the scene's parts gone; the result card still shows in the lobby
+(the run counted). BUBBLE WRAP: MaterialAppearance film transparency 0.36 to 0.12, colour 232,244,252, reflectance
+0.34 (each dome its own glint); a popped pocket now leaves a creased flattened mark (GroundMarks.pop, called from
+DeformationRenderer's burstPocket via POCKET.mark; GroundMarks.unpop as the cell goes pristine). LIGHT SWITCHES:
+I and O on every rocker (SurfaceGui SwitchMarks on the paddle's Top, along it, Rotation 90; O on the pilot's half),
+a bigger pilot (0.62 by 0.16 of the paddle), NEW_MATS.Switch glow 255,200,110, range 4 (9 lit the whole pad), bright
+1.2, and the SwitchWell tweened warm (150,104,52) when on. SHOP IDS: already done (pass 209); all ten items checked
+with GetProductInfo on 2026-11-21, priced and for sale. Clips: release/clips/raw/pads_236.mp4, switches_236.jpg,
+bubbles_236.jpg.
+
+Pass 237 (2026-11-21): FOR HOW ROBLOX RECOMMENDS GAMES (the user's reel: play time, coming back, leaving in the
+first 1 to 3 minutes, click-through on the thumbnail and title, friends, real sessions, spend days, Robux per player).
+Found already in place: daily chest with a streak, challenges, limited items, repeat purchases, a friend's fifth more,
+joinRunLate (a joiner during a run goes into it). Changed: the first visit's welcome is ONE card (what the game is,
+controls, finishing opens the next, more with a friend), its button Let's go, no page dot; the lobby guide is one step,
+straight to Start (City Shore and Chill are already chosen; the old four steps walked to the workshop and back).
+BRING A FRIEND board by the start (HubService, tagged InviteBoard, its InvitePrompt opens PauseMenuService's invite).
+APPLIED 2026-11-21 at the user's word (title 1, icon 1, all four thumbnails): name ASMR Squish Obby; icon image 127844629668560;
+previews 103480018537754, 89523235378782, 135121331745339, 94204202358194 (with alt text). Description set later the same day
+(the STORE_PAGE.md draft). The place asset PATCH needs multipart: sent with the form plus an image under an unused field name, which
+left the place content untouched (revision 851 before and after). The universe is still PRIVATE.
+Drafts in release/store_drafts (STORE_PAGE.md: three titles, a description; two 512 icons and four 1920x1080
+thumbnails cut from real gameplay captures, soft because the Studio view was 1357x511).
+SUNKEN CITY UNDER THE SEA, DARK (same pass, from the user's screenshot, "its missing dark scary underwater atmos"): the
+sea is parts, so a camera under it saw clear air. SunkenCityClient's aquarium.sea (on aquarium: the file is at 200
+locals) sets, while the camera is 0.8 under brief.waterY and neither the aquarium murk nor the drain's water has it:
+Atmosphere density 0.7, colour 12,38,44, decay 4,16,22, haze 2; ColorCorrection SeaDark tint 150,196,200, brightness
+-0.09, contrast 0.2, saturation -0.32; Blur 2; silt specks round the camera. Restored on surfacing (seen: atm 0.34).
+roblox_enums.py gained ParticleEmitterShapeInOut. Seen in play: release/clips/raw/sunken_dark_237.jpg.
+
+Pass 238 (2026-11-21): A QUICKER, CLEANER START. Alone in the lobby the count before a run is 3 seconds
+(SOLO_COUNTDOWN_SECONDS; 10 with anyone else there): stepping on Start to standing in City Shore went from 15 s to 7.3 s.
+SAL stood on the start slab, one stud from the spawn: every runner began inside her with her Talk prompt over them.
+StoryService.besideRoute takes the route's direction (along, the chunk's tangent or startAngle) and puts its spot
+square to it; Sal and Mrs Venn are stood from the second chunk on, with their chunk's direction. Seen: Sal on a
+junction slab 65 studs on. release/clips/raw/start_before_238.jpg, start_after_238.jpg.
+
+Pass 239 (2026-11-21): CITY SHORE'S BACKGROUND MODELS. Only the near band of open-sea objects used the "_Detail"
+(modelled, mostly textured) props; the far band, the sandbars' furniture and the floating rings used the plain meshes
+(a bin for the slime jar, a pillar for the statue, a disc for the umbrella). BackdropService.propBest now places the
+detailed one first everywhere, except where only the plain one is textured (the palm). Backdrop_Soap and Backdrop_Foam
+(no detailed versions: the stacked pale blocks and the dome) are off the open sea. Seen from the dive deck: every
+object there is a _Detail. release/clips/raw/shore_backdrop_239.jpg, backdrop_plain_vs_detail_239.jpg.
+No uploads or generations.
+
+Pass 240 (2026-11-21): JITTER WITH THE CURSOR LOCKED (your video: Ctrl lock, arcade buttons). The cause: the buttons'
+camera shake (DeformationRenderer) wrote Humanoid.CameraOffset directly, while ViewModeService writes the shoulder
+offset (1.75 sideways) every frame when locked; the two took turns, so the camera flicked between the shoulder and
+the middle (seen in your video as alternate frames ~40 px apart). Now the shake goes in the humanoid's CameraShake
+attribute and ViewModeService adds it: the only writer of CameraOffset. Also, facing the camera while locked is now
+an AlignOrientation (LockFacing) instead of writing the root CFrame each frame. Tested in play on P12_ButtonPad with
+the lock on: shake fired, offset held at 1.75, sideways jerk max 0.09 studs (old shake replayed: 0.54). Pasted and
+verified (Pass240Backup).
+
+Pass 240b (2026-11-21): THE BRING A FRIEND POSTER rebuilt (HubService): a framed board under a little roof on legs that
+run up to it; plum title banner, YOU + A FRIEND circles (your own headshot, set by PauseMenuService), a gold +20% TOKENS
+coin, and a line under; the prompt moved to an attachment under the board so it never covers it. Seen in play.
+Thumbnails v2 with captions: release/thumbs_v2.py -> release/store_drafts/thumb_v2_*.png; applied to the store page 2026-11-22 (4 image uploads; ids in release/store_drafts/STORE_PAGE.md).
+
+Pass 241 (2026-11-22, "polish the game more"; a tour of the levels in play, and what it found):
+- CHUNKS BY MATERIAL (LevelService.pickChunkForSlot): a slot now picks a material first, then one of its chunks, and
+  passes over a material used in the last few; and a level's headlineMaterial is laid at least once (from slot 4).
+  A Sunken City run had 12 Needoh in 35 and no oobleck; now 6, with oobleck, jellyfish and ice. Layouts all change.
+- NO CityStone in the Sunken City (MaterialAppearance): blue-black camouflage blotches on the aquarium tower and
+  ~1000 parts; they take HarrowCast/CityAshlar. check_made updated.
+- HINT CLEAR OF THE OPENING WORDS (OnboardingService.line): the first material's line was printed over the level's
+  "14 August..." card; while StoryOpening is up the line stands above it.
+- HILL HOUSE'S MIST to the horizon (7x7 MistFar sheets) and a third ring of mist banks; 14 wooded hills (FarHill +
+  FarWood) out of it 760-1500 studs off, fixed seed. The pink void band past the old sheet's rim is gone.
+All pasted and seen in play; backups in ServerStorage.Pass241Backup. 26 checkers pass.
+
+Pass 242 (2026-11-22): THE VIP CROWN (CosmeticsClient, GildedCrown's halo). It sat on the head's own top, so hair
+covered it; now it sits on the highest accessory on the head (hair, hats; measured in the head's up, every 2 s), settled
+0.18 into it. It no longer swells and shrinks (the orbit twinkle is not applied to the halo). Your own crown is hidden
+while the camera is in your head (first person), as Roblox hides hats. Tested: on top of the hair in third person;
+Transparency 1 in first person, 0 back in third. Backup in ServerStorage.Pass242Backup.
+
+Pass 243 (2026-11-22): THE BUTTER STICKS WAXED, AND IT CRACKS. WAX_SHELLS.ButterStick back (Wax_Shell_Sticks_16x12_A/B),
+the sticks now SHELL_THICKNESS under the plane (SURFACES.ButterStick surfaceOffset 3.99, was 3.69), SHELL_FINISH.ButterStick
+(whiten 0.55). DeformationRenderer BUTTER_STICK.SHELL/CRACK = true: the shell goes down with the dent and its shards part.
+The old imported stick shells were a crumpled heap even at rest: a shard's top was only its outline, so one across a groove
+could not bend into it. gen_wax_shell.py add_draped_plate (only with a RELIEF) now cuts each top shard on a grid lined up
+with the grooves (DRAPE_ACROSS 0.2, DRAPE_ALONG 0.4; clip_to_box), ~10.4k tris. Re-uploaded as models 120653509150449 (A)
+and 115921674562532 (B), swapped into ReplicatedStorage.Assets.TileMeshes (old ones as *_Old in ServerStorage.Pass243Backup;
+95079695754175 was a first upload of the un-fixed mesh, unused). check_feel's sticks section rewritten for the waxed rule.
+Seen in the squish room: three draped ridges, cracks open to yellow butter under footprints. 3 uploads.
+
+Pass 244 (2026-11-22, "improve the overall functionality of the chunks"): A SWEEP of all 27 squish-room pads in play
+(walk across, stand 3 s, jump; deformation events, speed, rise, drop per pad): no errors, every material deforms and
+replies. One fault: the bounce (SlimeLaunch, client Bootstrap) SET your rise, so a jump made as you landed on a
+jellyfish/jelly/slime was cut to the bounce (5.4 studs against 7.3 off the floor). Now, if you are already rising from
+your own jump, you keep it and get a third of the bounce on top: a jump timed to the landing goes 8.6 on both. Bounces
+alone unchanged (jellyfish 5.7, jelly 3.6). Lego coming loose under a standing foot is as designed (pass 151).
+Note for tests: Humanoid.Jump = true from a script does nothing here; ChangeState(Jumping) does.
+
+Pass 245 (2026-11-22, the material list: clay, waxed butter, chocolate x2, ice, keys over lava, snow, memory foam, toy
+bricks, stress ball, sand). Looked at each pad in play first. Done and seen in play:
+- RAISED FOOTPRINT PIECES gone where the print is painted (DeformationRenderer FOOT.PAINTED: Clay, Snow, Foam, Chocolate,
+  ButterWax): measured before the surface sank, they stood proud as grey/brown curls, and on chocolate reflected purple.
+  Memory foam gets painted prints (GroundMarks Foam).
+- STEP PRINTS (paws etc) drop and fade when nothing solid is under them any more (StepService dropUnsupported).
+- CLAY sticky: jumpScale 0.65 (rise 4.8 vs 7.3), speed 0.85. MEMORY FOAM: jumpScale 0.8, dents held 12 s.
+  (DeformationService `sticky`, restored on leaving.)
+- ICE crackSpread 1: a cell going through weakens and shakes the four round it (6 gone -> 20 warnings).
+- WAXED BUTTER: lettering smudges out while its wax is broken, back when whole; plate tilt 0.13 -> 0.07; grip 0.25 -> 0.3.
+- TOY BRICKS in five colours, scrambled per brick (ChunkBuilder attachBrick), debris in the brick's colour.
+- SOLID CHOCOLATE moulded: bevelled squares, a pressed diamond, slight shade per square (attachChocSquare).
+- Tried and backed out: snow packing into a faster lane and chocolate slowing where melted; both break 1-1.5 s after a foot
+  (your 191/205 asks), so neither lasts long enough to matter. Server support (packedSpeed/packSteps) left dormant.
+- Keys over lava, stress ball, sand: not changed (each already has its own full mechanic). Backups ServerStorage.Pass245Backup.
+
+Pass 246 (2026-11-22, "continue" + "make the pattern of the selected paw/footprint match the one put onto the chunk"):
+- SNOW, MEMORY FOAM, WARM CHOCOLATE KEEP THEIR FLOOR under a walking foot (no crumbleAfter / stepsToCollapse):
+  snow packs (0.78 fresh -> packedSpeed 1.05 after packSteps 2: measured 14.6 -> 16.8); foam never drops you (0.8 speed,
+  jumpScale 0.8, `sinks` = the taller Reach sensor, without which standing on it read as stepping off); chocolate is
+  softSpeed 0.7 where melted (16 -> 11.2), still melts through under a standing foot (dissolveTime). check_feel and
+  check_letgo rewritten for this; hints rewritten (Snow, Foam, Chocolate, Clay).
+- YOUR PRINT IN THE GROUND: with a shop footprint on, StepService asks GroundMarks.stampAt to press that print's own
+  shape (PRINT_SHAPES, from drawPrint) at the very spot the piece is laid; GroundMarks' own stride stands aside. The
+  shoe hollow (spawnFootprint) is skipped while a print is worn. Seen in play: the dent sits under the paw piece.
+- MARKS ON MESHES WERE POINT-MIRRORED (all of GroundMarks since 230: prints, cracks, bubble pops): a Decal on a MeshPart's
+  top is turned half round. meshTurn in toPixels and dirPixels; checked with a penguin and a slime print laid two ways.
+
+Pass 247 (2026-11-22, "continue working"): GroundMarks.stampAt(at, ahead, id?, walker?) takes anyone's print, and
+StepService asks it for every nearby player's (only the local player's before). On the cracking materials (ice, both
+chocolates, waxed butter, cookie) the print is pressed in as well as the crack (it was a crack only); prints are laid at
+least depth 0.5 so they show in the faint crack ink. Paw toes a third bigger. Seen in play on chocolate. Backups
+ServerStorage.Pass247Backup. Not tested with a second real player.
+
+Pass 248 (2026-11-22): KEYS OVER LAVA afloat (DeformationRenderer Keys.afloat: every free key bobs ~0.07 and rocks on
+its own beat, within 140 studs; gathered every 3 s from Levels and SquishRoom) and a key going under dips and rocks the
+keys round it. STRESS BALL: its skin goes paler and glossier by the hardest-held cell's squeeze (72,200,196 -> 117,213,210)
+and back on letting go. SAND ON YOUR SHOES: after a step in kinetic sand your feet trickle grains for 3.5 s, tapering
+(9 -> 0 a second). SOLID CHOCOLATE bevels darker than the top and matte (the pale streaks gone). All seen in play.
+Backups ServerStorage.Pass248Backup.
+
+Pass 249 (2026-11-22, "make it so that keys over lava will degrade after"): KEYS WEAR OUT. MaterialConfig
+LavaKeys.wearSteps = 4; DeformationService counts `cell.wear` per genuine step (at most once a half second: a sinking key
+loses and finds the foot again), keeps it through cooling, melts the key at wearSteps, and resets it only in restoreCell
+(a key coming back new); `wear` is in every update. DeformationRenderer Keys.wearLook: one glowing crack per wear on the
+key's Legend, 4.5% narrower per wear, cooling to Keys.wornColour (charred) instead of new. Hint rewritten; check_feel
+updated. Seen in play: cracks 1, 2, 3, 4, then under; back with none at full size. Backups ServerStorage.Pass249Backup.
+
+Pass 250 (2026-11-22, "improve the monster on level 4"): THE MAW. (1) The upper jaw now takes a texture: gen_maw.py
+smart-projects Maw_UpperJaw's UVs (extents unchanged, 55 x 27.56 x 105), re-uploaded as Model asset 102709964883976
+(1 upload) and swapped into TileMeshes.Maw_UpperJaw (Model wrapper); it wears the lower jaw's flesh texture
+137377800859043. generate_texture refused every mesh that day (Bad Request, even the lower jaw that took one before):
+a texture of its own can still be generated on the unwrapped jaw later. Old jaw in ServerStorage.Pass250Backup.
+(2) THE DARK DISC was the tongue: one 24 x 32 ellipsoid lying a stud over the hollow of the jaw's floor, seen flat
+from above. Now four lobes (two either side of a groove, a tip, a root joining them) sunk into the hollow in the
+gums' red, rolling slowly. (3) THE THROAT: four rings of gum behind the hinge (RINGS), one inside the next, each set
+with fangs leaning in and down, inside the skull's outline; they grind against each other and squeeze in a wave down
+the throat (Maw.set, on os.clock). Lit by the gullet's red and the acid glow it is a lamprey's throat. No cylinder,
+no end disc. (4) Drool off the palate while it breathes (Maw.breathe). Seen in play in daylight and in the dark.
+
+Pass 251 (2026-11-22, "improve the overall animation of level 4, more dramatic, improve the maw model even more"):
+FloodedHallsClient mawStep: the lunge overshoots and settles (LUNGE_OVER), heaves while you hang, weaves its head,
+judders as it springs open and jerks on the bite, throws itself up into the bite (BITE_LURCH); jaws spring past open
+and quiver, then GAPE wider with a roar before creaking shut; your heartbeat a beat at a time, quickening to the bite;
+the light flares once on the bite; Maw.hunger (throat rings churn faster) and Maw.reach (tongue lifts toward you).
+Maw.lua: raked inner rows of fangs in both jaws (INNER_ROWS), a uvula over the throat, ten saliva strands. Pasted,
+checkers pass, ridden once on video. Both looked wrong because the meshes were back to front (pass 252).
+Backups ServerStorage.Pass251Backup.
+
+Pass 252 (2026-11-24, "get the frame of the monster when it opens its mouth for the first time ... its teeth are out
+of place"): THE MAW WAS BACK TO FRONT. Rays cast down onto each imported mesh in Studio hit only on the hinge's +Z
+side: all four meshes (jaws and teeth) run back down the throat, not out along -Z as gen_maw.py's contract says. So
+every "open" swung each jaw the wrong way and the two passed through each other in an X (the fangs out of the other
+jaw's outside; pass 251's inner rows and the tongue standing in the air). Maw.lua places each mesh with MESH_TURN
+(half a turn about the hinge's Y; the meshes are the same either side of X). The tongue is one flat blade and a tip.
+Frames before and after in docs/maw/. Ridden on video: the first open reads as a mouth, teeth on both rims, and the
+bite shot now shows the red jaws shutting (pass 251's "black blob" was the jaws seen back to front). Place saved
+(version 892). Backups ServerStorage.Pass252Backup.
+Repo: new screenshots and GIFs (screenshots/, all from 2026-11-24), the store icon and thumbnails (media/), README's
+top, a Hill House row and a Recent improvements section.
+
+## The sea monsters' jaws (two-hundred-and-twenty-ninth pass, 2026-11-20)
+
+From "now do the serpent and leviathan mouths". MarshMouth.jaw(name) cuts a made head with jaws modelled open
+(Assets/Props.Sea_Head, the Sunken City serpent's; Sea_LeviathanHead, the lobby's) into skull and lower jaw: what is
+under a plane through the gap between its teeth AND in front of the hinge at the mouth's corner (MarshMouth.JAWS,
+box-centred mesh space, measured from side views). A strip of throat just behind the cut is on both pieces, so the
+jaw slides over the skull as it opens (it showed a line of sky); a matte dark-red gullet (JawThroat) turns half as far
+as the jaw so the mouth is never see-through. Leviathan: MarshMouth.leviathan (started by StoryClient) hides the
+server's head on each screen and draws the pieces, breathing slowly and roaring wide every 16 to 30 s.
+Serpent: SunkenCityClient's SerpentJaw.work on its made head each frame: breathing, wider the nearer it is, a snap
+shut every 5.5 s (one table, because that file is at Luau's 200-locals limit).
+EDITABLE MESH BUDGET: only about eight editable meshes fit on a screen at once. So Marsh is now three (his palate and
+mouth floor are in the skull and jaw meshes, coloured by vertex colour; both lids are one mesh), each source is
+destroyed after cutting, and cuts run one at a time. Leviathan filmed roaring in the lobby; the serpent's jaw filmed on
+a copy of its head in the lobby (a Sunken City run was not started), so it is unseen on the live serpent.
+Pasted (MarshMouth, StoryClient, StalkerClient, SunkenCityClient, Bootstrap), verified (release/clips/raw/jaws_229.mp4).
+No uploads or generations.
+
+## His eyes open when he sees you (two-hundred-and-twenty-eighth pass, 2026-11-20)
+
+From "make his eyes open when he spots you". MarshMouth also cuts each closed eyelid out of the skull (skull
+triangles whose centre is in an ellipse at (+-0.31, 0.165), half size 0.14 x 0.072, facing front) into its own
+MeshPart (MouthLid), hinged at its top edge; `lidTurn` swings it up and back 105 deg into the head. `eyeParts` puts a
+dark socket, a red rim, a yellowed eyeball and a pinprick pupil behind each, sunk 0.15 behind the eye point (set
+shallower, the pupils showed through the shut lids). StalkerClient: eyes shut until Spotted, then open (fast) and stay
+open, open in the hold. StoryClient's face shot: half open as it cuts in, wide 0.1 s later, before the mouth throws
+open. Also fixed from the film: the walking copy's teeth grew through his face with his mouth nearly shut; they now
+grow with how far it is open and hide when it is shut. Pasted (MarshMouth, StalkerClient, StoryClient, Bootstrap),
+verified, filmed (release/clips/raw/marsh_228.mp4). No uploads or generations.
+
+## His own mouth (two-hundred-and-twenty-seventh pass, 2026-11-20)
+
+From "do you think having his mouth actually open instead of just having another fake one underneath would be
+better? If yes then do that". New client module MarshMouth: at start it reads Assets/Props.Marsh_Head with
+EditableMesh, cuts it along a plane through the lips (y -0.42 at the front, rising 0.12 toward the back so it passes
+under the ears), clipping triangles that cross (UVs and normals carried), and fans two flesh caps from the cut. Four
+MeshParts (MouthSkull, MouthJaw, MouthPalate, MouthFloor) are kept to clone; EditableMesh-made MeshParts keep the
+mesh's own origin (not re-centred), so they are placed at the head's centre. The jaw hinges at (0, -0.306, 0.15).
+StoryClient's face shot uses them (skull tips 13 deg, jaw drops 38 deg, teeth rooted on both lips from the cut's rim,
+tongue, thin round spit strands, throat at the back of the mouth); the old lid over a second mouth is only the
+fallback. StalkerClient puts the pieces on the walking copy: his jaw hangs slack as he walks, works when he stops,
+shuts as he stares, gapes when he rushes, opens over you in the hold. NEEDS Game Settings > Security > "Allow Mesh &
+Image APIs" ON (the user turned it on 2026-11-20); without it MarshMouth warns once and the lid comes back.
+Pasted (MarshMouth new, StalkerClient, StoryClient, Bootstrap with MarshMouth in CLIENT_MODULES), verified, filmed
+(release/clips/raw/marsh_227.mp4). No uploads or generations.
+
+## No white flash, and he stops dead when he sees you (two-hundred-and-twenty-sixth pass, 2026-11-20)
+
+From "improve the backrooms monster even more and fix the white flash". Cinema.impact takes `dark`: the same beat
+(desaturate, contrast, flash frame, lines, kick) but the flash frame black and Brightness -0.18 instead of white and
++0.12. The back rooms catch uses it for all three hits (the cut to the hold, the head throwing open, the lunge), and the
+lights at the opening rise to 1.25x (was 1.6x, which washed the shot yellow-white). BackRoomsService chase: the first
+time there is open floor between you within 44 studs he stops dead for 0.9 s (Spotted), then rushes. StalkerClient: on
+Spotted his head snaps straight to you with a crack and holds, staring; his random head snaps crack half the time
+(chocolateSnap_1's upload slowed to 0.5, soft); his tie swings with his stride and flies out ahead when he rushes (the
+Tie weld turned about its top). check_backrooms/story/standards/touch updated for the new impact signature and the
+pass's needles. Pasted (Bootstrap, BackRoomsService, Cinema, StalkerClient, StoryClient), verified, filmed
+(release/clips/raw/marsh_226.mp4). No uploads or generations.
+
+## Bigger back rooms, Marsh refined again (two-hundred-and-twenty-fifth pass, 2026-11-20)
+
+From "improve the backrooms monster even more please, refine him, and the clip, and you could make the backrooms
+bigger". BackRoomsService MAP grew from 34x22 to 54x36 tiles: the old rooms top left, a hall of square pillars to the
+east, a south wing of offices and corridors, the WAY OUT moved to the far right wall (82 tiles walk, was ~50); 159
+tubes, 2118 parts in Studio. Sunk things 24/13/9, damp patches 34, ceiling stains 18. Marsh: two jacket buttons, a
+pocket flap, a staff badge reading "E. MARSH / STAFF" (SurfaceGui, readable only close), damp dark trouser hems.
+StalkerClient: a limp (right leg drags, hips lurch onto it), left shoulder hitched up, a faint cold PointLight in front
+of him in the hold so he is no longer a black shape, and the hidden server body's SurfaceGuis disabled. StoryClient: the
+"What IS that?!" thought is destroyed at the face cut. check_backrooms has needles for all of it, and the map must stay
+at least 50x32. Pasted (Bootstrap, BackRoomsService, StalkerClient, StoryClient), verified by FNV, played once (built
+clean). Filmed on the second try (release/clips/raw/marsh_225.mp4, 18 s): the window was 1920x1009, so rec.sh's fixed crop (2556:1080:2:182) gave no frames; the viewport crop there is 1912:790:4:146.
+No uploads or generations.
+
+## Marsh refined (two-hundred-and-twenty-fourth pass, 2026-11-19)
+
+From "improve the backrooms monster even more please, refine him". BackRoomsService `marsh`: the suit a faded charcoal
+(46,43,44; it was near black, a cut-out against the yellow walls), lapels a shade lighter; in his socks, long grey feet
+in place of the black blocks (the Foot block kept, not drawn); a hump over his shoulder blades. StalkerClient: his
+fingers flex on each screen (`flex`, each finger joint's Weld turned about its knuckle): working as he walks, slowly
+when he stops, splayed open when he rushes, clenched and trembling round you when he has you; and his back heaves
+with his breathing, deepest when he stops. check_backrooms has needles for all of it (and pass 223's). Pasted
+(BackRoomsService, StalkerClient, Bootstrap stamp), verified, filmed in the back rooms (release/clips/raw/marsh_224.mp4).
+No uploads or generations.
+
+## Marsh dressed, and the face shot given room (two-hundred-and-twenty-third pass, 2026-11-19)
+
+From "make the backrooms character even better and stuff". Filmed in the back rooms first: a pale head on flat black
+sticks, gaps at every joint, three pegs for fingers; and in the four-stud rooms the face shot's lens was shoved two
+studs off his face by the wall behind you.
+
+- BackRoomsService `marsh`: every limb and the neck drawn as a round limb welded along its block (`rounded`, the block
+  kept invisible so the joints and the hold sums are unchanged); knobs at knees, elbows and hunched shoulders (`knob`);
+  an office man of a kind: white collar and shirt front, a dark red tie, lapels, the jacket's hem over his hips, shirt
+  cuffs and grey socks showing (all too short for him); five long two-jointed fingers with dark nails in place of the
+  three pegs, the middle one reaching where they did. Fabric and SmoothPlastic, no Neon.
+- StoryClient `caught`: the face shot is taken over your shoulder if that way has room, else along whichever way out has
+  most (roomAlong), up to 5.9 off, still through Cinema.clear; and the lens widens to hold about four studs of him when
+  it is near anyway.
+- check_backrooms: finger needle moved to the new loop (hold sums unchanged), needles for the room-picking and the lens.
+- Pasted (BackRoomsService, StoryClient, Bootstrap stamp), verified, filmed three times in the back rooms
+  (release/clips/raw/marsh_*.mp4; marsh_223.mp4 is the cut). No uploads or generations.
+
+## His made head opens worse (two-hundred-and-twenty-second pass, 2026-11-19)
+
+From "improve it more" on pass 221. All in StoryClient (screamerFace, setFang, stretch, placeScreamer, caught):
+
+- A beat shut while his head shudders harder (noise, not random jitter), then it is flung open past wide and eases
+  back (an ease-out-back overshoot), quivering as he roars, and opens wider again on the lunge, his head cocking.
+- The lower jaw drops 16 degrees on its own hinge as the lid goes up, so the mouth opens both ways.
+- The fangs grow out of the gums as it opens (30% to 110% and more); two long fangs on the lid, two on the jaw.
+- Five strands of dark wet spit (Reflectance 0.18, no Neon) sag between lid and jaw, stretch to about 2 studs and
+  snap one at a time, each leaving a drip on the lid; once snapped they stay snapped.
+- The over-the-shoulder shot aims 0.45 over his head from 5.9 back (was 5.6, at his head), widening a little as it
+  opens, so the rising lid stays in the picture.
+- Then played and filmed three times (release/clips/raw/scream222*.mp4, a catch fired in the lobby) and fixed what
+  showed: your own hair filled half the shot (your head and accessories on the line from lens to face are now hidden for
+  the face shot, body kept); the upper fangs were rooted inside the head (now at the chin, raked); the lower fangs stood
+  on nothing in an even row like candles (now a pale chin and red gum, uneven and leaning); the throat was a flat red
+  square at the lens (now round and deeper); the spit was too fine to see and snapped all at once (thicker, two on the
+  throw and three on the lunge); and tipped 58 degrees from the top he looked up at the sky over a gap (hinged at the
+  ears, 40 degrees, the jaw dropping 22). Pasted as p222c, verified; check_backrooms has needles for all of it.
+
+## His made head opens (two-hundred-and-twenty-first pass, 2026-11-19)
+
+From your note **(you)**: "it still has the old head-opening animation even though there is a new head model". The
+catch's screamer (`StoryClient.screamerFace`/`placeScreamer`) still built the old pale halves on a seam and opened
+those in front of him, and it hid only his plain `Head` and `Seam`, so the made head (`MadeHead`, a sibling, worn since
+pass 211) stayed on behind the old face. Now, where `Assets/Props.Marsh_Head` is there, the head that opens is the made
+head: the whole of it tips 58 degrees up and back from the top of the skull (a lid), thin fangs under its front edge
+(hidden until it lifts, so none show through his face), onto a dark red mouth with a row of fangs where his face was;
+the light in the throat dimmed so the fangs are not blown out to white. His worn `MadeHead` is hidden for it. The old
+halves stay only for a place without the model. `check_backrooms.py` holds it (proved by taking the hide out: it
+fails). Pasted (StoryClient, and Bootstrap for its stamp) and seen in play: the catch twice.
+
+Also made this session: five vertical Shorts/TikTok clips in `release/clips/out/` (ASMR floors, pals, five worlds, back
+rooms, story) with `release/clips/POSTING.md`, the editor `release/clips/edit.py` and the recorder `release/clips/rec.sh`.
+
+## Badges in the same look, and another pass (same day)
+
+From your note **(you)**: "make the badges better too in the same style and improve these even more". `badges_v2()`:
+each badge in a chunky gold ring lit from above, a gloss and a glint over it; the five levels' cinematic views with the
+level's number on a gold medallion; the story's key as a glowing sticker on a green burst, in flames for Hardcore (the
+ring red-hot), under a jewelled crown for the true ending; the back rooms' corridor darkened with a big gold "?"; Every
+Material a ring of glossy material blobs round a sparkle (pink ring). Corners kept transparent. And: titles have a soft
+glow and a highlight along the top of the letters (`title3d` wraps the plain one); the hero's black outfit lifted
+(`lifted`) with a cool back light on his right (`backlit`); wobble arcs either side of the squished ball on the icon;
+the pals' reflections in the floor under their podiums. `__main__` runs `build()`, `refine2()`, `badges_v2()`.
+
+## The art's third look (2026-11-19)
+
+From your note **(you)**: "work even more on these". `compose.py` `refine2()` (after `build()` and `refine()`) remakes
+the icon and all four thumbnails with: a rim light on every subject (`rim`: a bright upper-left edge, sharpened);
+contact shadows; glossy round podiums (`podium`); comic speed lines and an even splash fan (`speed_lines`, `drops`); the
+squishy ball squashed a little; and a last grade on each (`final`: colour, contrast, sharpening, a vignette). The
+pals' thumbnail stands each pal on a podium in its colour under its beam; the worlds' cards are stickers, with Squish
+and Cinder peeking in from the bottom corners; the hero lands on a squashed slime; the icon has a glossy pink slime
+floor and speed lines. Overlaps checked by eye at full size and at 100 px.
+
+## The thumbnails' second look (same day)
+
+From your note **(you)**: "make the other thumbnails better too, take inspo from the popular games, refine them".
+New close-up shots: each pal alone (`release/shots/pals/`), your character cheering close (`hero_close.jpg`).
+`compose.py`'s `refine()` (after `build()`) remakes thumbs 1, 2 and 4 in the big games' manner: subjects as stickers
+(white outline, coloured glow), big and cut by the frame; extruded 3D titles; starburst badges (SO SQUISHY!, NEW!, NEW
+GAME!); a real, blurred view of the game behind with light rays (the spiral, the lobby); in the pals' one, a beam of
+light under each with its name and token price. Thumb 3 (the worlds) and the icon unchanged.
+
+## The levels reshot cinematically (same day)
+
+From your note **(you)**: "reshoot the pics of different levels in a more cinematic way". New `release/shots/level1-5.jpg`
+(the first takes kept in `release/shots/old/`): the City Shore from below, looking up through its spiral of chunks at
+the clock tower; Sky Pools, a keyboard chunk leading the eye down the path across the clouds to the fountain tower;
+the Sunken City at water level, a drowned tower block and clock tower rising out of the sea; the Flooded Halls through
+a broken brick arch, the honey chunk running to you down the hall; Hill House from low in the long grass. `compose.py`
+crops each (`CROPS`: no pink horizon, the landmark centred) and grades it (contrast, colour, vignette) for the
+worlds thumbnail and the five level badges.
+
+## Every trail a wake, and the release art (two-hundred-and-twentieth pass, 2026-11-18)
+
+From your note **(you)**: "do the same for the other trails too, and do the icons and everything for the game release
+... in the style of popular right now games". Name chosen: **Squish Obby**.
+- **Trails**: all fourteen others lost their ribbon lines (`strands = {}`) and gained a wake at the feet in their first
+  motes: suds and bubbles, an amber sheen and falling drops, green ooze and flicked goo, a green haze with gold glints,
+  sea foam, a colour mist, smoke and heat, a pink sheen and bouncing beads, sugar dust, autumn dust, snow powder and
+  flakes, gold dust, a pink blush, flour. Their pieces and other motes are as they were. `check_shop` reads past a
+  comment between a trail's name and its ribbon.
+- **Release art** (`release/`): `compose.py` keys Studio shots taken in front of a green screen (a plain, not Neon,
+  backdrop and no floor: Neon lit the subjects green) and lays them over drawn sunbursts with chunky outlined titles
+  and sparkles. `release/out/`: icon (with and without the word), four 1920x1080 thumbnails (hero, pals, five
+  worlds, the bay), ten badge icons. Shots in `release/shots/`. `STORE_PAGE.md` says where each goes. Fixed on the way:
+  keying took the slime's own green (only far greener than it is keyed now), and the shadows' blur stopped square at
+  each cut-out's edge (blurred on a canvas with room now).
+- Generations 0, uploads 0. The art is files for you to upload; Roblox's API for the icon, thumbnails and badges is not
+  open to this Studio connection.
+
+## The cloud trail's wake (two-hundred-and-nineteenth pass, 2026-11-18)
+
+From your screenshot **(you)**: "can you do something better instead of the 3 lines tailing at the back?" The cloud
+trail's three wave strands are gone (`strands = {}`: ShopCatalog.wear then makes only the marker its pieces are drawn
+by). In their place a lilac mist rolling low along the ground behind you, wisps curling up off your feet and a glint
+or two, with the cloud puffs as before. Seen in play on the garden's grass. `check_shop` lets a strandless trail pass
+(it draws nothing, not the old wide sheet). Other trails still have their strands; say if any of those want the same.
+
+## Rail, overlaps, tags, server size, release page (two-hundred-and-eighteenth pass, 2026-11-16)
+
+From your note and three screenshots of 2026-11-16 **(you)**.
+- **The rail's 2x and 2x RUN** did nothing you could see: their toast lives in the shop, which was shut. Now 2x
+  prompts the pass if you lack it, else opens the shop at Passes; 2x RUN opens it at Tokens, with your boost count.
+- **Overlaps.** Squish room lift: the jambs are narrower and stand clear of the columns, stop under the lintel; the
+  sides end at the columns; the dial sits proud of its rim. Workshop board: legs behind it, thinner, below its top
+  (they were in its plane, two woods flickering); its words painted on its face (SurfaceGui) where they floated over it.
+  The workshop's key signs, YOUR PICK chips and start sign are depth-tested now (`makeSign(..., behind)`), so they no
+  longer draw over the board and the lift. Seen in play: clean.
+- **Head tags**: VIP and KEY HOLDER are matching glossy chips (shadow, gloss), one height, side by side and centred
+  together (`TAGS`), VIP in deeper colours, the key holder's key a brass key in a green medallion. Seen in play.
+- **Server size 14** (Open Cloud, place serverSize). VR left on, at your word.
+- **Pals' facing** checked by eye: all six (and the duck) face front. Their "glance at you" is what looked sideways.
+- `release/STORE_PAGE.md`: name options (Squish Obby recommended), description, the ten badges' names and words.
+  Badges can only be made in the Creator Dashboard (the API is cookie-only); 5 free a day.
+- Icon and thumbnails: not yet. The 3D view stopped drawing mid-shoot (Studio not in front); the stage is
+  scripted (IconStage on the client: pals on two podiums before a pink backdrop).
+- Generations 0, uploads 0.
+
+## Pals polished (two-hundred-and-seventeenth pass, 2026-11-15)
+
+- **Over a gap** a hopping pal hops along at your feet' height instead of dropping to the far floor or the void (its own
+  ray, which says when nothing is there). **When you jump** it goes up with you, never more than a stud under your feet.
+  **Standing** a few seconds, it turns to look at you for a moment now and then. Tested by hand-stepping: on the plaza
+  0 to 0.25 over the spawn pad, over the void 0 to 0.25 from your feet, looking at you 1.4 s in 5.
+- Test note: each `execute_luau` that steps `CosmeticsClient.tick` leaves its pal behind when the test ends; clear
+  parts named `Pal` before measuring again.
+- `pass216.py` now 15 of 15. Generations 0, uploads 0.
+
+## Pals, and more to spend tokens on (two-hundred-and-sixteenth pass, 2026-11-14)
+
+From your note of 2026-11-14 **(you)**: "Add more stuff to the shop for tokens, make it good quality now that you have
+access to the tools."
+
+- **A new Pals tab** (second, after Featured), `kind = "pal"`, one worn at a time: Squish (needoh ball, 350), Gloop
+  (slime, 450), Wibble (jelly cube, 550), Bumble (bee, 700), Nimbus (cloud, 850), Cinder (lava rock, glows and sparks,
+  1200). Each a model from Studio's generator in `Assets.Cosmetics.Pal_*` (raw copies in
+  `ServerStorage.CosmeticGenerations`). `ShopCatalog.PALS` holds each one's size, motion, place at your side and pace.
+- **How they move** (`CosmeticsClient.movePals`): kept to your right and a little behind, catching you up; the hoppers
+  hop along the ground (a ray each frame) and squash as they land, a small hop now and then standing; the bee hovers
+  and darts; the cloud drifts high and slow; the lava rock bobs, lit. A teleport sets the pal down beside you.
+  Tested by stepping frames by hand (`CosmeticsClient.tick`, since Studio's view was not drawing): standing 2.6 right,
+  1.4 back; running at 16 a second it keeps 4 behind; after a 60-stud jump it is 3.4 from you; all six bought and drawn.
+- **Worn** through `ShopCatalog.wear(..., pal)` (attachment `CosmeticPal` / `ShopPreviewPal`, attribute `PiecePal`);
+  `EconomyService` WEARABLE has `pal`. In the shop each pal's tile shows the model itself hopping or bobbing
+  (`ShopModels` BUILD.pal), and pressing the tile tries it on.
+- **More for tokens:** Blossom trail (petals, 280), Cookie crumbs trail (240), Duck parade aura (rubber ducks round you,
+  380), Cat paws steps (160). Models `Cos_Petal`, `Cos_CookieBit`, `Cos_Duck`, `Cos_CatPaw`.
+- **The tabs' sound sheet** is `ShopTab_x11` now (asset 86949230363193): the ten old takes the same, a Pals take (a soft
+  boop and two notes), laid out in the tabs' order. The old `ShopTab_x10` is in `ServerStorage.Pass216Backup`.
+- **Not yet seen on screen**: which way each model faces. If one walks backwards, give its PALS entry `yaw = 180`.
+- Generations 10, uploads 1. `check_shop` pass 216 block; `blender/mutations/pass216.py` 13 of 13.
+
+## Crown, steps, side rail, plaza and the sound audition (two-hundred-and-fifteenth pass, 2026-11-14)
+
+From your note of 2026-11-14 **(you)**: steps 180 degrees reversed; the VIP crown falls back while moving; small
+on-screen icons for 2x tokens and the shop; improve the lobby a little; look for better sounds for the shop's Sounds
+tab and the Needoh, soda, slime and sand chunks.
+
+- **The crown** (`CosmeticsClient`): a halo with radius 0 is now placed from the head's own CFrame each frame, so it
+  stays on as you run rather than trailing.
+- **The steps** (`StepService`, `ShopCatalog`): a print piece can carry `yaw`; the honey paws have `yaw = 180`.
+  BubbleSole is back on `Cos_Sole`; PenguinSteps is a drawn print (`mesh = "Flat"`, three toes).
+- **The side rail** (`ShopService.buildRail`): under the pause tab, lobby and squish room only (hidden while
+  `InLevel`): SHOP (opens the shop), 2x (gold when owned, dimmed with a + that offers the pass when not), and 2x RUN
+  (only while you hold run boosts, with the count). This is an exception you asked for to the no-HUD-clutter rule.
+- **The plaza** (`HubService.buildFingerpost`, `buildPlazaTroughs`; `LobbyLayout.AT.fingerpost`): an oak fingerpost
+  ahead and to the right of the spawn, four arms (LEVELS, SHOP, VIP LOUNGE, SQUISH ROOM) pointing down their walks;
+  eight oak flower troughs along the plaza's edges between the quarter columns and the corner urns. All measured
+  standing on the inlay (201.325), overlapping nothing. **Not yet seen on screen**: Studio's renderer had stalled.
+- **The sound audition** (`SoundAudition.lua`, `DevPanelClient`, Studio only): F8, scroll down. Each row is NOW (the
+  current takes, played as the game plays them) and 3 to 7 free Creator Store sounds to try, 48 in all, every one
+  measured in Studio (all loaded, lengths in the module). Press LIKE after one you like; Output says
+  `SOUND AUDITION: ...` and it sits on you as `Liked_<row>`. **Nothing in the game has changed yet**: the picks get
+  wired in once you have chosen. Rips from other games (Minecraft, Half-Life 2, SM64) were left out.
+- Checks: `check_shop` pass 215 block; `blender/mutations/pass215.py` 10 of 10. Uploads 0, generations 0.
+- **The last stand-ins, imported (same day, 11 uploads):** StorySounds JournalAdd 129171032650232, DoorSlam
+  75772258192144, TubeDie 90148512310449, ScreamerStab 106251807516498; LobbySounds KeyPress_x4 85062093008691,
+  LeverChill_x2 76546716786828, LeverHardcore_x2 140062583321826, LockedPress_x2 104544651938752, PadPress_x4
+  94329807975104, PosePress_x4 109982271976687, StartPress_x2 121913089328508. All load in Studio; the sheets' lengths
+  match their slots in AmbienceService and HubLeverService.
+- **Suites:** `pass207.py` written (12 of 12, covering 207 and 211's score); 203, 205 and 206 re-run (13, 29, 13, all caught).
+
+## Made trails, the boutique's banner, billboards, January and more VIP (two-hundred-and-fourteenth pass, 2026-11-14)
+
+From your note of 2026-11-14 **(you)**: improve the trails and steps with the new tools; put the boutique where it is
+very visible, a quick link at the top of the other tabs; January's limited items; more VIP; and Roblox's immersive ads.
+How is mine **(suggested)**. Pasted and looked at in play.
+
+- **The trails and steps, made**: their pieces are textured meshes from Studio's generator now (Assets.Cosmetics):
+  soap foam, a slime blob, a cloud, a jelly bean, a green satin bow, sea glass; for the steps a jelly heart, a star
+  cookie, a golden honey paw, a foam sole. No glass beads left. The honey trail keeps its own drop, amber (the generator
+  made honey red twice). The ember trail and steps keep theirs, which cool to ash. A print lies flat whichever way its
+  mesh was made, and in the lobby it lies on the deck's inlay (it was under it, unseen).
+- **The boutique's banner**: across the top of every shop tab but Wear, NEW: THE BOUTIQUE, three of its real items and
+  a Shop it button, a light sweeping across it; the whole of it opens Wear.
+- **Billboards (immersive ads)**: two old seaside hoardings on the Level Gates deck facing the plaza, 16 by 9, raised
+  clear of the level pads. Roblox puts image or video ads on them for anyone it can show one to, and the game earns per
+  impression; anyone else sees the bay's own poster (the Squish Room, the Boutique: blender/gen_ad_posters.py), not
+  Roblox's logo. They serve once the game is public with about 2,000 visitors a month, your account is ID-verified with
+  2-step on, and the content questionnaire is approved.
+- **January**: Winter wool (a knitted cord and real pom-poms, 1 to 15 January), Hot cocoa (marshmallows through the
+  steam, 15 to 29), Penguin steps (29 January to 12 February). **Add February's before 12 February.**
+- **More VIP**: the daily chest pays half as much again; every season's thing on sale to a VIP 3 days early (VIP early
+  on its tile); and the **Gilded crown**, a real gold crown worn over your head, turning slowly.
+- **Checks**: rules in check_shop; blender/mutations/pass214.py plants 12 faults, all caught (pass213's 18 still are).
+
+Uploads this round: 2 images (the posters), about 22 generated meshes and 2 textures (some retried, the slime once
+redone, the honey drop twice); the raw generations kept in ServerStorage.CosmeticGenerations.
+
+## Earning: VIP, ads, the boutique and the season's things (two-hundred-and-thirteenth pass, 2026-11-14)
+
+From your note of 2026-11-14 **(you)**: build the VIP perks, the quick wins, rewarded video ads, selling avatar items and
+limited-time items, "very good quality ... so that the players really do wanna buy", and more levels and items to come.
+How is mine **(suggested)**. Pasted and played in Studio; the real ads and real purchases can only be seen live.
+
+- **City Shore's light shafts**: the underwater "glitch" was seven flat see-through slabs. Each is three soft beams now
+  (a faint core in two fainter, wider ones), fading at both ends, swaying as before.
+- **VIP**: every run pays a fifth more (after the 2x: they stack); a free background crate every day, opened in the new
+  **VIP lounge** on the Hall of Fame's deck (red velvet rope on brass posts, a navy rug, plum armchairs and lamps, the
+  crate on a marble pedestal, a VIP LOUNGE arch; only VIPs walk through its gateway, anyone else is offered VIP there);
+  three things only VIPs have: the **Royal wave** emote (made in gen_poses.py), the **Gold leaf** trail and **Gilded
+  steps**; with the gold sparkle and the tag as before. The pass's description on Roblox says all of it.
+- **The store icons**: all nine redrawn (blender/gen_shop_icons.py: a crown, coins, a gift, a porthole, a flag, a jar,
+  a chest), uploaded with new descriptions. **Private servers** are on, 99 Robux a month.
+- **Rewarded video ads** (AdOffers): a second chance on the hardcore card, and a **Run boost** (new product, 19 Robux:
+  your next finished run pays double) free in the shop's Tokens tab, 3 of each a day. Roblox serves them only once the
+  game is public with about 2,000 visitors a month, your account is ID-verified with 2-step on, and you turn on
+  Monetization > Ads > Rewarded Video > Serving in the Creator Hub. In Studio a watched ad is pretended.
+- **The boutique** (the shop's new **Wear** tab): real Roblox avatar items in four collections (Seaside, Squishy,
+  Lighthouse keeper, Cosy), found live in the catalogue by their words (ShopCatalog.BOUTIQUE) and sold in Roblox's own
+  window; you earn 40% of each. A new collection (a new level's) is one line.
+- **Limited-time items**: Autumn leaves (a trail of real leaves, a new generated mesh) to 28 November, First frost to 12
+  December, Lantern night to the new year; first in Featured with the time left, refused once gone, kept by whoever has
+  them. **Add the next ones before 1 January 2027**, or the season shelf is empty.
+- **Checks**: rules in check_shop, and blender/mutations/pass213.py plants 18 faults, all caught.
+
+Uploads this round: 10 images (nine store icons and the Run boost's), 1 audio (the tab sounds, now ten), 1 generated
+mesh (the leaf); 1 product made, 4 passes and 5 products updated, the private server price set.
+
+## Crumbling chocolate, a score for the endings, and the looks round (two-hundred-and-ninth to twelfth passes, 2026-11-13)
+
+From your notes of 2026-11-07 and 2026-11-13 **(you)**: lobby sounds on the levels, better City Shore background models,
+music for the climaxes "like they do in live-action movies", solid chocolate that crumbles rather than bending, and the
+looks round (squish room booth, Hill House inside and out, the Maw, the back rooms monster, the shop's items). How is mine
+**(suggested)**. All pasted through the Studio MCP and looked at in play, except where it says not.
+
+- **Shop ids and the soda's sound (209)**: four passes and five products made on Roblox with icons, their ids in
+  `ShopCatalog.lua`; the soda chunk has its own sound (`jelloWobble_x4`, the old id kept as `WasSoundId`).
+- **No lobby on the levels (209)**: the lobby's sea and promenade beds are in the lobby's sound group, and that group is
+  silenced a second after a level starts (`AmbienceService`).
+- **City Shore's bay, made again (209)**: 19 close props generated afresh (the old ones in
+  `ServerStorage.BackdropDetailOld`); the slime jar has its lid screwed on; the sky island regenerated.
+- **Solid chocolate crumbles (210)**: it is a bar of rigid squares now, each on its own (`ChunkBuilder` CHUNKED,
+  `attachChocSquare`). A step cracks a square and shakes crumbs off; worn through, it breaks into lumps and is gone; it
+  comes back from below. No tile mesh is looked for, so the server no longer warns about one (212).
+- **A score under the endings (211)**: each ending starts a quiet bed that grows as the scene builds (City Shore
+  wistful, the Sunken City uneasy, the Flooded Halls dread, Hill House warm; the Sky Pools keep their party song), and
+  on the turn the bed is cut off and a deep drum-and-strings hit lands (the splash, the plunge, the drain, the jaws, the
+  clock), before the level's own chord. Made by `audio/gen_score_sfx.py`; `Cinema.score` and `Cinema.climax`.
+- **The back rooms**: the way out returns you to the level (tested); the monster wears a generated pale head
+  (`Props.Marsh_Head`).
+- **The Maw (212)**: its lower jaw and both rows of fangs wear generated textures (the old ones in `ServerStorage.MawOld`).
+  The upper jaw's mesh has no UVs, so it cannot take one: it is coloured to match the lower jaw's red instead.
+- **The shop stall**: a new generated stall (open counter, turned posts, striped awning, jars on the counter); the
+  older two in `ServerStorage.ShopStallOld`.
+- **The squish room's lift (212)**: an old seaside lift pavilion now, not a pink box: a marble step, cream columns,
+  panels to the waist with iron bars above, a brass rail and folded brass gate, a carpet, a domed roof with a finial
+  and the floor dial on the cornice. The room's own lift is the same.
+- **Hill House finished (212)**: outside, a pitched porch hood (the two wedges read as black wings), dressed stone at
+  the corners, a band between the storeys, gutters and a downpipe, his green shutters and flower boxes, a door surround.
+  Inside, panelling to the rail and paper above it, skirting, cornice and a painted ceiling, a hanging lamp; at the back
+  his armchair and footstool by the window with his pipe and mug, a bookcase with his ship on top, a painting of the
+  bay, a barometer and an umbrella stand. The crag's ground used to show up through the hall's boards; it is cleared out.
+- **The shop's items in the round (212)**: each tile's disc shows a little moving model (a trail's bead and its wake,
+  an aura's motes round a figure, a foot leaving prints, a speaker with bouncing bars, a figure doing the emote, a
+  spinning stack of coins, a rattling crate) in `ShopModels.lua`. Passes keep their glyph and backgrounds their swatch.
+  Still under Roblox's Reduce Motion.
+- **Checks**: rules for all of it in `check_squishroom`, `check_hillhouse`, `check_shop`, `check_halls` and
+  `check_feel`; `blender/mutations/pass212.py` plants 26 faults and all 26 are caught.
+
+Uploads this round: 6 audio, 9 pass and product icons, 3 textures (a fourth, the Maw's upper jaw, failed every time),
+and about two dozen generated meshes (the bay's props, the jar, the island, the monster's head, two stalls).
+
+## Where the surfaces reach, and his letters in order (hundred-and-seventy-third to seventy-seventh passes, 2026-11-04)
+
+From your note of 2026-11-04 **(you)**: "polish things a bit more". What and how is mine **(suggested)**. Read again
+against the levels themselves, the last round's surfaces reached far less than it said, so most of this round puts that
+right; and the green envelopes are read in order now. Not played yet.
+
+- **The levels' worlds dressed where they are put (173)**: the hundred-and-seventieth pass said every level's own world
+  wears Harrow Bay's stone, wood, render and marble as it arrives. It watched for them in the workspace, and only the
+  backdrop behind City Shore and the Flooded Halls are put there: the Sky Pools, the Sunken City and Hill House are
+  built into the workspace's Levels folder with the level's chunks, so none of the three was ever dressed. Now both
+  places are watched, a world already there when the server starts is dressed too, and none is dressed twice.
+- **The drowned city and the hotel roof built of what they are (174)**: and even dressed, the Sunken City and the Sky
+  Pools would have worn almost nothing, because a surface reaches a part only through its material and theirs was plain
+  plastic. Now the Sunken City's houses and flats are rendered, its offices and stone dressings (sills, cornices,
+  quoins, parapets) cast stone, its roofs slate, its church and clock tower coursed stone, its warehouses brick, its
+  boards and benches timber, its sandbags and beds cloth. The Sky Pools' terraces are paved in the promenade's
+  flagstones; its columns, tower and fountain stems are cast stone; its coping, basins and bowls marble; its cabanas
+  rendered under canvas; its loungers timber. The cars, trams, boats, signs, the slide and the growth on everything keep
+  their paint, and the pools their tile. Until the variants are made in Studio these are Roblox's own materials of the
+  same names, which already look more like what they are than the plastic did.
+- **His letters in order (175)**: the five green envelopes are his day beside yours, read in order, and the journal
+  listed them among the other notes, newest first, in whatever order you found them. Now, from the first one found,
+  they are kept together at the top of your notes, one to five, under GREEN ENVELOPES, 2 OF 5: each found says where
+  (Found in the Sky Pools), each not found yet says only which level it lies on (Still to find, in the Sunken City), and
+  nothing opens from one not found yet.
+- **The squish room like the lobby (176)**: the squish room is the lobby's, and it was plain plastic. Now it is boarded
+  underfoot, its walls and ceiling rendered, its skirting and plinths timber, its lifts painted iron (the one in the
+  garden too), and it is dressed in Harrow Bay's surfaces as the lobby is. Its samples are the chunks themselves, and no
+  dressing anywhere reaches a chunk's own part now (a chunk's slab carries its material's name, and all on it hangs from
+  it). And Output's word about surfaces not made yet says what to do: upload the maps in `textures/`, then paste
+  `tools/make_variants.lua` into the Command Bar.
+- **Your slab variants (177)**: read through the Studio MCP on 2026-11-04, your MaterialService already has the three
+  slab variants this file once asked you to make, under names of your own (`ConcreteMeshTile`, `PlasterMeshTile`,
+  `SlateMeshTile`, each on its material at 4 studs, the Slab maps on), and those names never reached the code: until
+  the hundred-and-seventieth pass the names were blank, and that pass gave them new ones of its own. So no slab has ever
+  worn the stone you uploaded. The code uses your names now, and `tools/make_variants.lua` keeps your three (numbers in
+  its `MAPS.Slab` put the sharper maps on them, if you want them).
+
+**Checked**: `check_surfaces.py` holds the round: where each level's world is put, read from the service that builds it
+(the workspace, or the Levels folder handed to its build or start), and the server watching both, a world there at the
+start dressed too, none twice; the Sunken City's buildings each built of what it is (BUILT_OF, asked by every city
+block not given a material of its own), never a car, a sign, a boat or the growth on a wall; the Sky Pools' terraces
+paved, its columns and tower cast, its coping, basins and bowls marble, its cabanas render under canvas, its loungers
+timber, each call counted; the squish room's floor, walls, ceiling, trim and lifts, the room dressed once built; and
+MaterialAppearance keeping off a chunk's own part, its slab still named by ChunkBuilder. `check_story.py` holds the
+letters in order: told by their title, gathered at the top of the notes, one to five, where each lies as NOTES has it,
+one not found yet saying only where and opening nothing, a controller never stopping on it, none shown twice.
+`pass173.py` 7 of 7, `pass174.py` 9 of 9, `pass175.py` 7 of 7, `pass176.py` 7 of 7; no older row had to move this time.
+What turned up in the work itself: the hundred-and-seventieth pass watched the workspace alone, which missed three of
+the five worlds; the Sunken City's and the Sky Pools' buildings were plain plastic, so even dressed they wore almost
+nothing; the Sunken City's file came to one local short of Luau's 200 with the city's materials beside its other
+tables (they live inside cityBlock's own block now, and the file is back to 198); and the letters' first draft looked
+for an envelope with `table.find`, which stops at the first gap in a list numbered with holes (a set by id now). The
+full run after it: 169 suites, 2697 of 2697 caught, src, the Blender scripts and the sound generators put back byte for
+byte, and `tools/paste_list.py` and `tools/make_variants.lua` by their hashes. Then the slab variants (177):
+`check_surfaces.py` holds the slab names to the three made in Studio, and the variant maker to making any missing under
+those names; `pass177.py` 2 of 2; pass170's row on the slab name moved with it; and the nine suites that plant in the two
+files it changed (pass12, 118, 129, 155, 156, 169, 170, 176 and 177), 113 of 113, everything put back byte for byte.
+
+## Before you test in Studio (passes 173 to 177)
+
+**Paste**
+1. The Luau: you ran `--mark` on 2026-11-04, but your open place (read through the Studio MCP the same day) still has
+   the pass 163 copy of every file changed since: **`CHANGES_SINCE_PASS_163.txt` lists all 28** (26 to replace, and
+   `Haptics` and `Teleprinter` to make, ModuleScripts in StarterPlayer, StarterPlayerScripts, Services), and
+   `passes_164_177.zip` has the newest copy of each. If you had pasted `passes_166_172`, these alone changed since:
+   **Shared** `MaterialAppearance`; **Server** `Bootstrap` (the Script) and Services `SkyPoolsService`,
+   `SquishRoomService`, `SunkenCityService`; **Client** Services `JournalService`, `ViewModeService` (7 files).
+
+**Import (UPLOADS: 0)**: nothing new. Of the 36 maps of passes 166 to 172 (**Make the surfaces**, below), the 27 Harrow
+ones are still needed, then `tools/make_variants.lua`: until they are done, the new materials show as Roblox's own. The
+other 9 (the sharper slab, concrete and pool tile) are optional now: your variants for those already wear the older maps.
+
+**Then play**
+2. Press Play. Output: `[server] Harrow Bay's surfaces:` names any variant not made yet, and says what to do.
+3. The Sky Pools: the terraces flagstones, the coping, the basins and the fountain's bowls marble, the tower and the
+   columns cast stone, the cabanas rendered with canvas roofs, the loungers timber; the pools still tiled.
+4. The Sunken City: the houses rendered, the church and the clock tower coursed stone, the roofs slate, the warehouses
+   brick, above the water and under it; the cars, trams and boats in their paint.
+5. Hill House: its timber, boards, slate, render and stone in Harrow Bay's surfaces.
+6. The squish room (the lift in the garden): boards underfoot, rendered walls and ceiling, the lifts painted; every
+   sample exactly as it was.
+7. Pick up a green envelope and open the journal's Notes: GREEN ENVELOPES, 1 OF 5 at the top, the four not found yet
+   saying where each lies. Pick up another, on another level: they stay in order, one to five.
+8. Any level: the stone under every chunk wears your slab variants (fine stone, tinted by each material's colour),
+   for the first time.
+
+## The camera, the catch, the light, the surfaces and the story (hundred-and-sixty-sixth to seventy-second passes, 2026-11-03)
+
+From your note of 2026-11-03 **(you)**: "keep polishing, do the next passes", with five things named: the fixed camera
+"should also apply everywhere, not just in levels"; "make the story more interesting"; "fix the issue with the backrooms
+animation where it incorrectly positions the characters in the hands of the monster"; "fix the lighting in level 4
+flooded halls, it's too bright in there"; and "improve the textures of the lobby and the overall texture quality of the
+levels, I want it to be a very pleasant looking game". How each is done is mine **(suggested)**. Not played yet.
+
+- **The camera, everywhere (166)**: on a run the camera was held behind you at one distance (14 studs); in the lobby it
+  zoomed from 6 to 36. Now it is held at 14 everywhere: the lobby, the squish room, the shop and the back rooms are
+  seen from where a run is. First person through the seaside viewer is as it was.
+- **In his hands (167)**: caught in the back rooms, he stopped wherever he happened to be and closed his arms six studs
+  out from himself and above your head, round nothing. Now, in the black at the catch, he is squared up to you 4.6
+  studs off on open floor (back the way he came, or whichever way out of your tile is open), facing you, and your own
+  screen sets you exactly there, facing him. His hold is fitted to that, worked out from his own joints: hunched right
+  down on his knees bent the wrong way, his upper arms hanging, his long forearms along your sides closing round your
+  middle, his fingers round behind your back, his face a stud above yours, looking down, and his elbows inside a
+  four-stud corridor. The shot of him holding you is taken from the side with the more room and never from inside a
+  wall (it was eight studs to one side, in corridors four across), and the shot of his face over your shoulder never
+  from past a wall behind you.
+- **The halls lit as their own (168)**: why they were too bright. The level's light was applied after the halls were
+  built, so it swept away their own bloom and grade and lit the baths as the default's outdoor afternoon: a sun three
+  and a half times theirs (1.9 to their 0.55), the sky's fill through every opening (122 to their 42) and a haze, which
+  is light, of 1.05 to their 0.4. It has been so since 18 September: you have never seen the halls lit as they were
+  meant to be. Now the light goes first, and the halls have a palette of their own (LightingService, `floodedHalls`):
+  the light through the openings well down (0.8), the sky's fill halved, the haze under half, the exposure lower, one
+  tight bloom that only the windows pass, and the far air going green into the water. A step lighter than the halls'
+  own numbers only where the pools would have gone black. To nudge it, `brightness` and `outdoor` in that palette, a
+  little at a time.
+- **Harrow Bay's surfaces (169)**: the lobby was Roblox's own materials, its decks plain plastic. Now nine textures made
+  for this game, each 1024 square and tiling with no seam (`blender/gen_surfaces.py`): deck boards with their grain,
+  knots and the nails at the joists; timber; flagstones; the sea wall's coursed stone; render; veined marble; cast
+  stone; canvas; painted iron. Each is a MaterialVariant, and every part of the lobby wears the one for its material
+  (MaterialAppearance.dress); the decks are slate now, in the same dark colour, so the flagstones reach them. The maps
+  are light and near white because a variant's colour map multiplies the part's own colour: every part keeps its
+  colour and gains the detail. A variant not made yet leaves its parts as they were, and the Output says which.
+- **The levels' surfaces (170)**: every level's own world (the city behind City Shore, the Sky Pools, the Sunken City,
+  the baths and Hill House) wears the stone, wood, render and marble of the nine as it arrives; never the chunks, and
+  never a level's metal or cloth. (As built, only the backdrop and the baths were reached, and the Sunken City and the
+  Sky Pools were plastic: the hundred-and-seventy-third and seventy-fourth passes put both right.) And the levels' own three maps are made again at twice the size with more in them:
+  the stone under every chunk, the backdrop's concrete (board marks, tie holes, rain stains) and the pool tile (small
+  glazed tiles a shade apart in one colour of grout). The slab variants had never been named, so no slab ever wore its
+  stone: they are named now (as the ones you had made in Studio: ConcreteMeshTile, PlasterMeshTile, SlateMeshTile, the
+  hundred-and-seventy-seventh pass).
+- **His letters (171)**: five green envelopes, one lying on each level under a stone: his own 14 August, 1979, written
+  to the little one on the sea wall, numbered in the order the story plays them, Hill House first and the baths last.
+  Read in order they are his day beside yours. The first four are signed E. M.; the last is signed Dad, and tells you
+  how the true ending is found without naming it.
+- **He comes nearer (172)**: the Watcher only ever stood on the Deco tower. Now on every level he stands on the way
+  ahead of you twice, a third of the way along and nearly at the end: beside the route on a stable chunk, faceless,
+  facing back down at you, his head turning after you. Within 34 studs he is gone in under a second, with a breath
+  under everything. Never after the true ending.
+
+**Checked**: `check_surfaces.py`, the twenty-fourth checker, holds the round: the twelve surfaces made (36 maps, each 1024
+square and tiling with no seam, a light, near white colour map so a part keeps its own colour, true normals and a grey
+roughness); the nine Harrow ones each on the material its variant is made for, in MaterialAppearance and in
+`gen_surfaces.py` alike; the lobby dressed once it is built, its decks slate; the five levels' worlds dressed in their
+stone, wood, render and marble as each arrives, never the chunks, a level's metal or its cloth; the slab variants named;
+one maker of each map; and the steps here. `check_story.py` holds the camera at one distance everywhere (no zoom in the
+lobby, first person only through the seaside viewer); the catch squared up and both of its shots kept out of the walls;
+the five green envelopes, one lying on each level, numbered in the order the story plays them, signed E. M. until the
+last, signed Dad, which tells you to clock in and come back up, and in LORE; and the Watcher ahead of you twice on every
+level, beside the route on a stable chunk, faceless, facing back down at you, gone within 34 studs in under a second, and
+never after the true ending. `check_backrooms.py` works his hold out from his own joints (his hands round your middle at
+your sides, his fingers behind your back, his face a stud above yours, his elbows inside a four-stud corridor) and holds
+him squared up to you 4.6 studs off on open floor; `check_halls.py` holds the level's light applied before the halls are
+built, the halls' own palette, and nothing of theirs swept away after; `check_all.py` runs the new checker. `pass166.py`
+3 of 3, `pass167.py` 13 of 13, `pass168.py` 8 of 8, `pass169.py` 10 of 10, `pass170.py` 5 of 5, `pass171.py` 5 of 5,
+`pass172.py` 10 of 10. Four older rows moved with the code they pinned (pass19's on the lobby's zoom, pass125's on his old
+hold, and pass133's two on the catch's side shot and its eye over the shoulder), each caught again where it is now. Four
+more were let through by the new work itself, and are caught again: with an envelope on every level, a level with a note
+taken away still had four things to read (pass15's lounger in the Sky Pools, pass111's gatepost at Hill House) and the
+Sunken City with its letter back on a post still had one lying (pass17), so a level's own things to read are counted
+without the envelopes now; and aheadGone asks of the Watcher what stoppedWaiting does, so pass116's wrong one hidden was
+found in the other, and `check_trueending.py` holds that test to stoppedWaiting now. What turned up in the work itself:
+the halls lit as the default's afternoon since 18 September (above); his hands closing six studs out and over your head;
+the catch's side shot taken from eight studs to one side, inside the wall in a corridor four across; the lobby's decks
+plain plastic, which no stone could reach; the slab variants never named, so no slab ever wore its stone; and in the maps
+themselves, the marble's veins too faint to see, a seam in the pool tile where each tile had its own grout, and the stone
+dark enough to darken every part that wore it, each put right before the maps were made. The full run after it: 165
+suites, 2663 of 2667 caught, the four above caught again after (132 of 132 in their four suites), src, the Blender
+scripts and the sound generators put back byte for byte, and `tools/paste_list.py` and `tools/make_variants.lua` by their
+hashes.
+
+## Before you test in Studio (passes 166 to 172)
+
+**Paste**
+1. The Luau: if you pasted `passes_164_165`, these are all that changed since (`SINCE_PASSES_164_165.txt` in the zip):
+   **Shared** `MaterialAppearance`; **Server** `Bootstrap` (the Script) and Services `BackRoomsService`,
+   `FloodedHallsService`, `HubService`, `LightingService`, `StoryService`; **Client** Services `StalkerClient`,
+   `StoryClient`, `ViewModeService` (10 files). No new scripts this time. Your last `--mark` is 23 October, so
+   `python tools/paste_list.py` lists everything since, 130 to 172 together (51 Luau files, `RunFeel`, `Arrival`,
+   `Haptics` and `Teleprinter` the new ones; the zip carries the newest copy of each); then `--mark`.
+
+**Make the surfaces (UPLOADS: 36)**
+2. Upload the 36 maps in `textures/` that this round made (Asset Manager, Bulk Import): `Harrow*_Color`, `_Normal` and
+   `_Roughness` for the nine (27), and `Slab_*`, `Concrete_*` and `PoolTile_*` (9, made again: upload these even if you
+   uploaded the old ones).
+3. Paste all of `tools/make_variants.lua` into Studio's Command Bar (View, Command Bar) and press Enter, once: it makes
+   the fourteen MaterialVariants under MaterialService, each named, on its material and at its size, and leaves any
+   already there alone. (Put each image's number into its line in MAPS at the top first and it sets the maps too.)
+4. Otherwise give each variant its three maps by hand: select it under MaterialService, then ColorMap, NormalMap and
+   RoughnessMap in Properties.
+
+| Variant | BaseMaterial | StudsPerTile | Maps | What wears it |
+|---|---|---|---|---|
+| `HarrowBoards` | WoodPlanks | 8 | `HarrowBoards_*` | the boardwalks, any boarded floor |
+| `HarrowTimber` | Wood | 6 | `HarrowTimber_*` | posts, benches, beams |
+| `HarrowFlags` | Slate | 12 | `HarrowFlags_*` | the lobby's decks, paths and plinths |
+| `HarrowStone` | Rock | 10 | `HarrowStone_*` | the sea wall and rock |
+| `HarrowMarble` | Marble | 16 | `HarrowMarble_*` | the fountain, statues, planters |
+| `HarrowRender` | Plaster | 12 | `HarrowRender_*` | walls |
+| `HarrowCast` | Concrete | 10 | `HarrowCast_*` | kerbs, posts, walls |
+| `HarrowCanvas` | Fabric | 4 | `HarrowCanvas_*` | awnings and cloth (the lobby only) |
+| `HarrowPaint` | Metal | 8 | `HarrowPaint_*` | railings and lamps (the lobby only) |
+| ConcreteMeshTile, PlasterMeshTile, SlateMeshTile (yours, already made) | Concrete, Plaster, Slate | 4 | `Slab_*` (one set for all three) | the stone under every chunk |
+| ConcreteBackdrop | Concrete | 16 | `Concrete_*` | the levels' concrete |
+| PoolTileBackdrop | Concrete | 6 | `PoolTile_*` | the pools' and the halls' tile |
+
+**Then play**
+5. Press Play. In the lobby, scrolling does not zoom: the camera is where it is on a run. Output: `[server] Harrow Bay's
+   surfaces:` names any of the nine not made yet (nothing, once all are).
+6. The lobby: the decks are dark flagstones, the boardwalks boards with knots and nails, the fountain and the plinths
+   veined marble, the railings painted iron. On a level, its buildings in stone and render, the slabs under the chunks
+   in their fine stone, the pools in small glazed tiles.
+7. The Flooded Halls: darker than before, the windows bright, the walkway lit by its lamps, the pools still seen. Too
+   dark or too bright: LightingService's `floodedHalls`, `brightness` or `outdoor`, a little at a time.
+8. The back rooms (fall seven times in one run), and let him catch you: in the red light his hands close round your
+   middle at your sides, his face over yours, the camera in the room; then his face, over your shoulder.
+9. Any level: the faceless Watcher stands ahead of you beside the route; walk toward him and he is gone. A green
+   envelope lies on each level (1 of 5 at Hill House to 5 of 5 in the baths); take it and read it in your journal.
+
+## Felt, and typed (hundred-and-sixty-fourth and sixty-fifth passes, 2026-11-02)
+
+From your note of 2026-11-02 **(you)**: "keep polishing, do the next passes", again. The game read once more for what a
+player's hands and feet are told; and the creamy keyboard's letters, printed on every key since the hundred-and-fifty-fifth
+pass and read by nothing. What each is and how it is done is mine **(suggested)**. Not played yet.
+
+- **Felt in your hands (164)**: nothing in the game touched a controller's motors or a phone's. Now, through Roblox's
+  HapticEffect (a waveform played on whatever the player holds: PlayStation and Xbox controllers, most iPhones, Pixels and
+  Galaxies, a Quest's controllers), every material under your own feet is felt as well as heard, in one of nine shapes: a
+  squish (honey, slime, clay, the stress ball, the mud, the jelly, the bare butter), a pop (bubble wrap), a click (the
+  keypads, the toy bricks, the light switches), a thock (a keyboard's keys and the keys over lava), a grain (sand, soap,
+  salt, snow, the cookie), a crack (ice, the candle wax, both chocolates, the coal), a hush (foam, cloud, lamb's ear), a
+  bounce (a jellyfish) and a crust (lava). A step is felt exactly when its sound plays, once a footfall, only your own,
+  and on a phone at seven tenths of a controller's. And the moments: a checkpoint's two soft beats with its two notes, the
+  slime's fling swelling up, a hard landing (from a real drop: an ordinary jump's landing is only the step's own shape), a
+  scene's impacts and jolts, and every press in the menus (Roblox's own click, a soft brush as a card opens and goes, two
+  beats for something good, two knocks for a no). Roblox scales all of it by the player's own haptics setting. On a
+  client with no HapticEffect, a controller's two motors stand in. It is a new ModuleScript, **Haptics**; AudioService,
+  Cinema, RunFeel and the client Bootstrap ask it for what they need felt, and nothing waits for it.
+- **The teleprinter (165)**: every creamy keyboard is the waterworks teleprinter (its keepsake: "The last thing it typed
+  was KEY HOLDER PLEASE CONFIRM. Nobody did."). Now a strip of paper tape comes up at the foot of your screen as you step
+  onto one, and the teleprinter types its last message onto it by itself, a soft tap a letter. Then every key you stand on
+  types its letter after it: the key under your middle with your weight on it, so walking along a row types every key you
+  pass over, jumping over keys does not, and landing back on a key types it again. A key counts once you are half a stud
+  into it, so standing on the line between two keys types neither, however you sway. Type YES and it answers CONFIRMED: the
+  first time, once a save, 75 tokens on the tokens' pill ("The teleprinter answered"); after that as often as you like,
+  without. Once you have answered it, it prints only your letters. The boards could never have been answered: five keys
+  across, they read Q to T from the first key of each row, with no Y on them; now each row starts from its second key, W to
+  Y over S to H over X to N, so Y, E and S are on every board (the keys over lava move with them). The keyboard's first
+  hint says a key types its letter. On the server, DeformationService looks under everyone on a creamy keyboard ten times
+  a second; on your screen, a new ModuleScript, **Teleprinter**. The test panel's "Teleprinter answered on/off" makes it
+  unanswered again, to see its message and its tokens once more.
+- **An R6 body stands on its legs (165)**: how high a body stands over the ground is its HipHeight, and on an R6 body
+  that is 0 (its 2-stud legs stand it up instead). Three things read HipHeight alone: the teleprinter, which would never
+  have typed for an R6 body; the footing of the hundred-and-fifty-second pass, which took an R6 body to be in the air all
+  the time, so ice never slid one and nothing marked its soles; and the trails, which hung a stud above an R6 body's feet.
+  All three count an R6 body's legs now.
+
+**Checked**: `check_touch.py`, the twenty-third checker, holds the round: every material has a shape it is felt in, and
+every shape starts at once, runs forward, stays between nothing and full and ends at nothing within half a second; every
+call to Roblox's haptics guarded, nothing played on a server, a controller's motors let go after; your own steps felt
+only once their sound is certain and never anyone else's, once a footfall, a phone's lighter; a scene's impacts (not
+with less motion asked for, and only in a scene) and its jolts, a checkpoint, the slime's fling and every menu press
+felt, a hard landing felt and an ordinary jump's not; Haptics asked for beside its caller, never waited for, and started
+with the client's other services. Every creamy keyboard of every size the levels have carries Y, E and S, reckoned from
+the rows as ChunkBuilder lays them; the key typed is the one under your middle with your weight on it (an R6 body's legs
+counted), once a press, only on a creamy keyboard, and only once you are well into it: half a stud in, more than a
+standing body's sway, and what is left in the middle of every key still longer than a walk across the board covers
+between two looks, so a row walked skips no key. The line of someone standing still is kept and of someone gone let go;
+YES answers it, paid from the save and said on your strip and on the tokens' pill, at most 150 tokens; its message the
+keepsake's own, printed until you have answered it; nothing waited for without end; the keyboard's first hint says a key
+types its letter; the test panel can make it unanswered again. Everything in the game that reads HipHeight says on the
+same line what an R6 body's legs are (the townsfolk excepted, made R15 only, for as long as they are). `check_shop.py`
+allows the teleprinter as the seventh thing that pays tokens and holds it to once a save, marked before it pays;
+`roblox_enums.py` knows `Enum.HapticEffectType`, `Enum.KeyInterpolationMode` and `Enum.VibrationMotor`; `check_all.py`
+runs the new checker. `pass164.py` 22 of 22, `pass165.py` 44 of 44; three older rows moved with the code they pinned
+(pass109's and pass120's on the client's start list, which starts Haptics and the Teleprinter now, and pass116's on the
+save's template, which ends with the teleprinter now), each caught again where it is now. What turned up in the work
+itself: the boards had no Y on them, so the teleprinter could never have been answered (each row starts from its second
+key now); the R6 bodies above, found in the teleprinter's own test of your weight on a key; standing on the line between
+two keys could type them in turn with the smallest sway (a key counts once you are half a stud into it now);
+`check_lua.py` took the strip's `answered` (a key of its SAYS table) for a function read before it was declared (the
+function is `confirm` now, rather than the checker loosened); `check_feel.py` holds the keyboard's first hint to saying
+the keys spring back, so the new hint says both; `check_standards.py` reads a screen's DisplayOrder only as a number
+written out, so the strip's is 19 written out (under the pause card's 20); and the strip's letters were scaled to fit,
+which on a phone shrank them as the line grew (a fixed size now, the tape showing the newest 30). The full run after it:
+158 suites, 2602 of 2602 caught, src, the Blender scripts and the sound generators put back byte for byte, and
+`tools/paste_list.py` by its hash; then, after the R6 and key edge fixes, the 24 suites that plant in the files those changed, 447 of 447.
+
+## Before you test in Studio (passes 164 and 165)
+
+**Paste**
+1. The Luau: if you pasted `passes_159_163`, these are all that changed since (`SINCE_PASSES_159_163.txt` in the zip):
+   **Shared** `ShopCatalog`; **Server** `Bootstrap` and `ChunkBuilder` (the Scripts) and Services `DeformationService`,
+   `EconomyService`; **Client** `Bootstrap` (the LocalScript) and Services `AudioService`, `Cinema`, `CosmeticsClient`,
+   `DevPanelClient`, `OnboardingService`, `RunFeel`, `ShopService` (13 files, and the two new ones in 2). Your last
+   `--mark` is 23 October, so `python tools/paste_list.py` lists everything since, 130 to 165 together (49 Luau files,
+   `RunFeel`, `Arrival`, `Haptics` and `Teleprinter` the new ones; the zip carries the newest copy of each); then `--mark`.
+2. **Two new ModuleScripts** in **StarterPlayer, StarterPlayerScripts, Services**: `Haptics`, with
+   `src/Client/Services/Haptics.lua` pasted into it, and `Teleprinter`, with `src/Client/Services/Teleprinter.lua`.
+
+**Import (UPLOADS: 0)**: nothing this time.
+
+**Then play**
+3. Press Play. Output: `[client] started Haptics` and `[client] started Teleprinter`, and the paste check names neither as
+   missing.
+4. With an Xbox or PlayStation controller plugged in (on a phone it is the live game): walk the squish room's chunks and
+   feel each, bubble wrap ticking, honey a soft swell, the keys a knock, sand gritty; press a button in the shop, a click.
+5. On a creamy keyboard: the tape comes up at the bottom and types KEY HOLDER PLEASE CONFIRM. Walk along a row: each key's
+   letter after it. Then jump from key to key onto Y, E and S (Y and E are in the same row, S in the row after): CONFIRMED,
+   and +75 tokens (The teleprinter answered).
+6. Do it again: CONFIRMED with no tokens, and its message is not printed any more. The test panel (F8), "Teleprinter
+   answered on/off", to see it all again.
+7. Stand on the line between two keys and sway a little: nothing is typed until you step well onto one.
+8. If the game lets bodies be R6 (Avatar Settings, Avatar Type), one play as R6: the keyboard types for you, ice slides
+   you, and a trail sits at your feet.
+
+## What good Roblox games do (hundred-and-fifty-ninth to sixty-third passes, 2026-11-02)
+
+From your note of 2026-11-02 **(you)**: "keep polishing, do the next passes", after asking what standards other good
+Roblox games follow that this one does not. Read against them, the game already had most: saves kept safe (ProfileStore's
+locked sessions; a save that cannot load asks you to rejoin rather than letting you play on unsaved), purchases granted
+once and saved first, a fair board (a run too fast, or not walked, pays nothing and ranks nothing), the levels and the
+first five minutes on the Creator Dashboard, invites, the favourite ask, badges and codes. What it did not have, and how
+each is done, is mine **(suggested)**. Not played yet.
+
+- **The arrival (159)**: you joined on Roblox's own loading screen and then stood in the lobby while it arrived round you:
+  the boards under you after you, the textures after the boards, the sea's sound after the sea. Now from the first frame
+  the screen is the game's own black with a dip's card on it, WELCOME TO over **Harrow Bay**, its gold rule drawing itself
+  as the place comes in (the game loaded, you in it, the ground under you, the first things to see and hear fetched), and
+  a quiet "Best with headphones" under it; then it fades as a dip does. However slow the rest is, it is gone 12 seconds
+  after the game has loaded at the most (4 in Studio). The welcome waits for it, and so does everything that waits for the
+  black (a notice, the tokens a run paid). It is a new LocalScript in **ReplicatedFirst**, which runs before anything else
+  has arrived, so it writes Style's faces and colours out (`check_style.py` holds them to Style's own); the paste check
+  names it if it is missing, and the paste list has a group for it.
+- **The real price (160)**: every Robux price in the shop and the death card's second chance was the number written in
+  `ShopCatalog.lua`. Roblox sets its own prices now (each country's, and the ones it tries out itself when price
+  optimization is on in the Creator Dashboard), so a player could be shown R$ 99 and charged another price. Now each
+  item's price is asked of Roblox once a session on the player's own screen, where Roblox answers with theirs, and that is
+  what is drawn; the catalogue's number only until it has answered. The best value of the token packs is reckoned from
+  those prices. A pass you take off sale on the Dashboard says Not on sale and is not offered. And in Studio the paste
+  check asks Roblox about every id you put in: one Roblox does not know as that kind of thing (a product's id where a
+  pass's goes, a typo) is named, so it is not found by a player pressing Buy; a pass off sale is said; and a Dashboard
+  price that is not the catalogue's is said (the shop shows the Dashboard's).
+- **Chat in the game's look (161)**: what players type over their heads was Roblox's own white bubble in Roblox's own
+  face, beside the story's cream bubbles in Nunito, and the chat window and the bar you type in were Roblox's grey. Now a
+  chat bubble is the story's bubble (cream, dark ink, the bold face, its rounded corners), and the window and the bar are
+  the game's dark panel and ink in its faces. The VIP tag in chat is as it was.
+- **Less motion when asked (162)**: Roblox has a Reduce Motion setting for players a moving picture makes unwell, and only
+  the material wash on your screen listened to it. Now, with it on, a scene's jolt is a fifth of itself, the lens punched
+  in a quarter, the picture swimming under water a third, the speed lines under half, and an impact has no flash and no
+  black and white frames at all; the slime's launch widens the picture a third as much, the keypad's burst shakes it a
+  fifth as much, and a level finished celebrates quietly for them too (it read a game setting of Roblox's, not Reduce
+  Motion itself; it reads both now). Everyone else sees exactly what they saw.
+- **Where a run is left (163)**: the Dashboard already showed how many start each level and how many finish it. Now each
+  run is also a funnel of its level's ("City Shore run" and the rest, under Analytics, Funnels): Started, a quarter of
+  the way, half way, three quarters, Finished, the same five steps on every run length, each logged once a run, the first
+  time it gets that far. So you can see where in each level players give up.
+
+**Checked**: `check_standards.py`, the twenty-second checker, holds the round: the arrival says on its second line where
+it goes, is over every other screen (its DisplayOrder above any other screen's, and under Roblox's bar too), is not taken
+away by your character arriving, takes Roblox's own screen away once and only after its black is up, waits for the game
+to load, for you, for the ground under you and for the first things to fetch, each for so long at the most and for nothing
+without end, is up 0.8 seconds at the least and gone 15 seconds after the game has loaded at the most (6 in Studio), can go
+only once, and lets go of everything when it goes; the welcome waits for it (30 seconds at the most), and so does
+UIService's black. Every Robux price a player is shown is Roblox's answer to them (no client script draws the catalogue's
+number), the best value reckoned from those, what Roblox has off sale neither offered nor priced, the second chance the
+same, the asking guarded and off the asker's thread, and a screen that asks after Roblox has answered told at once; the
+paste check asks Roblox about every id set, as the kind of thing it is. The chat's bubbles, window and bar in the story
+bubble's and the panel's colours and faces, with the bubble's corners, each property set guarded and each chat setting
+waited for 10 seconds at the most. Reduce Motion read guarded; nothing in a scene more than half as big with it on; an
+impact with it on only a small jolt and punch, with no flash and no black and white; the slime's launch, the keypad's
+burst and a level's celebration kept to it, and every camera shake in the client's scripts looking at it first. Each run's
+funnel five steps from Started to Finished, each logged once and in order, the steps before filled in, guarded; a
+checkpoint never logs the finish; begun anew each run with a session of its own, finished only by finishing, let go of
+when a run is left; the level's length read as the checkpoints are set up. `check_style.py` holds the arrival's faces and
+colours to Style's own (Nunito, only the weights Style.FONT uses, every colour one of Style.COLOUR's), since a script in
+ReplicatedFirst runs before Style has arrived and writes them out; `check_hub.py` holds the paste check to looking for
+every script in `src/ReplicatedFirst`; the paste list has a group for it, and `roblox_enums.py` knows `Enum.InfoType`.
+`pass159.py` 18 of 18, `pass160.py` 12 of 12, `pass161.py` 7 of 7, `pass162.py` 9 of 9, `pass163.py` 9 of 9; no older
+suite's rows had to move. What turned up in the work itself: Cinema's calm numbers were declared below the jolt, the
+swimming picture and the speed lines that read them, so with Reduce Motion on each would have stopped on a nil (they are
+declared above them now); a screen that asked for the prices after Roblox had answered someone else was never told (it is
+told at once now); the card's shortest time was counted from the game's loading, not from when it went up (one clock had
+been doing both); a checkpoint read the level's length as it was touched, when a run already left may have let the level
+go (it is read once, as the checkpoints are set up); `check_lua.py` took the ARRIVE table's `most` for the title's size
+limit read before it was declared (a key, not a read: the local is `titleMost` now, rather than the checker loosened); and
+the rule that Roblox's screen goes only after the black was too loose for its own suite (Roblox's screen taken away first
+got past it; it now finds the one call, after the black). The full run after it: 156 suites, 2547 of 2547 caught, src, the
+Blender scripts and the sound generators put back byte for byte, and `tools/paste_list.py` (which the snapshot does not
+cover) by its hash.
+
+## Before you test in Studio (passes 159 to 163)
+
+**Paste**
+1. The Luau: if you pasted `passes_150_158`, these are all that changed since (`SINCE_PASSES_150_158.txt` in the zip):
+   **Server** `Bootstrap` (the Script); **Shared** `ShopCatalog`, `Style`; **Client** `Bootstrap` (the LocalScript) and
+   Services `Cinema`, `DeathService`, `DeformationRenderer`, `OnboardingService`, `ShopService`, `UIService` (10 files, and
+   the new one in 2). Your last `--mark` is 23 October, so `python tools/paste_list.py` lists everything since, 130 to 163
+   together (44 Luau files, `RunFeel` and `Arrival` the new ones; the zip carries the newest copy of each); then `--mark`.
+2. **One new script**: in **ReplicatedFirst**, a LocalScript named `Arrival`, with `src/ReplicatedFirst/Arrival.client.lua`
+   pasted into it (the only script there).
+
+**Import (UPLOADS: 0)**: nothing this time.
+
+**Then play**
+3. Press Play: black, WELCOME TO, Harrow Bay and a gold line growing under it, then a fade onto the lobby (a second or two
+   in Studio). Output: no "missing ReplicatedFirst/Arrival".
+4. A first visit again (the test panel's): the welcome comes up after the card has gone, never under it.
+5. The shop's Robux prices are as before while the ids are 0. Once you have put a real id in and pressed Play: the price
+   is the Dashboard's, and Output says if an id is wrong or its price is not the one in `ShopCatalog.lua`.
+6. Chat a line: the bubble over your head is cream with dark ink in the game's font, rounded; the chat window is dark.
+7. Roblox's own menu (Esc, then Settings): turn Reduce Motion on, then play an ending (the dive is quickest): the camera
+   barely shakes, and there is no white flash and no black and white frame. Turn it off again after.
+8. Nothing to see of the funnels in Studio: on the live game, the Creator Dashboard's Analytics, Funnels, once people have
+   played a day.
+
+## The chunks, the keys and the bodies (hundred-and-fiftieth to fifty-eighth passes, 2026-10-31)
+
+From your video and notes of 2026-10-31 **(you)**: the squish room walked through, every pit, and "yes, rename the brand
+names and improve the functionality of the chunks, the aesthetics, and the way they interact with the player and their
+physics", with what you saw: the bubbles could work better; honey is good as it is; the blocks that do not break should do
+something else (honey slows you; clouds could wet your feet or make it slippery); the ones that break should break faster
+("I can pass them within a second, and for some it takes way too much time or steps to ever break"); the keys over lava
+should have more to them ("I couldn't tell those are different apart from glowing"); the keys a better press, more
+colourways, better models, closer together; and "can you see the problem with Butter now?". Then the error in your Output
+(Cinema:174), and "more variations to the poses the player does by itself when standing afk, very high quality, some like an
+aura-farming emote; improve the emotes that can be bought, and add even more". Which first and how each is done is mine
+**(suggested)**. Not played yet.
+
+- **Your Output (150)**: `Cinema:174: attempt to index nil with 'GetAttribute'`, then `Requested module experienced an
+  error while loading` at SunkenCityClient:127, both on the SERVER. In Studio the server loads SunkenCityClient to see that
+  it loads (SunkenCityService's check, so it can tell you when it does not), SunkenCityClient loads Cinema, and Cinema read
+  the LocalPlayer's InLevel as it loaded: there is no LocalPlayer on a server. Nothing was wrong on your screen; the check
+  said the level's client could not load when it could. Cinema keeps both of its hooks on the LocalPlayer to a client now
+  (the second, a new character ending a scene, would have failed the same way next). EmoteService had not changed since 23
+  October (sent to you again, to paste over a copy that may have been overwritten).
+- **No trade marks (150)**: Lego, NeeDoh, Kinetic Sand and Jell-O are other companies' marks, and a game that sells things
+  should not put them on its board. A player reads **Toy bricks**, **Stress ball**, **Sculpting sand** and **Jelly** now, on
+  the lobby's board, in the journal, on the squish room's signs, in the hints, among the shop's backgrounds and in the
+  Novelty Works list. The keys every script and every save know them by are unchanged, so nothing found or bought is lost.
+- **The breaking chunks give way faster (151)**: a step was counted per cell ENTERED, and walking enters each cell once, so
+  a material that needed three or four steps on one spot never broke under anyone walking, and the clock only broke a
+  cell still stood on. Every chunk that can drop you (sculpting sand, soap, the cookie, snow, cloud, both chocolates, toy
+  bricks, ice, the lava crust) now gives way a moment after the first foot on it, whether you have walked on or not:
+  0.9 to 1.8 seconds by material, the cookie quickest, warm chocolate slowest. Walk on and the floor goes behind you; stop
+  and it goes under you. Just before, the cell shivers and sheds a little of itself (vapour off a cloud), so it is seen
+  going. Its hole fills back in six seconds after, so whoever follows has a way. And the slower ones are quicker: a coal is
+  ash under two seconds after you step on it, the oobleck has you sooner standing still, salt's loose plates sink sooner,
+  clay's edges tear sooner.
+- **Your footing (152)**: ice, soap, waxed butter and warm chocolate said they were slippery and were not: they lowered the
+  friction of your character's parts, and Roblox's walking pays friction no mind. Now, on your screen, your walking catches
+  up with your keys or stick only so fast on them: you slide on when you let go, turn wide, take a moment to stop (ice the
+  most). And your shoes carry what you walked on for a few seconds after: **wet** off a cloud or a jellyfish (a little
+  slippery anywhere, dark wet prints, drips, a soft splash now and then), **sticky** off honey (slower, golden prints and
+  strings; and sticky shoes do not slide at all, even on ice), **greasy** off either butter (slippery, pale smears), **gritty**
+  off sculpting sand, salt or a cookie (grit grips: slippery ground is half as slippery). **Lamb's ear wipes them clean**,
+  in a little puff. Everyone's prints are drawn for everyone near. Honey itself is as it was.
+- **The butter (153)**: what you showed. The sticks wore a wrapper of shards draped over them, meant to sit 0.3 above the
+  butter, and the sticks under it had been lifted 0.3 where they should have been lowered (their mesh's offset went down
+  by the wrapper's thickness, which raises a mesh; the waxed butter's went up, which lowers one). So the wrapper sat inside
+  the butter and only its corners came through: white triangles standing out of the sticks, more of them the more you
+  walked, as the butter sank and the wrapper did not quite. The sticks are bare butter now, level with where you walk, soft
+  yellow with a sheen, turning up a curl or two under each foot and greasing your shoes. Waxed butter is the wrapped one.
+- **Bubble wrap (154)**: it threw you four studs up on every touch, a third of a second apart: a trampoline, the popping
+  lost under the bouncing (your video: arms up, in the air, for the whole crossing). Now a step pops what is under it, a
+  landing from a jump pops the eight cells round it too, a crackle running outward, and fresh wrap gives a little of the
+  landing back (two studs). A spot popped twice gives way (the giant sheet drops to its second sheet first). A touch bluer
+  and clearer, with a sharper glint on each bubble.
+- **The keyboards (155)**: one rigged mesh, a bone to a key, so a key could never have a colour of its own, the letters were
+  painted into one texture, and the square caps were tapered to three quarters of their foot on a pitch wider than the cell:
+  nearly a stud of case between their tops. Now every cell has a key of its own, cut from one sculpted keycap
+  (`meshes/Keycap_Sculpted.fbx`, `blender/gen_keycap.py`: walls curving in, a rounded rim, a dished top) filling the cell
+  but for a hairline seam, its letter printed on it the right way up for whoever walks it. **Ten colourways** (strawberry
+  milk, dusk, mint, peach soda, lilac cloud, matcha, retro, midnight, honeycomb, and the lava keys' own), each with its
+  letter keys, a number row and two accent keys where an Esc and an Enter would be; every creamy board is painted one at
+  random as it is placed in a level, so two in a row are seldom alike. **The press**: a key goes down fast with your foot and
+  STAYS down while you stand on it; step off and it springs back a hair past and settles; the keys round it dip a little
+  with it.
+- **The keys over lava (156)**: there was no lava. The same pink keys as the creamy board's (one mesh and one texture between
+  them), a glow where you stood. Now the keys float on a pool of lava, their feet under its surface: the lava lit from
+  below, flowing, embers and bubbles coming off it between the keys, every key bobbing gently on it. Stand on one and it
+  SINKS, slowly and then faster, heating red, its letter going white hot, smoke coming off it; still on it after 1.3 seconds
+  and it is under, in a splash of lava, and so are you. Step off before and it bobs back up and cools. A key gone under
+  comes back up out of the lava five seconds later. Dark cooled-rock keys with letters lit from inside, and no Neon.
+- **Standing about (157)**: three fidgets, a sine or two each. Now ten, written as keys through time with the whole body in
+  them (the weight in the hips and knees, the shoulders after the arms, the head after the eyes) and eased into and out of
+  every turn: looking round, a shift of weight, a hand to the chin with a finger tapping, a big stretch and a yawn, a look
+  at a hand and a flick of it, a foot tapping with the hands on the hips, and four with AURA: the arms crossed, the chin up
+  and the head turning slowly away; the chin up to the horizon and a hand through the hair as if the wind had it; the
+  hands in the pockets, leaning back on one leg with a slow nod; a brush off the chest, the chin up, the eyes away. Picked by
+  how often each suits standing about, never the same one twice running, a little sooner than before.
+- **The emotes (158)**: the four remade the same way (the wave with a wind-up and a forearm waving from the elbow; the
+  stretch up onto the toes and over to each side; the spin with a crouch, a hop and a ta-da; sit and squish cross-legged,
+  rocking with the squeezes) and six more in the shop: **Cheer** (120 tokens), **Bow** (100), **Shrug** (90), **Flex** (160),
+  **Groove** (260, a little dance that keeps going) and **the Aura** (450, a hand on the hip and the other arm rolling in
+  slow waves, swaying from the knees, the chin up and the eyes away, with warm motes rising round you and a soft glow while
+  it plays). The Aura is on the Featured tab.
+- **How the poses are made**: `blender/gen_poses.py` holds every idle and emote, arms written as where the hand and the
+  elbow go (to the chin, on a hip, across the chest) and solved onto R15's own rig (`blender/pose_keys.py`, from its
+  attachments), and writes them into `Poses.lua` as plain keys; `python blender/pose_keys.py --draw <folder>` draws any of
+  them, front and side, through its length. The five hand-made poses they replace (the old stretch, spin, sit and squish,
+  looking round and shift of weight) are gone from `Poses.lua`; the story's own (the wave at the true ending, the
+  detective's ponder) are untouched.
+
+**Checked**: `check_feel.py`, the twenty-first checker, holds the round: Cinema loads on the server's check with no
+LocalPlayer, and hooks a new character only on a client; no trade mark anywhere a player reads (the board, the journal,
+the signs, the hints, the shop's backgrounds, the Novelty Works list); every material that can drop you gives way a moment
+after the first foot (0.9 to 1.8 seconds), shaken 0.45 seconds before, its hole filled in six, and the coal, the oobleck,
+the salt and the clay quicker; slippery ground slides you through your own controls, read before Roblox reads them, never
+in a scene, ordinary ground left alone; your soles carry what you walked on until lamb's ear wipes them, and sticky soles
+never slide; the butter sticks bare, opaque, level with where you walk, turning up curls; bubble wrap pops under a step and
+in a ring under a landing, and never throws you; every keyboard a sculpted key to a cell, filling it, its letter the right
+way up, in one of ten colourways painted as it is built and as it is placed, held down and sprung back with the keys round
+it dipping; the keys over lava floating on a pool that flows and is no floor, sinking under you, never Neon; ten idles and
+ten emotes written from `gen_poses.py` (its `--check`), from rest to rest, never through the body (`pose_keys.py` walks
+every frame of every one), never whipping, every loop played round, never the same idle twice running, the Aura glowing and
+put out after. `check_story.py` reads the shop's emotes by the poses EmoteService plays, the lava's flares in the lava's own
+effect, and the waxed butter's wrapper alone; `check_polish.py` reads Cinema's new hook. `pass150.py` 7 of 7, `pass151.py`
+10 of 10, `pass152.py` 10 of 10, `pass153.py` 5 of 5, `pass154.py` 6 of 6, `pass155.py` 10 of 10, `pass156.py` 7 of 7,
+`pass157.py` 5 of 5, `pass158.py` 6 of 6. Eleven rows in eight older suites had their lines moved by these passes: nine
+repointed to the same planted bug on the new lines, the sticks' glass case (`pass129.py`) now planted where the sticks' look
+is, and `pass94.py`'s "wrapper left up" retired, a stick driving no wrapper being what pass 153 made right (`pass153.py`
+holds it). What the checks found in the work itself: the sit and squish put a foot through the floor as it sat (it squats
+first now); the wave flipped between two ways of bending the arm, 20.8 radians a second at the elbow; the breeze's hand
+went through the head; no loop ever played round; ice's and the toy bricks' steps cut below the cracks they show (kept: the
+crumble does the hurrying); a hint over its 90 characters; two of the new rules too loose for their own suite (a key a
+little smaller than its cell; an idle twice running when only one of the two passes over the list skipped it); and three
+older rules loosened by these passes (the lava's flare, found in the keys' code instead of the lava's; the shop's emotes
+looked for by their old names; the soft bed's code read to the end of the file, its end marker gone with the old
+keyboards). The full run after it: 151 suites, 2491 of 2492 caught, src, the Blender scripts and the sound generators put
+back byte for byte (pass157's first run on its own had stopped when Windows refused a write, a file held a moment by
+something else, and `Poses.lua` was put back against the snapshot before anything else ran). The one it missed was a row
+left behind: pass 26's missing pose was planted in the old hand-made stretch, which nothing had played since the shop's
+emotes were keyed, so taking it away harmed nothing. It is planted in the stretch the shop plays now, the five hand-made
+poses the keyed ones replaced are cut from `Poses.lua` (with the ease only two of them used), and `check_story.py`'s idle
+rule no longer names them. Every suite that plants its bugs in `Poses.lua` or the idles run again: 12 suites, 307 of 307,
+byte for byte.
+
+## Before you test in Studio (passes 150 to 158)
+
+**Paste**
+1. The Luau: if you pasted `passes_143_149` (your video of 2026-10-31 has its squish room signs), these are all that
+   changed since (`SINCE_PASSES_143_149.txt` in the zip): **Server** `Bootstrap`, `ChunkBuilder` and `ChunkProps` (the
+   Scripts) and Services `ChunkService`, `DeformationService`, `StoryService`; **Shared** `MaterialAppearance`,
+   `MaterialConfig`, `Poses`, `ShopCatalog`; **Client** Services `Cinema`, `DeformationRenderer`, `EmoteService`,
+   `OnboardingService`, `PlayerLife`, `RunFeel`, `ShopLook` (17 files, none new). Your last `--mark` is 23 October, so
+   `python tools/paste_list.py` lists everything since, 130 to 158 together (42 Luau files, `RunFeel` the one new
+   ModuleScript; the zip carries the newest copy of each); then `--mark`.
+
+**Import (UPLOADS: 1, a mesh)**
+2. `meshes/Keycap_Sculpted.fbx` into **ReplicatedStorage/Assets/TileMeshes**, as a MeshPart named exactly
+   `Keycap_Sculpted` (the 3D importer, as the other tile meshes). Without it the keys are plain blocks (and Output says so).
+   You can delete `Keyboard_Field_16x16`, `Wax_Shell_Sticks_16x12_A` and `Wax_Shell_Sticks_16x12_B` from TileMeshes: nothing
+   uses them now. No new sounds; if the five from 137 to 149 (`UiTaps_x8` in ShopSounds; `CheckpointChime_x3`,
+   `HarbourRain`, `HarbourBell` and `KeyTurn` in StorySounds) are not in yet, they are in this zip again.
+3. ChunkBuilder builds the chunks at Play, so nothing else needs rebuilding.
+
+**Then play**
+4. Output at start: no `Cinema:174` and no "SunkenCityClient FAILS TO LOAD".
+5. The squish room: walk across sculpting sand, soap, the cookie, snow, cloud, both chocolates, the toy bricks, ice and the
+   lava crust without stopping: each shivers and goes a moment behind you, and a hole is back in six seconds. Stop on one:
+   it goes under you.
+6. Ice, soap and waxed butter: you slide, most on ice. A cloud, then the floor: wet prints and drips, a little slide, for
+   five seconds. Honey, then ice: golden prints, slower, and no slide. Then lamb's ear: a puff, and your shoes are clean.
+7. Butter: plain soft butter, no white shards, a curl or two at each step.
+8. Bubble wrap: walking pops under you and never throws you; jump and land: a ring of pops.
+9. A keyboard: sculpted keys, close together, letters the right way up as you walk; a key stays down while you stand on it
+   and springs back as you step off. Play two runs: the keyboards come in different colours.
+10. Keys over lava: lava under the keys, the keys bobbing; stand on one and count to two: it sinks, glowing, and you go in.
+11. Stand still in the lobby for a while: different idles, some with aura, never the same twice running.
+12. The shop's Emotes tab: ten, try each on (the Aura glows). Buy one with the test panel's tokens (F8) and play it from the
+    picker (G).
+
+## Polishing the game, the second round (hundred-and-forty-third to forty-ninth passes, 2026-10-30)
+
+From your note of 2026-10-30 **(you)**: "keep polishing, do the next passes". The first round's read had three things left
+over (the sound, the words, and how the game holds up over a long session), and those were read through, along with how the
+first round's changes meet the rest of the game. What each is and how it is done is mine **(suggested)**. Not played yet.
+
+- **What is open is put away for every move (143)**: a run starts for everyone standing in the lobby, so one that started
+  while you were in the shop, at the post box, in the journal, the emotes or the pause card took it with you onto the level:
+  over the black, then over the level, with the shop and the post box still holding your controls there. Now every black and
+  every dip the server sends first puts away what a scene puts away, and the post box's card is on that list (it was on
+  none). The black is over everything that can be open: it was level with the shop and under the post box, the welcome and
+  the journal, so one of them could float on it. Only the squish room's own cover and the Studio test panel are over it.
+- **One soft sound for every press (144)**: every press in the shop, the welcome and the emote picker was the engine's
+  electronic ping an octave up, the one sound the game was never to make. They asked for takes by names nothing has
+  ("buttonClick_"; the keypad's sheet is button_clicky_x4), and a bubble wrap sheet found that way played whole, three pops in
+  a row. The pause card, the death card, the journal's pages and the words you choose made no sound at all. Now one sheet,
+  eight takes (`audio/gen_ui_sfx.py`): four felt-tipped taps on a small wooden box for a press (never the same twice running),
+  two felt piano notes up as a card opens and down as it goes, a bubble and a marimba note for something good (bought, found,
+  earned), and two low knocks for a no (too dear, a crate refused). Every menu plays it (`AudioService.press`). Until it is
+  imported, a soft click, lowered.
+- **A long server stays quick (145)**: the server kept every platform of every level it had ever built, and its frame loop
+  walked every cell of all of them sixty times a second for as long as it ran. Each run played made every frame after it a
+  little longer, so a server that had seen a few dozen runs spent its frames on levels long gone (and a Roblox server can run
+  for days). A level's platforms are let go of as it is taken down now. On your screen, thirty-one of the tables that keep
+  what each tile is doing (its rest, its bones, its marks) kept every tile you had ever seen; every fifteen seconds they are
+  swept of the ones no longer in the world (the newer tables already let go on their own).
+- **The levels' own sounds (146)**: the last of the engine's sounds standing in for the levels' own. The Sunken City's rain
+  was the engine's falling wind played half as fast again, the one pitched-up sound left in the game; it is rain on the
+  harbour at night now, soft and even, drops on the water near you and a hush out over the sea. Its bell was the engine's
+  electronic ping slowed down over a landing thud; it is a cast bronze bell, struck by its clapper, ringing on over the water.
+  In the Flooded Halls the key into Outfall 3's lock was a light switch's click; it is the bit sliding into the wards, two
+  levers and the bolt going back, in the tiled chamber. The two splashes in the chamber's scenes (up out of the sump, out of
+  its throat) are the water's own (WaterSounds), as every other splash in the levels has been since the ninety-eighth pass.
+  Nothing in the game is played pitched up now, and a checker keeps it so.
+- **The words (147)**: the controls named are the ones in your hands. A secret's card said "Press J to read it" to a
+  controller and a phone; it says D-pad up, or tap the book, as the journal's own line does. The journal's foot said "J or
+  Esc to close" to everyone; a controller is told B, a phone nothing (the X is there). First person told a controller and a
+  phone that Ctrl frees the cursor; they are told only where they are. The emotes' hint names the menu's Emotes button (the
+  way on a phone), a background no longer tells a mouse to tap it, the lobby's level signs are set apart with the vote card's
+  dots (they were the only bars), and City Shore's description (kept in the code, not shown) no longer calls it the only
+  backdrop there is.
+- **The story kept to its days (148)**: everything in Harrow Bay happens on the Hold's days, the eleventh to the fourteenth
+  of August (and the fifteenth, when it ends), and every date the game shows was read against them. The calendar in the
+  Sunken City's flooded staff room said THURSDAY 16, a day that never comes; it says THURSDAY 14 (a Thursday: the milk still
+  comes, never on a Sunday, and Tobi said "after the weekend"). And the Waterworks' list of key holders dated Mr Wick 1946,
+  where he says on the pier that he held the key "forty years back" and that Marsh came after him, and it is thirty years
+  since Marsh ('79, Mr Gale): 1969 now. Every other date and time agrees (the honey at twelve past nine, City Shore at 9:14,
+  three o'clock, eight minutes to midnight, four, three and one; 1911; '79).
+- **One name for each material (148)**: the squish room's signs had names of their own for four of them (Butter Wax, Lava
+  Keys, Butter Stick, Jello Soda) and the bare Salt and Lava, while the lobby's board and the journal call the same slabs
+  Waxed butter, Keys over lava, Butter, Jello, Salt crust and Lava crust. The signs take the collection's names now
+  (ShopCatalog.MATERIALS, the one the board and the journal read).
+- **The run screen's presses (149)**: the hardcore clock folding down and opening, and the best times put away and brought
+  back, were the last presses in the game without the press: as a card going and coming now, two soft notes down and up.
+
+**Checked**: `check_polish.py` holds the round: every black and every dip puts away what is open first (the list a scene
+puts away, the post box's card on it), and nothing of the game's own screens is over the black but the squish room's
+cover and the test panel; the press (one slot of UiTaps_x8, a tap never twice running, a soft click without it, never the
+engine's ping) in the shop, the pause card, the death card, the journal, the words you choose and the run screen, and a no
+for a refusal; the server letting go of a level's platforms in its frame loop, and every one of the client's tables of tiles
+weak-keyed or swept; the harbour's rain and bell, the key and the chamber's splashes their own, and no sound anywhere played
+above 1.25; a key named only to a keyboard; every date the game shows one of the Hold's days, and Wick's year the one he
+tells; the squish room's signs in the collection's names. `check_audio.py` reads the shop folder's slots from both its
+generators, holds the press to its sheet, and takes the rain as a loop and the bell as music; `check_story.py`'s clock
+fold lets the press stand in its handler. `pass143.py` 11 of 11, `pass144.py` 17 of 17, `pass145.py` 9 of 9, `pass146.py`
+11 of 11, `pass147.py` 10 of 10, `pass148.py` 6 of 6, `pass149.py` 4 of 4; six anchors in the older suites moved to the
+lines as these passes left them. Two things the checks found in the work itself: the journal's page rows called the press
+before it was declared (a nil global there; `check_lua.py`), and the journal's foot still named J and Esc to everyone as it
+was first drawn (the new rule). The full run after 143 to 147: 140 suites, 2417 of 2417 caught, src, the Blender scripts
+and the sound generators put back byte for byte (pass77's run stopped when Windows refused a write three times over, a
+file held a moment by something else, and it was run again on its own: 45 of 45). Then 148 and 149, with every suite that
+plants its bugs in the files they changed run again: 29 suites, 602 of 602, byte for byte.
+
+## Before you test in Studio (passes 143 to 149)
+
+**Paste**
+1. The Luau: if you pasted `passes_137_142`, these are all that changed since (`SINCE_PASSES_137_142.txt` in the zip):
+   **Server** `Bootstrap` (the Script) and Services `DeformationService`, `HubService`, `SquishRoomService`,
+   `StoryService`, `SunkenCityService`; **Shared** `LevelDefinitions`; **Client** `Bootstrap` (StarterPlayerScripts, the
+   LocalScript; yours is `BootStrap`) and Services `AudioService`, `Cinema`, `DeathService`, `DeformationRenderer`,
+   `FloodedHallsClient`, `JournalService`, `PauseMenuService`, `ShopService`, `StoryClient`, `SunkenCityClient`,
+   `TalkClient`, `UIService`, `ViewModeService` (21 files, none new). If you have not pasted `passes_130_136` and
+   `passes_137_142`, `python tools/paste_list.py` lists everything since your last `--mark`, 130 to 149 together (31 Luau
+   files, `RunFeel` the one new ModuleScript; the zip carries the newest copy of each); then `--mark`.
+
+**Import (UPLOADS: 4)**
+2. `audio/shop/UiTaps_x8.wav` into **SoundService.ShopSounds** (every press in the menus; without it, a soft click).
+3. `audio/story/HarbourRain.wav`, `audio/story/HarbourBell.wav` and `audio/story/KeyTurn.wav` into
+   **SoundService.StorySounds** (the Sunken City's rain and bell, Outfall 3's key; without them, the old stand-ins). And
+   if `passes_137_142`'s `audio/story/CheckpointChime_x3.wav` is not in StorySounds yet, it is in this zip too.
+
+**Then play**
+4. Step on Start, then open the shop at the kiosk before the countdown ends: the shop goes as the black comes, nothing is
+   over the black, and you can move on the level. The same with the journal open (J), and with the post box's card up.
+5. Press through the menus: the shop, the pause card's tab (two notes up as it opens, down as it goes), the journal's tabs
+   and pages, the death card's choices in Hardcore, the words you choose with someone. A soft tap each, never a ping. Buy
+   something you cannot afford: two low knocks.
+6. The Sunken City: wait for the rain (soft rain, not a rushing wind) and the bell (a bell, not a ping), about two minutes in.
+7. The true ending: the key turning in the lock, and the two splashes.
+8. On a controller: find a secret (its card says D-pad up) and open the journal (its foot says B to close).
+9. Play a few runs in a row in one session: the tenth as smooth as the first.
+10. The squish room: the signs say Waxed butter, Keys over lava, Salt crust (the board's names). The Sunken City's staff room
+    calendar says THURSDAY 14; the journal's key holders, A. Wick, 1969.
+11. A Hardcore run: fold the clock (two notes down) and open it (up); put the best times away and back.
+
+## Polishing the game (hundred-and-thirty-seventh to forty-second passes, 2026-10-30)
+
+From your notes of 2026-10-30 **(you)**: "these next passes work on polishing the game, be thorough and precise". No new
+features were asked for, so this round read the game end to end for what a player feels between its big moments, and for
+what was quietly wrong. What each is and how it is done is mine **(suggested)**. Not played yet.
+
+- **In and out of a run, under a dip (137)**: every move into a level and out of one was a cut, the lobby one frame and the
+  level the next, and with StreamingEnabled on (as every place made since 2021 has it) the place you were put in was still
+  arriving round you. Now the picture fades to black first, the level's name comes up on the black ("LEVEL 2" over "Sky
+  Pools"; "STORY 2 OF 5" in the story) while it is built and streamed in round its start, you are put there, and it fades
+  back up, the opening words coming in after it. Going home (a finished run, Leave from the menu or the death card, the end
+  of the story) is the same the other way: black where you are, the lobby streamed in, set down at its spawn, back up. A
+  fall caught in Chill is a cut to black that fades back, so it reads as a cut, not a jump. The fade covers the whole screen
+  now (it stopped short of Roblox's bar along the top, so a strip of the world showed over every fade).
+- **A fall counted once (137)**: a character stays under the kill plane for a few frames after it is moved (its own screen
+  is still sending where it was), and every one of those frames counted as another fall. So the back rooms, meant for the
+  seventh fall in a run, could come after two or three, and a Hardcore fall's second frame found the run already restarted
+  and took the second chance off the card it had just offered. One fall is one fall now (a second after it, you are let be).
+- **A checkpoint reached (138)**: nothing said so, and a Chill fall puts you back "at your last checkpoint". Now the first time
+  you reach a checkpoint further on than any before in the run, a ring of light spreads across the slab from its middle to its
+  edges and another after it, a warm glow (a real light) comes up off the slab and dies, and two low marimba bars sound,
+  struck with felt: the countdown's wood an octave down, three takes, a different one each time
+  (`audio/gen_checkpoint_sfx.py`). Not over a scene, never in the lobby (`RunFeel`, a new client module).
+- **The best times (139)**: their rows were never cleared (they were looked for in the panel, and they are in its Content), so
+  every refresh (each Hardcore spawn, each fall) drew the whole board again under the last, and "No times yet" stacked down
+  the screen; and all hundred rows the board asks for were drawn, past the panel's foot and down over a phone's screen, with
+  a name looked up on the web for each. Now: as many as the panel holds (four), you in the last of them at your own place if
+  you are further down, the names found first, and one refresh at a time.
+- **The run's panels on a level only (139)**: the mode, the hardcore clock and the best times stayed up in the lobby after a
+  Hardcore run. They show on a level (and in the back rooms) and nowhere else. On a phone the folded clock moves with the
+  clock (it was left under the jump button); on a computer the clock sits a step over the mode readout (it was 26 pixels up,
+  placed for an older, taller readout).
+- **The pause card where you are (139)**: it said "This run", "Keep running" and "Leave to the lobby" in the lobby too. In the
+  lobby it says In the lobby over Harrow Bay (or The squish room), its first button is Back, and the shop, the emotes and
+  the invite move up into the way out's place; in the back rooms it says so, and the way out is there.
+- **The vote card's words (139)**: "City Shore (2)  ·  Hardcore (1)  ·  Medium (3)" and "Hardcore  ·  Medium run  ·  3 players
+  voted", where it was the server's lowercase words put apart with dashes.
+- **The death card comes up (139)**: over a third of a second, from nothing to its breathing, where it was there at once.
+- **A run's tokens, told after its ending (139)**: they are paid as the run finishes, in the middle of its ending, so the "+120
+  tokens" pill came up under the scene's bottom bar, where nobody saw it. It waits for the scene to give the camera back and
+  the screen to clear now.
+- **A scene always lets go (140)**: a scene ends when its own code says so, and one that stopped short anywhere outside the
+  levels' guards left you held still with the prompts away until you left the level. Now no scene runs past its time (an
+  ending two and a half minutes, the longest, the true ending, being about a minute and a half; a moment forty-five
+  seconds), a new character ends one, and Roblox's own Reset is held back while one plays. As one starts, whatever is open is
+  put away (the pause card, the journal, the shop, the emotes and the words you could say: caught in the back rooms with the
+  journal open, say, or off the board with Maren's choices still up), and while it plays the marks on your lens, the material
+  hints and the run's panels are off its picture.
+- **Every sound on time (141)**: only the materials' sounds were fetched ahead, so the first time any other played (the board
+  letting you go off the dive, a level's chord, the shop opening, the lobby's first wave) it came when its file had arrived,
+  which on a slow connection is after the moment it was for. Every folder the game plays from is fetched as you join now.
+- **A Reset in a run is a fall (141)**: a new character in a run was put at the level's start whatever the mode, so a Reset in
+  Chill (stuck somewhere, say) threw away every checkpoint, and in Hardcore the clock ran on with nothing said. Now Chill puts
+  you back at your checkpoint under a dip, and in Hardcore it is a fall (the card, the clock, the second chance). And you are
+  back on your feet in a second and a half, not Roblox's five.
+- **One notice at a time (142)**: what a run says as it ends (a challenge done, a level opened, a friend in the run, the story
+  going on) came up in the middle of its ending, half under the scene's top bar, and a second wiped the first before it could
+  be read. Each waits its turn now, five seconds apiece, and none comes up under a scene or the black. An answer to something
+  you have just done (the chest, Start while a run is on) is still said at once.
+
+**Checked**: a new, twentieth checker, `check_polish.py`, holds the round: every move in and out black, streamed in and faded
+back in that order, the level's name on the black, a failed start never left dark, a fall caught once; the checkpoint (new
+ground only, the ring kept on its slab, a real light, the chime's slots as its generator writes them, never twice running,
+never over a scene); the screen (the board cleared and kept to its panel, one refresh at a time, the run's panels on a level
+only, the folded clock off a phone's thumb, the pause card, no dashes on the vote card, the death card's rise, a run's tokens
+after its scene); each scene's time limit measured against the longest ending and the longest moment, a new character ending
+one, Reset held back, the open menus put away before the controls are taken, nothing over its picture; every sound folder the
+game plays from fetched ahead; a Reset in a run a fall; the notices one at a time. `check_hub.py` and `check_story.py` follow
+the ways in and out through the dips, `check_audio.py` takes the chime as music, `check_shop.py` looks for the countdown's own
+chime. `pass137.py` 16 of 16, `pass138.py` 14 of 14, `pass139.py` 18 of 18, `pass140.py` 13 of 13, `pass141.py` 8 of 8,
+`pass142.py` 8 of 8; twenty anchors in the older suites moved to the lines as these passes left them. And one thing found
+reading it all back: as a scene started the shop was put away after your controls were taken, and the shop gives them back as
+it closes, so on a phone the stick could come back mid-scene; it is put away first now. The full run after it: 135 suites,
+2358 of 2359 caught, src, the Blender scripts and the sound generators put back byte for byte. The one it missed was a rule
+made too easy: pass 91's "nothing as it runs out" took a notice's chime, the same call deeper in, for the countdown's own (the
+rule looks for the countdown's now); rerun, 20 of 20.
+
+## Before you test in Studio (passes 137 to 142)
+
+**Paste**
+1. The Luau: if you pasted `passes_130_136`, these are all that changed since (`SINCE_PASSES_130_136.txt` in the zip):
+   **Server** `Bootstrap`; **Client** `Bootstrap` (StarterPlayerScripts, the LocalScript; yours is `BootStrap`), and Services
+   `AudioService`, `Cinema`, `DeathService`, `HubVoteService`, `PauseMenuService`, `ShopService`, `TalkClient`,
+   `UIService`, and **a new ModuleScript** `RunFeel` in StarterPlayerScripts/Services (11 files, one new).
+   If you have not pasted `passes_130_136`, `python tools/paste_list.py` lists everything since your last `--mark`, 130 to
+   142 together (the zip carries the newest copy of each); then `--mark`.
+
+**Import (UPLOADS: 1)**
+2. `audio/story/CheckpointChime_x3.wav` into **SoundService.StorySounds** (the checkpoint's two notes; without it the ring
+   comes alone).
+
+**Then play**
+3. Start a level from the lobby: black, its name, the level fading up on its start, then the opening words.
+4. Walk on to a checkpoint (a plain slab): the ring and the two notes; again on the next one; not on one already reached.
+5. Fall in Chill: a cut, back at your checkpoint. Reset in Chill (Esc, Reset Character): the same, in a second and a half.
+   In Hardcore: the card.
+6. A Hardcore run: the best times (four rows, never piling up as you fall), the clock (fold it on a phone); finish and come
+   home: the dip, then no clock or board in the lobby. The tokens pill after the ending, not under it.
+7. The pause card in the lobby (In the lobby, Back) and on a level (This run).
+8. Open the journal (J) and walk into an ending: it is put away as the scene starts.
 
 ## Your test of 2026-10-23 (hundred-and-thirtieth to thirty-sixth passes, 2026-10-23)
 

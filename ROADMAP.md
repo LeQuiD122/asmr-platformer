@@ -4,9 +4,9 @@ What we are going to build, roughly in order. `HANDOFF.md` describes what exists
 what does not exist yet. Every idea is tagged with where it came from: **(you)** for your ideas
 and decisions, **(suggested)** for mine.
 
-Last updated: 2026-10-22. Everything built up to and including the ninety-second pass has been played in Studio
-**(you)**; the ninety-third to the hundred-and-twenty-second wait for a test. Section 9 is your list of 2026-10-20 and
-where each item stands; section 10 is your test of 2026-10-21.
+Last updated: 2026-10-30. Everything built up to and including the hundred-and-twenty-ninth pass has been played in
+Studio **(you)**; the hundred-and-thirtieth to forty-ninth wait for a test. Section 12 is your test of 2026-10-23,
+section 13 the polish round you asked for on 2026-10-30, and section 14 the second polish round, the same day.
 The short version is the Status section of `README.md`. What comes next, in order, is section 8.
 
 ## Where the levels stand
@@ -771,3 +771,150 @@ In your words, with where each stands. How each is done is mine **(suggested)**.
 12. **"Improve the shop looks even more": BUILT (hundred-and-thirty-fifth pass).**
 13. **"The backrooms animation ... I don't understand what's going on, it should be longer and I should understand what
     I'm looking at": BUILT (hundred-and-thirty-third pass).**
+
+## 13. Polishing the game, from your notes of 2026-10-30 **(you)**
+
+"These next passes work on polishing the game, be thorough and precise." No new features asked for, so the game was read
+end to end for what a player feels between its big moments and for what was quietly wrong. What each is and how it is done
+is mine **(suggested)**; HANDOFF, **Polishing the game**, has every one.
+
+1. **In and out of a run, under a dip: BUILT (hundred-and-thirty-seventh pass).** Black, the level's name, the level
+   streamed in round its start, faded up; home the same way; a Chill fall a cut; a fall counted once.
+2. **A checkpoint reached, felt: BUILT (hundred-and-thirty-eighth pass).** A ring of light over the slab and two low
+   marimba notes, the first time you get that far in a run (one new sound to import).
+3. **The screen put right: BUILT (hundred-and-thirty-ninth pass).** The best times, the run's panels, the folded clock on a
+   phone, the pause card, the vote card, the death card, the tokens after an ending.
+4. **A scene always lets go: BUILT (hundred-and-fortieth pass).** A time limit, a new character, Reset held back, what is
+   open put away, nothing left over its picture.
+5. **The small things: BUILT (hundred-and-forty-first pass).** Every sound on time; a Reset in a run a fall; a quicker
+   respawn.
+6. **One notice at a time: BUILT (hundred-and-forty-second pass).** Never under a scene or the black.
+
+## 14. Polishing the game, the second round, from your notes of 2026-10-30 **(you)**
+
+"Keep polishing, do the next passes." What the first round's read had left (the sound, the words, how the game holds up
+over a long session), read through, and the first round's changes against the rest of the game. What each is and how it is
+done is mine **(suggested)**; HANDOFF, **Polishing the game, the second round**, has every one.
+
+1. **What is open put away for every move: BUILT (hundred-and-forty-third pass).** The shop, the post box, the journal,
+   the emotes, the menu and the words you choose, as the screen goes black; nothing drawn over the black.
+2. **One soft sound for every press: BUILT (hundred-and-forty-fourth pass).** A felt tap, two notes as a card opens and
+   goes, a bubble for something good, two knocks for a no, in every menu (one new sound to import).
+3. **A long server stays quick: BUILT (hundred-and-forty-fifth pass).** A level's platforms let go of as it is taken
+   down, on the server and on your screen.
+4. **The levels' own sounds: BUILT (hundred-and-forty-sixth pass).** The Sunken City's rain and bell, Outfall 3's key,
+   the chamber's splashes; nothing pitched up (three new sounds to import).
+5. **The words: BUILT (hundred-and-forty-seventh pass).** The keys named only to a keyboard; the emotes' hint; the
+   lobby's signs.
+6. **The story's days, and one name for each material: BUILT (hundred-and-forty-eighth pass).** Every date shown one of the
+   Hold's days; Wick's year as he tells it; the squish room's signs in the collection's names.
+7. **The run screen's presses: BUILT (hundred-and-forty-ninth pass).** The clock and the best times folding and opening,
+   heard.
+
+## 15. The chunks, the keys and the bodies, from your video and notes of 2026-10-31 **(you)**
+
+"Rename the brand names, and improve the functionality of the chunks, the aesthetics, and the way they interact with the
+player and their physics": bubbles to work better, honey left as it is, the blocks that do not break to do something
+else (honey slows you; clouds could wet your feet or make it slippery), the ones that break to break faster, the keys over
+lava more to them, the keys a better press, more colourways, better models closer together, the problem with Butter; and
+then "more variations to the poses the player does by itself when standing afk ... some might be like an aura-farming
+emote; improve the existing emotes, and add even more". Which of the chunks first and how each is done is mine
+**(suggested)**; HANDOFF, **The chunks, the keys and the bodies**, has every one.
+
+1. **Your Output, and no trade marks: BUILT (hundred-and-fiftieth pass).**
+2. **The breaking chunks give way faster: BUILT (hundred-and-fifty-first pass).** A moment after the first foot, a shake
+   first; holes back in six seconds.
+3. **Your footing: BUILT (hundred-and-fifty-second pass).** Slippery ground slides you; your shoes carry wet, sticky,
+   greasy or gritty for a few seconds; lamb's ear wipes them.
+4. **The butter: BUILT (hundred-and-fifty-third pass).** Bare sticks, no shards.
+5. **Bubble wrap: BUILT (hundred-and-fifty-fourth pass).** Pops, never bounces; a landing pops a ring.
+6. **The keyboards: BUILT (hundred-and-fifty-fifth pass).** A sculpted key to a cell, ten colourways, a press held and
+   sprung (one mesh to import).
+7. **The keys over lava: BUILT (hundred-and-fifty-sixth pass).** Floating on lava, sinking under you.
+8. **Standing about: BUILT (hundred-and-fifty-seventh pass).** Ten idles in keys, four with aura.
+9. **The emotes: BUILT (hundred-and-fifty-eighth pass).** Ten, the Aura with its glow.
+10. **Honey: LEFT AS IT IS**, as you said, but for what it now leaves on your shoes (sticky soles, which also grip on ice).
+11. **Next, if you want them:** the creamy keyboard could TYPE (the letters you step on spelling a word for a reward), and
+    the light switches could light something; the slide's numbers (`FOOTING.grip` in RunFeel) and the crumble's
+    (`crumbleAfter` in MaterialConfig) are the first to tune after you have walked them.
+
+## 16. What good Roblox games do, from your note of 2026-11-02 **(you)**
+
+"Keep polishing, do the next passes", after asking what standards other good Roblox games follow that this one does
+not. Most were there already (safe saves, purchases granted once, a fair board, the Dashboard's view of the levels and
+the first five minutes, invites, the favourite ask, badges, codes). What was missing, and how each is done, is mine
+**(suggested)**; HANDOFF, **What good Roblox games do**, has every one.
+
+1. **The arrival: BUILT (hundred-and-fifty-ninth pass).** The game's own black from the first frame, the bay's name, a
+   gold line drawing itself as the place comes in, then a fade onto a lobby that is all there (one new LocalScript, in
+   ReplicatedFirst).
+2. **The real price: BUILT (hundred-and-sixtieth pass).** Every Robux price the one Roblox gives the player (its own
+   regional and tested prices); nothing off sale offered; every id you set checked with Roblox in Studio.
+3. **Chat in the game's look: BUILT (hundred-and-sixty-first pass).** The story's bubble over every head, the window and
+   the bar in the game's panel.
+4. **Less motion when asked: BUILT (hundred-and-sixty-second pass).** Roblox's Reduce Motion kept by every shake, punch,
+   flash and launch.
+5. **Where a run is left: BUILT (hundred-and-sixty-third pass).** A funnel for each level on the Dashboard.
+6. **Weighed and left, unless you want them:** a sound mix in the menu (Roblox's own volume does the whole game, and there
+   is little music to set apart); a soft shutdown when you update (Roblox's own restart for updates, on the Creator
+   Dashboard, is meant for this: worth trying first, rather than shutting the servers down); a controller's rumble on the
+   materials (built since, the hundred-and-sixty-fourth pass, section 17); something extra for Premium players.
+
+## 17. Felt, and typed, from your note of 2026-11-02 **(you)**
+
+"Keep polishing, do the next passes", again. A game whose every surface wants to be pressed, read once more for what a
+player's hands and feet are told; and the creamy keyboard's letters, printed on every key since the hundred-and-fifty-fifth
+pass and read by nothing. What each is and how it is done is mine **(suggested)**; HANDOFF, **Felt, and typed**, has both.
+
+1. **Felt in your hands: BUILT (hundred-and-sixty-fourth pass).** On a controller or a phone, every material underfoot in
+   a feel of its own (nine kinds: squish, pop, click, thock, grain, crack, hush, bounce, crust), and a checkpoint, the
+   slime's fling, a hard landing, a scene's jolts and impacts and every press in the menus (one new ModuleScript).
+2. **The teleprinter: BUILT (hundred-and-sixty-fifth pass).** The key you stand on types its letter on a strip of tape,
+   after the teleprinter's last message, KEY HOLDER PLEASE CONFIRM; YES answers it (once a save, 75 tokens). The boards'
+   letters moved one key along so Y, E and S are on every one (one new ModuleScript). Found on the way: an R6 body was
+   never typed for, never on the ground for the footing, and its trail a stud too high (HipHeight is 0 on R6); all fixed.
+3. **Weighed and left, unless you want them:** something extra for Premium players (Roblox paid games by their Premium
+   players' time until 24 July 2025; its Creator Rewards since pay for the time of players who spend Robux, Premium or not,
+   so a Premium perk would no longer earn the game anything of its own); a puzzle in the light switches (every switch on, a platform of twenty, each step turning one on or
+   off: a lights-out puzzle in the middle of a run, more likely to slow a run than please it); the sound mix in the menu
+   (as before).
+
+## 18. The camera, the catch, the light, the surfaces and the story, from your note of 2026-11-03 **(you)**
+
+"Keep polishing, do the next passes", with the fixed camera everywhere, a more interesting story, the back rooms catch,
+the Flooded Halls too bright, and the lobby's and the levels' textures, "a very pleasant looking game". How each is done
+is mine **(suggested)**; HANDOFF, **The camera, the catch, the light, the surfaces and the story**, has all of it.
+
+1. **The camera, everywhere: BUILT (hundred-and-sixty-sixth pass).** Held at 14 studs everywhere, the lobby too.
+2. **In his hands: BUILT (hundred-and-sixty-seventh pass).** Squared up to you at the catch; his hold worked out from his
+   own joints so his hands close round your middle; the shots kept out of the walls.
+3. **The halls lit as their own: BUILT (hundred-and-sixty-eighth pass).** Their light was overwritten by the outdoor
+   default as each run started; now a palette of their own, darker, with `brightness` and `outdoor` to nudge.
+4. **Harrow Bay's surfaces: BUILT (hundred-and-sixty-ninth and seventieth passes).** Nine textures made for the game on
+   the lobby and on the levels' buildings, and the levels' own three maps at twice the size (36 uploads, 14
+   MaterialVariants made in one go by `tools/make_variants.lua`).
+5. **The story: BUILT (hundred-and-seventy-first and seventy-second passes).** His letters, five green envelopes, and the
+   Watcher on the way ahead of you on every level.
+6. **Next for the story, if you want them:** Tobi brought home (find him in the baths, tell him Pip is waiting, and he
+   is on the sands with her the next time round, the first thing in the Hold that stays put right); the radio on the roof
+   (the shipping forecast breaking into Rudy's song); a way up to Marsh's ledge with a note in his hand; and the material
+   maps (honey, butter and the rest) made again at twice the size, which is 75 uploads and every SurfaceAppearance again.
+
+## 19. Polishing the surfaces and the letters, from your note of 2026-11-04 **(you)**
+
+"Polish things a bit more." Section 18's surfaces, read again against the levels themselves, reached far less than they
+said; and the green envelopes were listed in whatever order they were found. What each is and how it is done is mine
+**(suggested)**; HANDOFF, **Where the surfaces reach, and his letters in order**, has every one.
+
+1. **The levels' worlds dressed where they are put: BUILT (hundred-and-seventy-third pass).** The Sky Pools, the Sunken
+   City and Hill House are built into the Levels folder, and only the workspace was watched, so none was dressed.
+2. **The drowned city and the hotel roof built of what they are: BUILT (hundred-and-seventy-fourth pass).** Render,
+   cast stone, slate, coursed stone, brick, marble and timber where there was plain plastic, which no surface reaches.
+3. **His letters in order: BUILT (hundred-and-seventy-fifth pass).** The green envelopes kept together in the journal,
+   one to five, each not found yet saying only which level it lies on.
+4. **The squish room like the lobby: BUILT (hundred-and-seventy-sixth pass).** Boards, render, timber and painted lifts,
+   dressed as the lobby is; no dressing ever reaches a chunk's own part.
+5. **Your slab variants: BUILT (hundred-and-seventy-seventh pass).** Read through the Studio MCP: the three you made long
+   ago, maps on, now named in the code, so the stone under every chunk shows at last.
+6. **Still there, if you want them:** the story's next (Tobi brought home, the radio on the roof, a way up to Marsh's
+   ledge) and the material maps made again at twice the size (75 uploads), as in section 18.

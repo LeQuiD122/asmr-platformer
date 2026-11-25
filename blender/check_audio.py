@@ -138,9 +138,10 @@ FAMILIES = {
     "shop": dict(lufs=(-28, -13), centroid=3000),
 }
 LOOPS = re.compile(r"^(UnderwaterHum|SlideRush|WhirlRoar|CulvertWash|FlumeRush|ShoreSea|RoofWind|PartyFar|HarbourNight|"
-                   r"BathsHum|HoldDrone|HillMorning|SeaBed_\d|FountainBed|Heartbeat|Lap|Pour|Stream|\w+Loop)$")
-MUSIC = re.compile(r"(Chord|Song|SecretSting|Chime_\d|BuoyBell_(x)?\d|button_(combo|circuit)_\d|button_linear_(x)?\d|HoldDrone|"
-                   r"PartyFar|Siren|CountdownTock_x\d|TownsfolkVoice_x\d|HarbourNight|ShopTab_x\d|CrateReveal_x\d|ShopOpen)$")
+                   r"BathsHum|HoldDrone|HillMorning|SeaBed_\d|FountainBed|Heartbeat|Lap|Pour|Stream|HarbourRain|\w+Loop)$")
+MUSIC = re.compile(r"(Chord|Song|Scorew*|SecretSting|Chime_\d|CheckpointChime_x\d|BuoyBell_(x)?\d|button_(combo|circuit)_\d|button_linear_(x)?\d|HoldDrone|"
+                   r"PartyFar|Siren|CountdownTock_x\d|TownsfolkVoice_x\d|HarbourNight|ShopTab_x\d|CrateReveal_x\d|ShopOpen|"
+                   r"HarbourBell)$")
 ATTACK_FIRST = {"bubblePop_x4"}  # heard the moment the foot lands: loud from its first sample, by design
 SHEET = re.compile(r"^(\w+)_x(\d+)$")
 # Files kept only so their old ids still play: superseded by a sheet of the same event (checked for format alone).
@@ -366,12 +367,17 @@ def check_shop():
     if not look_file.exists():
         return
     look = look_file.read_text(encoding="utf-8")
-    gen = AUDIO / "gen_shop_sfx.py"
-    made = gen.read_text(encoding="utf-8") if gen.exists() else ""
-    found = re.search(r"SLOTS = \{(.*?)\}", made, re.S)
-    slots = dict(re.findall(r'"(\w+)": ([\d.]+)', found.group(1))) if found else {}
-    if not slots:
-        fail("gen_shop_sfx.py: this check can no longer read its SLOTS")
+    # Two generators write into audio/shop: the shop's own, and the press every menu makes (gen_ui_sfx.py, the
+    # hundred-and-forty-fourth pass).
+    slots = {}
+    for name in ("gen_shop_sfx.py", "gen_ui_sfx.py"):
+        gen = AUDIO / name
+        made = gen.read_text(encoding="utf-8") if gen.exists() else ""
+        found = re.search(r"SLOTS = \{(.*?)\}", made, re.S)
+        if not found:
+            fail("%s: this check can no longer read its SLOTS" % name)
+            continue
+        slots.update(dict(re.findall(r'"(\w+)": ([\d.]+)', found.group(1))))
     found = re.search(r"^local SLOT = \{(.*?)\}", look, re.M)
     played = dict(re.findall(r"(\w+) = ([\d.]+)", found.group(1))) if found else {}
     if not played:
@@ -383,7 +389,7 @@ def check_shop():
             continue
         slot = slots.get(m.group(1))
         if slot is None:
-            fail("gen_shop_sfx.py writes %s with no slot of its own in SLOTS" % name)
+            fail("audio/shop/%s.wav has no slot of its own in its generator's SLOTS" % name)
             continue
         rate, data = wavfile.read(str(AUDIO / "shop" / ("%s.wav" % name)))
         if abs(len(data) / rate / int(m.group(2)) - float(slot)) > 0.01:
@@ -432,6 +438,27 @@ def check_shop():
         if levels != list(range(1, int(SHEET.match(reveal).group(2)) + 1)):
             fail("ShopLook plays the crate's reveal by rarity as takes %s, and %s holds %s" % (
                 levels, reveal, SHEET.match(reveal).group(2)))
+    # THE PRESS (the hundred-and-forty-fourth pass): AudioService plays UiTaps_x8 in the slots its generator writes, and
+    # every kind of press it knows is a slot the sheet has.
+    audio_src = SRC / "Client" / "Services" / "AudioService.lua"
+    audio_lua = audio_src.read_text(encoding="utf-8") if audio_src.exists() else ""
+    press_slot = re.search(r"^local PRESS_SLOT = ([\d.]+)$", audio_lua, re.M)
+    taps = next((n for n in have if n.startswith("UiTaps_x")), None)
+    if not press_slot or not taps:
+        fail("AudioService: no press for the menus (PRESS_SLOT and audio/shop/UiTaps_xN.wav)")
+    else:
+        if abs(float(press_slot.group(1)) - float(slots.get("UiTaps", -1))) > 1e-6:
+            fail("AudioService plays the press in %s s slots, and gen_ui_sfx.py writes %s" % (
+                press_slot.group(1), slots.get("UiTaps")))
+        count = int(SHEET.match(taps).group(2))
+        kinds = re.search(r"^local PRESSES: .*? = \{(.*?)\n\}", audio_lua, re.M | re.S)
+        used = [int(v) for v in re.findall(r"\d+", " ".join(re.findall(r"slots = \{([^}]*)\}", kinds.group(1))))] \
+            if kinds else []
+        if not used:
+            fail("AudioService: this check can no longer read the press's kinds (PRESSES)")
+        elif max(used) >= count or sorted(set(used)) != list(range(count)):
+            fail("AudioService's presses play slots %s, and %s holds %d (each slot one kind's, none missing)" % (
+                sorted(set(used)), taps, count))
     boot = SRC / "Server" / "Bootstrap.server.lua"
     text = boot.read_text(encoding="utf-8") if boot.exists() else ""
     found = re.search(r"local SHOP_SOUNDS = \{(.*?)\}", text, re.S)

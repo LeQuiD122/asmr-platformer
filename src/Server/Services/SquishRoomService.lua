@@ -32,6 +32,7 @@ local Materials = (require(Shared:WaitForChild("MaterialConfig")) :: any).Materi
 local DeformationService = require(script.Parent:WaitForChild("DeformationService")) :: any
 -- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
 local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Style"))
+local MaterialAppearance = require(Shared:WaitForChild("MaterialAppearance"))
 
 local SquishRoomService = {}
 
@@ -63,14 +64,14 @@ local PALETTE = {
 	lamp = Color3.fromRGB(255, 236, 206),
 	shelf = Color3.fromRGB(198, 162, 120),
 }
-
--- How each material is named on its sign.
-local NAMES: { [string]: string } = {
-	ButterWax = "Butter Wax", KineticSand = "Kinetic Sand", CreamyKeyboard = "Creamy Keyboard",
-	Buttons = "Arcade Buttons", Foam = "Memory Foam", LightSwitch = "Light Switches",
-	ChocolateSolid = "Solid Chocolate", LambsEar = "Lamb's Ear", JelloSoda = "Jello Soda",
-	LavaKeys = "Lava Keys", ButterStick = "Butter Stick", BubbleWrap = "Bubble Wrap",
-}
+-- WHAT THE ROOM IS BUILT OF (the hundred-and-seventy-sixth pass): boarded underfoot, its walls and ceiling rendered,
+-- its skirting and plinths timber, the lifts painted iron, so it wears Harrow Bay's surfaces as the rest of the lobby
+-- does (MaterialAppearance.dress, once it is built). It was plain plastic, which no surface reaches. The samples are
+-- the chunks' own and are never dressed; the signs, the cards and the lamps are as they were.
+local BOARDS = Enum.Material.WoodPlanks
+local RENDER = Enum.Material.Plaster
+local TIMBER = Enum.Material.Wood
+local IRON = Enum.Material.Metal
 
 local room = {
 	folder = nil :: Folder?,
@@ -106,7 +107,7 @@ local function floorPiece(parent: Instance, x0: number, z0: number, x1: number, 
 		return
 	end
 	part(parent, "Floor", Vector3.new(x1 - x0, 1, z1 - z0),
-		CFrame.new((x0 + x1) / 2, y - 0.5, (z0 + z1) / 2), PALETTE.floor, true)
+		CFrame.new((x0 + x1) / 2, y - 0.5, (z0 + z1) / 2), PALETTE.floor, true, BOARDS)
 end
 
 local function words(host: BasePart, face: Enum.NormalId, text: string, colour: Color3)
@@ -132,8 +133,24 @@ local function words(host: BasePart, face: Enum.NormalId, text: string, colour: 
 	pad.Parent = label
 end
 
+-- ONE NAME FOR EACH MATERIAL (the hundred-and-forty-eighth pass): the signs had names of their own (Butter Wax, Lava Keys,
+-- Butter Stick, Jello Soda, and the bare Salt and Lava), and the lobby's board and the journal another (Waxed butter, Keys
+-- over lava, Butter, Jello, Salt crust, Lava crust) for the same slab. The collection's (ShopCatalog.MATERIALS, the name a
+-- player reads) is the one now. Without ShopCatalog, the key spaced out.
 local function spaced(name: string): string
-	return NAMES[name] or (name:gsub("(%l)(%u)", "%1 %2"))
+	local found = Shared:FindFirstChild("ShopCatalog")
+	local ok, catalog = false, nil
+	if found and found:IsA("ModuleScript") then
+		ok, catalog = pcall(require, found)
+	end
+	if ok and type(catalog) == "table" and type(catalog.MATERIALS) == "table" then
+		for _, material in ipairs(catalog.MATERIALS) do
+			if material.key == name then
+				return material.name
+			end
+		end
+	end
+	return (name:gsub("(%l)(%u)", "%1 %2"))
 end
 
 -- ===== THE SLABS =====
@@ -243,23 +260,91 @@ local function buildLift(parent: Instance, base: CFrame, sign: string, toward: s
 	local function at(x: number, y: number, z: number): CFrame
 		return base * CFrame.new(x, y, z)
 	end
-	part(cabin, "LiftPlinth", Vector3.new(7.4, 0.4, 7.4), at(0, 0.2, 0), PALETTE.cabinTrim, true)
-	part(cabin, "LiftBack", Vector3.new(7, 10, 0.4), at(0, 5.4, 3.3), PALETTE.cabin, true)
-	part(cabin, "LiftSide", Vector3.new(0.4, 10, 7), at(-3.3, 5.4, 0), PALETTE.cabin, true)
-	part(cabin, "LiftSide", Vector3.new(0.4, 10, 7), at(3.3, 5.4, 0), PALETTE.cabin, true)
-	part(cabin, "LiftJamb", Vector3.new(1.2, 10, 0.4), at(-2.9, 5.4, -3.3), PALETTE.cabin, true)
-	part(cabin, "LiftJamb", Vector3.new(1.2, 10, 0.4), at(2.9, 5.4, -3.3), PALETTE.cabin, true)
-	local lintel = part(cabin, "LiftLintel", Vector3.new(7, 1.8, 0.4), at(0, 9.5, -3.3), PALETTE.cabinTrim, true)
+	-- THE LIFT PAVILION (the two-hundred-and-twelfth pass, from your note of 2026-11-07: the booth in the garden
+	-- wanted a better design; it was a pink box). Now an old seaside lift: a step up onto its iron plinth, cream
+	-- columns at its corners carrying a ceiling, a cornice and a little dome with a brass finial; panelled to
+	-- waist height with iron bars above (you see through it to the garden, nothing glazed); a brass rail along
+	-- the panels, the folded brass gate either side of the door, a carpet, and the floor dial over the door
+	-- standing on the cornice. Everything stands on what is under it: the columns and panels on the plinth, the
+	-- bars between the rail and the ceiling, the ceiling on the columns, the cornice on the ceiling, the drum
+	-- on the cornice, the dome on the drum, the dial on the cornice's front.
+	local cream = Color3.fromRGB(250, 243, 226)
+	local brass = Color3.fromRGB(196, 160, 82)
+	local function round(name: string, length: number, across: number, cf: CFrame, colour: Color3,
+		material: Enum.Material, solid: boolean): Part
+		-- A cylinder standing up (a Part's cylinder runs along its own X).
+		local p = part(cabin, name, Vector3.new(length, across, across), cf * CFrame.Angles(0, 0, math.pi / 2), colour,
+			solid, material)
+		p.Shape = Enum.PartType.Cylinder
+		return p
+	end
+	part(cabin, "LiftPlinth", Vector3.new(7.4, 0.4, 7.4), at(0, 0.2, 0), PALETTE.cabinTrim, true, IRON)
+	part(cabin, "LiftStep", Vector3.new(5, 0.2, 1), at(0, 0.1, -4.2), cream, true, Enum.Material.Marble)
+	part(cabin, "LiftCarpet", Vector3.new(5.6, 0.05, 5.6), at(0, 0.425, 0.2), PALETTE.cabinTrim, false,
+		Enum.Material.Fabric)
+	-- The columns, each on a base and under a capital.
+	for _, x in ipairs({ -3.25, 3.25 }) do
+		for _, z in ipairs({ -3.25, 3.25 }) do
+			part(cabin, "LiftColumnBase", Vector3.new(1.1, 0.4, 1.1), at(x, 0.6, z), cream, true, Enum.Material.Marble)
+			round("LiftColumn", 8.9, 0.8, at(x, 5.25, z), cream, Enum.Material.Marble, true)
+			part(cabin, "LiftCapital", Vector3.new(1.1, 0.4, 1.1), at(x, 9.7, z), cream, false, Enum.Material.Marble)
+		end
+	end
+	-- Panelled to waist height, the brass rail on top of the panels.
+	part(cabin, "LiftBack", Vector3.new(6.1, 3.6, 0.3), at(0, 2.2, 3.15), PALETTE.cabin, true, IRON)
+	-- (The sides end at the columns' faces, not through them; the jambs stand clear of the columns and stop under the
+	-- lintel, where they cut into the marble and met the sign face to face: the two-hundred-and-eighteenth pass, from your
+	-- screenshot of 2026-11-16, "a slight overlap in the textures for squish room".)
+	part(cabin, "LiftSide", Vector3.new(0.3, 3.6, 5.7), at(-3.15, 2.2, 0), PALETTE.cabin, true, IRON)
+	part(cabin, "LiftSide", Vector3.new(0.3, 3.6, 5.7), at(3.15, 2.2, 0), PALETTE.cabin, true, IRON)
+	part(cabin, "LiftRail", Vector3.new(6.1, 0.2, 0.45), at(0, 4.1, 3.1), brass, false, Enum.Material.Metal)
+	part(cabin, "LiftRail", Vector3.new(0.45, 0.2, 6.1), at(-3.1, 4.1, 0), brass, false, Enum.Material.Metal)
+	part(cabin, "LiftRail", Vector3.new(0.45, 0.2, 6.1), at(3.1, 4.1, 0), brass, false, Enum.Material.Metal)
+	-- The bars from the rail to the ceiling (solid, so nobody leaves through them).
+	for k = -3, 3 do
+		local along = k * 0.8
+		round("LiftBar", 5.7, 0.16, at(-3.15, 7.05, along), PALETTE.cabinTrim, IRON, true)
+		round("LiftBar", 5.7, 0.16, at(3.15, 7.05, along), PALETTE.cabinTrim, IRON, true)
+		round("LiftBar", 5.7, 0.16, at(along, 7.05, 3.15), PALETTE.cabinTrim, IRON, true)
+	end
+	-- The door: jambs inside the front columns, the folded gate on each, the lintel with the sign.
+	part(cabin, "LiftJamb", Vector3.new(0.5, 7.98, 0.26), at(-2.55, 4.39, -3.15), PALETTE.cabin, true, IRON)
+	part(cabin, "LiftJamb", Vector3.new(0.5, 7.98, 0.26), at(2.55, 4.39, -3.15), PALETTE.cabin, true, IRON)
+	for _, side in ipairs({ -1, 1 }) do
+		for k = 0, 3 do
+			round("LiftGate", 7.6, 0.12, at(side * (2.2 - k * 0.12), 4.2, -2.95 + (k % 2) * 0.12), brass,
+				Enum.Material.Metal, false)
+		end
+	end
+	local lintel = part(cabin, "LiftLintel", Vector3.new(6.1, 1.5, 0.3), at(0, 9.15, -3.15), PALETTE.cabinTrim, true, IRON)
 	words(lintel, Enum.NormalId.Front, sign, PALETTE.sign)
-	part(cabin, "LiftRoof", Vector3.new(7.6, 0.5, 7.6), at(0, 10.65, 0), PALETTE.cabinTrim, true)
-	-- A lamp in the roof, and the call panel on the right-hand wall inside.
-	local lamp = part(cabin, "LiftLamp", Vector3.new(1.6, 0.25, 1.6), at(0, 10.27, 0), PALETTE.lamp, false)
+	-- The ceiling on the capitals, the cornice on the ceiling, the drum and the dome on the cornice.
+	part(cabin, "LiftCeiling", Vector3.new(7.4, 0.5, 7.4), at(0, 10.15, 0), PALETTE.cabin, true, IRON)
+	part(cabin, "LiftRoof", Vector3.new(8.2, 0.5, 8.2), at(0, 10.65, 0), PALETTE.cabinTrim, true, IRON)
+	round("LiftDrum", 0.4, 5.6, at(0, 11.1, 0), cream, Enum.Material.Marble, true)
+	local dome = part(cabin, "LiftDome", Vector3.new(5.2, 2.6, 5.2), at(0, 11.3, 0), PALETTE.cabin, true, IRON)
+	local domeShape = Instance.new("SpecialMesh")
+	domeShape.MeshType = Enum.MeshType.Sphere
+	domeShape.Parent = dome
+	local finial = part(cabin, "LiftFinial", Vector3.new(0.6, 0.6, 0.6), at(0, 12.85, 0), brass, false, Enum.Material.Metal)
+	finial.Shape = Enum.PartType.Ball
+	-- The floor dial, standing on the cornice's front edge: a cream face in a brass rim, its needle on the lift.
+	local rim = part(cabin, "LiftDialRim", Vector3.new(0.2, 2.4, 2.4), at(0, 12.1, -3.6) * CFrame.Angles(0, math.pi / 2, 0),
+		brass, false, Enum.Material.Metal)
+	rim.Shape = Enum.PartType.Cylinder
+	local face = part(cabin, "LiftDial", Vector3.new(0.14, 2, 2), at(0, 12.1, -3.66) * CFrame.Angles(0, math.pi / 2, 0),
+		cream, false)
+	face.Shape = Enum.PartType.Cylinder
+	part(cabin, "LiftDialNeedle", Vector3.new(0.12, 0.9, 0.05), at(0, 12.1, -3.75) * CFrame.Angles(0, 0, math.rad(-35))
+		* CFrame.new(0, 0.4, 0), PALETTE.cabinTrim, false, IRON)
+	-- A lamp under the ceiling, and the call panel on the right-hand wall inside.
+	local lamp = part(cabin, "LiftLamp", Vector3.new(1.6, 0.25, 1.6), at(0, 9.77, 0), PALETTE.lamp, false)
 	local light = Instance.new("PointLight")
 	light.Color = PALETTE.lamp
 	light.Brightness = 0.9
 	light.Range = 10
 	light.Parent = lamp
-	local panel = part(cabin, "LiftPanel", Vector3.new(0.2, 1.6, 1), at(3.0, 4.2, -1.2), PALETTE.cabinTrim, false)
+	local panel = part(cabin, "LiftPanel", Vector3.new(0.2, 1.6, 1), at(2.9, 2.9, -1.2), PALETTE.cabinTrim, false, IRON)
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "SquishLiftPrompt"
 	prompt.ActionText = "Ride"
@@ -327,7 +412,7 @@ local function buildShelf(folder: Folder, middleX: number, wallZ: number, y: num
 	local base = y + SHELF_PLINTH
 	local zMid = wallZ + depth / 2
 	local plinth = part(model, "ShelfPlinth", Vector3.new(width, SHELF_PLINTH, depth), CFrame.new(middleX, y + SHELF_PLINTH / 2, zMid),
-		PALETTE.trim, true)
+		PALETTE.trim, true, TIMBER)
 	part(model, "ShelfBack", Vector3.new(width, height, SHELF_BOARD), CFrame.new(middleX, base + height / 2, wallZ + SHELF_BOARD / 2),
 		PALETTE.shelf, true, Enum.Material.Wood)
 	for row = 0, SHELF_ROWS do
@@ -378,6 +463,159 @@ local function buildShelf(folder: Folder, middleX: number, wallZ: number, y: num
 	prompt.MaxActivationDistance = 10
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = plinth
+end
+
+-- ===== THE EASEL (the two-hundred-and-thirty-second pass) =====
+--
+-- (From your note of 2026-11-20: "do the free drawing in the squish room".) A sheet of paper on a stand against the front
+-- wall, right of the lift as the shelf is left of it, with a tray of paint pots, a rubber and a sponge. Roblox's own prompt
+-- "Draw" on the paper; the drawing itself is all on your screen (DrawingBoard), each player's own and nobody else's.
+-- It stands on two feet on the floor: two posts on them, the paper between the posts, the tray on the posts.
+local EASEL_RIGHT = 26 -- studs right of the hall's middle, mirroring the shelf
+local PAPER = Vector2.new(12, 7) -- studs of paper, wide and tall
+local PAINTS = {
+	{ "Plum", Color3.fromRGB(72, 44, 92) },
+	{ "Rose", Color3.fromRGB(236, 128, 166) },
+	{ "Honey", Color3.fromRGB(242, 168, 52) },
+	{ "Mint", Color3.fromRGB(104, 192, 140) },
+	{ "Sky", Color3.fromRGB(104, 158, 226) },
+	{ "Soot", Color3.fromRGB(44, 40, 48) },
+	{ "Chalk", Color3.fromRGB(252, 250, 246) },
+}
+
+-- THE EASEL, SHARED (the two-hundred-and-thirty-third pass, from your note of 2026-11-20: "make the drawings visible to
+-- other players too"). Each player's strokes come here in small batches (DrawingBoard), are checked, kept, and passed to
+-- everyone else; whoever comes in later asks for the paper as it is ("sync"). Checked: the easel is one of ours; you are
+-- in the room and at it; no more than EASEL_RATE batches a second; each point inside the sheet, each paint one of the
+-- tray's (or the rubber); and no more than EASEL_MAX_POINTS kept of yours. Your rubber and sponge only touch your own
+-- strokes. Yours go when you leave the server.
+local EASEL_SHEET = Vector2.new(768, 448) -- DrawingBoard's SIZE: 12 by 7 studs at 64 a stud
+local EASEL_RATE = 30
+local EASEL_MAX_POINTS = 20000
+local EASEL_CODES = 8 -- seven paints, and the rubber
+local easel = {
+	papers = {} :: { [string]: BasePart },
+	logs = {} :: { [string]: { [number]: { any } } }, -- by easel, then by user id: the strokes kept
+	counts = {} :: { [string]: { [number]: number } },
+	rate = {} :: { [Player]: { at: number, n: number } },
+	remote = nil :: RemoteEvent?,
+}
+
+local function easelKey(paper: BasePart): string
+	local p = paper.Position
+	return string.format("%d,%d,%d", math.round(p.X), math.round(p.Y), math.round(p.Z))
+end
+
+local function buildEasel(folder: Folder, middleX: number, wallZ: number, y: number)
+	local model = Instance.new("Model")
+	model.Name = "Easel"
+	model.Parent = folder
+	-- Facing into the hall (+Z): a part turned half round has its Front face that way.
+	local turn = CFrame.Angles(0, math.pi, 0)
+	local z = wallZ + 2.2
+	local paperBottom = y + 2.6
+	local paperMid = paperBottom + PAPER.Y / 2
+	local half = PAPER.X / 2 + 0.35
+	local postTop = paperBottom + PAPER.Y + 0.9
+	for _, side in ipairs({ -1, 1 }) do
+		local x = middleX + side * half
+		part(model, "EaselFoot", Vector3.new(0.8, 0.3, 2.6), CFrame.new(x, y + 0.15, z), PALETTE.trim, true, TIMBER)
+		part(model, "EaselPost", Vector3.new(0.5, postTop - y - 0.3, 0.5), CFrame.new(x, (y + 0.3 + postTop) / 2, z),
+			PALETTE.shelf, true, Enum.Material.Wood)
+	end
+	-- The paper's backing board between the posts, and the paper on it.
+	part(model, "EaselBoard", Vector3.new(PAPER.X + 0.2, PAPER.Y + 0.2, 0.3), CFrame.new(middleX, paperMid, z - 0.05) * turn,
+		PALETTE.shelf, true, Enum.Material.Wood)
+	local paper = part(model, "DrawingPaper", Vector3.new(PAPER.X, PAPER.Y, 0.06), CFrame.new(middleX, paperMid, z + 0.13) * turn,
+		Color3.fromRGB(250, 246, 236), true)
+	paper.Material = Enum.Material.SmoothPlastic
+	CollectionService:AddTag(paper, "DrawingPaper")
+	-- The top rail across the posts, its word facing the hall.
+	local rail = part(model, "EaselRail", Vector3.new(PAPER.X + 1.2, 1.1, 0.4), CFrame.new(middleX, postTop - 0.55, z) * turn,
+		PALETTE.trim, true, TIMBER)
+	words(rail, Enum.NormalId.Front, "DRAW", PALETTE.sign)
+	-- EVERYONE'S OR ONLY MINE (the two-hundred-and-thirty-fourth pass, from your note of 2026-11-20: "add the option to hide
+	-- other people's drawings"): a small sign on an arm off the left post, facing the hall, with its own prompt. Each
+	-- player turns it for themselves (DrawingBoard changes its words and the prompt on their screen only).
+	local leftPost = middleX - half
+	local signY = y + 1.7
+	part(model, "EaselSignArm", Vector3.new(1.0, 0.2, 0.2), CFrame.new(leftPost - 0.75, signY + 0.7, z), PALETTE.trim, false,
+		TIMBER)
+	local toggle = part(model, "EaselToggle", Vector3.new(2.2, 1.2, 0.15), CFrame.new(leftPost - 1.45, signY, z) * turn,
+		PALETTE.sign, false)
+	toggle.CanQuery = true
+	words(toggle, Enum.NormalId.Front, "EVERYONE'S", PALETTE.ink)
+	CollectionService:AddTag(toggle, "EaselToggle")
+	local togglePrompt = Instance.new("ProximityPrompt")
+	togglePrompt.Name = "TogglePrompt"
+	togglePrompt.ActionText = "Hide others' drawings"
+	togglePrompt.ObjectText = "Easel"
+	togglePrompt.HoldDuration = 0
+	togglePrompt.MaxActivationDistance = 7
+	togglePrompt.RequiresLineOfSight = false
+	togglePrompt.Parent = toggle
+	-- The tray on the posts under the paper, with a lip, and the pots, the rubber and the sponge standing on it.
+	local trayTop = paperBottom - 0.15
+	part(model, "EaselTray", Vector3.new(PAPER.X + 1.2, 0.25, 1.3), CFrame.new(middleX, trayTop - 0.125, z + 0.75),
+		PALETTE.shelf, true, Enum.Material.Wood)
+	part(model, "EaselTrayLip", Vector3.new(PAPER.X + 1.2, 0.35, 0.12), CFrame.new(middleX, trayTop + 0.05, z + 1.34),
+		PALETTE.shelf, true, Enum.Material.Wood)
+	local step = PAPER.X / (#PAINTS + 2)
+	local function onTray(index: number): number
+		return middleX - PAPER.X / 2 + step * (index - 0.5)
+	end
+	for index, paint in ipairs(PAINTS) do
+		local x = onTray(index)
+		local pot = Instance.new("Part")
+		pot.Name = "PaintPot"
+		pot.Shape = Enum.PartType.Cylinder
+		pot.Size = Vector3.new(0.6, 0.8, 0.8) -- a cylinder's length is X: stood up below
+		pot.CFrame = CFrame.new(x, trayTop + 0.3, z + 0.75) * CFrame.Angles(0, 0, math.pi / 2)
+		pot.Color = Color3.fromRGB(238, 232, 224)
+		pot.Material = Enum.Material.SmoothPlastic
+		pot.Anchored = true
+		pot.CanCollide = false
+		pot.CanTouch = false
+		pot.CanQuery = true
+		pot.Parent = model
+		local paintTop = Instance.new("Part")
+		paintTop.Name = "PaintTop"
+		paintTop.Shape = Enum.PartType.Cylinder
+		paintTop.Size = Vector3.new(0.06, 0.66, 0.66)
+		paintTop.CFrame = CFrame.new(x, trayTop + 0.58, z + 0.75) * CFrame.Angles(0, 0, math.pi / 2)
+		paintTop.Color = paint[2]
+		paintTop.Material = Enum.Material.SmoothPlastic
+		paintTop.Anchored = true
+		paintTop.CanCollide = false
+		paintTop.CanTouch = false
+		paintTop.CanQuery = true
+		paintTop.Parent = pot
+		pot:SetAttribute("Paint", paint[2])
+		pot:SetAttribute("PaintName", paint[1])
+		pot:SetAttribute("PaintIndex", index)
+		CollectionService:AddTag(pot, "PaintPot")
+	end
+	-- The rubber: a pale block. The sponge: a soft yellow one, to wipe the whole sheet.
+	local rubber = part(model, "Rubber", Vector3.new(0.9, 0.35, 0.55), CFrame.new(onTray(#PAINTS + 1), trayTop + 0.175, z + 0.75),
+		Color3.fromRGB(240, 196, 200), false)
+	rubber.CanQuery = true
+	rubber:SetAttribute("Tool", "rubber")
+	CollectionService:AddTag(rubber, "PaintPot")
+	local sponge = part(model, "Sponge", Vector3.new(1.0, 0.45, 0.7), CFrame.new(onTray(#PAINTS + 2), trayTop + 0.225, z + 0.75),
+		Color3.fromRGB(246, 214, 110), false, Enum.Material.Sand)
+	sponge.CanQuery = true
+	sponge:SetAttribute("Tool", "wipe")
+	CollectionService:AddTag(sponge, "PaintPot")
+	-- Roblox's own prompt, on the paper.
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "DrawPrompt"
+	prompt.ActionText = "Draw"
+	prompt.ObjectText = "Easel"
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = paper
+	easel.papers[easelKey(paper)] = paper
 end
 
 -- ===== THE HALL =====
@@ -446,7 +684,7 @@ local function buildHall(folder: Folder, pads: { Pad })
 			-- Its name, on a sign on two legs in the strip in front of it.
 			local signZ = rowZ0 + SIGN_STRIP / 2
 			for _, side in ipairs({ -1.9, 1.9 }) do
-				part(folder, "SignLeg", Vector3.new(0.25, 1.6, 0.25), CFrame.new(cx + side, y + 0.8, signZ), PALETTE.trim, false)
+				part(folder, "SignLeg", Vector3.new(0.25, 1.6, 0.25), CFrame.new(cx + side, y + 0.8, signZ), PALETTE.trim, false, TIMBER)
 			end
 			local board = part(folder, "SignBoard", Vector3.new(5, 1.3, 0.25), CFrame.new(cx, y + 2.2, signZ), PALETTE.sign, false)
 			words(board, Enum.NormalId.Front, spaced(pad.name), PALETTE.ink)
@@ -470,7 +708,7 @@ local function buildHall(folder: Folder, pads: { Pad })
 		{ Vector3.new(2, WALL_HEIGHT, depth), Vector3.new(xA - 1, y + WALL_HEIGHT / 2, cz) },
 		{ Vector3.new(2, WALL_HEIGHT, depth), Vector3.new(xB + 1, y + WALL_HEIGHT / 2, cz) },
 	}) do
-		part(folder, "Wall", w[1], CFrame.new(w[2]), PALETTE.wall, true)
+		part(folder, "Wall", w[1], CFrame.new(w[2]), PALETTE.wall, true, RENDER)
 	end
 	for _, t in ipairs({
 		{ Vector3.new(width, 1, 0.3), Vector3.new(cx, y + 0.5, zA + 0.15) },
@@ -478,9 +716,9 @@ local function buildHall(folder: Folder, pads: { Pad })
 		{ Vector3.new(0.3, 1, depth), Vector3.new(xA + 0.15, y + 0.5, cz) },
 		{ Vector3.new(0.3, 1, depth), Vector3.new(xB - 0.15, y + 0.5, cz) },
 	}) do
-		part(folder, "Skirting", t[1], CFrame.new(t[2]), PALETTE.trim, false)
+		part(folder, "Skirting", t[1], CFrame.new(t[2]), PALETTE.trim, false, TIMBER)
 	end
-	part(folder, "Ceiling", Vector3.new(width + 4, 1.4, depth + 4), CFrame.new(cx, y + WALL_HEIGHT + 0.7, cz), PALETTE.ceiling, true)
+	part(folder, "Ceiling", Vector3.new(width + 4, 1.4, depth + 4), CFrame.new(cx, y + WALL_HEIGHT + 0.7, cz), PALETTE.ceiling, true, RENDER)
 	-- LAMPS on the ceiling, every 30 studs: real lights, warm and modest, and not too many.
 	for lx = xA + 15, xB - 8, 30 do
 		for lz = zA + 15, zEnd - 8, 30 do
@@ -497,7 +735,9 @@ local function buildHall(folder: Folder, pads: { Pad })
 	-- THE LIFT HOME, at the front, its door facing into the hall.
 	local liftBase = CFrame.lookAt(Vector3.new(cx, y, zA + 8), Vector3.new(cx, y, zA + 20))
 	local prompt = buildLift(folder, liftBase, "LOBBY", "Lobby")
-	room.arrive = Vector3.new(cx, y + 3.5, zA + 15)
+	-- (19 studs in, the two-hundred-and-thirty-fourth pass: at 15 the camera behind you stood inside the cabin, whose front is
+	-- at 12.5, and the room's first look was through its bars. The slabs start at 22.)
+	room.arrive = Vector3.new(cx, y + 3.5, zA + 19)
 	prompt.Triggered:Connect(function(player: Player)
 		SquishRoomService.leave(player)
 	end)
@@ -505,6 +745,11 @@ local function buildHall(folder: Folder, pads: { Pad })
 	local shelfOk, shelfErr = pcall(buildShelf, folder, cx - SHELF_LEFT, zA + 0.3, y)
 	if not shelfOk then
 		warn("SquishRoomService: the keepsake shelf failed to build: " .. tostring(shelfErr))
+	end
+	-- THE EASEL against the front wall, right of the lift.
+	local easelOk, easelErr = pcall(buildEasel, folder, cx + EASEL_RIGHT, zA, y)
+	if not easelOk then
+		warn("SquishRoomService: the easel failed to build: " .. tostring(easelErr))
 	end
 end
 
@@ -527,7 +772,7 @@ end
 -- are going (StreamingEnabled is on by default, and a floor 9000 studs away is not on your screen until
 -- asked for), you are set down there, and "arrived" uncovers the screen. Never a fall into a half-loaded
 -- room.
-local function move(player: Player, to: Vector3, after: (() -> ())?)
+local function move(player: Player, to: Vector3, after: (() -> ())?, face: Vector3?)
 	tell(player, "going")
 	task.spawn(function()
 		task.wait(FADE_WAIT)
@@ -536,7 +781,9 @@ local function move(player: Player, to: Vector3, after: (() -> ())?)
 		end)
 		local root = rootOf(player)
 		if root then
-			root.CFrame = CFrame.new(to)
+			-- Facing away from the lift you came out of (into the hall, or out into the garden), so the camera is behind
+			-- you and not in the cabin.
+			root.CFrame = if face then CFrame.lookAt(to, to + face) else CFrame.new(to)
 			root.AssemblyLinearVelocity = Vector3.zero
 		end
 		if after then
@@ -544,6 +791,126 @@ local function move(player: Player, to: Vector3, after: (() -> ())?)
 		end
 		tell(player, "arrived")
 	end)
+end
+
+-- ===== THE EASEL'S STROKES =====
+
+local function easelAll(key: string): { [string]: { any } }
+	local out = {}
+	for id, segments in pairs(easel.logs[key] or {}) do
+		out[tostring(id)] = segments
+	end
+	return out
+end
+
+local function easelHeard(player: Player, kind: any, key: any, batch: any)
+	local remote = easel.remote
+	if not remote or type(kind) ~= "string" or type(key) ~= "string" then
+		return
+	end
+	local paper = easel.papers[key]
+	if not paper then
+		return
+	end
+	local now = os.clock()
+	local rate = easel.rate[player]
+	if not rate or now - rate.at > 1 then
+		rate = { at = now, n = 0 }
+		easel.rate[player] = rate
+	end
+	rate.n += 1
+	if rate.n > EASEL_RATE then
+		return
+	end
+	if kind == "sync" then
+		remote:FireClient(player, "all", key, nil, easelAll(key))
+		return
+	end
+	-- Drawing or wiping: in the room, standing at the easel.
+	local root = rootOf(player)
+	if not player:GetAttribute("InSquishRoom") or not root or (root.Position - paper.Position).Magnitude > 24 then
+		return
+	end
+	local id = player.UserId
+	local logs = easel.logs[key]
+	local counts = easel.counts[key]
+	if not logs or not counts then
+		logs = {}
+		counts = {}
+		easel.logs[key] = logs
+		easel.counts[key] = counts
+	end
+	local kept = logs :: { [number]: { any } }
+	local counted = counts :: { [number]: number }
+	if kind == "wipe" then
+		kept[id] = nil
+		counted[id] = nil
+		remote:FireAllClients("wipe", key, id)
+		return
+	end
+	if kind ~= "draw" or type(batch) ~= "table" then
+		return
+	end
+	local count = counted[id] or 0
+	local clean = {}
+	for index, segment in ipairs(batch) do
+		if index > 24 then
+			break
+		end
+		if type(segment) == "table" and type(segment[1]) == "number" and type(segment[2]) == "table" then
+			local code = math.floor(segment[1])
+			local raw = segment[2]
+			if code >= 1 and code <= EASEL_CODES then
+				local points = {}
+				for j = 1, math.min(#raw, 400) - 1, 2 do
+					local x, y = raw[j], raw[j + 1]
+					if type(x) == "number" and type(y) == "number" and x == x and y == y then
+						table.insert(points, math.clamp(math.floor(x), 0, EASEL_SHEET.X - 1))
+						table.insert(points, math.clamp(math.floor(y), 0, EASEL_SHEET.Y - 1))
+					end
+				end
+				if #points >= 2 and count + #points / 2 <= EASEL_MAX_POINTS then
+					count += #points / 2
+					table.insert(clean, { code, points })
+				end
+			end
+		end
+	end
+	if #clean == 0 then
+		return
+	end
+	local mine = kept[id]
+	if not mine then
+		mine = {}
+		kept[id] = mine
+	end
+	for _, segment in ipairs(clean) do
+		table.insert(mine :: { any }, segment)
+	end
+	counted[id] = count
+	for _, other in ipairs(Players:GetPlayers()) do
+		if other ~= player then
+			remote:FireClient(other, "draw", key, id, clean)
+		end
+	end
+end
+
+local function easelLeft(player: Player)
+	easel.rate[player] = nil
+	local id = player.UserId
+	local remote = easel.remote
+	for key, logs in pairs(easel.logs) do
+		if logs[id] then
+			logs[id] = nil
+			local counts = easel.counts[key]
+			if counts then
+				counts[id] = nil
+			end
+			if remote then
+				remote:FireAllClients("gone", key, id)
+			end
+		end
+	end
 end
 
 function SquishRoomService.enter(player: Player)
@@ -563,7 +930,8 @@ function SquishRoomService.enter(player: Player)
 	end
 	-- Out of the lobby's vote from this moment.
 	player:SetAttribute("InSquishRoom", true)
-	move(player, arrive)
+	-- Facing a little to the right of straight down the hall: straight ahead, the camera behind you stood in the lift.
+	move(player, arrive, nil, Vector3.new(0.77, 0, 0.64))
 end
 
 function SquishRoomService.leave(player: Player)
@@ -575,7 +943,7 @@ function SquishRoomService.leave(player: Player)
 	end
 	move(player, back, function()
 		player:SetAttribute("InSquishRoom", nil)
-	end)
+	end, Vector3.new(1, 0, 0))
 end
 
 function SquishRoomService.isInRoom(player: Player): boolean
@@ -590,6 +958,20 @@ function SquishRoomService.build(hubOrigin: Vector3)
 	end
 	room.built = true
 	room.remote = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("SquishRoom") :: RemoteEvent
+	-- THE EASEL'S STROKES, shared (the two-hundred-and-thirty-third pass).
+	local easelRemote = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("Easel", 10)
+	if easelRemote and easelRemote:IsA("RemoteEvent") then
+		easel.remote = easelRemote
+		easelRemote.OnServerEvent:Connect(function(player: Player, kind: any, key: any, batch: any)
+			local ok, err = pcall(easelHeard, player, kind, key, batch)
+			if not ok then
+				warn("SquishRoomService: the easel: " .. tostring(err))
+			end
+		end)
+		Players.PlayerRemoving:Connect(easelLeft)
+	else
+		warn("SquishRoomService: no RemoteEvents.Easel; the easel's drawings stay each player's own.")
+	end
 
 	-- THE LOBBY'S LIFT, in the garden, its door towards the garden's middle (+X).
 	local hub = workspace:FindFirstChild("Hub")
@@ -656,8 +1038,12 @@ function SquishRoomService.build(hubOrigin: Vector3)
 		end
 	end
 	buildHall(folder, pads)
+	local dressOk, dressErr = pcall(MaterialAppearance.dress, folder)
+	if not dressOk then
+		warn("SquishRoomService: the room's surfaces were not put on: " .. tostring(dressErr))
+	end
 	print(("SquishRoomService: the squish room is open, %d materials."):format(#pads))
 end
 
-SquishRoomService.STAMP = "87302c64"
+SquishRoomService.STAMP = "d1cb07b5"
 return SquishRoomService

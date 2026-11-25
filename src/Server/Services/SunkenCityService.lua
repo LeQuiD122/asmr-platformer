@@ -257,7 +257,7 @@ local FUNNEL_DEPTH = 16
 local CAPTURE_R = 20
 local DRAIN_R = 7
 local SHAFT_DEPTH = 60 -- under the sea floor; the rider ends at the bottom, in the dark
-local DRAIN_SECONDS = 13
+local DRAIN_SECONDS = 12
 
 -- ===== Colours =====
 local DEEP = Color3.fromRGB(24, 50, 56)
@@ -365,9 +365,46 @@ local function ellipsoid(parent: Instance, name: string, size: Vector3, cf: CFra
 	return part
 end
 
-local function cityBlock(parent: Instance, name: string, size: Vector3, cf: CFrame, colour: Color3,
-	material: Enum.Material?): Part
-	return block(parent, name, size, cf, drowned(colour, cf.Position.Y), material or Enum.Material.SmoothPlastic, false)
+-- WHAT THE CITY IS BUILT OF (the hundred-and-seventy-fourth pass): its houses and flats rendered, its offices and its
+-- stone dressings cast, its roofs slate, its church and clock tower coursed stone, its warehouses brick, its boards and
+-- benches timber, so each wears its surface (Harrow Bay's once they are made, MaterialAppearance.dress; Roblox's own
+-- until then). It was all plain plastic, which no surface reaches. A piece not named here, or given a material where
+-- it is built, is as it was: the cars, the trams, the boats, the signs and the growth on everything. The table is
+-- inside its own block, kept by cityBlock alone: this file is one local short of Luau's 200 (check_lua).
+local cityBlock: (parent: Instance, name: string, size: Vector3, cf: CFrame, colour: Color3,
+	material: Enum.Material?) -> Part
+do
+	local BUILT_OF: { [string]: Enum.Material } = {
+		Flats = Enum.Material.Plaster, FlatWall = Enum.Material.Plaster, Partition = Enum.Material.Plaster,
+		House = Enum.Material.Plaster, Chimney = Enum.Material.Plaster, Apartments = Enum.Material.Plaster,
+		RoofHouse = Enum.Material.Plaster, Broken = Enum.Material.Plaster,
+		Office = Enum.Material.Concrete, Setback = Enum.Material.Concrete, Crown = Enum.Material.Concrete,
+		CrownFin = Enum.Material.Concrete, PlantRoom = Enum.Material.Concrete, Sill = Enum.Material.Concrete,
+		Cornice = Enum.Material.Concrete, Parapet = Enum.Material.Concrete, Pilaster = Enum.Material.Concrete,
+		StringCourse = Enum.Material.Concrete, ArchSurround = Enum.Material.Concrete, Quoin = Enum.Material.Concrete,
+		Pinnacle = Enum.Material.Concrete, LoadingBank = Enum.Material.Concrete, DrainCollar = Enum.Material.Concrete,
+		Roof = Enum.Material.Slate, FlatRoof = Enum.Material.Slate, FallenRoof = Enum.Material.Slate,
+		StairHead = Enum.Material.Slate, NaveRoof = Enum.Material.Slate, BelfryRoof = Enum.Material.Slate,
+		Nave = Enum.Material.Rock, Buttress = Enum.Material.Rock, ChurchTower = Enum.Material.Rock,
+		ClockTower = Enum.Material.Rock, ClockStage = Enum.Material.Rock, BelfryPier = Enum.Material.Rock,
+		BelfryLintel = Enum.Material.Rock, BelfryFloor = Enum.Material.Rock, Rubble = Enum.Material.Rock,
+		Warehouse = Enum.Material.Brick, SawRidge = Enum.Material.Brick, Bare = Enum.Material.Brick,
+		Boards = Enum.Material.WoodPlanks, Plank = Enum.Material.WoodPlanks, Table = Enum.Material.Wood,
+		BenchSeat = Enum.Material.Wood, BenchBack = Enum.Material.Wood,
+		Sandbag = Enum.Material.Fabric, Bed = Enum.Material.Fabric, Blanket = Enum.Material.Fabric,
+	}
+	cityBlock = function(parent: Instance, name: string, size: Vector3, cf: CFrame, colour: Color3,
+		material: Enum.Material?): Part
+		local made = block(parent, name, size, cf, drowned(colour, cf.Position.Y),
+			material or BUILT_OF[name] or Enum.Material.SmoothPlastic, false)
+		-- WHICH BUILDING IT IS (the hundred-and-ninety-second pass): the lot's number, set on the folder as each building is
+		-- begun, so all of one building wears the same one of its surface's pool (MaterialAppearance.WORLD_SURFACES).
+		local look = parent:GetAttribute("Look")
+		if typeof(look) == "number" then
+			made:SetAttribute("Look", look)
+		end
+		return made
+	end
 end
 
 -- An upright cylinder from `bottom` to `top` at `at`'s X and Z, in pieces when it is longer than a
@@ -1640,6 +1677,8 @@ local function city(parent: Instance, route: Route, floorY: number, blocked: (Ve
 							local offset = -frontage / 2 + (index - 0.5) * lotW
 							local lot = frame * CFrame.new(0, 0, offset)
 							local w, d = lotW - 6, depth - 10
+							-- Each building its own number, for its surfaces (cityBlock): no draw, so nothing else moves.
+							parent:SetAttribute("Look", (parent:GetAttribute("Look") or 0) + 1)
 							local pick = rng:NextNumber()
 							if near < 320 then
 								if not churchDone and near > 150 and pick > 0.94 and clearOfRoute then
@@ -1984,6 +2023,39 @@ function streetKit.boat(parent: Instance, at: CFrame, rng: Random): Model
 	return model
 end
 
+-- ===== WHAT THE STREETS STILL HAVE IN THEM (the hundred-and-eighty-sixth pass) =====
+--
+-- From your note of 2026-11-04: "use your new skills to generate better looking ... models and stuff for the existing
+-- levels". Made in Studio's mesh generator and kept in ReplicatedStorage/Assets/Props, each its one mesh at the origin: a
+-- green cast-iron harbour lamp, a barnacled anchor, a stack of lobster pots. Nil when it is not there, and the street is
+-- as it was. (The rowboats stay the rigged ones, which ride the swell.)
+function streetKit.made(name: string): BasePart?
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local folder = assets and assets:FindFirstChild("Props")
+	local model = folder and folder:FindFirstChild(name)
+	local mesh = model and model:FindFirstChildWhichIsA("BasePart")
+	return mesh
+end
+
+-- One of them, standing on `feet` (its bottom there, turned and leaned as `feet` is), `tall` studs high, nothing of it
+-- colliding, touched or in the camera's way.
+function streetKit.place(parent: Instance, name: string, feet: CFrame, tall: number): BasePart?
+	local template = streetKit.made(name)
+	if not template then
+		return nil
+	end
+	local piece = template:Clone()
+	piece.Name = name
+	piece.Size = template.Size * (tall / template.Size.Y)
+	piece.CFrame = feet * CFrame.new(0, piece.Size.Y / 2, 0)
+	piece.Anchored = true
+	piece.CanCollide = false
+	piece.CanTouch = false
+	piece.CanQuery = false
+	piece.Parent = parent
+	return piece
+end
+
 function streetKit.sideStreets(parent: Instance, route: Route, floorY: number, rng: Random,
 	blocked: (Vector3, number) -> boolean): number
 	local pitch = BLOCK + STREET
@@ -2023,6 +2095,22 @@ function streetKit.sideStreets(parent: Instance, route: Route, floorY: number, r
 						end
 						things += 1
 					end
+					-- AND A LAMP ON THE CORNER ACROSS FROM IT, still standing on the drowned pavement, seen down through
+					-- the water from the route (streetKit.place).
+					local lampFoot = spot - route.forward * (STREET / 2 + 1.2)
+					if not blocked(lampFoot, 3) and streetKit.place(parent, "City_Lamp", CFrame.new(lampFoot.X, floorY, lampFoot.Z)
+						* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0), 16) then
+						things += 1
+					end
+				end
+				-- An anchor dropped in the street now and then, lying where it fell, half in the silt.
+				if row % 3 == 0 and step == 40 then
+					local fell = spot + route.forward * rng:NextNumber(-6, 6)
+					if not blocked(fell, 6) and streetKit.place(parent, "City_Anchor", CFrame.new(fell.X, floorY - 1.2, fell.Z)
+						* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0) * CFrame.Angles(math.rad(rng:NextNumber(62, 78)), 0, 0),
+						8) then
+						things += 1
+					end
 				end
 				-- Poles every 36 studs down one side, from past the pavement to 250 out.
 				if row % 2 == 0 and near >= 70 and near <= 250 and step % 12 == 0 then
@@ -2040,6 +2128,12 @@ function streetKit.sideStreets(parent: Instance, route: Route, floorY: number, r
 						streetKit.boat(parent, heading * CFrame.Angles(0, rng:NextNumber(-0.3, 0.3), 0), rng)
 						boats += 1
 						things += 1
+						-- Its pots, gone down where it was moored, on the street under it.
+						local pots = where + route.side * sign * 5
+						if not blocked(pots, 3) and streetKit.place(parent, "City_LobsterPots",
+							CFrame.new(pots.X, floorY, pots.Z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0), 4) then
+							things += 1
+						end
 					end
 				end
 			end
@@ -3118,6 +3212,46 @@ local function aquarium(parent: Instance, frame: CFrame, floorY: number, rng: Ra
 			column(parent, "TunnelPillar", 1.6, at, floorY, tunnelY - 1, STONE, true)
 		end
 	end
+	-- THE TUNNEL'S MOUTHS, CLOSED ROUND IT (the two-hundred-and-fifth pass, from your note of 2026-11-07: "I don't want
+	-- these holes where the aquarium triangle transfer starts"). The doorways the tunnel runs through, in the tower's round
+	-- wall and the gallery's back wall, are cut square, and the tunnel is shaped like a house: glass sides, then a pointed
+	-- roof. So beside the roof at each end two triangles of open water showed, and a slit down each side. Each mouth is
+	-- filled round the tunnel now: a slab down each side out past the doorway's edge, a wedge under each slope of the roof
+	-- (a wedge's slope follows the roof line exactly: measured, from inside the tunnel the first thing met is the roof),
+	-- and a band over the ridge up to the doorway's top.
+	local function mouth(x: number, thick: number, open: number, top: number, colour: Color3)
+		local glassOut = half + 0.2
+		if open > glassOut then
+			for _, side in ipairs({ -1, 1 }) do
+				block(parent, "TunnelMouth", Vector3.new(thick, top - (ty - 0.5), open - glassOut),
+					frame * CFrame.new(x, (top + ty - 0.5) / 2, side * (glassOut + open) / 2), colour, Enum.Material.Concrete, true)
+			end
+		end
+		for _, side in ipairs({ -1, 1 }) do
+			local wedge = Instance.new("WedgePart")
+			wedge.Name = "TunnelMouth"
+			wedge.Size = Vector3.new(thick, ridge, half)
+			wedge.CFrame = frame * CFrame.new(x, ty + 6 + ridge / 2, side * half / 2)
+				* (if side < 0 then CFrame.Angles(math.pi, 0, 0) else CFrame.Angles(0, 0, math.pi))
+			wedge.Color = colour
+			wedge.Material = Enum.Material.Concrete
+			wedge.Anchored = true
+			wedge.CanCollide = true
+			wedge.CanTouch = false
+			wedge.TopSurface = Enum.SurfaceType.Smooth
+			wedge.BottomSurface = Enum.SurfaceType.Smooth
+			wedge.Parent = parent
+		end
+		if top > ty + 6 + ridge then
+			block(parent, "TunnelMouth", Vector3.new(thick, top - (ty + 6 + ridge), 2 * glassOut),
+				frame * CFrame.new(x, (top + ty + 6 + ridge) / 2, 0), colour, Enum.Material.Concrete, true)
+		end
+	end
+	-- The tower's: its doorway is three of the wall's segments wide and the wall curves through it, so the slabs are as
+	-- thick as the curve is deep there and reach a stud past the doorway's edge into the wall either side.
+	mouth(xc + ROT_R - ROT_WALL / 2 - 0.5, ROT_WALL + 2.4, ROT_R * math.sin(math.pi * 3 / ROT_SEGMENTS) + 1,
+		ty + TUNNEL_H + 0.6, drowned(STONE, tunnelY + TUNNEL_H / 2))
+
 	-- THE LIGHT IN THE TUNNEL. Two lamps in a sixty-four stud tube left most of it dark and the
 	-- glass reading as slate. A strip along the ridge every bay instead -- a real fitting, set into
 	-- the roof, with a small light in every third one -- lights the whole run and, more to the
@@ -3238,6 +3372,8 @@ local function aquarium(parent: Instance, frame: CFrame, floorY: number, rng: Ra
 	end
 	block(parent, "GalleryLintel", Vector3.new(1, ROOM_H - TUNNEL_H, TUNNEL_W + 1.2),
 		room * CFrame.new(-ROOM_L / 2 - 0.5, ty + TUNNEL_H + (ROOM_H - TUNNEL_H) / 2, 0), wallColour, Enum.Material.Concrete, true)
+	-- And the tunnel's mouth into it, closed round the tunnel as the tower's is (above).
+	mouth(tunnelTo - 0.8, 1.2, TUNNEL_W / 2 + 0.6, ty + TUNNEL_H, wallColour)
 	block(parent, "GallerySill", Vector3.new(1, 2.5, 10), room * CFrame.new(ROOM_L / 2 + 0.5, ty + 1.25, 0), wallColour,
 		Enum.Material.Concrete, true)
 	block(parent, "GalleryLintel", Vector3.new(1, ROOM_H - 8.5, 10), room * CFrame.new(ROOM_L / 2 + 0.5, ty + 8.5 + (ROOM_H - 8.5) / 2, 0),
@@ -3537,6 +3673,31 @@ local function aquarium(parent: Instance, frame: CFrame, floorY: number, rng: Ra
 		frame * CFrame.new(xc, (roofY + tunnelY) / 2 - landingY, 0), FOAM, Enum.Material.SmoothPlastic, false)
 	towerShelter.Transparency = 1
 	CollectionService:AddTag(towerShelter, "SunkenShelter")
+	-- THE CAMERA STAYS IN WITH YOU (the two-hundred-and-fifth pass, from your note of 2026-11-07: "I don't want my camera
+	-- to be able to move beyond the aquarium's glass because it ruins the vibe, want the player to feel like they are
+	-- inside this aquarium"). The camera stands back from you and steps in only for what is solid, and the glass is
+	-- see-through, so it stood out in the water looking in. These are the rooms it keeps to while you are in one of them
+	-- (ViewModeService): the tower, the tunnel inside its glass (and a narrower room up under its ridge), reaching back
+	-- into the tower so the two meet, and the gallery. Those under the water are MURKY too: while you are in them the sea
+	-- outside is thick and dark and you cannot see far into it (SunkenCityClient).
+	local function cameraRoom(size: Vector3, cf: CFrame, murky: boolean)
+		local keep = block(parent, "CameraRoom", size, cf, FOAM, Enum.Material.SmoothPlastic, false)
+		keep.Transparency = 1
+		keep.CanQuery = false
+		keep:SetAttribute("Murk", murky)
+		CollectionService:AddTag(keep, "CameraRoom")
+	end
+	local square = (ROT_R - ROT_WALL) * 2 * 0.7 -- the square inside the tower's round wall
+	cameraRoom(Vector3.new(square, waterLevel - tunnelY, square),
+		CFrame.new(towerAt.Position.X, (tunnelY + waterLevel) / 2, towerAt.Position.Z), true)
+	cameraRoom(Vector3.new(square, roofY - waterLevel, square),
+		CFrame.new(towerAt.Position.X, (waterLevel + roofY) / 2, towerAt.Position.Z), false)
+	local tunnelBack = xc + square / 2 - 1
+	cameraRoom(Vector3.new(tunnelTo + 0.5 - tunnelBack, 5.7, TUNNEL_W - 0.4),
+		frame * CFrame.new((tunnelBack + tunnelTo + 0.5) / 2, ty + 3, 0), true)
+	cameraRoom(Vector3.new(TUNNEL_L, ridge * 0.7, half * 0.5),
+		frame * CFrame.new((tunnelFrom + tunnelTo) / 2, ty + 6 + ridge * 0.35, 0), true)
+	cameraRoom(Vector3.new(ROOM_L - 0.6, ROOM_H - 0.6, ROOM_W - 0.6), room * CFrame.new(0, ty + ROOM_H / 2, 0), true)
 	-- A STORY SPOT against the gallery's side wall, well away from the attendant's way out: a staff
 	-- locker goes there (StoryService). Its front faces into the room.
 	local lockerSpot = block(parent, "StorySpot", Vector3.new(1, 1, 1), room * CFrame.new(-5, ty, -ROOM_W / 2 + 0.7)
@@ -3574,7 +3735,8 @@ end
 -- is the flooded floor under the dry flat, and that is Roblox terrain water, which is GLOBAL and not
 -- built per run: every fill is remembered here and cleared when the level goes, as Sky Pools does
 -- with its pools, and the water's look is put back as it was found.
-local swimWater = { fills = {} :: { { cf: CFrame, size: Vector3 } }, was = {} :: { [string]: any } }
+local swimWater = { fills = {} :: { { cf: CFrame, size: Vector3 } }, was = {} :: { [string]: any },
+	watch = nil :: { shelters: { BasePart }, water: number }? }
 
 -- Dark and green, the colour of a flooded room, not of a pool; the look is remembered as found.
 function swimWater.look()
@@ -3737,7 +3899,9 @@ local function dryFlat(parent: Instance, frame: CFrame, floorY: number): Flat
 	block(parent, "Fridge", Vector3.new(1.6, 4.2, 1.6), put(b0 + 2, landingY + 2.1, hz - 1.6), Color3.fromRGB(226, 226, 220), Enum.Material.SmoothPlastic, true)
 	local calendar = block(parent, "Calendar", Vector3.new(0.1, 2.6, 2), put(b0 + 0.85, landingY + 4.8, -6), Color3.fromRGB(236, 232, 218),
 		Enum.Material.SmoothPlastic, false)
-	label(calendar, Enum.NormalId.Right, "THURSDAY 16\n\nThe water will not come up this far.\nManagement", Color3.fromRGB(60, 50, 40))
+	-- THE DAY IT IS (the hundred-and-forty-eighth pass): the fourteenth, the one day the Hold keeps; it said the sixteenth, a
+	-- day that never comes. A Thursday: the milk still comes (never on a Sunday), and Tobi said "after the weekend".
+	label(calendar, Enum.NormalId.Right, "THURSDAY 14\n\nThe water will not come up this far.\nManagement", Color3.fromRGB(60, 50, 40))
 
 	-- THE STAIRWELL: a railing round the hole and a spiral down to where the water starts. Then the
 	-- water, which is real water now: swim down the shaft, through the doorway at its foot and into
@@ -5137,6 +5301,11 @@ local arrivedAt: { [Player]: number } = {}
 -- captions read) and then six seconds more, and a rider caught by the plane in between is put back on
 -- the route in the middle of the last scene.
 function SunkenCityService.ownsFall(player: Player): boolean
+	-- ONLY ON THIS LEVEL (the hundred-and-seventy-eighth pass): a ride left behind must not keep the next level's falls
+	-- uncaught.
+	if player:GetAttribute("InLevel") ~= "sunkenCity" then
+		return false
+	end
 	if riding[player] then
 		return true
 	end
@@ -5216,6 +5385,14 @@ local function ride(player: Player, root: BasePart, humanoid: Humanoid, vortex: 
 	riding[player] = true
 	arrivedAt[player] = nil
 	drawing[player] = nil
+	-- STILL HERE (the hundred-and-seventy-eighth pass): left during the drain or the reveal, the ride used to set you down
+	-- at the outfall where the level had been and then finish a run that was already over (your Output of 2026-11-04,
+	-- "attempt to index nil with 'levelId'"). It moves you and says you arrived only while you are still on this level.
+	local body = player.Character
+	local function stillHere(): boolean
+		return player.Parent ~= nil and root.Parent ~= nil and player.Character == body
+			and player:GetAttribute("InLevel") == "sunkenCity"
+	end
 	humanoid.PlatformStand = true
 	splash(Vector3.new(root.Position.X, waterLevel, root.Position.Z))
 	local rush = sound(root, "DrainRush", WATER_SOUND, 0.65, 0.6, 60, true)
@@ -5411,9 +5588,10 @@ local function ride(player: Player, root: BasePart, humanoid: Humanoid, vortex: 
 		end
 		table.clear(turned)
 	end
-	while root.Parent do
+	while root.Parent and stillHere() do
 		local t = workspace:GetServerTimeNow() - began
-		local u = t / seconds
+		-- Quicker through the funnel than down the shaft, as the rider's own client draws it (SunkenPath.FUNNEL_TIME).
+		local u = if SunkenPath and SunkenPath.drainShare then SunkenPath.drainShare(t, seconds) else t / seconds
 		if t >= total then
 			break
 		end
@@ -5461,7 +5639,7 @@ local function ride(player: Player, root: BasePart, humanoid: Humanoid, vortex: 
 	end
 	giveBack()
 	trail:Destroy()
-	if root.Parent then
+	if root.Parent and stillHere() then
 		-- Set down: on the station's landing on their feet, or (with no outfall) in the sluice.
 		root.CFrame = if outfall and SunkenPath then SunkenPath.outfallFrame(outfall.path, 1, os.clock())
 			else CFrame.new(vortex.X, spec.bottomY, vortex.Z)
@@ -5485,13 +5663,17 @@ local function ride(player: Player, root: BasePart, humanoid: Humanoid, vortex: 
 	humanoid.PlatformStand = false
 	riding[player] = nil
 	drawing[player] = nil
+	if not stillHere() then
+		arrivedAt[player] = nil
+		return
+	end
 	arrivedAt[player] = os.clock()
 	-- THE REVEAL: the station held on screen (SunkenCityClient plays it), and then the level is over --
 	-- the card, and a few seconds to look round before the lobby.
 	if outfall and SunkenPath and SunkenPath.REVEAL_SECONDS then
 		task.wait(SunkenPath.REVEAL_SECONDS)
 	end
-	if onArrive then
+	if onArrive and stillHere() then
 		onArrive(player)
 	end
 end
@@ -6428,6 +6610,8 @@ function SunkenCityService.attach(model: Model, onArrive: PlayerCallback?, onTak
 	local sea = model:FindFirstChild("Sea")
 	local path = if sea and SunkenPath then SunkenPath.read(sea) else nil
 	local shelters = tagged(model, "SunkenShelter")
+	-- What underSea needs (the hundred-and-eightieth pass): where it is meant to be under the water, and how high it is.
+	swimWater.watch = { shelters = shelters, water = waterLevel }
 	local mirrorZones = tagged(model, "SunkenMirrorZone")
 	local washed = -1
 	local lingering: { [Player]: number } = {}
@@ -6520,7 +6704,54 @@ function SunkenCityService.attach(model: Model, onArrive: PlayerCallback?, onTak
 		end
 		table.clear(arrivedAt)
 		SunkenCityService.clearWater()
+		swimWater.watch = nil
 	end
+end
+
+-- ===== UNDER THE SEA IS A FALL (the hundred-and-eightieth pass) =====
+--
+-- From your test of 2026-11-04: "I also fall through the level for some reason in some area of level 3 instead of
+-- respawning". The sea is parts you see through, not water you swim in, so a fall off the route went on down through it
+-- into the drowned streets, forty studs above the kill plane, and nothing put you back. Now anyone more than `catch`
+-- studs under the surface is caught as any fall is (Bootstrap's kill plane asks this), unless they are somewhere meant to
+-- be under it: the aquarium's tower, tunnel and gallery and the dry flat (the shelters), the flooded floor you swim in
+-- under the flat (its water), or the drain, which owns its own fall.
+function SunkenCityService.underSea(player: Player): boolean
+	local catch = 4
+	local watch = swimWater.watch
+	if not watch or player:GetAttribute("InLevel") ~= "sunkenCity" or riding[player] or arrivedAt[player] then
+		return false
+	end
+	local root = rootOf(player)
+	if not root then
+		return false
+	end
+	local p = root.Position
+	if p.Y > watch.water - catch then
+		return false
+	end
+	-- WITH A MARGIN ROUND EVERY SHELTER (the hundred-and-ninetieth pass, from your test of 2026-11-05: "the glass tunnel
+	-- ... on its entrance teleports me back to the safe chunk near the aquarium"). The tower's inside and the tunnel's are
+	-- two boxes with the tower's wall between them, and the doorway through it was in neither: you were caught as you
+	-- stepped through, every time. Eight studs round each box takes in the wall, the doorway and the tunnel's mouth.
+	local margin = 8
+	for _, box in ipairs(watch.shelters) do
+		if box.Parent then
+			local q = box.CFrame:PointToObjectSpace(p)
+			local half = box.Size / 2 + Vector3.new(margin, margin, margin)
+			if math.abs(q.X) <= half.X and math.abs(q.Y) <= half.Y and math.abs(q.Z) <= half.Z then
+				return false
+			end
+		end
+	end
+	for _, fill in ipairs(swimWater.fills) do
+		local inside = fill.cf:PointToObjectSpace(p)
+		if math.abs(inside.X) <= fill.size.X / 2 + 2 and math.abs(inside.Y) <= fill.size.Y / 2 + 3
+			and math.abs(inside.Z) <= fill.size.Z / 2 + 2 then
+			return false
+		end
+	end
+	return true
 end
 
 Players.PlayerRemoving:Connect(function(player: Player)
@@ -6529,5 +6760,5 @@ Players.PlayerRemoving:Connect(function(player: Player)
 	arrivedAt[player] = nil
 end)
 
-SunkenCityService.STAMP = "1f4fbbe3"
+SunkenCityService.STAMP = "e6a3eb71"
 return SunkenCityService

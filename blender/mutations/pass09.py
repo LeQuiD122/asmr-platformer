@@ -15,8 +15,9 @@ MUTATIONS = [
     ("the serpent fatter than the service's girth", SERPENT, CITY, "GIRTH = 8.0          #", "GIRTH = 9.0          #"),
     ("the serpent's fluke measured at too small a turn", SERPENT, CITY, "SWAY_TURN = 0.42     #", "SWAY_TURN = 0.3      #"),
     ("the serpent rolling over where it turns back", CLIENT, CITY,
-     "SeaRig.follow(mesh.chain, mesh.rig.rest, joints, true, mesh.posed)",
-     "SeaRig.follow(mesh.chain, mesh.rig.rest, joints, false, mesh.posed)"),
+     # (the two-hundred-and-second pass: it is rolled through its turns too, with its across)
+     "SeaRig.follow(mesh.chain, mesh.rig.rest, joints, true, mesh.posed, mesh.across)",
+     "SeaRig.follow(mesh.chain, mesh.rig.rest, joints, false, mesh.posed, mesh.across)"),
     ("the serpent never moved", CLIENT, CITY, "if b and (#segments > 0 or thingMesh) then", "if b and #segments > 0 then"),
     ("the serpent's fluke into the dry flat", EXTENTS, CITY, '"side_reach": 7.669', '"side_reach": 12.0'),
     ("the mood written every frame", CLIENT, CITY, "if key == moodWritten and shade then", "if false then"),

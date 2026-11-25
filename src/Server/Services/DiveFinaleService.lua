@@ -557,6 +557,12 @@ end
 -- True while this module is responsible for where the player is: falling inside the circle, or
 -- taken over by the server after it. The kill plane leaves both alone.
 function DiveFinaleService.ownsFall(player: Player): boolean
+	-- ONLY ON A LEVEL (the hundred-and-seventy-eighth pass): a dive left behind must not keep the next level's falls
+	-- uncaught.
+	local level = player:GetAttribute("InLevel")
+	if level == nil or level == "backRooms" then
+		return false
+	end
 	return diving[player] == true or committed[player] == true
 end
 
@@ -582,5 +588,5 @@ function DiveFinaleService.stop()
 	table.clear(committed)
 end
 
-DiveFinaleService.STAMP = "f9e1544f"
+DiveFinaleService.STAMP = "4e31aa6b"
 return DiveFinaleService

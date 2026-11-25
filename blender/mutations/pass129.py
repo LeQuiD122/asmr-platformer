@@ -12,13 +12,14 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]  # blender/mutations/ -> the project
 S = ROOT / "src"
+APPEAR = S / "Shared/MaterialAppearance.lua"
 BOOT = S / "Server/Bootstrap.server.lua"
 BUILDER = S / "Server/ChunkBuilder.server.lua"
 INTERACT = S / "Server/Services/Interactables.lua"
 POSES = S / "Shared/Poses.lua"
 SHORE = S / "Client/Services/CityShoreClient.lua"
 STORYC = S / "Client/Services/StoryClient.lua"
-HUB, SHOTS, STORY, PARSE = "check_hub.py", "check_shots.py", "check_story.py", "check_luau_syntax.py"
+FEEL, HUB, SHOTS, STORY, PARSE = "check_feel.py", "check_hub.py", "check_shots.py", "check_story.py", "check_luau_syntax.py"
 
 
 def run(checker):
@@ -26,7 +27,7 @@ def run(checker):
                           cwd=str(ROOT / "blender"))
 
 
-for checker in (HUB, SHOTS, STORY, PARSE):
+for checker in (FEEL, HUB, SHOTS, STORY, PARSE):
     if run(checker).returncode != 0:
         sys.exit("%s fails before anything is mutated; fix that first" % checker)
 
@@ -51,8 +52,8 @@ MUTATIONS = [
     ('no air', SHORE, STORY, 'burst:Emit(140)', 'burst:Emit(0)'),
     ("Maren's shot too far, not restated", SHORE, SHOTS, 'head + toward * 6 + Vector3.new(-toward.Z, 0, toward.X) * 1.5', 'head + toward * 9 + Vector3.new(-toward.Z, 0, toward.X) * 1.5'),
     ('a glass case of butter', BUILDER, STORY, 'ButterWax = { whiten = 0.5, transparency = 0.06, reflectance = 0.12 },', 'ButterWax = { whiten = 0.62, transparency = 0.3, reflectance = 0.10 },'),
-    ('the sticks in glass', BUILDER, STORY, 'ButterStick = { whiten = 0.35, transparency = 0.06, reflectance = 0.12 },', 'ButterStick = { whiten = 0.35, transparency = 0.3, reflectance = 0.12 },'),
-    ("the strike's sounds not looked for", BOOT, HUB, '"PoolsSong", "BarStrike", "BrickBurst" }', '"PoolsSong" }'),
+    ('the sticks in glass', APPEAR, FEEL, '\tButterStick = {\n\t\tcolor = Color3.fromRGB(248, 232, 168),\n\t\tmaterial = Enum.Material.SmoothPlastic,\n\t\ttransparency = 0,', '\tButterStick = {\n\t\tcolor = Color3.fromRGB(248, 232, 168),\n\t\tmaterial = Enum.Material.SmoothPlastic,\n\t\ttransparency = 0.3,'),
+    ("the strike's sounds not looked for", BOOT, HUB, '"PoolsSong", "BarStrike", "BrickBurst", "CheckpointChime_x3",', '"PoolsSong", "CheckpointChime_x3",'),
     ('a name never declared', SHORE, PARSE, 'foam.Shape = Enum.PartType.Cylinder', 'foams.Shape = Enum.PartType.Cylinder'),
 ]
 

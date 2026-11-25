@@ -53,8 +53,8 @@ MUTATIONS = [
      "screen.IgnoreGuiInset = true"),
     ("the best times over the thumbstick", UI, CHECK, "leaderboard.Position = UDim2.new(0, SPACE.xl, 0, SPACE.xl)",
      "leaderboard.Position = UDim2.new(0, SPACE.xl, 1, -SPACE.xl)"),
-    ("the clock over the jump button", UI, CHECK, "timerPanel.Position = UDim2.new(1, -SPACE.xl, 0, top + 26 + SPACE.sm)",
-     "timerPanel.Position = UDim2.new(1, -SPACE.xl, 1, -SPACE.xl)"),
+    ("the clock over the jump button", UI, CHECK, 'timerPanel.Position = UDim2.new(1, -SPACE.xl, 0, top + MODE_TALL + SPACE.sm)',
+     'timerPanel.Position = UDim2.new(1, -SPACE.xl, 1, -SPACE.xl)'),
     # The code still reads.
     ("a name never declared in the pause menu", PAUSE, PARSE, "\t\tif usingPad() and firstButton then",
      "\t\tif usingPad() and firstButon then"),

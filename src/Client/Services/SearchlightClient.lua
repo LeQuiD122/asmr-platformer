@@ -27,6 +27,11 @@ local THING_RISE, THING_HOLD, THING_SINK = 9, 12, 10
 
 local S = 1.5 -- the launch is laid out below at 1:1, and built at this scale
 local BEAM_LONGEST = 190
+-- THE HAZE IS SHORT (the hundred-and-eighty-first pass, from your test of 2026-11-04: "big white horizontal columns").
+-- The beam drawn through the air ran the whole 190 studs to the water, twenty studs wide at its end and a third opaque at
+-- the lamp: from the route it was a white column laid across the harbour. Now the haze is the first HAZE_LONGEST studs
+-- only, thin and faint, and the light still reaches as far as it did (the lamp, and the pool where it meets the water).
+local HAZE_LONGEST = 55
 local LAMP_HEIGHT = 5.8 -- the lamp's middle above the waterline, before scaling
 local LAMP_BACK = 0.4 -- and how far aft of the launch's middle
 
@@ -148,14 +153,18 @@ local function dressLamp(lamp: BasePart): (Attachment, Beam, SpotLight, PointLig
 	spot.Color = COLD
 	spot.Shadows = false
 	spot.Parent = lamp
-	-- THE BEAM through the air: widening, fading along its length.
+	-- THE BEAM through the air: widening, fading along its length, to its own end short of the water (HAZE_LONGEST).
+	local haze = Instance.new("Attachment")
+	haze.Name = "Haze"
+	haze.Position = Vector3.new(0, 0, -HAZE_LONGEST)
+	haze.Parent = lamp
 	local beam = Instance.new("Beam")
 	beam.Attachment0 = glass
-	beam.Attachment1 = far
-	beam.Width0 = 1.2
-	beam.Width1 = 20
+	beam.Attachment1 = haze
+	beam.Width0 = 0.9
+	beam.Width1 = 5
 	beam.FaceCamera = true
-	beam.LightEmission = 0.5
+	beam.LightEmission = 0.2
 	beam.LightInfluence = 0
 	beam.Segments = 2
 	beam.Color = ColorSequence.new(COLD)
@@ -172,10 +181,10 @@ end
 
 -- The beam's fade, a little stronger when it is raining (the light is lower, and the rain catches it).
 local function fade(rain: number): NumberSequence
-	local near = 0.72 - 0.14 * rain
+	local near = 0.88 - 0.06 * rain
 	return NumberSequence.new({
 		NumberSequenceKeypoint.new(0, near),
-		NumberSequenceKeypoint.new(0.55, 0.9 - 0.04 * rain),
+		NumberSequenceKeypoint.new(0.5, 0.96 - 0.02 * rain),
 		NumberSequenceKeypoint.new(1, 1),
 	})
 end
@@ -324,7 +333,11 @@ local function stepLaunch(launch: Launch, now: number, dt: number)
 		long = math.min(BEAM_LONGEST, (height - 1) / -look.Y)
 	end
 	launch.far.Position = Vector3.new(0, 0, -long)
-	launch.beam.Width1 = math.clamp(long * 0.14, 4, 26)
+	local hazeEnd = launch.beam.Attachment1
+	if hazeEnd then
+		hazeEnd.Position = Vector3.new(0, 0, -math.min(long, HAZE_LONGEST))
+	end
+	launch.beam.Width1 = math.clamp(math.min(long, HAZE_LONGEST) * 0.1, 2, 5.5)
 	launch.pool.Enabled = look.Y < -0.02 and long < BEAM_LONGEST
 
 	-- RAIN: the lamp a little stronger, the beam a little more there.
@@ -364,5 +377,5 @@ function SearchlightClient.start()
 	print("SearchlightClient: running, " .. SearchlightClient.VERSION)
 end
 
-SearchlightClient.STAMP = "25ab1038"
+SearchlightClient.STAMP = "ee204a83"
 return SearchlightClient

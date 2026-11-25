@@ -5,6 +5,9 @@
 
 local ServerStorage = game:GetService("ServerStorage")
 local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local MaterialAppearance = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("MaterialAppearance")) :: any
 
 local ChunkService = {}
 
@@ -55,6 +58,12 @@ function ChunkService.spawnChunk(chunkId: string, at: CFrame): Model?
 	local entry = Vector3.new(0, entrySurfaceY, entryZ)
 	clone:PivotTo(at * CFrame.new(pivot.Position - entry))
 
+	-- EVERY KEYBOARD IN COLOURS OF ITS OWN (the hundred-and-fifty-fifth pass): a colourway picked as it is placed, so two
+	-- boards in a run are seldom the same. Nothing else is touched.
+	if typeof(MaterialAppearance.paintKeys) == "function" then
+		MaterialAppearance.paintKeys(clone, nil)
+	end
+
 	clone.Parent = ensureLevelsFolder()
 	return clone
 end
@@ -91,4 +100,5 @@ function ChunkService.getChunkMetrics(chunkId: string): (number, number)
 	return length, rise
 end
 
+ChunkService.STAMP = "5351e0e7"
 return ChunkService

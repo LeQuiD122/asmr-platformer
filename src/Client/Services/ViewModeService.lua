@@ -4,14 +4,16 @@
 --
 -- === Third person, always, unless you go and look through the viewer ===
 --
--- This is a game about seeing your feet land on things, so it is played in third person, and in a run
--- the camera is held behind you at one distance (THIRD_DISTANCE): no zooming in until you lose sight of
--- yourself. In the lobby it zooms between LOBBY_NEAR and LOBBY_FAR: never so near that a scroll slips
--- you into first person by accident.
+-- This is a game about seeing your feet land on things, so it is played in third person, and the camera
+-- is held behind you at one distance (THIRD_DISTANCE): no zooming in until you lose sight of yourself,
+-- and no zooming out until you are a speck. EVERYWHERE, not only in a run (the hundred-and-sixty-sixth
+-- pass, from your note of 2026-11-03: "the fixed camera angle should also apply everywhere, not just in
+-- levels"): the lobby, the squish room, the shop and the back rooms are seen from where a run is. The
+-- lobby used to zoom between 6 and 36 studs.
 --
 -- COMING BACK FROM FIRST PERSON LANDS YOU IN A PROPER THIRD PERSON VIEW. Letting go of the lock left the
 -- camera where first person had it, inside your head, until you scrolled out by hand. Now it is put
--- behind you and over your shoulder at THIRD_DISTANCE, at once, and the lobby's range given back after.
+-- behind you and over your shoulder at THIRD_DISTANCE, at once, and held there.
 --
 -- First person was asked for as an option and then asked to be kept out of the interface: nothing on
 -- the screen for it, nothing in anybody's way. So it lives in the room. The SEASIDE VIEWER on the
@@ -32,6 +34,7 @@
 -- A word at the bottom of the screen says which, for a moment, and goes. Nothing is done to the camera
 -- while a scene has it (Cinema), and you are never turned while you ride, sit or are carried.
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -51,12 +54,11 @@ local function warnOnce(text: string)
 		warn(text .. " (shown once)")
 	end
 end
-ViewModeService.VERSION = "nineteenth pass, 2026-09-30"
+ViewModeService.VERSION = "the two-hundred-and-fifth pass, 2026-11-07"
 
--- How far behind you the camera is held in a run, and how far over your shoulder when the cursor is
+-- How far behind you the camera is held, everywhere, and how far over your shoulder when the cursor is
 -- locked in third person.
 local THIRD_DISTANCE = 14
-local LOBBY_NEAR, LOBBY_FAR = 6, 36
 local SHOULDER = Vector3.new(1.75, 0.2, 0)
 local STEP = "ViewModeCursor"
 
@@ -77,14 +79,12 @@ local state = {
 	free = false, -- first person: the cursor let go
 	turned = false, -- whether AutoRotate is ours to give back
 	offset = Vector3.zero,
+	align = nil :: AlignOrientation?, -- what turns you to face where you look while locked (see step)
 }
 local ui: { [string]: any } = {}
 
-local function inRun(): boolean
-	return Players.LocalPlayer:GetAttribute("InLevel") ~= nil
-end
-
--- The camera as the view and the place say it should be.
+-- The camera as the view says it should be: the same in a run and out of one. (Put back on every change of place
+-- all the same, InLevel below, in case anything on the way in or out left the camera otherwise.)
 local function apply()
 	local player = Players.LocalPlayer
 	player:SetAttribute("ViewMode", state.view)
@@ -93,14 +93,10 @@ local function apply()
 		player.CameraMinZoomDistance = 0.5
 		player.CameraMaxZoomDistance = 0.5
 		player.CameraMode = Enum.CameraMode.LockFirstPerson
-	elseif inRun() then
+	else
 		player.CameraMode = Enum.CameraMode.Classic
 		player.CameraMaxZoomDistance = THIRD_DISTANCE
 		player.CameraMinZoomDistance = THIRD_DISTANCE
-	else
-		player.CameraMode = Enum.CameraMode.Classic
-		player.CameraMaxZoomDistance = LOBBY_FAR
-		player.CameraMinZoomDistance = LOBBY_NEAR
 	end
 	-- The viewer says what it will do next, on this screen.
 	local prompt = ui.prompt
@@ -128,9 +124,9 @@ local function say(text: string)
 	end)
 end
 
--- Straight into a good third person view: the zoom held at THIRD_DISTANCE for a moment (the camera
--- goes there), the camera put behind you and a little above, and then the place's own range given back
--- (the camera stays where it was put).
+-- Straight into a good third person view: the zoom held at THIRD_DISTANCE (the camera goes there), the
+-- camera put behind you and a little above, and the view applied again a moment after (the camera stays
+-- where it was put).
 local function settleThird()
 	local player = Players.LocalPlayer
 	player.CameraMode = Enum.CameraMode.Classic
@@ -164,7 +160,10 @@ function ViewModeService.setView(view: string)
 	else
 		apply()
 	end
-	say(if view == "first" then "First person. Ctrl frees the cursor." else "Third person.")
+	-- CTRL IS A KEYBOARD'S (the hundred-and-forty-seventh pass): a controller or a phone is told only where it is.
+	local last = UserInputService:GetLastInputType()
+	local keys = UserInputService.KeyboardEnabled and last.Name:sub(1, 7) ~= "Gamepad" and last ~= Enum.UserInputType.Touch
+	say(if view == "first" then (if keys then "First person. Ctrl frees the cursor." else "First person.") else "Third person.")
 end
 
 function ViewModeService.view(): string
@@ -207,6 +206,8 @@ local function menuOpen(): boolean
 	local codeBox = playerGui:FindFirstChild("CodeBox")
 	-- WHAT YOU SAY TO SOMEONE (TalkClient): the choices, to be pressed.
 	local talk = playerGui:FindFirstChild("Talk")
+	-- THE SQUISH ROOM'S EASEL (DrawingBoard, the two-hundred-and-thirty-second pass): the cursor is the brush.
+	local easel = playerGui:FindFirstChild("Easel")
 	return (book ~= nil and book:IsA("GuiObject") and book.Visible) or (card ~= nil and card:IsA("GuiObject") and card.Visible)
 		or (panel ~= nil and panel:IsA("GuiObject") and panel.Visible)
 		or (welcome ~= nil and welcome:IsA("ScreenGui") and welcome.Enabled)
@@ -216,6 +217,82 @@ local function menuOpen(): boolean
 		or (devPanel ~= nil and devPanel:IsA("GuiObject") and devPanel.Visible)
 		or (codeBox ~= nil and codeBox:IsA("ScreenGui") and codeBox.Enabled)
 		or (talk ~= nil and talk:IsA("ScreenGui") and talk.Enabled)
+		or (easel ~= nil and easel:IsA("ScreenGui") and easel.Enabled)
+end
+
+-- ===== THE CAMERA KEPT IN THE ROOM YOU ARE IN =====
+--
+-- (The two-hundred-and-fifth pass, from your note of 2026-11-07 about the Sunken City's aquarium: "I don't want my camera
+-- to be able to move beyond the aquarium's glass because it ruins the vibe, want the player to feel like they are inside
+-- this aquarium".) Roblox's camera steps in front of what is solid, and glass you can see through is not that, so it
+-- stood out in the water looking in at you. Rooms a level marks (CameraRoom, invisible boxes) hold it: while your head is
+-- in one, the camera is kept within them, brought in along the line from your head to where it would be, to the last
+-- point still inside one. Third person only, and never while a scene has the camera.
+local keepRooms: { BasePart } = {}
+local keep = {
+	rooms = keepRooms,
+	MARGIN = 0.35, -- how far inside a room's walls the camera stops
+	STEP = 0.25, -- how finely the line from your head is walked
+}
+
+function keep.inside(point: Vector3): boolean
+	for _, room in ipairs(keep.rooms) do
+		if room.Parent then
+			local at = room.CFrame:PointToObjectSpace(point)
+			local half = room.Size / 2
+			if math.abs(at.X) <= half.X - keep.MARGIN and math.abs(at.Y) <= half.Y - keep.MARGIN
+				and math.abs(at.Z) <= half.Z - keep.MARGIN then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function keep.hold(head: Vector3)
+	if #keep.rooms == 0 or not keep.inside(head) then
+		return
+	end
+	local camera = workspace.CurrentCamera
+	local at = camera.CFrame.Position
+	if keep.inside(at) then
+		return
+	end
+	local offset = at - head
+	local distance = offset.Magnitude
+	if distance < 0.01 then
+		return
+	end
+	local unit = offset / distance
+	local last = head
+	local travelled = keep.STEP
+	while travelled < distance do
+		local point = head + unit * travelled
+		if not keep.inside(point) then
+			break
+		end
+		last = point
+		travelled += keep.STEP
+	end
+	camera.CFrame = CFrame.new(last) * camera.CFrame.Rotation
+end
+
+function keep.watch()
+	local function added(item: Instance)
+		if item:IsA("BasePart") and not table.find(keep.rooms, item) then
+			table.insert(keep.rooms, item)
+		end
+	end
+	for _, item in ipairs(CollectionService:GetTagged("CameraRoom")) do
+		added(item)
+	end
+	CollectionService:GetInstanceAddedSignal("CameraRoom"):Connect(added)
+	CollectionService:GetInstanceRemovedSignal("CameraRoom"):Connect(function(item: Instance)
+		local index = table.find(keep.rooms, item :: any)
+		if index then
+			table.remove(keep.rooms, index)
+		end
+	end)
 end
 
 -- Every frame, after the camera: the cursor, the shoulder, and which way you face.
@@ -243,20 +320,60 @@ local function step(dt: number)
 	-- Over the shoulder while locked, eased in and out.
 	local want = if lockedNow then SHOULDER else Vector3.zero
 	state.offset = state.offset:Lerp(want, 1 - math.exp(-10 * dt))
-	humanoid.CameraOffset = state.offset
+	-- Plus any shake the ground asked for (DeformationRenderer's buttons: the "CameraShake" attribute). This is the
+	-- only writer of the camera offset; anything else that wants the camera to move adds through that attribute.
+	local shake = humanoid:GetAttribute("CameraShake")
+	humanoid.CameraOffset = state.offset + (if typeof(shake) == "Vector3" then shake else Vector3.zero)
 	-- Facing where you look: never while you ride, sit, are carried, or are down.
 	local free = not humanoid.Sit and not humanoid.PlatformStand and not root.Anchored and humanoid.Health > 0
+	-- TURNED BY PHYSICS, NOT PUT (the two-hundred-and-fortieth pass, from your video of 2026-11-21: with the cursor
+	-- locked the screen and the body shook on the arcade buttons). This used to write the root's CFrame every frame.
+	-- A written CFrame is a teleport: it throws away what the physics had worked out for that step, and the camera had
+	-- already been placed from the old pose. Standing still that was invisible; at a cyan button's speed, on caps that
+	-- sink and rise under you, every frame snapped back and forth. Now an AlignOrientation on the root does the
+	-- turning inside the physics step, as the ground and the speed are, and nothing is teleported.
+	local align = state.align
+	if align and align.Parent ~= root then
+		align:Destroy()
+		align = nil
+		state.align = nil
+	end
+	local facing = false
 	if lockedNow and free then
 		local look = workspace.CurrentCamera.CFrame.LookVector
 		local flat = Vector3.new(look.X, 0, look.Z)
 		if flat.Magnitude > 0.05 then
+			if not align then
+				local hold = Instance.new("Attachment")
+				hold.Name = "LockFacing"
+				hold.Parent = root
+				local made = Instance.new("AlignOrientation")
+				made.Name = "LockFacing"
+				made.Mode = Enum.OrientationAlignmentMode.OneAttachment
+				made.Attachment0 = hold
+				made.RigidityEnabled = true
+				made.Enabled = false
+				made.Parent = root
+				align = made
+				state.align = made
+			end
 			humanoid.AutoRotate = false
 			state.turned = true
-			root.CFrame = CFrame.lookAt(root.Position, root.Position + flat.Unit)
+			align.CFrame = CFrame.lookAt(Vector3.zero, flat.Unit)
+			align.Enabled = true
+			facing = true
 		end
-	elseif state.turned then
+	end
+	if align and not facing then
+		align.Enabled = false
+	end
+	if not (lockedNow and free) and state.turned then
 		state.turned = false
 		humanoid.AutoRotate = true
+	end
+	-- And the camera kept in the room you are in (keep, above).
+	if state.view == "third" and not scene then
+		keep.hold(root.Position + Vector3.new(0, 1.5, 0))
 	end
 end
 
@@ -310,6 +427,7 @@ function ViewModeService.start()
 	build()
 	apply()
 	findViewer()
+	keep.watch()
 	workspace.DescendantAdded:Connect(function(item: Instance)
 		if item:IsA("ProximityPrompt") and item.Name == "ViewScopePrompt" then
 			ui.prompt = item
@@ -345,5 +463,5 @@ function ViewModeService.start()
 	print("ViewModeService: running, " .. ViewModeService.VERSION)
 end
 
-ViewModeService.STAMP = "fa7b7c02"
+ViewModeService.STAMP = "62147faa"
 return ViewModeService

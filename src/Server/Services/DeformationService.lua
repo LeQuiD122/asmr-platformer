@@ -100,6 +100,10 @@ local function replicate(platform: BasePart, cell, who: Player?, cause: string?)
 		-- one opened the crack further than the first, or the warning it is supposed to
 		-- give is not a warning at all -- just a floor that drops without notice.
 		stepCount = cell.stepCount,
+		-- WEAR (the two-hundred-and-forty-ninth pass): steps a cell has taken that cooling does not give back, for the keys
+		-- over lava, which char and crack a little more with every foot and melt at `wearSteps`. Back to 0 only when a
+		-- cell that went under comes back new (restoreCell).
+		wear = cell.wear,
 		-- ...and WHICH SHEET it is popping, on a stacked platform. The client picks its
 		-- bone prefix from this; without it a cell that has burst through to the lower
 		-- layer would go on driving the flattened pockets above it and look inert.
@@ -431,6 +435,26 @@ local WADE_STEPS = 4
 local lowestFall: { [Player]: { speed: number, at: number } } = {}
 local wades: { [Player]: { level: number, shown: number, frame: number } } = {}
 
+-- ===== STICKY FOOTING: clay and memory foam hold your jump (the two-hundred-and-forty-fifth pass) =====
+--
+-- From your list of 2026-11-22 ("clay ... memory foam ... functionality and looks"). A material with `jumpScale` takes
+-- that share of your jump's height while you are on it: clay grips your soles, memory foam soaks up the push. Your jump
+-- as it was is kept the first time, and put back the moment a foot lands on anything without it (or you leave).
+local sticky: { [Player]: { jumpPower: number, jumpHeight: number } } = {}
+local function unstick(player: Player)
+	local held = sticky[player]
+	if not held then
+		return
+	end
+	sticky[player] = nil
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.JumpPower = held.jumpPower
+		humanoid.JumpHeight = held.jumpHeight
+	end
+end
+
 -- The whole pool, hard, spreading from the cell that was landed on.
 local function shockOobleck(platform: BasePart, state, def, landed)
 	state.hardUntil = os.clock() + (def.shockTime or 1.2)
@@ -488,6 +512,11 @@ local function applyMaterialEffectOnEnter(player: Player, materialName: string?,
 		if matDef.displacement == "brine" and cell and matDef.displaceSteps then
 			multiplier += (1 - multiplier) * math.clamp((cell.depth or 0) / matDef.displaceSteps, 0, 1)
 		end
+		-- SNOW PACKS (the two-hundred-and-forty-fifth pass): fresh snow is deep and slow, and every foot that has been
+		-- down a cell packs it toward `packedSpeed`, so a trodden trail is a lane. See Snow in MaterialConfig.
+		if matDef.packedSpeed and cell then
+			multiplier += (matDef.packedSpeed - multiplier) * math.clamp((cell.stepCount or 0) / (matDef.packSteps or 2), 0, 1)
+		end
 		-- CHARCOAL: burning coal is hot underfoot, so you hurry. See CHARCOAL.
 		if matDef.hotSpeed and cell and cell.fire == "burning" then
 			multiplier = matDef.hotSpeed
@@ -511,6 +540,25 @@ local function applyMaterialEffectOnEnter(player: Player, materialName: string?,
 			end
 		end
 		humanoid.WalkSpeed = Constants.DEFAULT_WALKSPEED * multiplier
+	end
+
+	-- WAXED BUTTER (the two-hundred-and-seventh pass): all of your speed on whole wax, `softSpeed` of it on a cell whose
+	-- wax was already broken when this foot arrived (`cell.broken`, noted as the foot lands, before the cell is marked
+	-- stood on). Set either way, cell by cell, so stepping from butter back onto wax gives the speed back.
+	if matDef.softSpeed then
+		humanoid.WalkSpeed = Constants.DEFAULT_WALKSPEED * (if cell and cell.broken then matDef.softSpeed else 1)
+	end
+
+	-- STICKY FOOTING (see `sticky` above).
+	if matDef.jumpScale then
+		if not sticky[player] then
+			sticky[player] = { jumpPower = humanoid.JumpPower, jumpHeight = humanoid.JumpHeight }
+		end
+		local held = sticky[player]
+		humanoid.JumpHeight = held.jumpHeight * matDef.jumpScale
+		humanoid.JumpPower = held.jumpPower * math.sqrt(matDef.jumpScale)
+	elseif sticky[player] then
+		unstick(player)
 	end
 
 	if matDef.frictionOverride then
@@ -612,6 +660,7 @@ end
 
 local function resetMaterialEffect(player: Player)
 	restoreJump(player)
+	unstick(player)
 	wades[player] = nil
 	local character = player.Character
 	if not character then
@@ -648,6 +697,16 @@ local function resetMaterialEffect(player: Player)
 	end
 end
 
+-- ===== CRUMBLE: the floor going behind you =====
+--
+-- (The hundred-and-fifty-first pass, from your test of 2026-10-31: "I can pass them within a second, and for some of them
+-- it takes way too much time or steps to ever break.") Steps are counted per cell ENTERED, and a crossing enters each cell
+-- once, so a material that needed three or four steps on one spot never broke under anyone walking; a clock that only
+-- broke a cell still stood on never broke one walked over. A material with `crumbleAfter` gives way that long after the
+-- first foot on a cell, whoever is or is not on it then: walk on and the floor goes behind you, stop and it goes under
+-- you. CRUMBLE_WARN before, the cell is shaken (a "warn" to every client), so it is seen going and not only felt.
+local CRUMBLE_WARN = 0.45
+
 -- === Collapse ===
 --
 -- The one place a cell gives way. Lifted out of onPlayerEnterCell, where it was a closure over
@@ -682,6 +741,22 @@ local function collapseCell(platform: BasePart, cell, who: Player?)
 	-- them for the rest of the run any more. Cleared by restoreCell; ticked in the heartbeat.
 	local regrowDef = platformStates[platform] and Materials[platformStates[platform].material]
 	cell.regrowAt = os.clock() + ((regrowDef and regrowDef.regrowAfter) or Constants.REGROW_DURATION)
+	-- THE CRACK RUNS ON (the two-hundred-and-forty-fifth pass): a cell of ice going through weakens the four round it by
+	-- a step each and shakes them, so a hole in a sheet of ice is the start of a bigger one. Never breaks them by itself:
+	-- the next foot does.
+	local spread = regrowDef and regrowDef.crackSpread
+	local spreadState = platformStates[platform]
+	if spread and spreadState then
+		for _, offset in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
+			local col, row = cell.col + offset[1], cell.row + offset[2]
+			local inside = col >= 1 and row >= 1 and col <= spreadState.grid.cols and row <= spreadState.grid.rows
+			local other = if inside then spreadState.cells[SubRegionGrid.key(col, row)] else nil
+			if other and other.state ~= "exhausted" then
+				other.stepCount = (other.stepCount or 0) + spread
+				replicate(platform, other, who, "warn")
+			end
+		end
+	end
 	-- A collapsed cell stops being floor: CanCollide off drops anyone standing on
 	-- it. Previously only CanTouch was cleared, so the tile "dissolved" visually but
 	-- still held your weight.
@@ -957,6 +1032,74 @@ local function reachFor(tile: BasePart): BasePart
 	return reach
 end
 
+-- ===== BUBBLE WRAP: a step pops what is under it, a landing pops a ring =====
+--
+-- (The hundred-and-fifty-fourth pass, from your test of 2026-10-31.) It used to throw you four studs up on every touch, a
+-- third of a second apart: a trampoline, the popping lost under the bouncing. Now a STEP pops the cell under it (once a
+-- footfall, as every surface answers one), and a LANDING from a jump -- a fall faster than POP_LAND, remembered the way the
+-- oobleck remembers one -- pops the eight cells round it too, a ring going off a beat after the foot; landed on fresh
+-- wrap, the air in it gives POP_REBOUND studs of the landing back. A cell popped popCount times drops to the sheet under it
+-- (the giant sheet) or gives way.
+local POP_LAND = 30
+local POP_REBOUND = 2.2
+
+-- One pop on `cell`, and what it leads to. `announced`: the step's own word has already gone out for it.
+local function popBubbles(platform: BasePart, state, cell, player: Player?, cause: string?, announced: boolean)
+	-- HOW MANY SHEETS DEEP THIS PLATFORM IS. Read off the slab rather than off the
+	-- material, because it is a property of the MESH: an ordinary sheet has one layer
+	-- of pockets and a giant one has two, and they are the same material. Defaulting
+	-- to 1 is what keeps every existing bubble wrap chunk behaving exactly as before.
+	cell.layer = cell.layer or 1
+	local layers = platform:GetAttribute("PopLayers") or 1
+
+	if cell.popCount < Materials.BubbleWrap.popCount then
+		cell.popCount += 1
+	end
+	if cell.popCount >= Materials.BubbleWrap.popCount then
+		if cell.layer < layers then
+			-- THROUGH THE TOP SHEET, NOT THROUGH THE FLOOR. The upper pockets under
+			-- this cell are all burst, so the cell drops to the layer below and its
+			-- budget starts again. The player is standing on the lower sheet now and
+			-- can see it, which is the warning that the next pass is the last one.
+			cell.layer += 1
+			cell.popCount = 0
+			replicate(platform, cell, player, cause)
+		else
+			-- The last sheet has gone, so there is nothing left to stand on: a real hole.
+			collapseCell(platform, cell, player)
+		end
+	elseif not announced then
+		-- `announced` guards the double send: on a first entry the pristine ->
+		-- deformed transition has already gone out, and firing again here
+		-- would burst the same pockets twice and double the tile's jolt.
+		replicate(platform, cell, player, cause)
+	end
+end
+
+-- A landing's ring: the eight cells round `landed`, each popped once, nobody's footfall but the lander's weight.
+local function ringPop(platform: BasePart, state, landed, player: Player)
+	local def = Materials.BubbleWrap
+	for dc = -1, 1 do
+		for dr = -1, 1 do
+			local other = if dc ~= 0 or dr ~= 0 then cellAt(state, landed.col + dc, landed.row + dr) else nil
+			if other then
+				if other.state == "pristine" or other.state == "decaying" then
+					-- Nobody on it: it starts back at once, the way a cell does when the last foot leaves it.
+					if other.count == 0 then
+						other.state = "decaying"
+						other.decayTimer = math.min(def.decayDuration, Constants.REGROW_DURATION)
+					else
+						other.state = "deformed"
+					end
+				end
+				other.origin = Vector2.new(landed.col, landed.row)
+				popBubbles(platform, state, other, player, "ring", false)
+				other.origin = nil
+			end
+		end
+	end
+end
+
 -- === Genuine enter / exit transitions ===
 
 local function onPlayerEnterCell(platform: BasePart, state, cell, player: Player)
@@ -989,8 +1132,13 @@ local function onPlayerEnterCell(platform: BasePart, state, cell, player: Player
 	-- warning the material exists to give. Every other field in that payload (state,
 	-- popCount, layer) is already the post-entry value; this one was the odd one out.
 	local steps = matDef and matDef.stepsToCollapse
-	if steps and cell.state ~= "exhausted" then
+	if (steps or (matDef and matDef.packSteps)) and cell.state ~= "exhausted" then
 		cell.stepCount = (cell.stepCount or 0) + 1
+	end
+	-- (Once a half second at most: a key sinking under a foot loses it and finds it again, and that is one step.)
+	if matDef and matDef.wearSteps and cell.state ~= "exhausted" and os.clock() - (cell.woreAt or 0) > 0.5 then
+		cell.wear = (cell.wear or 0) + 1
+		cell.woreAt = os.clock()
 	end
 
 	-- A KEYPAD PRESS is counted before it is announced, so the announcement can carry what it did: a
@@ -1027,6 +1175,10 @@ local function onPlayerEnterCell(platform: BasePart, state, cell, player: Player
 		local wade = wades[player]
 		cell.wade = if wade then wade.shown else 0
 	end
+
+	-- WAS IT BROKEN ALREADY? For waxed butter (softSpeed): a cell still holding somebody's footprint, or with somebody
+	-- else on it now, is butter, not wax. Asked before this foot marks it.
+	cell.broken = cell.state == "decaying" or cell.state == "deformed"
 
 	local announced = false
 	if cell.state == "pristine" or cell.state == "decaying" then
@@ -1070,6 +1222,17 @@ local function onPlayerEnterCell(platform: BasePart, state, cell, player: Player
 	if steps and cell.state ~= "exhausted" and (cell.stepCount or 0) >= steps then
 		collapse()
 	end
+	-- WORN THROUGH: a key over lava that has taken `wearSteps` feet melts into the lava, however quickly they came.
+	if matDef and matDef.wearSteps and cell.state ~= "exhausted" and (cell.wear or 0) >= matDef.wearSteps then
+		collapse()
+	end
+
+	-- THE CRUMBLE, from the first foot on the cell (see CRUMBLE above); it comes due in the heartbeat.
+	local crumble = matDef and matDef.crumbleAfter
+	if crumble and cell.state ~= "exhausted" and not cell.crumbleAt then
+		cell.crumbleAt = os.clock() + crumble
+		cell.warned = nil
+	end
 
 	-- The clock, for standing still. One timer per cell, not one per Touched event.
 	if dissolveTime and not cell.dissolveScheduled and cell.state ~= "exhausted" then
@@ -1096,37 +1259,18 @@ local function onPlayerEnterCell(platform: BasePart, state, cell, player: Player
 	-- entry four could never burst at all, while the cell spent its four counts anyway.
 	-- The client needs to be told where you are, not merely that a threshold was passed.
 	if state.material == "BubbleWrap" and cell.state ~= "exhausted" then
-		-- HOW MANY SHEETS DEEP THIS PLATFORM IS. Read off the slab rather than off the
-		-- material, because it is a property of the MESH: an ordinary sheet has one layer
-		-- of pockets and a giant one has two, and they are the same material. Defaulting
-		-- to 1 is what keeps every existing bubble wrap chunk behaving exactly as before.
-		cell.layer = cell.layer or 1
-		local layers = platform:GetAttribute("PopLayers") or 1
-
-		if cell.popCount < Materials.BubbleWrap.popCount then
-			cell.popCount += 1
-		end
-		if cell.popCount >= Materials.BubbleWrap.popCount then
-			if cell.layer < layers then
-				-- THROUGH THE TOP SHEET, NOT THROUGH THE FLOOR. The upper pockets under
-				-- this cell are all burst, so the cell drops to the layer below and its
-				-- budget starts again. The player is standing on the lower sheet now and
-				-- can see it, which is the warning that the next pass is the last one.
-				cell.layer += 1
-				cell.popCount = 0
-				replicate(platform, cell, player)
-			else
-				-- The last sheet has gone, so there is nothing left to stand on.
-				-- `collapse` is what soap and sand already use: it clears the tile, the
-				-- Floor child and the slab, so this is a real hole rather than a visual
-				-- one.
-				collapse()
+		local fresh = cell.popCount == 0 and (cell.layer or 1) == 1
+		popBubbles(platform, state, cell, player, nil, announced)
+		-- A LANDING POPS A RING (see BUBBLE WRAP above), and fresh wrap gives a little of it back.
+		local fall = lowestFall[player]
+		if fall and fall.speed < -POP_LAND and os.clock() - fall.at <= FALL_MEMORY then
+			-- Spent: a landing across two cells is one landing.
+			fall.speed = 0
+			ringPop(platform, state, cell, player)
+			if fresh and cell.state ~= "exhausted" then
+				lastLaunchAt[player] = os.clock()
+				SlimeLaunch:FireClient(player, bounceVelocity(POP_REBOUND))
 			end
-		elseif not announced then
-			-- `announced` guards the double send: on a first entry the pristine ->
-			-- deformed transition above has already gone out, and firing again here
-			-- would burst the same pockets twice and double the tile's jolt.
-			replicate(platform, cell, player)
 		end
 	end
 end
@@ -1272,6 +1416,7 @@ local function restoreCell(platform: BasePart, cell, whole: boolean)
 	cell.state = "pristine"
 	cell.popCount = 0
 	cell.stepCount = 0
+	cell.wear = 0
 	cell.layer = 1
 	cell.dissolveScheduled = false
 	cell.depth = 0
@@ -1286,6 +1431,9 @@ local function restoreCell(platform: BasePart, cell, whole: boolean)
 	cell.regrowAt = nil
 	cell.healAt = nil
 	cell.wade = nil
+	cell.crumbleAt = nil
+	cell.warned = nil
+	cell.broken = nil
 	-- Announced, so the client springs the surface back: bubbles re-inflate, soap and sand come out
 	-- of their collapsed pose, a coal settles into its hole. Without this the state is right on the
 	-- server and the platform still LOOKS destroyed.
@@ -1458,8 +1606,12 @@ function DeformationService.registerPlatform(platform: BasePart)
 	local state = getOrCreatePlatformState(platform)
 	-- The taller sensor for every material whose floor moves UP or sinks further than the thin tile
 	-- reaches: clay and salt, and oobleck, which you wade into.
+	-- (And the light switches, whose rockers stand over the tile: `proud`, the two-hundred-and-eighth pass.)
 	local reachDef = Materials[state.material]
-	local movesMaterial = reachDef ~= nil and (reachDef.displacement ~= nil or reachDef.wadeStill ~= nil)
+	-- (And memory foam, `sinks`, the two-hundred-and-forty-sixth pass: its dent took you below the thin tile, so standing
+	-- on it read as stepping off, and its slowness and soft jump were cleared the moment you sank in.)
+	local movesMaterial = reachDef ~= nil and (reachDef.displacement ~= nil or reachDef.wadeStill ~= nil or reachDef.proud == true
+		or reachDef.sinks == true)
 
 	for _, child in ipairs(platform:GetChildren()) do
 		if child:IsA("BasePart") and child.Name:match("^SubRegion_") then
@@ -1547,6 +1699,16 @@ RunService.Heartbeat:Connect(function(dt: number)
 	trackFalls(now)
 	settleSprings(now)
 	for platform, state in pairs(platformStates) do
+		-- A LEVEL'S PLATFORMS GO WITH IT (the hundred-and-forty-fifth pass). Every platform of every level ever built
+		-- was kept here (registerPlatform, as each level is laid), and this loop walked every cell of all of them sixty
+		-- times a second for as long as the server ran: each run played made every frame after it a little longer, and a
+		-- server that had seen a few dozen runs spent its frames on levels long gone. A platform taken down (destroyed:
+		-- nothing on the server is taken out of the world and put back; the lobby is put away in ServerStorage) is let
+		-- go of here, its cells with it.
+		if platform.Parent == nil then
+			platformStates[platform] = nil
+			continue
+		end
 		-- STANDING STILL PRESSES AGAIN, on the materials that move material. See DISPLACEMENT.
 		local creepDef = state.material and Materials[state.material]
 		local creepEvery = creepDef and creepDef.creepEvery
@@ -1577,6 +1739,17 @@ RunService.Heartbeat:Connect(function(dt: number)
 				cell.floating = (cell.floating or 0) + dt
 				if cell.floating >= sinkAfter then
 					collapseCell(platform, cell, nil)
+				end
+			end
+			-- A CRUMBLE COMES DUE (see CRUMBLE): shaken first, then gone, whoever is on it.
+			local crumbleAt = cell.crumbleAt
+			if crumbleAt and cell.state ~= "exhausted" then
+				if now >= crumbleAt then
+					cell.crumbleAt = nil
+					collapseCell(platform, cell, nil)
+				elseif not cell.warned and now >= crumbleAt - CRUMBLE_WARN then
+					cell.warned = true
+					replicate(platform, cell, nil, "warn")
 				end
 			end
 			-- THE HOLE FILLS ITSELF IN, on the clock set when the cell gave way, and not while anyone
@@ -1632,4 +1805,124 @@ end)
 -- enforced simply by not touching platformStates from teleport logic
 -- (see PlayerStateService / LevelService).
 
+-- ===== THE TELEPRINTER (the hundred-and-sixty-fifth pass) =====
+--
+-- A CREAMY KEYBOARD TYPES. It is the waterworks teleprinter (Keepsakes: "The last thing it typed was KEY HOLDER PLEASE
+-- CONFIRM. Nobody did."), and every key on it has its letter printed on it (ChunkBuilder's KEY_ROWS), and nothing ever
+-- read them. Now the key you stand on types its letter onto your own strip (the Teleprinter remote, Teleprinter.lua on
+-- your screen), and YES typed answers it: once a save its tokens (EconomyService.answeredTeleprinter, wired by
+-- Bootstrap), and every time the strip's CONFIRMED.
+--
+-- THE KEY UNDER YOUR MIDDLE, NOT UNDER YOUR FEET. A character touches two or three keys at once and in no order, so a
+-- touch cannot say which one you meant; where you stand can. A key is typed when you come to stand on it with your
+-- weight on it: walk along a row and you type every key you pass over, jump over keys and they are not typed, land on
+-- the one you jumped from and it is typed again, as a key pressed twice is. On the line between two keys neither is
+-- typed until you are well into one. Off the keyboards for a while and the line is forgotten.
+local TYPING = {
+	every = 0.1, -- seconds between looks at who is on a keyboard
+	keep = 24, -- letters kept on the line
+	forget = 10, -- seconds off every keyboard before the line is forgotten
+	answer = "YES",
+	above = 1, -- studs above standing height that still has your weight on the key (more is a jump)
+	legsR6 = 2, -- an R6 body's legs, which stand it up where its HipHeight (0 on R6) says nothing
+	inside = 0.5, -- studs into a key before it counts, so standing on the line between two keys types neither
+}
+local typing: { [Player]: { line: string, key: string?, at: number } } = {}
+local typingClock = 0
+local answeredBy: ((Player) -> number)? = nil
+
+-- What YES typed pays, from the save (EconomyService.answeredTeleprinter: its tokens the first time, 0 after).
+function DeformationService.setAnswered(fn: (Player) -> number)
+	answeredBy = fn
+end
+
+local function teleprinterSay(player: Player, ...: any)
+	local remote = RemoteEvents:FindFirstChild("Teleprinter")
+	if remote and remote:IsA("RemoteEvent") then
+		remote:FireClient(player, ...)
+	end
+end
+
+local function typeUnder(platform: BasePart, state, player: Player, now: number)
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not (root and root:IsA("BasePart") and humanoid) then
+		return
+	end
+	local col, row = SubRegionGrid.getActiveRegion(root.Position, platform.CFrame, state.grid)
+	local key = if col and row then SubRegionGrid.key(col, row) else nil
+	local cell = key and state.cells[key]
+	if not cell then
+		return
+	end
+	local mine = typing[player]
+	if not mine or now - mine.at > TYPING.forget then
+		mine = { line = "", key = nil, at = now }
+		typing[player] = mine
+	end
+	-- Kept while you are on a keyboard at all, so standing still on one key never forgets the line.
+	mine.at = now
+	-- Your weight on it: in the air over a key nothing is typed, and the key is pressed again when you land. Standing, the
+	-- root is its legs above the key: HipHeight on R15, and on R6 (whose HipHeight is 0) the legs themselves.
+	local top = cell.part.Position.Y + cell.part.Size.Y / 2
+	local legs = if humanoid.RigType == Enum.HumanoidRigType.R6 then TYPING.legsR6 else humanoid.HipHeight
+	if root.Position.Y - top > legs + root.Size.Y / 2 + TYPING.above then
+		mine.key = nil
+		return
+	end
+	if key == mine.key then
+		return
+	end
+	-- Well into a key before it counts. The key you were on stays yours until then, so standing on the line between two
+	-- keys never types the two in turn.
+	local into = cell.part.CFrame:PointToObjectSpace(root.Position)
+	local half = cell.part.Size / 2
+	if math.abs(into.X) > half.X - TYPING.inside or math.abs(into.Z) > half.Z - TYPING.inside then
+		return
+	end
+	mine.key = key
+	local cap = cell.part:FindFirstChild("Keycap")
+	local letter = cap and cap:GetAttribute("Legend")
+	if typeof(letter) ~= "string" or letter == "" then
+		return
+	end
+	local fresh = mine.line == ""
+	mine.line = string.sub(mine.line .. letter, -TYPING.keep)
+	teleprinterSay(player, "typed", letter, fresh)
+	if string.sub(mine.line, -#TYPING.answer) == TYPING.answer then
+		local paid = 0
+		if answeredBy then
+			local ok, amount = pcall(answeredBy :: any, player)
+			paid = if ok and type(amount) == "number" then amount else 0
+		end
+		teleprinterSay(player, "answered", paid)
+		-- A new line after the answer; the key you stand on is not typed again until you step off it.
+		mine.line = ""
+	end
+end
+
+RunService.Heartbeat:Connect(function(dt: number)
+	typingClock += dt
+	if typingClock < TYPING.every then
+		return
+	end
+	typingClock = 0
+	local now = os.clock()
+	for platform, state in pairs(platformStates) do
+		if state.material == "CreamyKeyboard" and platform.Parent then
+			for player, count in pairs(state.playerCellCount) do
+				if count > 0 then
+					typeUnder(platform, state, player, now)
+				end
+			end
+		end
+	end
+end)
+
+Players.PlayerRemoving:Connect(function(player: Player)
+	typing[player] = nil
+end)
+
+DeformationService.STAMP = "862e0512"
 return DeformationService

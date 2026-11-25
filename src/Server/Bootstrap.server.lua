@@ -11,6 +11,42 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local LevelDefinitions = require(Shared:WaitForChild("LevelDefinitions"))
 
+-- HARROW BAY'S SURFACES ON EACH LEVEL'S OWN BUILDINGS (the hundred-and-sixty-ninth pass, from your note of 2026-11-03:
+-- "improve ... the overall texture quality of the levels"): the stone, wood, render and marble of the world a level
+-- stands in, as it is put into the workspace (MaterialAppearance.dress). Never the chunks: they are the game's
+-- materials and wear their own.
+-- WHERE EACH IS PUT (the hundred-and-seventy-third pass): the backdrop and the halls straight into the workspace, the
+-- Sky Pools, the Sunken City and Hill House into its Levels folder with the level's chunks. Watching the workspace
+-- alone, those three were never dressed. A world already there when the server starts is dressed too, and a world
+-- put back after being taken away is not dressed twice.
+local MaterialAppearance = require(Shared:WaitForChild("MaterialAppearance"))
+local LEVEL_WORLDS = { Backdrop = true, FloodedHalls = true, HillHouse = true, SkyPools = true, SunkenCity = true }
+local dressedWorlds: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local function dressWorld(child: Instance)
+	if LEVEL_WORLDS[child.Name] and not dressedWorlds[child] then
+		dressedWorlds[child] = true
+		-- With the level's own surfaces first where it has them (the hundred-and-eighty-fifth pass: WORLD_SURFACES).
+		local worlds = (MaterialAppearance :: any).WORLD_SURFACES
+		pcall(MaterialAppearance.dress, child, MaterialAppearance.LEVEL_SURFACES, if worlds then worlds[child.Name] else nil)
+	end
+end
+local function watchLevels(folder: Instance)
+	if folder.Name == "Levels" and folder:IsA("Folder") then
+		folder.ChildAdded:Connect(dressWorld)
+		for _, child in ipairs(folder:GetChildren()) do
+			dressWorld(child)
+		end
+	end
+end
+workspace.ChildAdded:Connect(function(child: Instance)
+	dressWorld(child)
+	watchLevels(child)
+end)
+for _, child in ipairs(workspace:GetChildren()) do
+	dressWorld(child)
+	watchLevels(child)
+end
+
 -- WHICH LEVELS THIS PLACE HAS, said once at startup. The lobby builds a pad for each, named from
 -- this list, so when the lobby shows the wrong levels the question is always whether
 -- LevelDefinitions was pasted in. Levels 2 and 3 were Open Sky and Far Water before they became
@@ -150,6 +186,8 @@ ensureRemoteEvent(remoteEventsFolder, "HillScene")
 -- something (ShopRequest) and reads its tokens and what it owns (ShopState); the server says when that
 -- changes (ShopUpdate) and what a finished run paid (TokensEarned).
 ensureRemoteFunction(remoteFunctionsFolder, "ShopRequest")
+-- THE BOUTIQUE's shelves and what of them you own (EconomyService: the two-hundred-and-thirteenth pass).
+ensureRemoteFunction(remoteFunctionsFolder, "Boutique")
 ensureRemoteFunction(remoteFunctionsFolder, "ShopState")
 -- THE JOURNAL KEPT BETWEEN SESSIONS (EconomyService): what you had, asked for once your save is loaded.
 ensureRemoteFunction(remoteFunctionsFolder, "JournalState")
@@ -162,8 +200,16 @@ ensureRemoteEvent(remoteEventsFolder, "Onboarding")
 -- hardcore runner asks to go back to where they fell from; one bought is spent).
 ensureRemoteEvent(remoteEventsFolder, "Emote")
 ensureRemoteEvent(remoteEventsFolder, "SecondChance")
+-- A REWARDED VIDEO AD asked for, and how it went (EconomyService, AdOffers: the two-hundred-and-thirteenth pass).
+ensureRemoteEvent(remoteEventsFolder, "WatchAd")
 -- THE SQUISH ROOM: the server tells a player in it that the lobby is away for a run ("closed").
 ensureRemoteEvent(remoteEventsFolder, "SquishRoom")
+-- THE SQUISH ROOM'S EASEL (the two-hundred-and-thirty-third pass): a player's strokes to the server ("draw", "wipe", and
+-- "sync" for the paper as it is), and everyone's on to everyone ("draw", "wipe", "all", "gone").
+ensureRemoteEvent(remoteEventsFolder, "Easel")
+-- THE TELEPRINTER (the hundred-and-sixty-fifth pass): DeformationService tells a player the letter they have typed on a
+-- creamy keyboard ("typed"), and that YES has answered it ("answered"); Teleprinter prints them on their strip.
+ensureRemoteEvent(remoteEventsFolder, "Teleprinter")
 -- STUDIO ONLY: the test panel (DevPanelClient). Not made in the live game, and nothing listens there.
 if game:GetService("RunService"):IsStudio() then
 	ensureRemoteEvent(remoteEventsFolder, "DevPanel")
@@ -340,11 +386,34 @@ local wireCheckpointing: ({ Player }) -> ()
 -- Re-entry is not a concern. The first thing it does is check hasCompletedLevel, so a rider who
 -- also brushes the trigger completes once.
 local finishRunFor: ((Player) -> ())? = nil
+-- A FINISH FROM THE LEVEL THAT ASKED (the hundred-and-seventy-eighth pass, from your test of 2026-11-04). An ending's
+-- "they have arrived" comes long after it began (the flume's gates, the drain's outfall, the dive), and by then the
+-- rider may have left, been home, and started the next level: leaving the Flooded Halls in the Maw finished your next
+-- run, the Sunken City, forty seconds later at its fourth checkpoint ("Pulled down into the dark"). So each level's
+-- endings are handed one of these as the level is made, and a late arrival from a level that is gone finishes nothing.
+-- `before` is anything that ending does first (the halls' true ending), under the same rule.
+local function finishFrom(run: any, before: ((Player) -> ())?): (Player) -> ()
+	return function(player: Player)
+		if run == nil or levelInstance ~= run or not finishRunFor then
+			return
+		end
+		if before then
+			before(player)
+		end
+		local finish = finishRunFor
+		if finish then
+			finish(player)
+		end
+	end
+end
 -- THE HARDCORE RESET, for things that are not falls: the Sunken City's thing taking a Hardcore player
 -- off the route when it surfaces. Forward-declared for the reason finishRunFor is (the level is wired
 -- above the code it needs), assigned beside restartRunFor, and the same five steps as the kill plane's
 -- Hardcore branch, which blender/check_sunkencity.py holds the two to.
 local sendBackToStart: ((Player) -> ())? = nil
+-- WHERE A CHILL FALL PUTS YOU (three tiles back from your checkpoint, on something), for a Reset in a run as well as for a
+-- fall: forward-declared for the same reason, and assigned beside the kill plane (groundedRecovery).
+local recoverAtCheckpoint: ((Player) -> Vector3?)? = nil
 -- THE SECOND CHANCE: where each hardcore runner was, and their clock, the moment before a fall sent them
 -- back to the start. Used within WINDOW seconds (one bought, EconomyService), it puts them back there
 -- with the clock where it was; that run then counts for neither the leaderboard nor a best.
@@ -435,6 +504,34 @@ local AnalyticsService = game:GetService("AnalyticsService")
 local PROGRESSION_PATH = "Levels"
 local runningFor: { [Player]: { levelId: number, name: string, fields: { [string]: any } } } = {}
 
+-- WHERE A RUN IS LEFT (the hundred-and-sixty-third pass). The path above says how many start each level and how many
+-- finish it, not where the rest stop. Each run is a funnel of its own level's now too ("City Shore run"), in steps that
+-- mean the same on every run length (RUN_STEPS: started, a quarter of the way, half way, three quarters, finished): a
+-- step logged once a run, the first time it gets that far (its furthest checkpoint over the run's chunks, runReached),
+-- and every step before it in order, so the Creator Dashboard's Funnels show where in each level players give up.
+local RUN_STEPS = { "Started", "A quarter of the way", "Half way", "Three quarters of the way", "Finished" }
+local funnelFor: { [Player]: { name: string, session: string, step: number } } = {}
+
+local function funnelTo(player: Player, step: number)
+	local funnel = funnelFor[player]
+	if not funnel or step <= funnel.step then
+		return
+	end
+	for at = funnel.step + 1, math.min(step, #RUN_STEPS) do
+		pcall(function()
+			AnalyticsService:LogFunnelStepEvent(player, funnel.name, funnel.session, at, RUN_STEPS[at])
+		end)
+	end
+	funnel.step = step
+end
+
+-- A checkpoint `index` of `total` chunks reached: the quarter of the way it is in (the last step is the finish's own).
+local function runReached(player: Player, index: number, total: number)
+	if total > 1 then
+		funnelTo(player, math.min(#RUN_STEPS - 1, 1 + math.floor(4 * index / total)))
+	end
+end
+
 local function progression(player: Player, status: string)
 	local run = runningFor[player]
 	if status == "start" then
@@ -469,6 +566,17 @@ local function progression(player: Player, status: string)
 			AnalyticsService:LogProgressionFailEvent(player, PROGRESSION_PATH, logged.levelId, logged.name, logged.fields)
 		end
 	end)
+	-- The run's own funnel (runReached): begun, finished, or let go of where it was left.
+	if status == "start" then
+		funnelFor[player] = { name = logged.name .. " run", session = game:GetService("HttpService"):GenerateGUID(false),
+			step = 0 }
+		funnelTo(player, 1)
+	elseif status == "complete" then
+		funnelTo(player, #RUN_STEPS)
+		funnelFor[player] = nil
+	else
+		funnelFor[player] = nil
+	end
 end
 
 local secondChance = {
@@ -497,7 +605,91 @@ local function tellRunFriends()
 	end)
 end
 
-local function startChosenLevel(level, players: { Player }, origin: Vector3)
+-- ===== IN AND OUT OF A RUN, UNDER A DIP (the hundred-and-thirty-seventh pass) =====
+--
+-- Every move into a level and back out of one was a cut: the lobby one frame and the level the next, or a level's last
+-- shot and then the lobby, and with StreamingEnabled on (as every place made since 2021 has it) the place you were put in
+-- was still arriving round you, its floor sometimes after you had fallen through where it would be. Now the picture
+-- fades to black first (DIP.out), the place is streamed in round where you are going while it is black (for at most
+-- DIP.stream seconds, everyone at once), you are put there, and it fades back up (DIP.back). On the black, going into a
+-- level, its name (the card). A fall caught in Chill is the one move that has already happened: a cut to black that
+-- fades back (a dip).
+local DIP = { out = 0.45, back = 0.9, stream = 4, fall = 0.55 }
+-- When the kill plane last caught each player, and how long after it they are let be (the kill plane, below).
+local caughtAt: { [Player]: number } = {}
+local CATCH_GAP = 1
+
+-- The place round `at` streamed in to each of `players` at once, and waited for (DIP.stream at most).
+local function streamFor(players: { Player }, at: Vector3)
+	local waiting = 0
+	for _, player in ipairs(players) do
+		if player.Parent == Players then
+			waiting += 1
+			task.spawn(function()
+				pcall(function()
+					player:RequestStreamAroundAsync(at, DIP.stream)
+				end)
+				waiting -= 1
+			end)
+		end
+	end
+	local began = os.clock()
+	while waiting > 0 and os.clock() - began < DIP.stream + 0.5 do
+		task.wait(0.05)
+	end
+end
+
+-- HOME UNDER A DIP: black where you are, the lobby streamed in round its spawn, set down there, and back up; held still
+-- meanwhile and passed over by the kill plane (homeGoing). `after` once you are home (out of a story, say).
+local homeGoing: { [Player]: boolean } = {}
+local function goHome(player: Player, after: (() -> ())?)
+	if homeGoing[player] or player.Parent ~= Players then
+		return
+	end
+	homeGoing[player] = true
+	ScreenFade:FireClient(player, { black = true, time = DIP.out })
+	local character = player.Character
+	local found = character and character:FindFirstChild("HumanoidRootPart")
+	local held: BasePart? = if found and found:IsA("BasePart") then found else nil
+	if held then
+		held.Anchored = true
+	end
+	task.wait(DIP.out)
+	HubService.setVisible(true)
+	streamFor({ player }, HubService.spawnPosition())
+	if held and held.Parent then
+		held.Anchored = false
+	end
+	homeGoing[player] = nil
+	if player.Parent ~= Players then
+		return
+	end
+	HubService.returnToHub(player)
+	if after then
+		local ok, err = pcall(after)
+		if not ok then
+			warn("Bootstrap: after going home: " .. tostring(err))
+		end
+	end
+	ScreenFade:FireClient(player, { black = false, time = DIP.back })
+end
+
+-- The level's name on the black, going into it (UIService.fadeCard).
+local function cardFor(level: any, story: any?): { eyebrow: string, title: string }
+	local eyebrow = ("Level %d"):format(tonumber(level.levelId) or 0)
+	if type(story) == "table" and type(story.index) == "number" then
+		eyebrow = ("Story %d of %d"):format(story.index, #LevelDefinitions.Story)
+	end
+	return { eyebrow = eyebrow, title = tostring(level.name) }
+end
+
+local function startChosenLevel(level, players: { Player }, origin: Vector3, card: any?)
+	-- The level's name, on the black the caller has put up.
+	if card then
+		for _, player in ipairs(players) do
+			ScreenFade:FireClient(player, { card = card })
+		end
+	end
 	-- THE DIVE STANDS DOWN FIRST, before the old level is cleared out from under it. Its watch
 	-- puts the platform back whenever it finds it destroyed, so a stop that came after the clear
 	-- would have it rebuilding a platform for a level that no longer exists, in the frame the
@@ -552,6 +744,26 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 	-- level that follows might be any of them.
 	tearDownLevelWorld()
 
+	-- THE LEVEL'S OWN LIGHT, before anything of it is built, so the first frame is already lit
+	-- the way the rest of the run will be. Each level names a palette through its `backdrop`
+	-- (LightingService.palettes); a level with no palette of its own falls back to the default.
+	--
+	-- This has to happen HERE rather than once at boot, because the lobby sets the atmosphere for
+	-- the whole game while it builds the room -- so a palette applied before that is overwritten
+	-- by the lobby's, which is why City Shore has been running under the room's haze.
+	--
+	-- AND BEFORE THE HALLS (the hundred-and-sixty-eighth pass, from your note of 2026-11-03: "fix the lighting in level 4
+	-- flooded halls, it's too bright in there"). This came AFTER the halls were built, so it took away the halls' own
+	-- bloom, blur and grade as it applied (LightingService.clearLevelLook) and lit the baths with the default's outdoor
+	-- afternoon: a sun three and a half times theirs, a sky's fill through every opening and a glowing haze. Since
+	-- September the halls have never once been lit as their own. Now the palette is first, their own (floodedHalls) and
+	-- dim, and the halls' blur goes on after it.
+	local levelLightOk, levelLightErr = pcall(LightingService.apply, level.backdrop)
+	if not levelLightOk then
+		warn("Bootstrap: lighting for this level failed, continuing with whatever is set: "
+			.. tostring(levelLightErr))
+	end
+
 	if level.backdrop == "floodedHalls" and FloodedHallsService then
 		-- Each piece in a pcall, for the reason the backdrop is: this is atmosphere, and
 		-- atmosphere must never be able to stop players being placed on the level below it.
@@ -605,16 +817,13 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 			if levelInstance and levelInstance.finishPart and typeof(landing) == "CFrame" then
 				levelInstance.finishPart.CFrame = landing
 			end
-			local unride = FloodedHallsService.attachSlide(built :: Model, function(player)
+			local unride = FloodedHallsService.attachSlide(built :: Model, finishFrom(levelInstance, function(player)
 				-- THE TRUE ENDING seen (the hundred-and-sixteenth pass): a rider who clocked in at the time clock by Mr
 				-- Barlow came through the gates to his face; its reward, once a save, before the run's own.
 				if player:GetAttribute("ClockedIn") == true and EconomyService and EconomyService.trueEnding then
 					pcall(EconomyService.trueEnding, player)
 				end
-				if finishRunFor then
-					finishRunFor(player)
-				end
-			end)
+			end))
 			if typeof(unride) == "function" then
 				table.insert(undos, unride)
 			end
@@ -625,19 +834,6 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 				end
 			end
 		end
-	end
-
-	-- THE LEVEL'S OWN LIGHT, before anything of it is built, so the first frame is already lit
-	-- the way the rest of the run will be. Each level names a palette through its `backdrop`
-	-- (LightingService.palettes); a level with no palette of its own falls back to the default.
-	--
-	-- This has to happen HERE rather than once at boot, because the lobby sets the atmosphere for
-	-- the whole game while it builds the room -- so a palette applied before that is overwritten
-	-- by the lobby's, which is why City Shore has been running under the room's haze.
-	local levelLightOk, levelLightErr = pcall(LightingService.apply, level.backdrop)
-	if not levelLightOk then
-		warn("Bootstrap: lighting for this level failed, continuing with whatever is set: "
-			.. tostring(levelLightErr))
 	end
 
 	local existingBackdrop = workspace:FindFirstChild("Backdrop")
@@ -706,18 +902,14 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 					frame,
 					workspace:WaitForChild("Levels"),
 					if BackdropService then BackdropService.waterLevelAt else nil,
-					function(player: Player)
-						-- NO BLACKOUT, and that was the mistake worth naming. The dive is the best
-						-- thing in this level, the water closing over you says "that was the end"
-						-- on its own, and cutting to black threw the picture away at exactly that
-						-- moment -- leaving a small grey banner alone on an empty screen. The
-						-- banner carries the ending now, over the sea, in the level's own colours
-						-- (UIService.showCompletion). `ScreenFade` is only the story's now, for
-						-- the move between its levels (storyNext).
-						if finishRunFor then
-							finishRunFor(player)
-						end
-					end
+					-- NO BLACKOUT, and that was the mistake worth naming. The dive is the best
+					-- thing in this level, the water closing over you says "that was the end"
+					-- on its own, and cutting to black threw the picture away at exactly that
+					-- moment -- leaving a small grey banner alone on an empty screen. The
+					-- banner carries the ending now, over the sea, in the level's own colours
+					-- (UIService.showCompletion). `ScreenFade` is only the story's now, for
+					-- the move between its levels (storyNext).
+					finishFrom(levelInstance)
 				)
 			end)
 			if diveOk then
@@ -750,11 +942,7 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 		else
 			local houseOk, houseErr = pcall(function()
 				HillHouseService.start(levelInstance.finishFrame, workspace:WaitForChild("Levels"), levelInstance.centre,
-					levelInstance.killY, function(player: Player)
-						if finishRunFor then
-							finishRunFor(player)
-						end
-					end)
+					levelInstance.killY, finishFrom(levelInstance))
 			end)
 			if houseOk then
 				if levelInstance.finishPart then
@@ -794,11 +982,7 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 				warn("Bootstrap: SkyPoolsService.build failed, so this level is finishing at the end of its "
 					.. "route instead: " .. tostring(skyErr))
 			elseif built then
-				local unride = SkyPoolsService.attachSlide(built :: Model, function(player: Player)
-					if finishRunFor then
-						finishRunFor(player)
-					end
-				end)
+				local unride = SkyPoolsService.attachSlide(built :: Model, finishFrom(levelInstance))
 				if levelInstance.finishPart then
 					levelInstance.finishPart.CanTouch = false
 				end
@@ -841,11 +1025,7 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 				warn("Bootstrap: SunkenCityService.build failed, so this level is finishing at the end of its "
 					.. "route instead: " .. tostring(cityErr))
 			elseif built then
-				local undo = SunkenCityService.attach(built :: Model, function(player: Player)
-					if finishRunFor then
-						finishRunFor(player)
-					end
-				end, function(player: Player)
+				local undo = SunkenCityService.attach(built :: Model, finishFrom(levelInstance), function(player: Player)
 					-- Taken by the surfacing: Hardcore only, which SunkenCityService checks before calling.
 					if sendBackToStart then
 						sendBackToStart(player)
@@ -869,6 +1049,9 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 	-- nothing carried that choice into PlayerStateService -- so the run used whatever mode the
 	-- state was already holding. A player who picked Chill still got the hardcore
 	-- back-to-the-start on their first fall, which is exactly how it was reported.
+	-- STREAMED IN FIRST, while the screen is black: a start you are put on before your screen has it is a floor that is
+	-- not there yet.
+	streamFor(players, levelInstance.startPosition)
 	local request = HubService.getRequest()
 	for _, player in ipairs(players) do
 		TimerService.init(player)
@@ -877,6 +1060,7 @@ local function startChosenLevel(level, players: { Player }, origin: Vector3)
 		end
 		PlayerStateService.beginRun(player, request.mode :: any)
 		progression(player, "start")
+		player:SetAttribute("Checkpoint", 0)
 		-- The mode the run ACTUALLY starts in, from the server, once per player. Two rounds
 		-- were spent on "I am in chill and it sends me to the start" while the HUD was showing
 		-- a mode the server had never agreed to; this line makes that unarguable next time.
@@ -997,7 +1181,8 @@ local function storyLevel(run: any, origin: Vector3?)
 	end
 	print(("Bootstrap: the story goes on to %s (%d of %d) for %d player(s)."):format(
 		tostring(level.name), run.index, #LevelDefinitions.Story, #going))
-	return startChosenLevel(HubService.scaledLevel(level, run.length), going, origin or HubService.levelOrigin())
+	return startChosenLevel(HubService.scaledLevel(level, run.length), going, origin or HubService.levelOrigin(),
+		cardFor(level, run))
 end
 
 -- A STORY BEGUN FROM THE LOBBY, from the level the furthest-behind of its players got to (their saves), so nobody
@@ -1039,7 +1224,7 @@ local function storyNext(run: any)
 		storyRun = nil
 		for player in pairs(run.players) do
 			if player.Parent == Players and HubService.isInRun(player) then
-				HubService.returnToHub(player)
+				task.spawn(goHome, player)
 			end
 		end
 		return
@@ -1111,6 +1296,8 @@ local function storyTimeUp(run: any, index: number)
 			progression(player, "fail")
 			TimerService.resetTimer(player)
 			syncTimer(player)
+			-- At once (the story goes on to its next level under them), so a cut to black that fades back.
+			ScreenFade:FireClient(player, { dip = true, time = DIP.back })
 			HubService.returnToHub(player)
 			tellStory(player, "behind")
 		end
@@ -1136,6 +1323,8 @@ local function storyStep(player: Player)
 		storyNext(run)
 		return
 	end
+	-- At once, not under a slow dip: whoever finishes last moves everyone on from here, this player included.
+	ScreenFade:FireClient(player, { dip = true, time = DIP.back })
 	HubService.returnToHub(player)
 	tellStory(player, "waiting", { playing = playing, level = LevelDefinitions.Story[run.index].name })
 	if not run.waiting then
@@ -1174,11 +1363,28 @@ end
 
 -- THE LOBBY'S RUNNER: the story, or one level.
 local function startFromLobby(level, players: { Player }, origin: Vector3)
-	if level.story then
-		return startStory(players, origin)
+	-- INTO THE RUN UNDER A DIP: black first, the level built and streamed in under it (its name on the black), and back
+	-- up on its start. Back up whatever happens, so a failed start never leaves anyone in the dark.
+	for _, player in ipairs(players) do
+		ScreenFade:FireClient(player, { black = true, time = DIP.out })
 	end
-	storyRun = nil
-	return startChosenLevel(level, players, origin)
+	task.wait(DIP.out)
+	local ok, result = pcall(function()
+		if level.story then
+			return startStory(players, origin)
+		end
+		storyRun = nil
+		return startChosenLevel(level, players, origin, cardFor(level))
+	end)
+	for _, player in ipairs(players) do
+		if player.Parent == Players then
+			ScreenFade:FireClient(player, { black = false, time = DIP.back })
+		end
+	end
+	if not ok then
+		error(result, 0)
+	end
+	return result
 end
 
 HubService.setRunner(startFromLobby)
@@ -1216,6 +1422,11 @@ if EconomyService and EconomyService.finishedLevels and EconomyService.setLevels
 			HubVoteState:FireClient(player, "admin", { on = on })
 		end)
 	end
+end
+-- THE TELEPRINTER ANSWERED (the hundred-and-sixty-fifth pass): YES typed on a creamy keyboard (DeformationService) is
+-- paid from the save, once.
+if EconomyService and EconomyService.answeredTeleprinter and DeformationService.setAnswered then
+	DeformationService.setAnswered(EconomyService.answeredTeleprinter)
 end
 -- THE DAILY CHEST in the lobby (HubService.setDailyChest): EconomyService.claimDaily decides, and the player's own
 -- vote card says what happened (HubVoteService.onDaily); its tokens come with the usual "+N tokens".
@@ -1327,6 +1538,7 @@ local function joinRunLate(player: Player)
 		PlayerStateService.init(player, instance.startPosition)
 	end
 	PlayerStateService.beginRun(player, request.mode :: any)
+	player:SetAttribute("Checkpoint", 0)
 	HubService.markInRun({ player })
 	progression(player, "start")
 	if runBackdrop then
@@ -1373,6 +1585,25 @@ local function wirePlayer(player: Player)
 		if levelInstance and not inRunNow and lobbyAway and not player:GetAttribute("InSquishRoom") then
 			joinRunLate(player)
 		end
+		-- A RESET IN A RUN IS A FALL (the hundred-and-forty-first pass, from your notes: "polishing the game"). A new
+		-- character in a run was put at the level's start whatever the mode: Reset in Chill (stuck somewhere, say) threw
+		-- away every checkpoint, and in Hardcore the clock ran on with the run's checkpoints kept and nothing said. Now Chill
+		-- puts you back where a fall would, at your checkpoint, under a dip; Hardcore is a fall (sendBackToStart: the clock,
+		-- the run, the card, the second chance). Not once the run is finished, nor on the slab you started on.
+		local state = PlayerStateService.getState(player)
+		if inRunNow and state and not state.hasCompletedLevel then
+			if state.mode == "hardcore" then
+				if (state.checkpointChunkIndex >= 2 or TimerService.isRunning(player)) and sendBackToStart then
+					sendBackToStart(player)
+				end
+			elseif state.checkpointChunkIndex >= 1 and recoverAtCheckpoint then
+				local at = recoverAtCheckpoint(player)
+				if at then
+					hrp.CFrame = CFrame.new(at)
+					ScreenFade:FireClient(player, { dip = true, time = DIP.fall })
+				end
+			end
+		end
 	end
 
 	-- THE LEADERBOARD IS DRAWN INTO THIS PLAYER'S OWN PlayerGui, so it needs one to exist.
@@ -1405,6 +1636,10 @@ end
 -- runs, which in Studio Play Solo is always the local player. Without this
 -- loop the CharacterAdded hook is never connected for them and they stay on
 -- the baseplate instead of being placed on the level.
+-- BACK ON YOUR FEET IN A MOMENT AND A HALF (the hundred-and-forty-first pass): Roblox's own five seconds after a Reset is a
+-- long while to look at yourself in pieces, in a game where nothing else kills you.
+Players.RespawnTime = 1.5
+
 for _, player in ipairs(Players:GetPlayers()) do
 	wirePlayer(player)
 end
@@ -1480,6 +1715,8 @@ Players.PlayerRemoving:Connect(function(player: Player)
 	-- OUT OF THE STORY too (storyLeave): the hub has already had them back, so the rest may go on.
 	storyLeave(player)
 	storyMoving[player] = nil
+	homeGoing[player] = nil
+	caughtAt[player] = nil
 	-- A countdown started by someone who then left must not fire a run into an empty lobby.
 	-- PlayerRemoving fires before the player is gone from GetPlayers, hence the 1.
 	if #Players:GetPlayers() <= 1 and HubService.isVoting() then
@@ -1522,16 +1759,65 @@ LeaveLevel.OnServerEvent:Connect(function(player: Player)
 	-- "Leave to the lobby" was put in the lobby still marked as in the squish room (and so left out of every
 	-- vote after), and the lobby was brought back into the world in the middle of the run.
 	if levelInstance and HubService.isInRun(player) then
-		progression(player, "fail")
+		-- A RUN LEFT DURING ITS ENDING IS A RUN FINISHED, not one failed (the two-hundred-and-seventh pass): it has been
+		-- counted complete already, and the funnel must not say it was abandoned.
+		local leaving = PlayerStateService.getState(player)
+		if not (leaving and leaving.hasCompletedLevel) then
+			progression(player, "fail")
+		end
 		-- THE CLOCK STOPS WITH THE RUN. Leaving to the lobby left it ticking, so the hub showed a
-	-- hardcore time counting up for a run that had ended -- and the next run inherited it.
-	TimerService.resetTimer(player)
-	syncTimer(player)
-	HubService.returnToHub(player)
-	-- AND OUT OF THE STORY (storyLeave), so whoever is waiting in the lobby can go on.
-	storyLeave(player)
+		-- hardcore time counting up for a run that had ended -- and the next run inherited it.
+		TimerService.resetTimer(player)
+		syncTimer(player)
+		-- HOME UNDER A DIP, and then OUT OF THE STORY (storyLeave), so whoever is waiting in the lobby can go on.
+		goHome(player, function()
+			storyLeave(player)
+		end)
 	end
 end)
+
+-- ===== STUDIO ONLY: GO TO A LEVEL NOW (the two-hundred-and-third pass) =====
+--
+-- From your note of 2026-11-06: "be able to teleport to different levels right away". The test panel's level buttons
+-- send "level" and a level's id: out of any run you are in first, home under a dip as Leave to the lobby takes you, and
+-- then that level begun at once, in the room's mode and length, with no vote and no countdown; locked or not. One at a
+-- time: a second press while one is starting does nothing.
+if game:GetService("RunService"):IsStudio() then
+	local dev = remoteEventsFolder:FindFirstChild("DevPanel")
+	if dev and dev:IsA("RemoteEvent") then
+		local starting = false
+		dev.OnServerEvent:Connect(function(player: Player, action: any, levelId: any)
+			if action ~= "level" or typeof(levelId) ~= "number" or starting then
+				return
+			end
+			if not HubService.levelById(levelId) then
+				warn(("Bootstrap: the test panel asked for level %s, and there is none."):format(tostring(levelId)))
+				return
+			end
+			starting = true
+			local function begin()
+				HubService.setLevel(levelId)
+				local ok, began = pcall(HubService.beginRun)
+				starting = false
+				if not (ok and began) then
+					warn(("Bootstrap: the test panel could not start level %d: %s"):format(levelId,
+						if ok then "a run is still on for someone else" else tostring(began)))
+				end
+			end
+			if levelInstance and HubService.isInRun(player) then
+				progression(player, "fail")
+				TimerService.resetTimer(player)
+				syncTimer(player)
+				goHome(player, function()
+					storyLeave(player)
+					task.defer(begin)
+				end)
+			else
+				begin()
+			end
+		end)
+	end
+end
 
 -- ===== Mode switching =====
 
@@ -1638,6 +1924,9 @@ function wireCheckpointing(players: { Player })
 	--
 	-- A run starts when you leave the platform you spawned on. That is chunk two, and it has
 	-- nothing to do with what chunk two is made of.
+	-- (How many chunks this run has, for the level's funnel: counted here, as the run is wired, so a touch arriving as the
+	-- level is taken down has nothing to read.)
+	local chunkCount = #levelInstance.placedChunks
 	for _, entry in ipairs(levelInstance.placedChunks) do
 		local model = entry.model
 		local primary = model.PrimaryPart
@@ -1719,6 +2008,16 @@ function wireCheckpointing(players: { Player })
 					return
 				end
 				PlayerStateService.setCheckpoint(player, checkpointPos, entry.index, backward)
+				-- FURTHER ON THAN EVER IN THIS RUN (the hundred-and-thirty-eighth pass): said on the player, for their own
+				-- screen (RunFeel: a ring of light over the slab and two low notes). Back to 0 as a run starts or starts
+				-- again, so it is only ever new ground.
+				local reached = PlayerStateService.getState(player)
+				if reached and entry.index > (reached.furthest or 0) then
+					reached.furthest = entry.index
+					player:SetAttribute("Checkpoint", entry.index)
+					-- And how far that is into the run, for the level's funnel (the hundred-and-sixty-third pass).
+					runReached(player, entry.index, chunkCount)
+				end
 				-- CHUNK 2, not chunk 1, and it matches PlayerStateService.setCheckpoint
 				-- on purpose. Chunk 1 is the spawn chunk, so starting here began the
 				-- clock before the player had moved -- and worse, switching to hardcore
@@ -1743,6 +2042,12 @@ function wireCheckpointing(players: { Player })
 	-- the second entry point would be a second place for best times, hardcore clocks and the
 	-- return to the hub to drift apart.
 	local function completeRun(player: Player)
+		-- NO LEVEL, NOTHING TO FINISH (the hundred-and-seventy-eighth pass): the drain's outfall once finished a run whose
+		-- level had already gone, and this stopped on levelInstance.levelId ("attempt to index nil", your Output of
+		-- 2026-11-04). Nor a runner the lobby already has back.
+		if not levelInstance or not HubService.isInRun(player) then
+			return
+		end
 		local state = PlayerStateService.getState(player)
 		if not state or state.hasCompletedLevel then
 			return
@@ -1854,23 +2159,38 @@ function wireCheckpointing(players: { Player })
 		-- used to start the moment the run counted as finished, which on City Shore is the splash:
 		-- the lobby took you away in the middle of the last caption. The six now start when the
 		-- scene says it is done (SceneState), or after SCENE_WAIT whatever it says.
+		-- HOME ONCE (the two-hundred-and-seventh pass, from your note of 2026-11-10: "it teleports me twice, by default
+		-- because of the final animation and manually when I exit to the lobby"). Leave to the lobby during an ending took
+		-- you home, and this, still waiting on the ending, took you home again when it would have been over: out of the
+		-- lobby to its spawn, or out of the next run you had started. The wait now ends the moment the lobby has you
+		-- (HubService.isInRun) or this level has gone, and nothing more is done for a runner who is already home.
+		local finished = levelInstance
+		local function homeAlready(): boolean
+			return player.Parent ~= Players or not HubService.isInRun(player) or levelInstance ~= finished
+		end
 		task.spawn(function()
 			local waited = 0
-			while sceneState[player] == "began" and waited < SCENE_WAIT and player.Parent do
+			while sceneState[player] == "began" and waited < SCENE_WAIT and not homeAlready() do
 				task.wait(0.25)
 				waited += 0.25
 			end
 			sceneState[player] = nil
-			task.wait(6)
+			local read = 0
+			while read < 6 and not homeAlready() do
+				task.wait(0.25)
+				read += 0.25
+			end
+			if homeAlready() then
+				return
+			end
 			-- A STORY GOES ON (storyStep): to its next level, to the lobby to wait for the rest, or home after the last.
 			local going = storyRun
 			if going and going.players[player] and player.Parent then
 				storyStep(player)
 				return
 			end
-			if player.Parent then
-				HubService.returnToHub(player)
-			end
+			-- HOME UNDER A DIP (goHome): the level's last shot fading out, the lobby fading up.
+			goHome(player)
 			-- AND THE ROOM GETS ITS AIR BACK, once nobody is left out on the level. Lighting is
 			-- one setting for the whole server, so this waits for the LAST runner: re-lighting on
 			-- the first would drop the lobby's sky over everyone still climbing.
@@ -1985,6 +2305,8 @@ local function restartRunFor(player: Player)
 	local state = PlayerStateService.getState(player)
 	if state and levelInstance then
 		PlayerStateService.restartRun(player, levelInstance.startPosition)
+		-- From nothing again: every checkpoint is new ground (RunFeel).
+		player:SetAttribute("Checkpoint", 0)
 		-- Put the mode back. LevelService.startLevel used to wipe it via init; restartRun
 		-- keeps it, and setMode is legal here because restartRun restores isAtStart.
 		PlayerStateService.setMode(player, state.mode)
@@ -2055,6 +2377,15 @@ local function groundedRecovery(candidate: Vector3, fallback: Vector3): Vector3
 	return fallback + Vector3.new(0, 3.5, 0)
 end
 
+recoverAtCheckpoint = function(player: Player): Vector3?
+	local state = PlayerStateService.getState(player)
+	if not state then
+		return nil
+	end
+	local back = state.checkpointBackward or Vector3.new(0, 0, -1)
+	return groundedRecovery(state.checkpointPosition + back * CHILL_SETBACK_STUDS, state.checkpointPosition)
+end
+
 -- THE SECOND CHANCE, asked for from the death card: spent first (a chance that cannot be paid for is
 -- not given), then the checkpoint and the clock put back, and the runner set down where they fell from.
 do
@@ -2080,7 +2411,10 @@ do
 			local now = PlayerStateService.getState(player)
 			if now then
 				now.usedChance = true
+				-- Back at the checkpoint you fell from, which is said as one reached (RunFeel).
+				now.furthest = fall.chunk
 			end
+			player:SetAttribute("Checkpoint", fall.chunk)
 			TimerService.resume(player, fall.elapsed)
 			syncTimer(player)
 			hrp.CFrame = CFrame.new(groundedRecovery(fall.position, fall.position))
@@ -2393,6 +2727,10 @@ game:GetService("RunService").Heartbeat:Connect(function()
 		if player:GetAttribute("InLevel") == "backRooms" then
 			continue
 		end
+		-- NOR ANYONE GOING HOME under a dip (goHome: held where they stand until the lobby has them).
+		if homeGoing[player] then
+			continue
+		end
 
 		-- THE DIVE IS A FALL THIS DOES NOT OWN. City Shore finishes seven hundred studs below
 		-- the kill plane, in the sea, so a diver is exempt from the moment they leave the board
@@ -2404,7 +2742,11 @@ game:GetService("RunService").Heartbeat:Connect(function()
 		-- drops into the void under the far chamber, the plane caught the rider part way down, and
 		-- put them back on the last chunk they had touched. A ride that ends the level cannot be
 		-- something the plane interrupts.
-		if hrp.Position.Y < killY
+		-- UNDER THE SUNKEN CITY'S SEA IS A FALL TOO (the hundred-and-eightieth pass): its sea is parts you sink through, so a
+		-- fall off the route went down into the drowned streets, above this plane, and was never caught.
+		local fell = hrp.Position.Y < killY
+			or (SunkenCityService ~= nil and SunkenCityService.underSea ~= nil and SunkenCityService.underSea(player))
+		if fell
 			and not (DiveFinaleService and DiveFinaleService.ownsFall(player))
 			and not (SkyPoolsService and SkyPoolsService.ownsFall(player))
 			and not (SunkenCityService and SunkenCityService.ownsFall(player))
@@ -2414,6 +2756,15 @@ game:GetService("RunService").Heartbeat:Connect(function()
 			if not state then
 				continue
 			end
+			-- ONE FALL, CAUGHT ONCE (the hundred-and-thirty-seventh pass). A character stays under the plane for a few
+			-- frames after it is moved (its own client is still sending where it was), and every one of those frames was
+			-- taken as another fall: seven falls into the back rooms came in two or three, and a Hardcore fall's second
+			-- frame found the run already restarted and took the second chance off the card it had just offered.
+			local last = caughtAt[player]
+			if last and os.clock() - last < CATCH_GAP then
+				continue
+			end
+			caughtAt[player] = os.clock()
 			-- ONE FALL TOO MANY (BACKROOMS_FALLS in this run): through the floor, into the back rooms. Once a run.
 			state.falls = (state.falls or 0) + 1
 			if BackRoomsService and BackRoomsService.isBuilt() and state.falls >= BACKROOMS_FALLS and not state.backRooms then
@@ -2438,6 +2789,8 @@ game:GetService("RunService").Heartbeat:Connect(function()
 				local back = state.checkpointBackward or Vector3.new(0, 0, -1)
 				local behind = state.checkpointPosition + back * CHILL_SETBACK_STUDS
 				hrp.CFrame = CFrame.new(groundedRecovery(behind, state.checkpointPosition))
+				-- SEEN AS A CUT (DIP.fall): black at once where you are set down, and the picture back.
+				ScreenFade:FireClient(player, { dip = true, time = DIP.fall })
 			end
 		end
 	end
@@ -2457,69 +2810,83 @@ local PASTE_STAMPS: { [string]: { [string]: string } } = {
 		ChunkDefinitions = "4210d3cc",
 		Conversations = "3ea9ed08",
 		Keepsakes = "2213dd3d",
-		LevelDefinitions = "4fc9bd94",
-		LobbyLayout = "d2908861",
-		MaterialAppearance = "b1cbae82",
-		MaterialConfig = "cb2d1920",
+		LevelDefinitions = "bd7939e3",
+		LobbyLayout = "9c2c93b6",
+		MaterialAppearance = "9da9d575",
+		MaterialConfig = "dd3a5a52",
 		PlanShapes = "c4c2dee5",
-		Poses = "f120320d",
-		ShopCatalog = "a893da9c",
+		Poses = "21531f97",
+		SeaRig = "1b6665f8",
+		ShopCatalog = "4bba8e94",
 		SkyPath = "ee880e00",
-		Style = "34c3e714",
-		SunkenPath = "938bcf38",
+		SoundAudition = "9dc92c15",
+		Style = "8898a74b",
+		SunkenPath = "4fb174ad",
 		WaterSounds = "f8d3e842",
 	},
 	server = {
-		BackRoomsService = "ca6fa480",
+		BackRoomsService = "2b79ce56",
+		BackdropService = "74db258b",
 		BestTimeService = "71828c8e",
-		DiveFinaleService = "f9e1544f",
-		EconomyService = "66b1627b",
-		FloodedHallsService = "facf4cb4",
-		HillHouseService = "2b03c327",
-		HubService = "f3c4e0b7",
-		Interactables = "3ee2e4f1",
+		ChunkService = "5351e0e7",
+		DeformationService = "862e0512",
+		DiveFinaleService = "4e31aa6b",
+		EconomyService = "08b8b30e",
+		FloodedHallsService = "8b707b0d",
+		HillHouseService = "1d7a91bf",
+		HubService = "5f04e3a1",
+		Interactables = "d86f603a",
 		LeaderboardService = "5cb1004e",
-		LightingService = "e8009ba0",
-		SkyPoolsService = "d628dbf4",
-		SquishRoomService = "87302c64",
-		StoryService = "527b60fd",
-		SunkenCityService = "1f4fbbe3",
+		LevelService = "47bc8749",
+		LightingService = "6c4e1c71",
+		SkyPoolsService = "513603d6",
+		SquishRoomService = "d1cb07b5",
+		StoryService = "b9e0dbb5",
+		SunkenCityService = "e6a3eb71",
 		TimerService = "4c754864",
-		Townsfolk = "0d6b3e76",
+		Townsfolk = "61b686e8",
 	},
 	client = {
-		AmbienceService = "93ae5f36",
-		AudioService = "1096b908",
-		Cinema = "87246380",
-		CityShoreClient = "bf8a0666",
-		CosmeticsClient = "2e4a024f",
-		DeathService = "88f12ebc",
-		DeformationRenderer = "2c44d45e",
-		DevPanelClient = "61fc5413",
-		EmoteService = "ef8c7244",
-		FloodedHallsClient = "bfede0cc",
-		HillHouseClient = "899d813c",
+		AdOffers = "2a031c81",
+		AmbienceService = "93150068",
+		AudioService = "eb31b80b",
+		Cinema = "c2320b3c",
+		CityShoreClient = "b1d8bd87",
+		CosmeticsClient = "d8c7c6f3",
+		DeathService = "fd20a739",
+		DeformationRenderer = "9425438f",
+		DevPanelClient = "37eb0a07",
+		DrawingBoard = "2584d982",
+		EmoteService = "6b4fb966",
+		FloodedHallsClient = "1c3a6b78",
+		GroundMarks = "d996c287",
+		Haptics = "326501ab",
+		HillHouseClient = "940260b5",
 		HubLeverService = "cb5ad0b8",
-		HubVoteService = "39a9ce1b",
-		JournalService = "a9e90c21",
+		HubVoteService = "9f52f1f8",
+		JournalService = "930eb700",
 		LobbyLife = "19fe7174",
-		Maw = "17049ea6",
-		OnboardingService = "5de561e4",
-		PauseMenuService = "466ea02d",
-		PlayerLife = "32becc65",
+		MarshMouth = "a5ee35df",
+		Maw = "31b25c99",
+		OnboardingService = "154bdcdc",
+		PauseMenuService = "2c4c2fe2",
+		PlayerLife = "d14b951a",
+		RunFeel = "2bc3fccd",
 		ScreenEffects = "1aab395f",
-		SearchlightClient = "25ab1038",
-		ShopLook = "b104ab03",
-		ShopService = "9fa2efc2",
-		SkyPoolsClient = "6361e442",
-		SquishRoomClient = "d8a5bf07",
-		StalkerClient = "54373819",
-		StepService = "f8fc4255",
-		StoryClient = "fb1f02a8",
-		SunkenCityClient = "655616d7",
-		TalkClient = "d2da2c3b",
-		UIService = "75a6c86e",
-		ViewModeService = "fa7b7c02",
+		SearchlightClient = "ee204a83",
+		ShopLook = "90e3eed1",
+		ShopModels = "9f46b345",
+		ShopService = "810e3dc0",
+		SkyPoolsClient = "44ad1308",
+		SquishRoomClient = "94acbe7c",
+		StalkerClient = "a6823855",
+		StepService = "c10931d2",
+		StoryClient = "3da889d8",
+		SunkenCityClient = "a76f5f25",
+		TalkClient = "4cf69365",
+		Teleprinter = "32391f7f",
+		UIService = "5d894e66",
+		ViewModeService = "62147faa",
 	},
 }
 -- END PASTE STAMPS
@@ -2541,13 +2908,14 @@ local function pasteCheck()
 		"SquishRoomService", "StoryService", "SunkenCityService", "TimerService", "Townsfolk" }
 	local SHARED_MODULES = { "ChunkDefinitions", "Conversations", "HallRoute", "Keepsakes", "LevelDefinitions",
 		"LobbyLayout", "MaterialAppearance", "MaterialConfig", "PlanShapes", "Poses", "SeaRig", "ShopCatalog", "SkyPath",
-		"Style", "SubRegionGrid", "SunkenPath", "Types", "WaterSounds" }
+		"SoundAudition", "Style", "SubRegionGrid", "SunkenPath", "Types", "WaterSounds" }
 	local CLIENT_MODULES = { "AmbienceService", "AudioService", "Cinema", "CityShoreClient", "CloudService", "CosmeticsClient",
-		"DeathService", "DeformationRenderer", "DevPanelClient", "EmoteService", "FloodedHallsClient",
-		"HillHouseClient", "HubLeverService", "HubVoteService", "InputService", "JournalService", "LobbyLife", "Maw", "OnboardingService",
+		"DeathService", "DeformationRenderer", "DevPanelClient", "DrawingBoard", "EmoteService", "FloodedHallsClient",
+		"HillHouseClient", "HubLeverService", "HubVoteService", "InputService", "JournalService", "GroundMarks", "LobbyLife", "MarshMouth", "Maw", "OnboardingService",
 		"PlayerLife",
 		"PauseMenuService", "ScreenEffects", "SeaService", "SearchlightClient", "ShopService", "SkyPoolsClient",
-		"ShopLook", "SquishRoomClient", "StalkerClient", "StepService", "StoryClient", "SunkenCityClient", "TalkClient", "UIService",
+		"ShopLook", "ShopModels", "AdOffers", "SquishRoomClient", "StalkerClient", "StepService", "StoryClient", "SunkenCityClient", "TalkClient", "UIService",
+		"RunFeel", "Haptics", "Teleprinter",
 		"ViewModeService" }
 	-- Taken out of the game: still there, they would run alongside what replaced them.
 	local GONE = { "KeepsakeService", "PromptStyleService" }
@@ -2565,19 +2933,24 @@ local function pasteCheck()
 		"HallsChord", "PlungeWind", "PoolPlunge", "PoolsChord", "ShoreChord", "SkimSlap", "SlideRush", "SunkenChord",
 		"UnderwaterHum", "WhirlRoar", "MawGrowl", "MawRoar", "TownsfolkVoice_x9", "CountdownTock_x3", "JournalAdd", "DoorSlam", "TubeDie",
 		"ScreamerStab", "ArchPass", "KeyLift", "ClockStart", "ClockPunch",
-		"MorningChord", "PoolsSong", "BarStrike", "BrickBurst" }
+		"MorningChord", "PoolsSong", "BarStrike", "BrickBurst", "CheckpointChime_x3", "HarbourRain", "HarbourBell",
+		"KeyTurn", "ShoreScoreLoop", "SunkenScoreLoop", "HallsScoreLoop", "HillScoreLoop", "ScoreHit" }
 	-- Each of these has a stand-in (EndChord for the four chords, a built-in sound for the roars and the growl, the
 	-- pool's chord for the Sky Pools' song).
 	local OPTIONAL = { ShoreChord = true, PoolsChord = true, SunkenChord = true, HallsChord = true, WhirlRoar = true,
 		MawGrowl = true, MawRoar = true, TownsfolkVoice_x9 = true, CountdownTock_x3 = true, JournalAdd = true,
 		DoorSlam = true, TubeDie = true, ScreamerStab = true, ArchPass = true, KeyLift = true, ClockStart = true,
-		ClockPunch = true, MorningChord = true, PoolsSong = true, BarStrike = true, BrickBurst = true }
+		ClockPunch = true, MorningChord = true, PoolsSong = true, BarStrike = true, BrickBurst = true,
+		CheckpointChime_x3 = true, HarbourRain = true, HarbourBell = true, KeyTurn = true,
+		-- (The endings' score: a scene plays without it.)
+		ShoreScoreLoop = true, SunkenScoreLoop = true, HallsScoreLoop = true, HillScoreLoop = true, ScoreHit = true }
 	local AMBIENCE_SOUNDS = { "BathsHum", "HarbourNight", "HillMorning", "HoldDrone", "PartyFar", "RoofWind", "ShoreSea" }
 	-- The lobby's own (the ninety-sixth pass): optional, as the lobby has the server's stand-ins without them.
 	-- The levels' water (the ninety-eighth pass): optional, as the old splash stands in without them.
 	local WATER_SOUNDS = { "Dip_x8", "Drip_x8", "Lap", "Pour", "Splash_x6", "Stream" }
 	-- THE SHOP'S OWN (ShopLook, the hundred-and-fifth pass), optional: the shop is plain without them.
-	local SHOP_SOUNDS = { "CookieCrunch_x4", "CrateReveal_x5", "CrateShake", "ShopClose", "ShopOpen", "ShopTab_x9" }
+	local SHOP_SOUNDS = { "CookieCrunch_x4", "CrateReveal_x5", "CrateShake", "ShopClose", "ShopOpen", "ShopTab_x11",
+		"UiTaps_x8" }
 	local LOBBY_SOUNDS = { "BuoyBell_x2", "FountainBed", "FountainSplash_x10", "KeyPress_x4", "LeverChill_x2",
 		"LeverHardcore_x2", "LockedPress_x2", "PadPress_x4", "PosePress_x4", "SeaBed_1", "SeaBed_2", "StartPress_x2", "Surf_x8",
 		"WindGust_x5" }
@@ -2633,6 +3006,8 @@ local function pasteCheck()
 	scriptAt(ServerScriptService, "ServerScriptService", "ChunkBuilder", "Script")
 	scriptAt(ServerScriptService, "ServerScriptService", "ChunkProps", "Script")
 	scriptAt(StarterPlayerScripts, "StarterPlayerScripts", "Bootstrap", "LocalScript")
+	-- THE ARRIVAL (the hundred-and-fifty-ninth pass): the join card, first of everything. Without it, Roblox's own screen.
+	scriptAt(game:GetService("ReplicatedFirst"), "ReplicatedFirst", "Arrival", "LocalScript")
 	for _, name in ipairs(GONE) do
 		for _, folder in ipairs({ clientServices, serverServices }) do
 			if folder and folder:FindFirstChild(name) then
@@ -2798,6 +3173,42 @@ local function pasteCheck()
 	if #notOnSale > 0 then
 		print("PASTE CHECK: not on sale yet, no id in ShopCatalog.lua (fine for testing, needed before publishing): "
 			.. table.concat(notOnSale, ", "))
+	end
+	-- AN ID ROBLOX DOES NOT KNOW (the hundred-and-sixtieth pass): each Robux item's id asked of Roblox as what it should
+	-- be, a pass or a developer product, so a product's id put where a pass's goes (or a typo) is named here, not found
+	-- by a player pressing Buy; a pass taken off sale is said; and a price on the Dashboard that is not the one in
+	-- ShopCatalog.lua is said too (the shop shows the Dashboard's, ShopCatalog.robuxFor).
+	if catalogModule and catalogModule:IsA("ModuleScript") then
+		local ok, catalog = pcall(require, catalogModule)
+		if ok and type(catalog) == "table" and type(catalog.all) == "function" then
+			task.spawn(function()
+				local MarketplaceService = game:GetService("MarketplaceService")
+				for _, item in ipairs(catalog.all()) do
+					local isPass = item.passId ~= nil
+					local id = if isPass then item.passId else item.productId
+					if item.robux and type(id) == "number" and id ~= 0 then
+						local field = if isPass then "passId" else "productId"
+						local asked, info = pcall(function()
+							return MarketplaceService:GetProductInfo(id,
+								if isPass then Enum.InfoType.GamePass else Enum.InfoType.Product)
+						end)
+						local price = if asked and type(info) == "table" then tonumber((info :: any).PriceInRobux) else nil
+						if not asked or type(info) ~= "table" then
+							warn(("PASTE CHECK: Roblox does not know %s's %s %d as a %s of this game: check the id on the "
+								.. "Creator Dashboard (Monetization) and in ShopCatalog.lua"):format(tostring(item.name), field,
+								id, if isPass then "pass" else "developer product"))
+						elseif isPass and (info :: any).IsForSale == false then
+							print(("PASTE CHECK: %s (pass %d) is off sale on the Dashboard, so the shop says it is not on sale")
+								:format(tostring(item.name), id))
+						elseif price and price ~= item.robux then
+							print(("PASTE CHECK: %s is %d Robux on the Dashboard and %d in ShopCatalog.lua; the shop shows "
+								.. "the Dashboard's (and Roblox's price for each player, where it sets one)"):format(
+								tostring(item.name), price, tonumber(item.robux) or 0))
+						end
+					end
+				end
+			end)
+		end
 	end
 	-- BADGES NOT MADE YET (ShopCatalog.BADGES): nothing is awarded for them until they are.
 	if catalogModule and catalogModule:IsA("ModuleScript") then

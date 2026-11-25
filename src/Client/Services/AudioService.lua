@@ -313,6 +313,13 @@ local SOUND_LIFETIME = 5
 
 local ContentProvider = game:GetService("ContentProvider")
 
+-- AND EVERY OTHER SOUND THE GAME PLAYS BY NAME (the hundred-and-forty-first pass, from your notes: "polishing the game"):
+-- only the materials' were fetched ahead, so the first time any of these played (the board letting you go off the dive,
+-- a level's chord, the shop opening, the lobby's first wave) it came when its asset had arrived, which on a slow
+-- connection is after the moment it was for. Fetched behind the materials', the lobby's first since it is heard first;
+-- the folder's own Sounds, which are kept (only the probes made here are destroyed).
+local PRELOAD_FOLDERS = { "LobbySounds", "ShopSounds", "StorySounds", "AmbienceSounds", "WaterSounds" }
+
 task.spawn(function()
 	local probes = {}
 	local asked: { [string]: boolean } = {}
@@ -328,17 +335,30 @@ task.spawn(function()
 			end
 		end
 	end
-	if #probes == 0 then
+	local fetch: { Instance } = table.clone(probes)
+	for _, name in ipairs(PRELOAD_FOLDERS) do
+		local folder = SoundService:FindFirstChild(name)
+		if folder then
+			for _, item in ipairs(folder:GetDescendants()) do
+				if item:IsA("Sound") and item.SoundId ~= "" and not asked[item.SoundId] then
+					asked[item.SoundId] = true
+					table.insert(fetch, item)
+				end
+			end
+		end
+	end
+	if #fetch == 0 then
 		return
 	end
 	local ok, err = pcall(function()
-		ContentProvider:PreloadAsync(probes)
+		ContentProvider:PreloadAsync(fetch)
 	end)
 	for _, probe in ipairs(probes) do
 		probe:Destroy()
 	end
 	if ok then
-		print(("[client] Audio: %d sound ids preloaded"):format(#probes))
+		print(("[client] Audio: %d sound ids preloaded (%d the materials', %d the game's others)"):format(#fetch, #probes,
+			#fetch - #probes))
 	else
 		warn("[client] Audio: preload failed, first plays may be late: " .. tostring(err))
 	end
@@ -457,6 +477,23 @@ end
 --   `force` skips the per-material gap, so a combo lands on top of the click that caused it.
 export type SfxOptions = { pitch: number?, gain: number?, event: string?, force: boolean? }
 
+-- FELT AS WELL AS HEARD (the hundred-and-sixty-fourth pass): Haptics, beside this module, found the first time it is
+-- wanted. Nothing here needs it to run, so without it every sound still plays.
+local haptics: any = nil
+local function felt(): any
+	if haptics == nil then
+		haptics = false
+		local found = script.Parent and script.Parent:FindFirstChild("Haptics")
+		if found and found:IsA("ModuleScript") then
+			local ok, loaded = pcall(require, found)
+			if ok and type(loaded) == "table" then
+				haptics = loaded
+			end
+		end
+	end
+	return haptics or nil
+end
+
 function AudioService.playSfx(material: string, region: BasePart, mine: boolean?, options: SfxOptions?)
 	local matDef = Materials[material]
 	if not matDef then
@@ -519,6 +556,15 @@ function AudioService.playSfx(material: string, region: BasePart, mine: boolean?
 	local soundId = pickSoundId(event)
 	if not soundId then
 		return
+	end
+
+	-- YOUR OWN STEP, FELT (the hundred-and-sixty-fourth pass): here, past both gates and with a take picked, so a step is
+	-- felt exactly when it is heard, once a footfall, and nobody else's ever is.
+	if mine then
+		local hands = felt()
+		if hands then
+			pcall(hands.step, material, asked, gain)
+		end
 	end
 
 	local playing = activeSounds[material]
@@ -626,5 +672,70 @@ function AudioService.playSfx(material: string, region: BasePart, mine: boolean?
 	end)
 end
 
-AudioService.STAMP = "1096b908"
+-- ===== A PRESS (the hundred-and-forty-fourth pass) =====
+--
+-- ONE SOFT SOUND FOR EVERY BUTTON IN THE GAME'S MENUS: a felt-tipped tap for a press, two soft notes up as a card opens
+-- and down as it goes, a bubble and a note for something good, two low knocks for a no. One sheet, audio/gen_ui_sfx.py's
+-- UiTaps_x8 in SoundService.ShopSounds, each take in its own PRESS_SLOT seconds (its generator's SLOTS).
+-- Every press the shop, the welcome and the emotes made was the engine's electronic ping an octave up: they asked
+-- MaterialSounds for takes named "buttonClick_" and "bubblePop_", which nothing there is named (the keypad's sheet is
+-- button_clicky_x4), and a bubble wrap sheet found that way played whole, three pops in a row. The pause card, the death
+-- card, the journal's pages and the words you choose made no sound at all.
+local PRESS_SLOT = 0.8
+local PRESSES: { [string]: { slots: { number }, volume: number } } = {
+	tap = { slots = { 0, 1, 2, 3 }, volume = 0.45 },
+	open = { slots = { 4 }, volume = 0.4 },
+	close = { slots = { 5 }, volume = 0.35 },
+	good = { slots = { 6 }, volume = 0.5 },
+	no = { slots = { 7 }, volume = 0.45 },
+}
+local lastTap = -1
+function AudioService.press(kind: string?, volume: number?)
+	local spec = PRESSES[kind or "tap"] or PRESSES.tap
+	local folder = SoundService:FindFirstChild("ShopSounds")
+	local sheet = folder and folder:FindFirstChild("UiTaps_x8")
+	local s: Sound
+	if sheet and sheet:IsA("Sound") then
+		-- One slot, and never the same tap twice running.
+		local pick = spec.slots[math.random(1, #spec.slots)]
+		if #spec.slots > 1 then
+			if pick == lastTap then
+				pick = spec.slots[(table.find(spec.slots, pick) :: number) % #spec.slots + 1]
+			end
+			lastTap = pick
+		end
+		local take = sheet:Clone()
+		take.Looped = false
+		local from = pick * PRESS_SLOT
+		local regioned = pcall(function()
+			(take :: any).PlaybackRegionsEnabled = true;
+			(take :: any).PlaybackRegion = NumberRange.new(from, from + PRESS_SLOT - 0.05)
+		end)
+		take.TimePosition = from
+		if not regioned then
+			task.delay(PRESS_SLOT - 0.07, function()
+				if take.Parent then
+					take:Stop()
+				end
+			end)
+		end
+		s = take
+	else
+		-- Until it is imported: a soft click, lowered. Never the ping.
+		s = Instance.new("Sound")
+		s.SoundId = "rbxasset://sounds/clickfast.wav"
+		s.PlaybackSpeed = if kind == "good" then 0.9 elseif kind == "no" then 0.6 else 0.75
+	end
+	s.Volume = volume or spec.volume
+	s.Parent = SoundService
+	s:Play()
+	game:GetService("Debris"):AddItem(s, PRESS_SLOT + 0.3)
+	-- And felt, by the same kind (the hundred-and-sixty-fourth pass).
+	local hands = felt()
+	if hands then
+		pcall(hands.press, kind)
+	end
+end
+
+AudioService.STAMP = "eb31b80b"
 return AudioService

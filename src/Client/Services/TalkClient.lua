@@ -19,6 +19,14 @@
 -- toward you, its rim and number gold and an arrow at its end; something you have never said to anyone, in any run, is
 -- marked New (what you have said before comes back each time you start a level). And every speech bubble over a head,
 -- theirs and yours, is written out a letter at a time as it comes up, its name tag and shadow there at once.
+--
+-- UNDER YOU, AND WHO THEY ARE (the two-hundredth pass, from your note of 2026-11-05: "the UI of the characters talking,
+-- the speech boxes and interactions"). Seen in play, the choices stood a hundred and fifty pixels up the screen, three
+-- cards and a heading tall, which put them across your own character's middle; now they sit DOCK.low from the bottom
+-- (DOCK.touch on a touch screen, over the thumbs) and you stay in sight above them. Over them, who you are talking to:
+-- their own face, a likeness of their head as they stand there, in the disc in their colour (their initial if no likeness
+-- can be made), then their name and "What do you say?". And while they think what to answer, three dots over their head
+-- come up one by one (Townsfolk.think): the bubble tagged ThinkingBubble.
 
 local CollectionService = game:GetService("CollectionService")
 local ContextActionService = game:GetService("ContextActionService")
@@ -52,10 +60,32 @@ local ui = {
 	watch = nil :: RBXScriptConnection?,
 	buttons = {} :: { TextButton },
 	slots = {} :: { Frame },
+	low = 0,
 }
 local KEYS = { Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four }
 -- Letters a second a speech bubble is written out at: quicker than reading, so it is never waited on.
 local WRITE_RATE = 48
+-- WHERE THE CHOICES SIT (the two-hundredth pass): `low` pixels up from the bottom of the screen with a keyboard or a
+-- controller, `touch` on a touch screen (over the thumbstick and the jump button), and `away` further down as they come
+-- and go.
+local DOCK = { low = 26, touch = 104, away = 20 }
+-- THE LIKENESS (the same pass): how far in front of their face the little camera stands (studs), how high over its
+-- middle, and how wide it sees (degrees), so the head fills the disc.
+local LIKENESS = { back = 3.4, up = 0.25, fov = 26 }
+-- THE THREE DOTS (the same pass): how long each dot takes to come up while they think.
+local DOT_EVERY = 0.28
+
+-- A PRESS, HEARD (the hundred-and-forty-fourth pass): AudioService.press, the one soft sound every menu in the game makes
+-- (a felt tap, two notes up as a card opens and down as it goes). The words you choose made none.
+local function pressSound(kind: string)
+	local found = script.Parent and script.Parent:FindFirstChild("AudioService")
+	if found and found:IsA("ModuleScript") then
+		local ok, audio = pcall(require, found)
+		if ok and type(audio) == "table" and type(audio.press) == "function" then
+			audio.press(kind)
+		end
+	end
+end
 
 local function usingPad(): boolean
 	local last = UserInputService:GetLastInputType()
@@ -81,11 +111,12 @@ local function build()
 	gui.Enabled = false
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 	ui.gui = gui
-	-- Low in the middle, above where a thumb would be, as wide as a phone allows.
+	-- Low in the middle, under your character (DOCK, the two-hundredth pass; over the thumbs on a touch screen), as wide
+	-- as a phone allows.
 	local holder = Instance.new("Frame")
 	holder.Name = "Choices"
 	holder.AnchorPoint = Vector2.new(0.5, 1)
-	holder.Position = UDim2.new(0.5, 0, 1, -150)
+	holder.Position = UDim2.new(0.5, 0, 1, -DOCK.low)
 	holder.Size = UDim2.new(0.9, 0, 0, 0)
 	holder.AutomaticSize = Enum.AutomaticSize.Y
 	holder.BackgroundTransparency = 1
@@ -103,14 +134,16 @@ local function build()
 	local eyebrow = Instance.new("TextLabel")
 	eyebrow.Name = "Eyebrow"
 	eyebrow.LayoutOrder = 0
-	-- WHO YOU ARE TALKING TO, in a bubble of its own over the choices, their initial on a disc in their own colour (what
-	-- they wear) at its start.
-	eyebrow.Size = UDim2.fromOffset(0, 34)
+	-- WHO YOU ARE TALKING TO, in a bubble of its own over the choices: at its start their face on a disc in their own
+	-- colour (what they wear), a little bigger than the bubble so it stands out of it like a medal; then their name, and
+	-- the question in a lighter ink (RichText, show).
+	eyebrow.Size = UDim2.fromOffset(0, 40)
 	eyebrow.AutomaticSize = Enum.AutomaticSize.X
 	eyebrow.BackgroundColor3 = Style.BUBBLE.fill
 	eyebrow.FontFace = Style.BUBBLE.font
 	eyebrow.TextSize = Style.SIZE.body
 	eyebrow.TextColor3 = Style.BUBBLE.ink
+	eyebrow.RichText = true
 	eyebrow.Text = ""
 	rounded(eyebrow, Style.RADIUS.pill)
 	local eyebrowRim = Instance.new("UIStroke")
@@ -119,13 +152,13 @@ local function build()
 	eyebrowRim.Thickness = Style.BUBBLE.stroke
 	eyebrowRim.Parent = eyebrow
 	local eyebrowPad = Instance.new("UIPadding")
-	eyebrowPad.PaddingLeft, eyebrowPad.PaddingRight = UDim.new(0, 44), UDim.new(0, 16)
+	eyebrowPad.PaddingLeft, eyebrowPad.PaddingRight = UDim.new(0, 56), UDim.new(0, 18)
 	eyebrowPad.Parent = eyebrow
 	local portrait = Instance.new("Frame")
 	portrait.Name = "Portrait"
 	portrait.AnchorPoint = Vector2.new(0, 0.5)
-	portrait.Position = UDim2.new(0, -38, 0.5, 0)
-	portrait.Size = UDim2.fromOffset(28, 28)
+	portrait.Position = UDim2.new(0, -54, 0.5, 0)
+	portrait.Size = UDim2.fromOffset(46, 46)
 	portrait.BackgroundColor3 = Style.COLOUR.accent
 	portrait.BorderSizePixel = 0
 	portrait.Parent = eyebrow
@@ -140,7 +173,7 @@ local function build()
 	initial.BackgroundTransparency = 1
 	initial.Size = UDim2.fromScale(1, 1)
 	initial.FontFace = Style.FONT.display
-	initial.TextSize = Style.SIZE.body
+	initial.TextSize = Style.SIZE.title
 	initial.TextColor3 = Style.BUBBLE.ink
 	initial.Text = ""
 	initial.Parent = portrait
@@ -211,7 +244,8 @@ local function hide()
 	if gui and gui.Enabled then
 		local holder = ui.holder
 		if holder then
-			TweenService:Create(holder, TweenInfo.new(0.18, Enum.EasingStyle.Quad), { Position = UDim2.new(0.5, 0, 1, -130) }):Play()
+			TweenService:Create(holder, TweenInfo.new(0.18, Enum.EasingStyle.Quad),
+				{ Position = UDim2.new(0.5, 0, 1, -ui.low + DOCK.away) }):Play()
 		end
 		for _, button in ipairs(ui.buttons) do
 			fade(button, 1, 0.16)
@@ -371,9 +405,60 @@ local function option(index: number, entry: Option): (Frame, TextButton)
 		lit(false)
 	end)
 	button.Activated:Connect(function()
+		pressSound("tap")
 		choose(index)
 	end)
 	return slot, button
+end
+
+-- THEIR FACE IN THE DISC (the two-hundredth pass): a copy of whoever `head` belongs to, as they stand, in a little
+-- viewport of its own, its camera LIKENESS.back in front of their face. Only what draws is kept (no scripts, sounds,
+-- prompts, bubbles, lights or effects). False, and the disc keeps their initial, when there is no one to copy.
+local function likeness(disc: Frame, head: BasePart): boolean
+	local old = disc:FindFirstChild("Likeness")
+	if old then
+		old:Destroy()
+	end
+	local model = head.Parent
+	if not (model and model:IsA("Model")) then
+		return false
+	end
+	local made, copy = pcall(function()
+		return model:Clone()
+	end)
+	if not made or not copy then
+		return false
+	end
+	for _, item in ipairs(copy:GetDescendants()) do
+		if item:IsA("LuaSourceContainer") or item:IsA("Sound") or item:IsA("ProximityPrompt") or item:IsA("LayerCollector")
+			or item:IsA("Light") or item:IsA("ParticleEmitter") or item:IsA("Beam") or item:IsA("Trail") then
+			item:Destroy()
+		end
+	end
+	local view = Instance.new("ViewportFrame")
+	view.Name = "Likeness"
+	view.Size = UDim2.fromScale(1, 1)
+	view.BackgroundTransparency = 1
+	view.Ambient = Color3.fromRGB(160, 158, 170)
+	view.LightColor = Color3.fromRGB(255, 244, 228)
+	view.LightDirection = Vector3.new(-0.3, -1, -0.5)
+	view.ZIndex = 2
+	rounded(view, Style.RADIUS.pill)
+	copy.Parent = view
+	local camera = Instance.new("Camera")
+	camera.FieldOfView = LIKENESS.fov
+	local face = head.CFrame
+	camera.CFrame = CFrame.lookAt(face.Position + face.LookVector * LIKENESS.back + face.UpVector * LIKENESS.up,
+		face.Position + face.UpVector * (LIKENESS.up * 0.2))
+	camera.Parent = view
+	view.CurrentCamera = camera
+	view.Parent = disc
+	return true
+end
+
+-- Their name for RichText: the three characters it treats as markup, written as text.
+local function plain(text: string): string
+	return (string.gsub(string.gsub(string.gsub(text, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"))
 end
 
 local function show(offer: Offer)
@@ -388,8 +473,9 @@ local function show(offer: Offer)
 	end
 	table.clear(ui.slots)
 	table.clear(ui.buttons)
-	eyebrow.Text = ("What do you say to %s?"):format(offer.title)
-	-- Their initial (the last word of what they are called: Mrs Venn's V) on their own colour.
+	-- Their name, and the question after it in a lighter ink.
+	eyebrow.Text = ('<font weight="heavy">%s</font><font transparency="0.4">   What do you say?</font>'):format(plain(offer.title))
+	-- Their face on their own colour; their initial (the last word of what they are called: Mrs Venn's V) without one.
 	local words = string.split(offer.title, " ")
 	local tint = if typeof(offer.tint) == "Color3" then offer.tint else Style.COLOUR.accent
 	if ui.portrait and ui.initial then
@@ -397,6 +483,8 @@ local function show(offer: Offer)
 		ui.initial.Text = string.upper(string.sub(words[#words] or "", 1, 1))
 		ui.initial.TextColor3 = if 0.299 * tint.R + 0.587 * tint.G + 0.114 * tint.B > 0.6 then Style.BUBBLE.ink
 			else Color3.new(1, 1, 1)
+		local drawn, seen = pcall(likeness, ui.portrait, offer.head)
+		ui.initial.Visible = not (drawn and seen)
 	end
 	for index, entry in ipairs(offer.options) do
 		if index > #KEYS then
@@ -440,10 +528,12 @@ local function show(offer: Offer)
 			end
 		end)
 	end
-	holder.Position = UDim2.new(0.5, 0, 1, -130)
+	-- Under you (DOCK): over the thumbs on a touch screen with no keyboard.
+	ui.low = if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then DOCK.touch else DOCK.low
+	holder.Position = UDim2.new(0.5, 0, 1, -ui.low + DOCK.away)
 	gui.Enabled = true
 	TweenService:Create(holder, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-		{ Position = UDim2.new(0.5, 0, 1, -150) }):Play()
+		{ Position = UDim2.new(0.5, 0, 1, -ui.low) }):Play()
 	-- Number keys choose; B (or Escape) puts them away. The controller's A presses the selected one, as on any menu.
 	local binds: { Enum.KeyCode } = { Enum.KeyCode.Escape, Enum.KeyCode.ButtonB }
 	for index = 1, #ui.buttons do
@@ -506,12 +596,39 @@ local function writeOut(gui: Instance)
 	end)
 end
 
+-- THREE DOTS COMING UP ONE BY ONE while they think what to say (the two-hundredth pass; Townsfolk.think makes the
+-- bubble and tags it ThinkingBubble): one, two, three, a beat with none, and round again, until they speak.
+local function thinkOut(gui: Instance)
+	local words = gui:FindFirstChild("Words")
+	if not (words and words:IsA("TextLabel")) then
+		return
+	end
+	local dots = { 1, 3, 5, 0 } -- graphemes of the three dots: one, two (with the space between), all three, none
+	local started = os.clock()
+	local thinking: RBXScriptConnection? = nil
+	thinking = RunService.Heartbeat:Connect(function()
+		if not words.Parent then
+			if thinking then
+				thinking:Disconnect()
+			end
+			return
+		end
+		words.MaxVisibleGraphemes = dots[math.floor((os.clock() - started) / DOT_EVERY) % #dots + 1]
+	end)
+end
+
 function TalkClient.isOpen(): boolean
 	return ui.offer ~= nil
 end
 
+-- PUT AWAY FROM OUTSIDE (Cinema, as a scene starts: the hundred-and-fortieth pass), as walking away puts them away.
+function TalkClient.dismiss()
+	hide()
+end
+
 function TalkClient.start()
 	CollectionService:GetInstanceAddedSignal("SpeechBubble"):Connect(writeOut)
+	CollectionService:GetInstanceAddedSignal("ThinkingBubble"):Connect(thinkOut)
 	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents", 20)
 	local remote = remotes and remotes:WaitForChild("Talk", 20)
 	if not (remote and remote:IsA("RemoteEvent")) then
@@ -532,5 +649,5 @@ function TalkClient.start()
 	print("TalkClient: running")
 end
 
-TalkClient.STAMP = "d2da2c3b"
+TalkClient.STAMP = "4cf69365"
 return TalkClient

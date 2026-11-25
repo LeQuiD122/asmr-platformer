@@ -95,6 +95,12 @@ for item_id, tab, kind, rest in items:
         elif earn.group(1) == "crate":
             if "function ShopCatalog.rollCrate(" not in CATALOG or 'if action == "crate" or item.kind == "crate" then' not in ECONOMY:
                 fail("%s comes out of the background crate, and nothing opens one" % item_id)
+        elif earn.group(1) == "vip":
+            # VIP's own (the two-hundred-and-thirteenth pass): owned while Roblox says you have the VIP pass.
+            if 'local item = ShopCatalog.get(id)\n\t\tif item and item.earn == "vip" then\n\t\t\treturn true' not in ECONOMY:
+                fail("%s comes with VIP, and having VIP gives nothing of it" % item_id)
+            if item_id not in re.search(r"ShopCatalog\.VIP = \{.*?items = \{([^}]*)\}", CATALOG, re.S).group(1):
+                fail("%s comes with VIP but is not in the list of what VIP gives (ShopCatalog.VIP.items)" % item_id)
         elif earn.group(1) != "story":
             fail("%s is earned by %s, which nothing gives" % (item_id, earn.group(1)))
     elif bool(price) == bool(robux):
@@ -114,6 +120,13 @@ for item_id in re.findall(r'"(\w+)"', featured.group(1) if featured else ""):
     if item_id not in seen:
         fail("Featured lists %s, which is not in the catalogue" % item_id)
 for tab in tabs[1:]:
+    # (Wear is the boutique's: its shelves come from the Roblox catalogue, found by the server with ShopCatalog.BOUTIQUE.)
+    if tab == "Wear":
+        if not re.search(r"ShopCatalog\.BOUTIQUE = \{\n\tcollections = \{\n\t\t\{ name = ", CATALOG) \
+                or 'boutiqueRemote.OnServerInvoke = function(player: Player): any' not in ECONOMY \
+                or 'if tab == "Wear" then\n\t\treturn boutiqueItems()' not in SHOP:
+            fail("the Wear tab is empty: the boutique has no collections, no server finding them, or no shelves")
+        continue
     if not any(t == tab for _, t, _, _ in items):
         fail("the %s tab is empty" % tab)
 reward = re.search(r"BASE = \{ short = (\d+), medium = (\d+), long = (\d+) \}", CATALOG)
@@ -149,11 +162,22 @@ for needle, why in (
 adds = re.findall(r"[Dd]ata\.Tokens \+= ([\w.]+)", ECONOMY)
 # (A run's "amount" twice: a run's pay in runFinished, and the story's bonus in finishStory, which only Bootstrap
 # calls, after a story's last level, for someone whose own walking got there. And since the hundred-and-sixteenth pass
-# the true ending's, once a save, in trueEnding, which only Bootstrap calls, for a rider who clocked in.)
-if sorted(adds) != sorted(["STUDIO_TOKENS", "item.tokens", "amount", "amount", "amount", "amount", "amount", "amount", "prize",
-                           "starterTokens", "codeTokens", "DEV_TOKENS"]):
+# the true ending's, once a save, in trueEnding, which only Bootstrap calls, for a rider who clocked in. And since the
+# hundred-and-sixty-fifth the teleprinter's, once a save, in answeredTeleprinter, which only DeformationService calls,
+# for YES typed under the player's own feet.)
+# (And since the two-hundred-and-thirteenth pass the VIP crate's, vipTokens, when there is no background left for a VIP:
+# once a day, for a player Roblox says has VIP; checked with the request below.)
+if sorted(adds) != sorted(["STUDIO_TOKENS", "item.tokens", "amount", "amount", "amount", "amount", "amount", "amount", "amount",
+                           "prize", "starterTokens", "codeTokens", "DEV_TOKENS", "vipTokens"]):
     fail("EconomyService adds tokens somewhere other than a run, a token pack, the Studio gift and the Studio "
          "test panel: %s" % adds)
+# The teleprinter pays once a save: the flag is looked at, and set, before a token is added.
+answered_at = ECONOMY.find("function EconomyService.answeredTeleprinter(player: Player): number")
+answered_block = ECONOMY[answered_at:ECONOMY.find("\nend\n", answered_at)] if answered_at >= 0 else ""
+if answered_at >= 0 and not (
+        answered_block.find("profile.Data.Teleprinter == true then\n\t\treturn 0") >= 0
+        and 0 <= answered_block.find("profile.Data.Teleprinter = true") < answered_block.find("profile.Data.Tokens += amount")):
+    fail("EconomyService: the teleprinter can pay more than once a save")
 # THE TEST PANEL is Studio's alone: listened to only there, and checking again when it is.
 dev_block = ECONOMY[ECONOMY.find("local function onDev("):ECONOMY.find("-- ===== THE SECOND CHANCE =====")]
 if not dev_block.startswith("local function onDev(player: Player, action: any)\n\tif not RunService:IsStudio() then\n\t\treturn"):
@@ -174,8 +198,16 @@ handler = ECONOMY[ECONOMY.find("local function handle("):ECONOMY.find("local fun
 # ONE PLACE ONLY: a code posted in the lobby's post box, found in the server's own list (ShopCatalog.CODES), while it
 # lasts, once a save. Anywhere else in a request, tokens only go down.
 code_branch = handler[handler.find('if action == "code" then'):handler.find("-- UNEQUIP names a kind of thing")]
-if handler.replace(code_branch, "").count("Tokens +=") or code_branch.count("Tokens +=") != 1:
+# AND THE VIP CRATE (the two-hundred-and-thirteenth pass): only for a VIP, only once a day, the day kept before any pay.
+vip_branch = handler[handler.find('if action == "vipCrate" then'):handler.find("-- A CODE POSTED in the lobby's post box")]
+if handler.replace(code_branch, "").replace(vip_branch, "").count("Tokens +=") or code_branch.count("Tokens +=") != 1 \
+        or vip_branch.count("Tokens +=") != 1:
     fail("a shop request can add tokens")
+vip_pay = vip_branch.find("data.Tokens += vipTokens")
+if not (0 <= vip_branch.find("if not (passes[player] and passes[player].VIP) then\n\t\t\treturn answer(player, false, \"vip\")")
+        < vip_branch.find("if (tonumber(data.VipCrateDay) or 0) == day then\n\t\t\treturn answer(player, false, \"tomorrow\")")
+        < vip_branch.find("data.VipCrateDay = day") < vip_pay):
+    fail("EconomyService: the VIP crate can be opened without VIP, or more than once a day")
 for needle, why in (
     ("local entry = if key then ShopCatalog.code(key) else nil\n\t\tif not (key and entry) then\n\t\t\treturn answer(player, false, \"unknown\")",
      "a code not in the server's own list pays"),
@@ -292,7 +324,7 @@ for item_id, tab, kind, rest in items:
     if kind == "sound" and item_id not in packs:
         fail("the step sound %s has no pack in StepService" % item_id)
 for needle, why in (
-    ("local WEARABLE = { trail = true, aura = true, steps = true, sound = true, background = true }",
+    ("local WEARABLE = { trail = true, aura = true, pal = true, steps = true, sound = true, background = true }",
      "footprints, step sounds or backgrounds cannot be worn"),
     ('player:SetAttribute("Footprint", if steps and steps.kind == "steps" and owns(player, steps.id) then steps.id else nil)',
      "a footprint is shown without being owned"),
@@ -706,14 +738,14 @@ for needle, why in (
     ("local isVip = passes[player] ~= nil and passes[player].VIP == true", "the VIP tag is given to players without VIP"),
     ("\t\tif existing then\n\t\t\texisting:Destroy()\n\t\tend\n\t\treturn", "a VIP tag stays on someone without VIP"),
     ("gui.Parent = head", "the VIP tag is not over the head"),
-    ("gui.Size = UDim2.new(2.7, 0, 1.25, 0)", "the VIP tag is not sized in studs (it would stay huge far away)"),
+    ("gui.Size = UDim2.new(TAGS.vip, 0, TAGS.height / TAGS.pill, 0)", "the VIP tag is not sized in studs (it would stay huge far away)"),
     ("gui.MaxDistance = 80", "the VIP tag is drawn from any distance"),
     ('shown.Enabled = player:GetAttribute("InLevel") == nil', "the VIP tag shows on a level"),
 ):
     if needle not in vip:
         fail("EconomyService: " + why)
 for needle, why in (
-    ('"Cosmetic")\n\tvipTag(player)\n', "the VIP tag is not put on with the rest (dress)"),
+    ('then pal else nil)\n\tvipTag(player)\n', "the VIP tag is not put on with the rest (dress)"),
     ('player:GetAttributeChangedSignal("InLevel"):Connect(function()\n\t\t\tvipTag(player)',
      "the VIP tag does not come off on a level and back in the lobby"),
     ('elseif action == "vip" then', "the test panel cannot turn VIP on to see the tag"),
@@ -722,7 +754,8 @@ for needle, why in (
         fail("EconomyService: " + why)
 if '{ action = "vip", text = "VIP on/off" }' not in DEV_CLIENT:
     fail("DevPanelClient: there is no VIP on/off button")
-if 'blurb = "A VIP tag over your head and in chat, and the gold sparkle"' not in CATALOG:
+vip_blurb = re.search(r'\{ id = "VIP", tab = "Passes", kind = "pass", name = "VIP",\n\t+blurb = ((?:"[^"]*"\s*(?:\.\.\s*)?)+)', CATALOG)
+if not (vip_blurb and "VIP tag over your head" in "".join(re.findall(r'"([^"]*)"', vip_blurb.group(1)))):
     fail("ShopCatalog: the VIP pass does not say it puts a tag over your head")
 
 # NEAR THE END (Studio only, Bootstrap): the test panel puts you at a checkpoint about eight chunks before the
@@ -779,7 +812,7 @@ if "local theirs = EconomyService.finishedLevels(other)\n\t\t\t\tfor _, level in
 ONBOARD = read("Client", "Services", "OnboardingService.lua")
 if "Each level is a route of materials to its end, and finishing one opens the next." not in ONBOARD:
     fail("OnboardingService: the welcome does not say that finishing a level opens the next")
-if 'say = "Step on City Shore, the first level. Finishing it opens the next." }' not in ONBOARD:
+if 'say = "Step on Start for your first run, City Shore. Finishing it opens the next." }' not in ONBOARD:
     fail("OnboardingService: the guide's first step does not say that finishing City Shore opens the next")
 
 # ADMINS OPEN EVERY LEVEL FOR THEMSELVES (/levels): only the owner (a group game's owner), ADMIN_IDS and Studio;
@@ -900,7 +933,7 @@ for needle, why in (
     ("local amount = ShopCatalog.dailyReward(streak)", "the daily chest's tokens are not the catalogue's"),
     ("data.DailyDay = now\n", "the daily chest is not kept as opened today"),
     ("dailyAttributes(player)", "the player's screen is not told the chest was opened"),
-    ("earnedRemote:FireClient(player, amount, { daily = true, streak = streak })", "the daily chest pays without a word"),
+    ("earnedRemote:FireClient(player, amount, { daily = true, streak = streak, vip = vip })", "the daily chest pays without a word"),
 ):
     if needle not in claim:
         fail("EconomyService: " + why)
@@ -1111,7 +1144,7 @@ for needle, why in (
     ("local prize, done = EconomyService.challengeRun(player, { levelId = levelId, hardcore = hardcore, best = best,\n\t\tfriend = friend, length = run.length })",
      "a finished run never does a daily challenge"),
     ("earnedRemote:FireClient(player, amount + prize + foundTokens, {", "a daily challenge's tokens are not on the run's pill"),
-    ("friend = friend, challenges = #done,", "the run's pill does not say a challenge was done"),
+    ("friend = friend, vip = vip, boost = boosted, challenges = #done,", "the run's pill does not say a challenge was done"),
 ):
     if needle not in run_finished:
         fail("EconomyService: " + why)
@@ -1380,7 +1413,7 @@ for needle, why in (
     if needle not in CATALOG:
         fail("ShopCatalog: " + why)
 for needle, why in (
-    ("local ACTIONS = { buy = true, equip = true, unequip = true, code = true, crate = true }",
+    ("local ACTIONS = { buy = true, equip = true, unequip = true, code = true, crate = true, vipCrate = true }",
      "a code cannot be posted, or a crate opened"),
     ("\tCodes = {} :: { [string]: boolean },", "a new save has nowhere to keep the codes posted"),
 ):
@@ -1644,7 +1677,8 @@ if "electronicpingshort" in VOTE:
 for needle, why in (
     ('local sheet = folder and folder:FindFirstChild("CountdownTock_x3")', "the countdown's own sounds are never found"),
     ("tock(if left <= 3 then 1 else 0)", "the last three seconds sound like the rest"),
-    ("\t\ttock(2)\n", "nothing sounds as the countdown runs out"),
+    # The countdown's own (a notice's chime, nextNotice, is the same call deeper in: it must not stand in for this one).
+    ("\t\tshownSeconds = 0\n\t\ttock(2)\n", "nothing sounds as the countdown runs out"),
 ):
     if needle not in VOTE:
         fail("HubVoteService: " + why)
@@ -1716,8 +1750,17 @@ else:
         meshes = re.findall(r'mesh = "(\w+)"', body) + re.findall(r'wings = "(\w+)"', body)
         if not meshes:
             fail("ShopCatalog: %s's pieces name no mesh" % item["id"])
+        # (Made in Studio's own mesh generator and kept in the place, ReplicatedStorage.Assets.Cosmetics, not exported:
+        # the autumn leaf, the two-hundred-and-thirteenth pass.)
+        # (And the two-hundred-and-fourteenth pass's: the trails' and steps' own pieces, January's, the VIP crown.)
+        STUDIO_MADE = {"Cos_Leaf", "Cos_SoapFoam", "Cos_SlimeBlob", "Cos_CloudPuff", "Cos_JellyBean", "Cos_Bow",
+                       "Cos_SeaPebble", "Cos_JellyHeart", "Cos_StarCookie", "Cos_HoneyPaw",
+                       "Cos_PomPom", "Cos_Marshmallow", "Cos_Crown",
+                       # (the two-hundred-and-sixteenth pass's)
+                       "Cos_Petal", "Cos_CookieBit", "Cos_CatPaw", "Cos_Duck"}
         for mesh in meshes:
-            if mesh != "Ball" and not (MESHES / (mesh + ".fbx")).exists():
+            # ("Flat": a print drawn flat on the ground by StepService, the penguin's.)
+            if mesh not in ("Ball", "Flat") and mesh not in STUDIO_MADE and not (MESHES / (mesh + ".fbx")).exists():
                 fail("ShopCatalog: %s is made of %s, and meshes/cosmetics/%s.fbx is not made" % (item["id"], mesh, mesh))
         for size in re.findall(r"size = ([\d.]+)", body):
             top = 2.0 if item["kind"] in ("steps", "aura") else 1.0
@@ -1766,11 +1809,15 @@ else:
 # (it was two); and every aura's ring or halo within its limit and drawn.
 MOTIONS = set(re.findall(r'(?:if|elseif) s\.motion == "(\w+)" then', COSMETICS)) | {"still"}
 ribbon_ids = []
-for m in re.finditer(r"^\t(\w+) = \{\n\t\tribbon = \{(.*?)\n\t\tmotes = \{", looks_block, re.M | re.S):
+for m in re.finditer(r"^\t(\w+) = \{\n(?:\t\t--[^\n]*\n)*\t\tribbon = \{(.*?)\n\t\tmotes = \{", looks_block, re.M | re.S):
     look_id, body = m.group(1), m.group(2)
     ribbon_ids.append(look_id)
     width = re.search(r"\bwidth = ([\d.]+),\s*life", body)
     strands = re.findall(r"\{ at = Vector3\.new\((-?[\d.]+), (-?[\d.]+), (-?[\d.]+)\), motion = \"(\w+)\"(.*?)\}", body, re.S)
+    # (A mist trail, the cloud's since the two-hundred-and-nineteenth pass, has no ribbon at all: `strands = {}`, its marker
+    # only, ShopCatalog.wear. That draws nothing, which is not the old wide sheet.)
+    if "strands = {}" in body:
+        continue
     if not width or not strands:
         fail("ShopCatalog: the %s trail has no strands, so it is the old wide sheet" % look_id)
         continue
@@ -2244,6 +2291,217 @@ for m in re.finditer(r"(\w+) = rgb\((\d+), (\d+), (\d+)\)", colours.group(1) if 
 started = re.search(r"CLIENT_MODULES = \{(.*?)\}", BOOT, re.S)
 if not started or '"ShopLook"' not in started.group(1):
     fail("Bootstrap: ShopLook is not among the client's modules")
+
+# ===== 203: THE TEST PANEL SIZED AND MOVED, AND A LEVEL AT ONCE (your note of 2026-11-06) =====
+dev_build = DEV_CLIENT[DEV_CLIENT.find("local function build()"):DEV_CLIENT.find("function DevPanelClient.start()")]
+for needle, why in (
+    ('title.InputBegan:Connect(begin("move"))', "the test panel cannot be moved by its title"),
+    ('grip.InputBegan:Connect(begin("size"))', "the test panel cannot be sized by its grip"),
+    ("math.clamp(to.X, SIZE.minWidth, math.max(SIZE.minWidth, screen.X - at.X))", "the test panel can be sized off the screen or to nothing"),
+    ('local scroll = Instance.new("ScrollingFrame")', "the test panel's buttons do not scroll when they do not fit"),
+    ("local columns = math.clamp(math.floor((panel.AbsoluteSize.X - 28) / SIZE.cell), 1, 4)", "the test panel's columns do not follow its width"),
+    ('remote:FireServer("level", level.levelId)', "the test panel has no way to a level at once"),
+):
+    if needle not in dev_build:
+        fail("DevPanelClient: " + why)
+if "for _, level in ipairs(definitions.All or {}) do" not in DEV_CLIENT:
+    fail("DevPanelClient: the level buttons are not the game's own levels")
+go_level = BOOT[BOOT.find("-- ===== STUDIO ONLY: GO TO A LEVEL NOW"):]
+go_level = go_level[:go_level.find("\nend\n") + 5]
+for needle, why in (
+    ('if action ~= "level" or typeof(levelId) ~= "number" or starting then', "takes a level that is not one, or two at once"),
+    ("HubService.setLevel(levelId)", "does not start the level asked for"),
+    ("local ok, began = pcall(HubService.beginRun)", "starts a level unguarded"),
+    ("goHome(player, function()\n\t\t\t\t\tstoryLeave(player)\n\t\t\t\t\ttask.defer(begin)", "starts a level over the run you are in"),
+):
+    if needle not in go_level:
+        fail("Bootstrap, the test panel's levels: " + why)
+if 'if game:GetService("RunService"):IsStudio() then' not in go_level:
+    fail("Bootstrap: the test panel's levels can be asked for in the live game")
+
+# THE ITEMS IN THE ROUND (the two-hundred-and-twelfth pass): every kind of item but a pass, a product or a background has
+# a little model, every emote its own move, still under Reduce Motion, let go of when its tile goes; and the shop falls
+# back to the drawing when the model cannot be made.
+MODELS = read("Client", "Services", "ShopModels.lua")
+for kind in sorted(set(re.findall(r'kind = "(\w+)"', CATALOG[:CATALOG.find("CHALLENGES")] if "CHALLENGES" in CATALOG else CATALOG))):
+    if kind in ("pass", "product", "background", "hardcore", "best", "long", "friend"):
+        continue
+    if "BUILD.%s = function" % kind not in MODELS:
+        fail("ShopModels: no model for the shop's %s items, so they are flat drawings" % kind)
+for emote in re.findall(r'\{ id = "(\w+)", tab = "Emotes", kind = "emote"', CATALOG):
+    if not re.search(r"^\t%s = function\(t\)" % emote, MODELS, re.M):
+        fail("ShopModels: the %s emote has no move of its own in the shop" % emote)
+if "if not Style.lessMotion() then\n\t\ttable.insert(live," not in MODELS:
+    fail("ShopModels: the models keep moving under Roblox's Reduce Motion")
+if "if not entry.view.Parent then\n\t\t\t\ttable.remove(live, k)" not in MODELS:
+    fail("ShopModels: a tile's model is never let go of when its tile goes, so the loop grows every time you change tab")
+if "Neon" in "\n".join(line.split("--", 1)[0] for line in MODELS.splitlines()):
+    fail("ShopModels: something is Neon")
+if 'local ok, drawn = pcall(ShopModels.draw, icon, item)' not in SHOP or "if not modelled then\n\t\tdrawIcon(icon, item)" not in SHOP:
+    fail("ShopService: the tiles do not try the model first and fall back to the drawing")
+
+# THE TWO-HUNDRED-AND-THIRTEENTH PASS: VIP worth having, rewarded ads, the boutique and the season's things.
+for needle, why in (
+    # VIP
+    ("\tif vip then\n\t\tamount = ShopCatalog.vipReward(amount)\n\tend", "a VIP's run does not pay a fifth more"),
+    ("physics:CollisionGroupSetCollidable(VIP_GUESTS, VIP_GATE, false)", "the VIP lounge's gateway stops VIPs too"),
+    ("local group = if passes[player] ~= nil and passes[player].VIP == true then VIP_GUESTS else \"Default\"",
+     "everyone walks through the VIP lounge's gateway"),
+    # Rewarded ads
+    ("if (adsLeft(profile.Data)[what] or 0) <= 0 then\n\t\t\t\twatchAd:FireClient(player, what, false, \"limit\")",
+     "an ad can be watched without end"),
+    ("if RunService:IsStudio() then\n\t\t\t\ttask.wait(1)", "a pretend ad is given outside Studio"),
+    ("if channel == Enum.ProductPurchaseChannel.AdReward then", "an ad's reward is not counted against the day's ads"),
+    ("\tif boosted then\n\t\tprofile.Data.RunBoosts -= 1\n\t\tamount *= 2\n\tend", "a run boost is never used, or used without paying"),
+    ("elseif item.id == \"RunBoost\" then\n\t\t\t-- KEPT until a run is finished", "a bought run boost is never given"),
+    # Limited
+    ("if action == \"buy\" and item.limited and inSeason ~= \"on\" and inSeason ~= \"early\" then\n\t\treturn answer(player, false, \"gone\")",
+     "a limited thing can be bought out of its season"),
+    # Boutique
+    ("and not restricted and name and fits and not string.find(string.lower(seller), \"test\", 1, true)",
+     "the boutique shelves items off its theme, or a test shop's"),
+):
+    if needle not in ECONOMY:
+        fail("EconomyService: " + why)
+if "ShopCatalog.VIP = { tokens = 1.2," not in CATALOG:
+    fail("ShopCatalog: VIP's fifth more is not a fifth")
+if "MarketplaceService:PromptPurchase(player, item.assetId)" not in SHOP:
+    fail("ShopService: a boutique item cannot be bought")
+if "or ((state == \"on\" or state == \"early\") and not table.find(list, item)) or owned(item.id)" not in SHOP:
+    fail("ShopService: a limited thing is shown out of its season")
+ads = re.search(r"ShopCatalog\.ADS = \{ chance = \{ product = \"SecondChance\", perDay = (\d+) \}, boost = \{ product = \"RunBoost\", perDay = (\d+) \} \}", CATALOG)
+if not ads or int(ads.group(1)) > 5 or int(ads.group(2)) > 5:
+    fail("ShopCatalog: the ads are not limited to a few a day (Roblox: rewards must not flood the economy)")
+for m in re.finditer(r'limited = \{ from = "(\d{4}-\d\d-\d\d)", to = "(\d{4}-\d\d-\d\d)" \}', CATALOG):
+    if m.group(1) >= m.group(2):
+        fail("ShopCatalog: a limited thing's season ends before it begins (%s to %s)" % (m.group(1), m.group(2)))
+
+# THE TWO-HUNDRED-AND-FOURTEENTH PASS: the boutique's banner, the billboards, VIP early and daily, the made pieces.
+STEP = read("Client", "Services", "StepService.lua")
+COSMETICS = read("Client", "Services", "CosmeticsClient.lua")
+for needle, why in (
+    ('banner.Activated:Connect(function()\n\t\tuiSound("buttonClick", 0.5)\n\t\tShopService.showTab("Wear")', "the boutique's banner does not lead to Wear"),
+    ('local showing = shop.tab ~= "Wear"', "the boutique's banner covers the boutique itself, or no tab"),
+):
+    if needle not in SHOP:
+        fail("ShopService: " + why)
+board = re.search(r"local AD_BOARD = \{ w = ([\d.]+), h = ([\d.]+), foot = ([\d.]+),", HUB)
+if not board:
+    fail("HubService: the billboards' size is not where this reads it")
+else:
+    w, h, foot = float(board.group(1)), float(board.group(2)), float(board.group(3))
+    if not (8 <= w <= 32 and 4.5 <= h <= 18):
+        fail("HubService: a billboard %gx%g is outside what Roblox serves ads into (8x4.5 to 32x18)" % (w, h))
+    if foot < 9:
+        fail("HubService: the billboards stand low enough for the level pads to hide them (an ad half hidden is not counted)")
+for needle, why in (
+    ("ad.FallbackImage = fallback", "a billboard shows Roblox's logo to anyone not shown an ad, not the bay's own poster"),
+    ("ad.EnableVideoAds = true", "the billboards take no video ads"),
+):
+    if needle not in HUB:
+        fail("HubService: " + why)
+if len(re.findall(r'^	buildAdBoard\(HUB_ORIGIN \+ AT\.adBoard\w+, Vector3\.new\(0, 0, 1\), "AdBoard\w+", "rbxassetid://\d+", folder\)', HUB, re.M)) != 2:
+    fail("HubService: the two billboards are not both built, each with its own poster")
+if "if vip and at < from and at >= from - ShopCatalog.VIP.early * 86400 then" not in CATALOG:
+    fail("ShopCatalog: a VIP does not get the season's things early")
+if "amount = math.floor(amount * ShopCatalog.VIP.daily + 0.5)" not in ECONOMY:
+    fail("EconomyService: a VIP's daily chest pays no more")
+if "if up.Y > 0.9 then\n\t\tat = onDeck(at)" not in STEP:
+    fail("StepService: a print in the lobby is laid under the deck's inlay, unseen")
+if 'local tilt = if one.motion == "halo" then 0 else 0.3' not in COSMETICS:
+    fail("CosmeticsClient: what is worn over the head (the crown) tilts at random")
+pieces_block = CATALOG[CATALOG.find("local PIECES"):CATALOG.find("function ShopCatalog.pieces")]
+for made in ("SoapSuds", "HoneyDrip", "SlimeGlow", "CloudPuff", "JellyRibbon", "GreenRibbon", "SeaGlass", "HeartStep", "StarStep",
+             "HoneyPaw", "BubbleSole", "SlimeStep"):
+    m = re.search(r"\n\t%s = \{(.*?)\n\t(?:-- |\w+ = \{)" % made, pieces_block, re.S)
+    if not m:
+        fail("ShopCatalog: %s has no pieces" % made)
+    elif 'material = "Glass"' in m.group(1):
+        fail("ShopCatalog: %s's pieces are glass again (the see-through look the bay does not use)" % made)
+
+# THE TWO-HUNDRED-AND-FIFTEENTH PASS: the crown on the head, the prints the right way round, the side rail, the plaza.
+if "part.CFrame = head.CFrame * CFrame.new(0, lift, 0)" not in COSMETICS:
+    fail("CosmeticsClient: the crown is not held on the head, so it trails behind you as you run")
+if "frame = frame * CFrame.Angles(0, math.rad(piece.yaw or 0), 0)" not in STEP:
+    fail("StepService: a print mesh cannot be turned to face the way you walk")
+if 'piece.mesh == "Flat" then' not in STEP:
+    fail("StepService: a drawn print (\"Flat\") is looked for as a mesh")
+honey = re.search(r"\n\tHoneyPaw = \{(.*?)\n\t\w+ = \{", pieces_block, re.S)
+if not honey or "yaw = 180" not in honey.group(1):
+    fail("ShopCatalog: the honey paws point back the way you came")
+for needle, why in (
+    ('screen.Enabled = player:GetAttribute("InLevel") == nil', "the side rail shows during a run"),
+    ("MarketplaceService:PromptGamePassPurchase(Players.LocalPlayer, item.passId)", "the rail's 2x does not offer the pass"),
+    ("\tbuildRail()\n", "the side rail is never built"),
+):
+    if needle not in SHOP:
+        fail("ShopService: " + why)
+LAYOUT = read("Shared", "LobbyLayout.lua")
+if "\tbuildFingerpost(HUB_ORIGIN + AT.fingerpost, folder)\n\tbuildPlazaTroughs(folder)" not in HUB:
+    fail("HubService: the plaza's fingerpost and flower troughs are not built")
+if "local base = at + Vector3.new(0, 0.325, 0) -- on the inlay" not in HUB:
+    fail("HubService: the fingerpost stands in the inlay, not on it")
+if "local inset = plaza.w / 2 - LobbyLayout.MARGIN - 1" not in HUB:
+    fail("HubService: the flower troughs stand past the inlay's edge")
+if "fingerpost = Vector3.new(" not in LAYOUT:
+    fail("LobbyLayout: the fingerpost has no place")
+
+# THE TWO-HUNDRED-AND-SIXTEENTH PASS: the pals, and more to spend tokens on.
+pals_block = CATALOG[CATALOG.find("local PALS: { [string]: Pal } = {"):CATALOG.find("function ShopCatalog.pal(")]
+pal_items = re.findall(r'\{ id = "(\w+)", tab = "Pals", kind = "pal",[^}]*?price = (\d+)', CATALOG, re.S)
+if len(pal_items) < 6:
+    fail("ShopCatalog: the Pals tab has %d pals, not six" % len(pal_items))
+for pal_id, price in pal_items:
+    spec = re.search(r"\n\t%s = \{ mesh = \"(\w+)\", size = ([\d.]+), motion = \"(\w+)\"" % pal_id, pals_block)
+    if not spec:
+        fail("ShopCatalog: the pal %s has no model or motion (PALS)" % pal_id)
+        continue
+    if spec.group(3) not in ("hop", "buzz", "drift", "float"):
+        fail("ShopCatalog: the pal %s moves in a way CosmeticsClient does not know (%s)" % (pal_id, spec.group(3)))
+    if not 0.8 <= float(spec.group(2)) <= 2.6:
+        fail("ShopCatalog: the pal %s is %s studs, too small to see or big enough to be in the way" % (pal_id, spec.group(2)))
+    if not 200 <= int(price) <= 2000:
+        fail("ShopCatalog: the pal %s costs %s tokens, outside what a few runs earn" % (pal_id, price))
+if '"Pals"' not in re.search(r"ShopCatalog\.TABS = \{[^}]*\}", CATALOG).group(0):
+    fail("ShopCatalog: the pals have no tab")
+for needle, why in (
+    ('at:SetAttribute("PiecePal", pal.id)', "a worn pal is never named on the character, so nobody draws it"),
+):
+    if needle not in CATALOG:
+        fail("ShopCatalog: " + why)
+for needle, why in (
+    ('local tag = root and (root:FindFirstChild("ShopPreviewPal") or root:FindFirstChild("CosmeticPal"))',
+     "a pal worn or tried on is not looked for"),
+    ("if fresh or (pal.at - want).Magnitude > PAL_JUMP then", "a pal set down somewhere new is dragged the whole way"),
+    ("local hit = workspace:Raycast(Vector3.new(pal.at.X, root.Position.Y + 2, pal.at.Z), Vector3.new(0, -10, 0), rayParams)",
+     "a hopping pal does not keep to the ground"),
+    ("if ground < feet - 4 or ground > feet + 4 then\n\t\t\t\tground = feet", "a hopping pal drops into the gap between two chunks"),
+    ("ground = math.max(ground, feet - 1)", "a hopping pal is left on the ground when you jump"),
+    ("(root.Position - eye).Magnitude < NEAR) then\n\t\t\tdropPal(player)", "a pal far off is still made and moved"),
+    ("movePals(dt, now, eye)", "the pals are never moved"),
+):
+    if needle not in COSMETICS:
+        fail("CosmeticsClient: " + why)
+if 'if pal and pal.kind == "pal" and owns(player, pal.id) then pal else nil)' not in ECONOMY:
+    fail("EconomyService: a pal is worn without being owned, or never worn")
+if 'if item.kind == "pal" then item else nil)' not in SHOP:
+    fail("ShopService: a pal cannot be tried on")
+
+# THE TWO-HUNDRED-AND-EIGHTEENTH PASS: the rail's buttons say something with the shop shut; nothing in the workshop or
+# on the squish room's lift shares a face; the workshop's labels hide behind things.
+for needle, why in (
+    ('ShopService.open("Passes")', "the rail's 2x does nothing you can see once the pass is yours (its toast is in the shut shop)"),
+    ('ShopService.open("Tokens")', "the rail's run boost does nothing you can see (its toast is in the shut shop)"),
+):
+    if needle not in SHOP:
+        fail("ShopService: " + why)
+SQUISH = read("Server", "Services", "SquishRoomService.lua")
+if 'part(cabin, "LiftJamb", Vector3.new(0.5, 7.98, 0.26), at(2.55, 4.39, -3.15)' not in SQUISH:
+    fail("SquishRoomService: the lift's jambs cut into its columns and meet its sign face to face again")
+if 'decorPart("WorkshopBoardLeg", Vector3.new(0.5, 7.1, 0.5), at + Vector3.new(-0.55, 3.55, z), folder)' not in HUB:
+    fail("HubService: the workshop board's legs share its faces again (the two woods flicker)")
+if "makeSign(pad, row.labels[value], row.field, 5.4, 6.4, true)" not in HUB or "made.AlwaysOnTop = false" not in HUB:
+    fail("HubService: the workshop's labels are drawn through the board and the lift again")
 
 if problems:
     for problem in problems:

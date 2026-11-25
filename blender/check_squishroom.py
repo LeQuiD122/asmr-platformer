@@ -148,7 +148,9 @@ for needle, text, why in (
     ("local ok, err = pcall(function()\n\t\t\t\t(require(squishModule)", BOOT, "a broken room could stop the whole server Bootstrap"),
     ('if kind == "closed" then', CLIENT, "the client never says why the way back is shut"),
     ('if kind == "going" then\n\t\t\t\tcover()', CLIENT, "the lift has no fade"),
-    ('elseif kind == "arrived" then\n\t\t\t\tuncover()', CLIENT, "the fade never lifts when you arrive"),
+    ('if ui.coveredAt == stamp then\n\t\t\t\t\t\tbehind()\n\t\t\t\t\t\tuncover()', CLIENT, "the fade never lifts when you arrive"),
+    ("local ROOM_OUTDOOR = ", CLIENT, "the fade lifts before the room's lamps have lit it (it showed a cold blue hall)"),
+    ("room.arrive = Vector3.new(cx, y + 3.5, zA + 19)", ROOM, "you arrive with the camera inside the lift"),
     ("if ui.coveredAt == stamp then\n\t\t\tuncover()", CLIENT, "a lost word could leave the screen covered for good"),
     ("player:RequestStreamAroundAsync(to, 6)", ROOM, "you are moved before the place is streamed in, and can fall through it"),
     ('tell(player, "arrived")', ROOM, "the client is never told you have arrived"),
@@ -239,6 +241,37 @@ for needle, why in (
 ):
     if needle not in JOURNAL:
         fail("JournalService: " + why)
+
+# THE LIFT PAVILION (the two-hundred-and-twelfth pass): columns, panels with bars over them, a ceiling on the capitals,
+# a cornice, a drum and a dome, and the floor dial standing on the cornice. Each piece on what is under it.
+def lift_y(name, field=r"at\(0, ([\d.]+), 0\)"):
+    m = re.search(r'"%s", Vector3\.new\(([\d.]+), ([\d.]+), ([\d.]+)\), %s' % (name, field), ROOM)
+    return (float(m.group(2)), float(m.group(4))) if m else None
+for name in ("LiftColumn", "LiftBar", "LiftGate", "LiftRail", "LiftCeiling", "LiftDrum", "LiftDome", "LiftFinial", "LiftDialRim",
+             "LiftCarpet", "LiftStep"):
+    if '"%s"' % name not in ROOM:
+        fail("the lift has no %s: it is a box again, not the pavilion" % name)
+roof, ceiling = lift_y("LiftRoof"), lift_y("LiftCeiling")
+capital = re.search(r'"LiftCapital", Vector3\.new\([\d.]+, ([\d.]+), [\d.]+\), at\(x, ([\d.]+), z\)', ROOM)
+rail = re.search(r'"LiftRail", Vector3\.new\([\d.]+, ([\d.]+), [\d.]+\), at\(0, ([\d.]+), ', ROOM)
+bar = re.search(r'round\("LiftBar", ([\d.]+), [\d.]+, at\(-3\.15, ([\d.]+), along\)', ROOM)
+dial = re.search(r'"LiftDialRim", Vector3\.new\([\d.]+, ([\d.]+), [\d.]+\), at\(0, ([\d.]+), ', ROOM)
+if not (roof and ceiling and capital and rail and bar and dial):
+    fail("the lift pavilion's pieces are not where this reads them (roof, ceiling, capital, rail, bar, dial)")
+else:
+    ceiling_bottom = ceiling[1] - ceiling[0] / 2
+    roof_top = roof[1] + roof[0] / 2
+    if abs(float(capital.group(2)) + float(capital.group(1)) / 2 - ceiling_bottom) > 0.05:
+        fail("the lift's ceiling is not on its columns' capitals (a gap, or the capitals through it)")
+    if abs(roof[1] - roof[0] / 2 - (ceiling[1] + ceiling[0] / 2)) > 0.05:
+        fail("the lift's cornice is not on its ceiling")
+    bar_low = float(bar.group(2)) - float(bar.group(1)) / 2
+    bar_high = float(bar.group(2)) + float(bar.group(1)) / 2
+    if abs(bar_low - (float(rail.group(2)) + float(rail.group(1)) / 2)) > 0.05 or abs(bar_high - ceiling_bottom) > 0.05:
+        fail("the lift's bars do not run from the rail to the ceiling (%.2f to %.2f)" % (bar_low, bar_high))
+    if abs(float(dial.group(2)) - float(dial.group(1)) / 2 - roof_top) > 0.05:
+        fail("the lift's floor dial is not standing on the cornice (its foot %.2f, the cornice's top %.2f)"
+             % (float(dial.group(2)) - float(dial.group(1)) / 2, roof_top))
 
 if problems:
     for problem in problems:

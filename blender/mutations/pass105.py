@@ -60,7 +60,7 @@ MUTATIONS = [
     ("the drip in slots not the water's", LOOK, AUDIOCHECK, 'material = 1.0, Drip = 1.0 }', 'material = 1.0, Drip = 0.5 }'),
     ('a sound that is not there', LOOK, AUDIOCHECK, 'playSound("ShopSounds/ShopClose", 0.55)', 'playSound("ShopSounds/ShopShut", 0.55)'),
     ('a tab with no take', LOOK, AUDIOCHECK, '"Tokens", "Backgrounds" }', '"Tokens", "Backgrounds", "Pets" }'),
-    ('a sound Bootstrap does not check for', BOOT, AUDIOCHECK, '"ShopOpen", "ShopTab_x9" }', '"ShopOpen" }'),
+    ('a sound Bootstrap does not check for', BOOT, AUDIOCHECK, '"ShopOpen", "ShopTab_x9",\n\t\t"UiTaps_x8" }', '"ShopOpen",\n\t\t"UiTaps_x8" }'),
     ('a material with no sound', LOOK, AUDIOCHECK, 'sound = "MaterialSounds/cloudHush"', 'sound = "MaterialSounds/cloudPuff"'),
     ('a name never declared', LOOK, PARSE, 'local index = table.find(ShopLook.TAB_ORDER, name)', 'local index = table.find(ShopLook.TAB_ORDER, nam)'),
 ]

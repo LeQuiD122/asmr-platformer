@@ -41,22 +41,12 @@ local DRESSING: { [string]: any } = {
 	-- stuff on top of soda" -- two materials in one platform, only one of which you could
 	-- press into. The Needohs are the surface now, so there is nothing left to scatter.
 
-	-- ===== KEYBOARD PALETTES =====
+	-- ===== KEYBOARD PALETTES ARE NOT HERE ANY MORE (the hundred-and-fifty-fifth pass) =====
 	--
-	-- The same rigged Keyboard_Field mesh in three colourways. Nothing about the geometry
-	-- changes -- one mesh, one rig, one recipe -- so a variant costs a Color3 and a line here.
-	--
-	-- Lava additionally carries the free model's own texture over a near-black base, which is
-	-- exactly how the original does it: the heat is painted, not modelled.
-	P21_KeyboardDusk = { tint = Color3.fromRGB(78, 46, 138) },
-	P22_KeyboardMint = { tint = Color3.fromRGB(52, 190, 160) },
-	-- NO TINT ANY MORE, only the texture. The dark grey was standing in for a material this
-	-- chunk did not have; LavaKeys has a palette of its own and a heat effect that writes the
-	-- key colour directly, so a tint here would be a third thing fighting the other two for
-	-- the same property.
-	P23_KeyboardLava = {
-		texture = "rbxassetid://13076266447",
-	},
+	-- They were one tint over every MeshPart of the chunk, which on a board of keys of their own would paint every key the
+	-- same flat colour, letters and all; and the lava chunk's texture would have printed the free model's lava on every
+	-- key. A keyboard's colours are a colourway now (MaterialAppearance.KEYCAPS), painted key by key as it is built and
+	-- placed, and the lava is a pool under the keys (ChunkBuilder).
 
 	-- ===== BUTTER =====
 	--
@@ -75,12 +65,10 @@ local DRESSING: { [string]: any } = {
 	--
 	-- The chunk does not need them. What makes it a butter chunk is the butter and the shell
 	-- that cracks off it, both of which are the platform itself.
-	-- The sticks take the wrapper print off the imported butter mesh. No props: the sticks
-	-- ARE the chunk, and the wax coating over them is built by ChunkBuilder, not scattered
-	-- here.
-	P25_ButterStick = {
-		textureFrom = "Butter_Stick",
-	},
+	-- The sticks USED TO take the wrapper print off the imported butter mesh. They are bare butter now (the hundred-and-
+	-- fifty-third pass: see WAX_SHELLS in ChunkBuilder), and a wrapper's print on unwrapped butter is the paper again, so
+	-- they are their own soft colour and nothing is borrowed. No props: the sticks ARE the chunk.
+	P25_ButterStick = {},
 
 	P24_ButterBlocks = {
 		props = {

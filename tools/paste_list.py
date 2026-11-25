@@ -45,6 +45,7 @@ GROUPS = [
     ("ReplicatedStorage/Shared", "Shared modules (ReplicatedStorage.Shared): paste these first"),
     ("ServerScriptService", "Server (ServerScriptService)"),
     ("StarterPlayerScripts", "Client (StarterPlayerScripts)"),
+    ("ReplicatedFirst", "First to load (ReplicatedFirst)"),
     ("mesh", "Meshes (Asset Manager; where HANDOFF says)"),
     ("sound", "Sounds (Asset Manager, then into the SoundService folder named)"),
     ("other", "Other"),

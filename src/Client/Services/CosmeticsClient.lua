@@ -35,10 +35,11 @@ local RunService = game:GetService("RunService")
 local ShopCatalog = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShopCatalog")) :: any
 
 local CosmeticsClient = {}
-CosmeticsClient.VERSION = "hundred-and-seventh pass, 2026-10-21"
+CosmeticsClient.VERSION = "the two-hundred-and-sixteenth pass (pals), 2026-11-14"
 
 local NEAR = 120 -- studs: further off, nothing is drawn
 local TRAIL_MAX = 22 -- a trail's pieces alive at once, per player
+local JUMPED = 12 -- studs moved between two frames that can only be a teleport (a fall at full speed is about 4)
 local AURA_MAX = 8 -- an aura's, per player
 local RING_MAX = 12 -- an aura's ring or halo, per player
 local PIECES_MAX = 260 -- in all, on this screen
@@ -48,11 +49,18 @@ local FLAP = 22 -- a firefly's wingbeats, a second
 type Live = { part: BasePart, wings: BasePart?, born: number, life: number, motion: string, from: Vector3, vel: Vector3,
 	spin: Vector3, angle: Vector3, ground: number, landed: boolean, bounces: number, size: Vector3, colour: Color3,
 	cool: Color3?, alpha: number, phase: number, owner: Player, aura: boolean, slot: number, seed: number, landedAt: number,
-	ring: boolean }
+	ring: boolean, hairAt: number?, hairTop: number? }
 type Strand = { top: Attachment, bottom: Attachment, motion: string, at: Vector3, half: number, radius: number,
 	speed: number, phase: number }
 type Wearer = { trail: string?, aura: string?, last: Vector3?, travelled: number, auraSet: { Live }, ringSet: { Live },
-	drop: number, strands: { Strand }, strandsFor: string?, strandsRoot: BasePart?, strandsAt: number }
+	drop: number, strands: { Strand }, strandsFor: string?, strandsRoot: BasePart?, strandsAt: number, pace: number }
+
+-- STILL, NOTHING DRAWN (the hundred-and-ninety-fifth pass). A trail's strands wave, bob and wind about you every frame,
+-- and a ribbon draws wherever its two ends go: standing still, each strand drew its own sway as a flat pale bar either
+-- side of you, a pair of wings that never went. Now the sway is as much as you are travelling (none below STILL studs a
+-- second, all of it at MOVING), so a strand at rest stays at rest and draws nothing; the shop's try-on keeps it all, so
+-- a trail can still be seen there standing.
+local STRANDS = { still = 1, moving = 8, ease = 6, jump = 60 }
 
 local live: { Live } = {}
 local wearers: { [Player]: Wearer } = {}
@@ -245,10 +253,11 @@ local function ringOf(id: string?): any
 	return made or nil
 end
 
--- How far below its root a character's feet are (its hips, and half the root), within reason.
+-- How far below its root a character's feet are (its hips, and half the root), within reason. An R6 body's HipHeight is
+-- 0, and its 2-stud legs are what stand it up.
 local function feetDrop(character: Model, root: BasePart): number
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	local hip = if humanoid then humanoid.HipHeight else 2
+	local hip = if humanoid and humanoid.RigType ~= Enum.HumanoidRigType.R6 then humanoid.HipHeight else 2
 	return math.clamp(hip + root.Size.Y / 2, 2, 4)
 end
 
@@ -294,9 +303,11 @@ local function moveStrands(w: Wearer, root: BasePart, now: number)
 		end
 		w.strandsFor, w.strandsRoot, w.strandsAt = w.trail, root, now
 	end
+	local trying = root:FindFirstChild("ShopPreviewTrailTop") ~= nil
+	local sway = if trying then 1 else math.clamp((w.pace - STRANDS.still) / (STRANDS.moving - STRANDS.still), 0, 1)
 	for _, s in ipairs(w.strands) do
 		if s.top.Parent and s.motion ~= "still" then
-			local centre = strandPlace(s, now)
+			local centre = s.at:Lerp(strandPlace(s, now), sway)
 			s.top.Position = centre + Vector3.new(0, s.half, 0)
 			s.bottom.Position = centre - Vector3.new(0, s.half, 0)
 		end
@@ -336,10 +347,200 @@ local function auraPlace(one: Live, look: any, root: Vector3, now: number, drop:
 	return root + Vector3.new(math.cos(a) * (radius + sway), y, math.sin(a) * (radius + sway)), u
 end
 
+-- ===== THE PALS (the two-hundred-and-sixteenth pass, from your note of 2026-11-14: "add more stuff to the shop for
+-- tokens, make it good quality") =====
+--
+-- A pal keeps to your side (ShopCatalog.pal: `side` to your right, `back` behind), catching you up as it can (`follow`),
+-- turned the way it is going or, standing, the way you face. The hoppers hop after you along the ground (found by a ray,
+-- so they go up a step and down into a hollow), squashing as they land and stretching as they leave, with a small hop now
+-- and then while you stand; the bee hovers and darts; the cloud drifts high and slow; the lava rock bobs at your
+-- shoulder, warm, throwing sparks. Set down somewhere new (a checkpoint, home), it is set down beside you, not dragged.
+-- One part each, on this screen only, within NEAR.
+type PalState = { id: string, part: BasePart, base: Vector3, at: Vector3, yaw: number, phase: number, last: Vector3,
+	hopFrom: number, ground: number, still: number }
+local pals: { [Player]: PalState } = {}
+local PAL_JUMP = 24 -- studs between it and where it should be that can only be a teleport
+
+local function dropPal(player: Player)
+	local state = pals[player]
+	if state then
+		state.part:Destroy()
+		pals[player] = nil
+	end
+end
+
+local function makePal(id: string, spec: any): PalState?
+	local source = meshes()
+	local found = source and source:FindFirstChild(spec.mesh)
+	local template = if found and found:IsA("MeshPart") then found
+		elseif found then found:FindFirstChildWhichIsA("MeshPart", true) else nil
+	if not template then
+		return nil
+	end
+	local part = (template :: MeshPart):Clone()
+	part.Name = "Pal"
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.Massless = true
+	part.CastShadow = true
+	local largest = math.max(part.Size.X, part.Size.Y, part.Size.Z)
+	if largest > 0 then
+		part.Size = part.Size * (spec.size / largest)
+	end
+	if spec.light then
+		local light = Instance.new("PointLight")
+		light.Color = spec.light
+		light.Brightness = 0.9
+		light.Range = 9
+		light.Shadows = false
+		light.Parent = part
+	end
+	if spec.sparks then
+		local sparks = Instance.new("ParticleEmitter")
+		sparks.Texture = "rbxasset://textures/particles/fire_sparks_main.dds"
+		sparks.Color = ColorSequence.new(Color3.fromRGB(255, 200, 110), Color3.fromRGB(255, 110, 40))
+		sparks.Size = NumberSequence.new(0.12, 0)
+		sparks.Lifetime = NumberRange.new(0.5, 1)
+		sparks.Rate = 5
+		sparks.Speed = NumberRange.new(1, 2.5)
+		sparks.SpreadAngle = Vector2.new(60, 60)
+		sparks.Acceleration = Vector3.new(0, 3, 0)
+		sparks.LightEmission = 0.8
+		sparks.Parent = part
+	end
+	part.Parent = holder()
+	return { id = id, part = part, base = part.Size, at = Vector3.zero, yaw = 0, phase = rng:NextNumber(0, 6), last = Vector3.zero,
+		hopFrom = 0, ground = 0, still = 0 }
+end
+
+local function movePals(dt: number, now: number, eye: Vector3)
+	for _, player in ipairs(Players:GetPlayers()) do
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		local tag = root and (root:FindFirstChild("ShopPreviewPal") or root:FindFirstChild("CosmeticPal"))
+		local id = tag and tag:GetAttribute("PiecePal")
+		local spec = if typeof(id) == "string" then ShopCatalog.pal(id) else nil
+		if not (root and root:IsA("BasePart") and spec and (root.Position - eye).Magnitude < NEAR) then
+			dropPal(player)
+			continue
+		end
+		local state = pals[player]
+		if state and state.id ~= id then
+			dropPal(player)
+			state = nil
+		end
+		local fresh = false
+		if not state then
+			state = makePal(id :: string, spec)
+			if not state then
+				continue
+			end
+			pals[player] = state
+			fresh = true
+		end
+		local pal = state :: PalState
+		local face = root.CFrame.LookVector
+		face = Vector3.new(face.X, 0, face.Z)
+		face = if face.Magnitude > 0.01 then face.Unit else Vector3.new(0, 0, -1)
+		local right = face:Cross(Vector3.yAxis)
+		local spot = root.Position + right * spec.side - face * spec.back
+		local hopper = spec.motion == "hop"
+		-- Where it should be: on the ground for a hopper, up by your middle (and its own height) for the rest.
+		local wantY = if hopper then 0 else root.Position.Y + (spec.height or 1)
+		local want = Vector3.new(spot.X, if hopper then pal.at.Y else wantY, spot.Z)
+		if fresh or (pal.at - want).Magnitude > PAL_JUMP then
+			pal.at = Vector3.new(want.X, if hopper then root.Position.Y else want.Y, want.Z)
+			pal.last = pal.at
+			pal.yaw = math.atan2(-face.X, -face.Z)
+		end
+		local ease = 1 - math.exp(-dt * spec.follow)
+		local flat = Vector3.new(want.X - pal.at.X, 0, want.Z - pal.at.Z) * ease
+		pal.at += flat
+		if not hopper then
+			pal.at = Vector3.new(pal.at.X, pal.at.Y + (wantY - pal.at.Y) * ease, pal.at.Z)
+		end
+		local speed = if dt > 0 then Vector3.new(pal.at.X - pal.last.X, 0, pal.at.Z - pal.last.Z).Magnitude / dt else 0
+		pal.last = pal.at
+		-- TURNED the way it goes, or standing, the way you face; and LOOKING UP AT YOU now and then while you stand (the
+		-- two-hundred-and-seventeenth pass): after a few seconds still, it turns to you for a moment, then away again.
+		pal.still = if speed < 0.6 then pal.still + dt else 0
+		local toYou = Vector3.new(root.Position.X - pal.at.X, 0, root.Position.Z - pal.at.Z)
+		local glance = pal.still > 2.5 and (pal.still % 7) < 3 and toYou.Magnitude > 0.5
+		local heading = if speed > 1.5 and flat.Magnitude > 1e-4 then flat.Unit elseif glance then toYou.Unit else face
+		local wantYaw = math.atan2(-heading.X, -heading.Z)
+		local turn = (wantYaw - pal.yaw + math.pi) % (2 * math.pi) - math.pi
+		pal.yaw += turn * math.min(1, dt * 8)
+		local size = pal.base
+		local offset = Vector3.zero
+		local tilt = CFrame.identity
+		if hopper then
+			-- THE GROUND under it, eased so a step is climbed in a hop, not snapped up.
+			-- (Its own ray, which says when there is nothing: groundUnder's guess for nothing is near enough your feet to
+			-- pass for a floor.)
+			rayParams.FilterDescendantsInstances = { holder(), character :: Model }
+			local hit = workspace:Raycast(Vector3.new(pal.at.X, root.Position.Y + 2, pal.at.Z), Vector3.new(0, -10, 0), rayParams)
+			local feet = root.Position.Y - feetDrop(character :: Model, root)
+			local ground = if hit then hit.Position.Y else feet
+			-- OVER A GAP OR UP WITH YOU (the two-hundred-and-seventeenth pass): between two chunks the ground under it is
+			-- the far floor, or none, and it would drop into the void; there it hops along at your feet' height, on the air,
+			-- as a cartoon would. And when you jump it goes up with you, never further below your feet than a stud.
+			if ground < feet - 4 or ground > feet + 4 then
+				ground = feet
+			end
+			local humanoid = (character :: Model):FindFirstChildOfClass("Humanoid")
+			if humanoid and humanoid.FloorMaterial == Enum.Material.Air then
+				ground = math.max(ground, feet - 1)
+			end
+			pal.ground += (ground - pal.ground) * (if math.abs(ground - pal.ground) > 8 then 1 else math.min(1, dt * 10))
+			-- Hops at 2.6 a second going, a small one every two seconds standing.
+			local going = math.clamp(speed / 8, 0, 1)
+			pal.phase += dt * (0.55 + 2.1 * going)
+			local u = pal.phase % 1
+			local height = (0.25 + 0.95 * going) * math.sin(u * math.pi)
+			-- Squashed flat as it lands and as it leaves (the first and last tenth of a hop), stretched tall in the air.
+			local squash = spec.squash or 0.3
+			local land = if u < 0.1 then 1 - u / 0.1 elseif u > 0.9 then (u - 0.9) / 0.1 else 0
+			local stretch = math.sin(u * math.pi) * going * 0.12
+			local s = squash * land - stretch
+			size = Vector3.new(pal.base.X * (1 + s * 0.6), pal.base.Y * (1 - s), pal.base.Z * (1 + s * 0.6))
+			pal.at = Vector3.new(pal.at.X, pal.ground + size.Y / 2 + height, pal.at.Z)
+			tilt = CFrame.Angles(-0.18 * going * math.cos(u * math.pi), 0, 0)
+		elseif spec.motion == "buzz" then
+			pal.phase += dt
+			offset = Vector3.new(0.12 * math.sin(pal.phase * 7.3), 0.3 * math.sin(pal.phase * 1.8) + 0.06 * math.sin(pal.phase * 23),
+				0.1 * math.cos(pal.phase * 5.1))
+			tilt = CFrame.Angles(0.12 * math.sin(pal.phase * 2.3), 0, 0.1 * math.sin(pal.phase * 3.1))
+		elseif spec.motion == "drift" then
+			pal.phase += dt
+			offset = Vector3.new(0.2 * math.sin(pal.phase * 0.7), 0.3 * math.sin(pal.phase * 0.9), 0)
+			tilt = CFrame.Angles(0, 0, 0.06 * math.sin(pal.phase * 0.8))
+			local breathe = 1 + 0.03 * math.sin(pal.phase * 1.6)
+			size = pal.base * breathe
+		else
+			pal.phase += dt
+			offset = Vector3.new(0, 0.22 * math.sin(pal.phase * 2.1), 0)
+			tilt = CFrame.Angles(0.06 * math.sin(pal.phase * 1.3), 0, 0.08 * math.sin(pal.phase * 1.7))
+		end
+		local part = pal.part
+		if part.Size ~= size then
+			part.Size = size
+		end
+		part.CFrame = CFrame.new(pal.at + offset) * CFrame.Angles(0, pal.yaw + math.rad(spec.yaw or 0), 0) * tilt
+	end
+	for player in pairs(pals) do
+		if not player.Parent then
+			dropPal(player)
+		end
+	end
+end
+
 local function step(dt: number)
 	local now = os.clock()
 	local camera = workspace.CurrentCamera
 	local eye = if camera then camera.CFrame.Position else Vector3.zero
+	movePals(dt, now, eye)
 	-- WHO WEARS WHAT, near enough to see.
 	local seen: { [Player]: boolean } = {}
 	for _, player in ipairs(Players:GetPlayers()) do
@@ -348,8 +549,20 @@ local function step(dt: number)
 		if root and root:IsA("BasePart") and (root.Position - eye).Magnitude < NEAR then
 			seen[player] = true
 			local w = wearers[player] or { trail = nil, aura = nil, last = nil, travelled = 0, auraSet = {}, ringSet = {},
-				drop = 3, strands = {}, strandsFor = nil, strandsRoot = nil, strandsAt = 0 }
+				drop = 3, strands = {}, strandsFor = nil, strandsRoot = nil, strandsAt = 0, pace = 0 }
 			wearers[player] = w
+			-- MOVED, NOT TRAVELLED (the hundred-and-eighty-first pass, from your test of 2026-11-04: "big white horizontal
+			-- columns"): set down at a checkpoint, taken home, carried by a ride, a ribbon drew itself the whole way from where
+			-- you were to where you are, a white bar across the level for a second and more. Any jump further than a frame's
+			-- running starts every ribbon on you again from where you are now.
+			local lastAt = w.last
+			if lastAt and (root.Position - lastAt).Magnitude > JUMPED then
+				for _, child in ipairs(root:GetChildren()) do
+					if child:IsA("Trail") then
+						child:Clear()
+					end
+				end
+			end
 			w.drop = feetDrop(character :: Model, root)
 			local trailTag = root:FindFirstChild("ShopPreviewTrailTop") or root:FindFirstChild("CosmeticTrailTop")
 			local auraTag = root:FindFirstChild("ShopPreviewAura") or root:FindFirstChild("CosmeticAura")
@@ -368,7 +581,9 @@ local function step(dt: number)
 				table.clear(w.ringSet)
 				w.aura = wantAura
 			end
-			-- THE TRAIL'S STRANDS, each moved its own way about you.
+			-- THE TRAIL'S STRANDS, each moved its own way about you, as far as you are travelling (a jump is not travel).
+			local pace = if lastAt and dt > 0 then Vector3.new(root.Position.X - lastAt.X, 0, root.Position.Z - lastAt.Z).Magnitude / dt else 0
+			w.pace += ((if pace > STRANDS.jump then 0 else math.min(pace, STRANDS.moving)) - w.pace) * math.min(1, dt * STRANDS.ease)
 			moveStrands(w, root, now)
 			-- THE TRAIL: one let go every `every` studs covered, behind you, a little to one side or the other.
 			local look = w.trail and ShopCatalog.pieces(w.trail)
@@ -451,7 +666,9 @@ local function step(dt: number)
 				done = true
 			else
 				local at, u = auraPlace(one, look, (root :: BasePart).Position, now, (w :: Wearer).drop)
-				local twinkle = if one.motion == "orbit" or one.motion == "ring" or one.motion == "halo"
+				-- (Not the crown: a crown that swells and shrinks four times a second read as wobbling. The two-hundred-and-
+				-- forty-second pass.)
+				local twinkle = if one.motion == "orbit" or one.motion == "ring"
 					then 0.75 + 0.25 * math.sin(now * 5 + one.phase * 3) else 1
 				part.Size = one.size * twinkle
 				local fadeIn = math.clamp(age / 0.6, 0, 1)
@@ -460,7 +677,52 @@ local function step(dt: number)
 				if one.cool then
 					part.Color = one.colour:Lerp(one.cool, math.clamp(u * 1.2, 0, 1))
 				end
-				part.CFrame = CFrame.new(at) * CFrame.fromEulerAnglesXYZ(one.angle.X * 0.3, one.angle.Y, one.angle.Z * 0.3)
+				-- (Over the head, worn upright and turning: a crown tilted at random read as dropped. The two-hundred-and-
+				-- fourteenth pass.)
+				local tilt = if one.motion == "halo" then 0 else 0.3
+				part.CFrame = CFrame.new(at) * CFrame.fromEulerAnglesXYZ(one.angle.X * tilt,
+					if one.motion == "halo" then now * 0.6 + one.slot else one.angle.Y, one.angle.Z * tilt)
+				-- WORN ON THE HEAD (the two-hundred-and-fifteenth pass, from your note of 2026-11-14: the crown "falls back a
+				-- bit when I'm moving"): placed from the root, it stayed where the head would be standing still, and running
+				-- leans the head forward of the root. Now on the head itself: on its top, leaning with it, turning slowly.
+				local head = if one.motion == "halo" and one.owner.Character then one.owner.Character:FindFirstChild("Head") else nil
+				if head and head:IsA("BasePart") and look.radius == 0 then
+					-- ON THE HAIR, NOT IN IT (the two-hundred-and-forty-second pass, from your note of 2026-11-22: "my vip
+					-- crown is covered by my hair"). It sat on the head's own top, and hair stands well above that. Now it
+					-- sits on the highest of what is worn on the head (hair and hats), a little settled into it; measured
+					-- in the head's own up, so it holds as the head leans, and again every two seconds for a change of look.
+					if not one.hairAt or now - one.hairAt > 2 then
+						one.hairAt = now
+						local top = head.Size.Y * 0.5
+						for _, item in ipairs(one.owner.Character:GetChildren()) do
+							local handle = item:IsA("Accessory") and item:FindFirstChild("Handle")
+							if handle and handle:IsA("BasePart") and handle.Transparency < 1 then
+								local rel = head.CFrame:ToObjectSpace(handle.CFrame)
+								local up = rel:VectorToObjectSpace(Vector3.yAxis)
+								local reach = 0.5 * (math.abs(up.X) * handle.Size.X + math.abs(up.Y) * handle.Size.Y
+									+ math.abs(up.Z) * handle.Size.Z)
+								local over = rel.Position.Y + reach
+								-- (Only what is on the head: a back accessory or a sword stands no higher than this.)
+								if over > top and over < head.Size.Y * 0.5 + 3 and math.abs(rel.Position.X) < 2
+									and math.abs(rel.Position.Z) < 2 then
+									top = over
+								end
+							end
+						end
+						one.hairTop = top
+					end
+					local settle = if (one.hairTop or 0) > head.Size.Y * 0.5 + 0.05 then 0.18 else 0
+					local lift = (one.hairTop or head.Size.Y * 0.5) - settle + part.Size.Y * 0.42
+					part.CFrame = head.CFrame * CFrame.new(0, lift, 0) * CFrame.Angles(0, now * 0.6 + one.slot, 0)
+					-- NOT IN YOUR OWN EYES (same pass: "in first person it's wobbling in front of my face"). Roblox hides
+					-- your hats when the camera is in your head; your crown is hidden the same way, and only on your screen.
+					if one.owner == Players.LocalPlayer then
+						local camera = workspace.CurrentCamera
+						if camera and (camera.CFrame.Position - head.Position).Magnitude < 2 then
+							part.Transparency = 1
+						end
+					end
+				end
 				if one.wings then
 					local beat = math.sin(now * FLAP * math.pi * 2 + one.phase) * 0.7
 					one.wings.CFrame = part.CFrame * CFrame.new(0, part.Size.Y * 0.3, 0) * CFrame.Angles(0, 0, beat)
@@ -551,6 +813,11 @@ local function step(dt: number)
 	end
 end
 
+-- One frame by hand (`dt` seconds), for a test run while Studio's view is not drawing (RenderStepped does not fire then).
+function CosmeticsClient.tick(dt: number)
+	step(math.min(dt, 0.1))
+end
+
 function CosmeticsClient.start()
 	RunService.RenderStepped:Connect(function(dt: number)
 		local ok, err = pcall(step, math.min(dt, 0.1))
@@ -562,5 +829,5 @@ function CosmeticsClient.start()
 	print("CosmeticsClient: running, " .. CosmeticsClient.VERSION)
 end
 
-CosmeticsClient.STAMP = "2e4a024f"
+CosmeticsClient.STAMP = "d8c7c6f3"
 return CosmeticsClient

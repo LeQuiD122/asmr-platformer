@@ -8,7 +8,9 @@
 --   standing still the body turns a little with it; look back over your shoulder and it turns ahead again. Yours only:
 --   it is your camera.
 --   STANDING ABOUT: anyone stood still a while (you, and everyone you can see) now and then looks round, shifts their
---   weight, or puts a hand to their chin, each in their own time, and stops the moment they move.
+--   weight, puts a hand to their chin, stretches and yawns, looks at a hand, taps a foot, or stands with some AURA (the
+--   arms crossed and the chin up, a hand through the hair in the breeze, the hands in the pockets, a shoulder dusted off),
+--   each in their own time, never the same one twice running, and stops the moment they move.
 --
 -- Never while something else has them: a scene (Cinema, on your own screen), an emote, a line being told (a Teller's
 -- gesture, StoryClient), a seat, the water, a ride.
@@ -35,7 +37,7 @@ local function sibling(name: string): any
 end
 
 local PlayerLife = {}
-PlayerLife.VERSION = "the hundred-and-twentieth pass, 2026-10-22"
+PlayerLife.VERSION = "ten idles, keyed, the hundred-and-fifty-seventh pass, 2026-10-31"
 
 -- YOUR HEAD AFTER YOUR VIEW: how far the head turns and tips, how quickly it follows, past what angle behind you it
 -- looks ahead again, how much of the turn the body takes standing still, and how much the camera's usual look down at
@@ -43,17 +45,50 @@ PlayerLife.VERSION = "the hundred-and-twentieth pass, 2026-10-22"
 local HEAD = { yaw = math.rad(70), pitch = math.rad(26), behind = math.rad(115), follow = 7, waist = 0.3, down = 0.3 }
 -- STANDING ABOUT: slower than this is standing still; stood still this long, a fidget, then another every so often.
 local STILL_SPEED = 0.8
-local STILL_FOR = 4
-local EVERY_LOW, EVERY_HIGH = 7, 14
-type Fidget = { pose: string, seconds: number }
+local STILL_FOR = 3.5
+local EVERY_LOW, EVERY_HIGH = 5, 11
+-- TEN OF THEM NOW, KEYED (the hundred-and-fifty-seventh pass, from your notes of 2026-10-31: "make more variations to the
+-- poses the player does by itself when standing afk, improve the quality of the existing ones, some might be like an
+-- aura-farming emote"): the three there were, remade in keys with the whole body in them (Poses, blender/gen_poses.py),
+-- and a yawning stretch, a look at a hand, a foot tapping with the hands on the hips, and four with AURA: the arms crossed
+-- and the chin up, a hand through the hair in the breeze, the hands in the pockets, a shoulder dusted off. Picked by how
+-- often each suits standing about (`often`), and never the same one twice running.
+type Fidget = { pose: string, seconds: number, often: number }
 local FIDGETS: { Fidget } = {
-	{ pose = "lookAround", seconds = 4 },
-	{ pose = "weightShift", seconds = 3 },
-	{ pose = "ponder", seconds = 3.2 },
+	{ pose = "idleLook", seconds = 4.8, often = 3 },
+	{ pose = "idleShift", seconds = 4.2, often = 3 },
+	{ pose = "idlePonder", seconds = 4.6, often = 2 },
+	{ pose = "idleYawn", seconds = 4.6, often = 1.5 },
+	{ pose = "idleHand", seconds = 3.8, often = 2 },
+	{ pose = "idleTap", seconds = 4.4, often = 1.5 },
+	{ pose = "idleAuraCrossed", seconds = 6.4, often = 1.5 },
+	{ pose = "idleAuraBreeze", seconds = 5.8, often = 1.2 },
+	{ pose = "idleAuraPockets", seconds = 5.4, often = 1.5 },
+	{ pose = "idleAuraBrush", seconds = 3.9, often = 1 },
 }
 
+-- The next fidget for `rng`: by how often each suits, never `last` again.
+local function nextFidget(rng: Random, last: Fidget?): Fidget
+	local total = 0
+	for _, fidget in ipairs(FIDGETS) do
+		if fidget ~= last then
+			total += fidget.often
+		end
+	end
+	local pick = rng:NextNumber(0, total)
+	for _, fidget in ipairs(FIDGETS) do
+		if fidget ~= last then
+			pick -= fidget.often
+			if pick <= 0 then
+				return fidget
+			end
+		end
+	end
+	return FIDGETS[1]
+end
+
 type Life = { model: Model, joints: { [string]: any }, still: number, nextAt: number, fidget: Fidget?, began: number,
-	rng: Random, yaw: number, pitch: number, headed: boolean }
+	rng: Random, yaw: number, pitch: number, headed: boolean, last: Fidget? }
 local lives: { [Player]: Life } = {}
 local others = { cinema = nil :: any, emotes = nil :: any, failed = false }
 
@@ -174,7 +209,9 @@ local function step(dt: number)
 				end
 			end
 		elseif life.still >= STILL_FOR and now >= life.nextAt then
-			life.fidget = FIDGETS[life.rng:NextInteger(1, #FIDGETS)]
+			local fidget = nextFidget(life.rng, life.last)
+			life.fidget = fidget
+			life.last = fidget
 			life.began = now
 		end
 		if mine and not life.fidget then
@@ -202,5 +239,5 @@ function PlayerLife.start()
 	print("PlayerLife: running, " .. PlayerLife.VERSION)
 end
 
-PlayerLife.STAMP = "32becc65"
+PlayerLife.STAMP = "d14b951a"
 return PlayerLife

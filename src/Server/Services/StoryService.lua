@@ -95,8 +95,12 @@ local NOTES: { [number]: { Note } } = {
 		{ title = "A child's drawing", lying = true, body = "A crayon drawing, left under a stone so it would not blow away.\n\n"
 			.. "My dad. The key man. The gates. The sea going out.\n\nBy Pip Okafor, age 8." },
 		{ title = "Novelty Works list", body = "HARROW BAY NOVELTY WORKS, MILL LANE. SUMMER LIST.\n\nBubble wrap by the "
-			.. "yard. Green slime in tins. Squeeze toys for worriers. Kinetic sand, as used by Pip Okafor.\n\n"
+			.. "yard. Green slime in tins. Squeeze toys for worriers. Sculpting sand, as used by Pip Okafor.\n\n"
 			.. "Everything on this list is made to be pressed." },
+		-- THE GREEN ENVELOPES (the hundred-and-seventy-first pass): his own 14 August, 1979, a letter a level. See LORE.
+		{ title = "A green envelope, 2 of 5", lying = true, body = "14 August 1979. Nine in the morning.\n\nSal gave you a "
+			.. "cone and you dropped it and laughed, so I laughed too.\n\nThe whole front is waiting for me and pretending "
+			.. "not to. If I am late tonight it is because the gates are heavy. Not because I am afraid.\n\nE. M." },
 	},
 	[2] = {
 		{ title = "An invitation", body = "YOU ARE INVITED to the Rooftop Party at the Sky Pools, from 11 August until "
@@ -108,6 +112,9 @@ local NOTES: { [number]: { Note } } = {
 		{ title = "Promenade Hotel", body = "A NOTE FROM THE MANAGEMENT.\n\nThe roof is open for the party until the water "
 			.. "goes down. Guests are asked not to use the stairs. They only go down to the street, and the street is "
 			.. "not there any more.\n\nThe slide is the way down." },
+		{ title = "A green envelope, 3 of 5", lying = true, body = "14 August 1979. Three o'clock.\n\nThe party up here has "
+			.. "one song and it never ends. My name is on nobody's list.\n\nI keep the key in my pocket. I keep checking "
+			.. "it is still there.\n\nE. M." },
 	},
 	[3] = {
 		{ title = "Tide table, August", body = "HARBOUR HIGH WATER.\n\n11th: 11:52 PM\n12th: 11:52 PM\n13th: 11:52 PM\n"
@@ -117,8 +124,14 @@ local NOTES: { [number]: { Note } } = {
 			.. "hard, many times." },
 		{ title = "Missing", lying = true, body = "HAVE YOU SEEN OUR PEOPLE?\n\nMany went down the harbour drain on 14 August to fetch "
 			.. "the key holder. If you find them, please send them home.\n\nHarrow Bay" },
+		-- WICK'S YEAR AS HE TELLS IT (the hundred-and-forty-eighth pass): "Held the key myself once, forty years back", he
+		-- says on the pier, and "the one after me was Marsh"; and it is thirty years since Marsh ('79, Mr Gale). It said
+		-- 1946, sixty-odd years back.
 		{ title = "Key holders, Outfall 3", body = "HARROW BAY WATERWORKS. KEY HOLDERS, 1911 TO DATE.\n\nJ. Harrow, 1911.\n"
-			.. "A. Wick, 1946.\nE. Marsh, 1979. Did not come back up.\n%s, 14 August." },
+			.. "A. Wick, 1969.\nE. Marsh, 1979. Did not come back up.\n%s, 14 August." },
+		{ title = "A green envelope, 4 of 5", lying = true, body = "14 August 1979. Eight minutes to midnight.\n\nThe street "
+			.. "is under and the drain is the only way down.\n\nSomething is down there. Not the water. It waits the way the "
+			.. "tide waits.\n\nIf I do not come back up, sit on the wall as long as you like. And then stop.\n\nE. M." },
 	},
 	[4] = {
 		{ title = "Rules of the Baths", body = "HARROW BAY CORPORATION BATHS.\n\nNo running. No diving. No bathing after "
@@ -131,6 +144,10 @@ local NOTES: { [number]: { Note } } = {
 		{ title = "Lost property", body = "CORPORATION BATHS. LOST PROPERTY, 14 AUGUST.\n\nOne red towel (T. Okafor). One bar "
 			.. "of soap, used. One bucket and spade. One front door key on a green ribbon, marked HILL HOUSE.\n\nNot "
 			.. "collected." },
+		{ title = "A green envelope, 5 of 5", lying = true, body = "14 August 1979. Four minutes to midnight.\n\nI clocked "
+			.. "in. That is all the job is: you sign, and the gates are yours to open.\n\nIt keeps what it is given. I am "
+			.. "giving it me, so it gives you the morning.\n\nOne day it will be your card in the rack. Sign it. Open "
+			.. "them. Then come back up. I could not.\n\nDad" },
 	},
 	-- HILL HOUSE (the hundred-and-eleventh pass): the morning, on the way up.
 	[5] = {
@@ -142,6 +159,10 @@ local NOTES: { [number]: { Note } } = {
 		{ title = "A postcard on the doormat", lying = true, body = "To Hill House. A picture of the pier.\n\nSee you on "
 			.. "the sea wall at nine. I'll bring a cone.\n\nS." },
 		{ title = "On the gatepost", body = "HILL HOUSE.\n\nNo circulars, thank you. Milk on the step.\n\nE. Marsh" },
+		{ title = "A green envelope, 1 of 5", lying = true, body = "14 August 1979. Eight in the morning.\n\nLittle one. The "
+			.. "key is on its ribbon by the door and my coat is on the hook. Tonight I go down, I open the gates, and the "
+			.. "sea goes out. That is the whole job.\n\nYou are on the sea wall already. I can see you from the window."
+			.. "\n\nE. M." },
 	},
 }
 
@@ -248,10 +269,18 @@ local function stableCap(entry: any): BasePart?
 end
 
 -- A spot on a stable chunk's cap: to one side, `inset` studs inside its edge, facing across the route.
-local function besideRoute(cap: BasePart, side: number, inset: number): CFrame
+-- `along`, if given, is the way the route runs over this chunk, and "across" is taken square to it (the two-hundred-and-
+-- thirty-eighth pass: guessed from the cap's shape alone, across came out ALONG the route on the start slab, and Sal
+-- stood on the spot every runner is set down on, her Talk prompt over them and their first steps into her).
+local function besideRoute(cap: BasePart, side: number, inset: number, along: Vector3?): CFrame
 	local capCF = cap.CFrame
 	local across = if cap.Size.X >= cap.Size.Z then capCF.RightVector else capCF.LookVector
 	local half = math.min(cap.Size.X, cap.Size.Z) / 2
+	if along and Vector3.new(along.X, 0, along.Z).Magnitude > 0.05 then
+		local flat = Vector3.new(along.X, 0, along.Z).Unit
+		across = Vector3.new(flat.Z, 0, -flat.X)
+		half = math.abs(across:Dot(capCF.RightVector)) * cap.Size.X / 2 + math.abs(across:Dot(capCF.LookVector)) * cap.Size.Z / 2
+	end
 	local top = cap.Position.Y + cap.Size.Y / 2
 	local at = Vector3.new(cap.Position.X, top, cap.Position.Z) + across * side * (half - inset)
 	local inward = Vector3.new(-across.X * side, 0, -across.Z * side)
@@ -259,8 +288,8 @@ local function besideRoute(cap: BasePart, side: number, inset: number): CFrame
 end
 
 -- SAL AND HER CART.
-local function sal(parent: Instance, cap: BasePart)
-	local feet = besideRoute(cap, 1, 2.2)
+local function sal(parent: Instance, cap: BasePart, along: Vector3?)
+	local feet = besideRoute(cap, 1, 2.2, along)
 	local cart = feet * CFrame.new(2.8, 0, -0.6)
 	prop(parent, "IceCreamCart", Vector3.new(2.2, 2.4, 3.6), cart * CFrame.new(0, 1.9, 0), Color3.fromRGB(246, 240, 226), Enum.Material.SmoothPlastic)
 	for _, dz in ipairs({ -1.3, 1.3 }) do
@@ -320,8 +349,8 @@ local function pip(parent: Instance, cap: BasePart)
 end
 
 -- MRS VENN AND HER TICKET DESK: the desk between her and the route, a sign on its front.
-local function venn(parent: Instance, cap: BasePart)
-	local feet = besideRoute(cap, 1, 2.6)
+local function venn(parent: Instance, cap: BasePart, along: Vector3?)
+	local feet = besideRoute(cap, 1, 2.6, along)
 	local desk = feet * CFrame.new(0, 0, -1.7)
 	local wood = Color3.fromRGB(122, 90, 62)
 	prop(parent, "TicketDesk", Vector3.new(3.4, 2.3, 1.2), desk * CFrame.new(0, 1.15, 0), wood, Enum.Material.WoodPlanks)
@@ -366,6 +395,61 @@ local function tobi(parent: Instance, cap: BasePart)
 		for _, x in ipairs({ -0.5, 0.5 }) do
 			Townsfolk.wear(npc, "TowelEnd", Vector3.new(0.5, 1.3, 0.12), red, "UpperTorso", CFrame.new(x, 0.05, -0.56))
 		end
+	end
+end
+
+-- ===== HE COMES NEARER (the hundred-and-seventy-second pass) =====
+--
+-- From your note of 2026-11-03: "make the story more interesting". The Watcher (Edwin Marsh, faceless) only ever stood
+-- on the Deco tower, three hundred studs off. Now on every level he stands ON THE WAY AHEAD of you: beside the route on a
+-- stable chunk, facing back down it, his head turning after you; and before you reach him he is gone (StoryClient's
+-- aheadGone). Twice a level, at WATCHER_AT of the way, so the second time he is nearer the end. After the true ending
+-- he is never there (StoryClient's stoppedWaiting, as for his ledge). He never says a word.
+local WATCHER_AT = { 0.34, 0.72 }
+-- WHAT IS SEEN AND NEVER MET (the hundred-and-seventy-ninth pass): a collision group that collides with nothing, itself
+-- included. Made once, here on the server, and every client has it from here.
+local function apparitions(): string?
+	local name = "Apparitions"
+	local ok = pcall(function()
+		local physics = game:GetService("PhysicsService")
+		if not physics:IsCollisionGroupRegistered(name) then
+			physics:RegisterCollisionGroup(name)
+		end
+		physics:CollisionGroupSetCollidable(name, "Default", false)
+		physics:CollisionGroupSetCollidable(name, name, false)
+	end)
+	return if ok then name else nil
+end
+local function watcherAhead(parent: Instance, cap: BasePart, before: any)
+	local spot = besideRoute(cap, 1, 2.4)
+	local behind = before and before.model and before.model:GetPivot().Position
+	local facing = if behind then CFrame.lookAt(spot.Position, Vector3.new(behind.X, spot.Position.Y, behind.Z)) else spot
+	local npc = Townsfolk.spawn(parent, "Watcher", facing, "stand",
+		{ Color3.fromRGB(34, 36, 40), Color3.fromRGB(34, 36, 40), Color3.fromRGB(30, 32, 36) }, true, 240)
+	if npc then
+		npc.model:SetAttribute("Ahead", true)
+		-- NOTHING THERE TO WALK INTO (the hundred-and-seventy-ninth pass, from your test of 2026-11-04: "invisible walls on
+		-- the safe/checkpoint platforms", "the npc's that despawn leave behind these invisible fields"). He stands on a safe
+		-- chunk beside the route and fades on your screen as you come, but 14 of his 16 parts still stood there, solid,
+		-- where you could no longer see him. He was never meant to be met: nothing of him stops you, touches you or
+		-- catches the camera. IN A COLLISION GROUP OF HIS OWN that meets nothing, because his Humanoid puts CanCollide back
+		-- on his body every step (turning it off alone, he was still 14 of 16 solid when tested).
+		local group = apparitions()
+		local function nothing(item: Instance)
+			if item:IsA("BasePart") then
+				item.CanCollide = false
+				item.CanTouch = false
+				item.CanQuery = false
+				if group then
+					item.CollisionGroup = group
+				end
+			end
+		end
+		for _, item in ipairs(npc.model:GetDescendants()) do
+			nothing(item)
+		end
+		-- (And whatever he is dressed in after, his hat and his coat.)
+		npc.model.DescendantAdded:Connect(nothing)
 	end
 end
 
@@ -1259,7 +1343,7 @@ local function spots()
 			local at = spot.CFrame
 			local ok, err = pcall(function()
 				if kind == "PoolBox" then
-					Interactables.lockbox(spot.Parent, at, "photograph", CFrame.new((at * CFrame.new(3.4, 2.6, -3.4)).Position))
+					Interactables.lockbox(spot.Parent, at, "photograph", CFrame.new((at * CFrame.new(1.2, 2.6, -3.4)).Position))
 				elseif kind == "AquariumLocker" then
 					Interactables.locker(spot.Parent, at, { label = "STAFF", bar = true, secret = "marsh",
 						eye = CFrame.new((at * CFrame.new(1.8, 4.6, -5.2)).Position) })
@@ -1315,18 +1399,26 @@ function StoryService.stage(level: any, instance: any, players: { Player })
 	end
 	if Townsfolk then
 		if level.backdrop == "cityShore" then
-			local _, first = stableFrom(1, #chunks)
-			if first then
-				pcall(sal, folder, first)
+			-- (From the second chunk on: the first is where every runner is set down.)
+			local firstIndex, first = stableFrom(2, #chunks)
+			if firstIndex and first then
+				local entry = chunks[firstIndex]
+				local along = entry.tangent
+					or (if typeof(entry.startAngle) == "number" then Vector3.new(-math.sin(entry.startAngle), 0, math.cos(entry.startAngle)) else nil)
+				pcall(sal, folder, first, along)
 			end
 			local _, mid = stableFrom(math.floor(#chunks * 0.45), #chunks - 2)
 			if mid then
 				pcall(pip, folder, mid)
 			end
 		elseif level.backdrop == "floodedHalls" then
-			local _, first = stableFrom(1, #chunks)
-			if first then
-				pcall(venn, folder, first)
+			-- (As Sal: off the slab everyone is set down on, and square to the way the route runs.)
+			local firstIndex, first = stableFrom(2, #chunks)
+			if firstIndex and first then
+				local entry = chunks[firstIndex]
+				local along = entry.tangent
+					or (if typeof(entry.startAngle) == "number" then Vector3.new(-math.sin(entry.startAngle), 0, math.cos(entry.startAngle)) else nil)
+				pcall(venn, folder, first, along)
 			end
 			local _, mid = stableFrom(math.floor(#chunks * 0.5), #chunks - 2)
 			if mid then
@@ -1334,6 +1426,13 @@ function StoryService.stage(level: any, instance: any, players: { Player })
 			end
 			pcall(barlow, folder)
 			pcall(marsh)
+		end
+		-- HE COMES NEARER (see watcherAhead): on every level, twice, a little further on the second time.
+		for _, fraction in ipairs(WATCHER_AT) do
+			local index, cap = stableFrom(math.floor(#chunks * fraction), #chunks - 2)
+			if index and cap then
+				pcall(watcherAhead, folder, cap, chunks[index - 1])
+			end
 		end
 	end
 	-- CITY SHORE'S SIREN TOWER, and every level's secrets on the spots its service marked.
@@ -1462,5 +1561,5 @@ function StoryService.stage(level: any, instance: any, players: { Player })
 	print(("StoryService: %d nooks off the route, %d keepsakes in them."):format(#nooks, count))
 end
 
-StoryService.STAMP = "527b60fd"
+StoryService.STAMP = "b9e0dbb5"
 return StoryService

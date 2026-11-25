@@ -24,8 +24,8 @@ for checker in (HUBCHECK, PARSE):
         sys.exit("%s fails before anything is mutated; fix that first" % checker)
 
 MUTATIONS = [
-    ("a start not logged", BOOT, HUBCHECK, '\t\tprogression(player, "start")\n\t\t-- The mode the run ACTUALLY',
-     "\t\t-- The mode the run ACTUALLY"),
+    ("a start not logged", BOOT, HUBCHECK, '\t\tprogression(player, "start")\n\t\tplayer:SetAttribute("Checkpoint", 0)\n\t\t-- The mode the run ACTUALLY',
+     '\t\tplayer:SetAttribute("Checkpoint", 0)\n\t\t-- The mode the run ACTUALLY'),
     ("a late joiner's start not logged", BOOT, HUBCHECK, '\tHubService.markInRun({ player })\n\tprogression(player, "start")\n',
      "\tHubService.markInRun({ player })\n"),
     ("a finish not logged", BOOT, HUBCHECK, '\t\tprogression(player, "complete")\n', ""),

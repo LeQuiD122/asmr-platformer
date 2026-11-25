@@ -169,6 +169,18 @@ def finish(name, bm):
     half = [max(abs(lo[i]), abs(hi[i])) + 0.5 for i in range(3)]
     G.anchor(bm, (-half[0], -half[1], -half[2]), (half[0], half[1], half[2]))
     obj = G.to_object(name, bm, smooth=True)
+    # UNWRAPPED (the two-hundred-and-fiftieth pass): the upper jaw had no UVs, so Studio's texture generator refused it
+    # twice and it stayed a flat colour beside the textured lower jaw, a dark disc from outside. A smart projection is
+    # enough for flesh. (Only the upper: the lower jaw's import already wears its generated texture.)
+    if name == "Maw_UpperJaw":
+        bpy.ops.object.select_all(action="DESELECT")
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=0.02)
+        bpy.ops.object.mode_set(mode="OBJECT")
+        obj.select_set(False)
     # Roblox axes: Blender (x, y, z) arrives as (x, z, -y).
     return obj, [round(2 * half[0], 2), round(2 * half[2], 2), round(2 * half[1], 2)]
 

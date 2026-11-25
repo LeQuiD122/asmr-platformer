@@ -121,6 +121,27 @@ local function sound(name: string?, fallback: string?, volume: number, speed: nu
 	return made
 end
 
+-- THE WATER'S OWN SOUNDS (WaterSounds, the hundred-and-forty-sixth pass) for the two splashes in the chamber's scenes,
+-- up out of the sump and out of the thing's throat: they were still the engine's one splash, which every other splash
+-- in the levels stopped being in the ninety-eighth pass. Without the module or its folder, that splash, at its pitch.
+local function waterSound(kind: string, volume: number, speed: number): Sound
+	local made = Instance.new("Sound")
+	local shared = ReplicatedStorage:FindFirstChild("Shared")
+	local module = shared and shared:FindFirstChild("WaterSounds")
+	local ok, water = false, nil
+	if module and module:IsA("ModuleScript") then
+		ok, water = pcall(require, module)
+	end
+	if not (ok and type(water) == "table" and water.dress(made, kind)) then
+		made.SoundId = SPLASH
+		made.PlaybackSpeed = speed
+	end
+	made.Volume = volume
+	made.Parent = SoundService
+	made:Play()
+	return made
+end
+
 local function ease(u: number): number
 	u = math.clamp(u, 0, 1)
 	return u * u * (3 - 2 * u)
@@ -224,7 +245,8 @@ type Scene = { began: number, slide: number, gates: number, halls: Instance, cha
 	rumble: Sound?, lastFall: Vector3?, path: { CFrame }?, rush: Sound?, clockAt: number, exitFrame: CFrame?,
 	thought: number, wake: Instance?, growl: Sound?, exitSpeed: number?, fallM: number?, fallD: number?,
 	tumble: number?, lit: any?, mawRest: CFrame?, lungeAt: number?, trueEnd: boolean, marsh: Model?, marshRest: CFrame?,
-	marshJoints: { [string]: any }?, marshParts: { Instance }, throat: any?, swallowed: boolean?, crunched: number? }
+	marshJoints: { [string]: any }?, marshParts: { Instance }, throat: any?, swallowed: boolean?, crunched: number?,
+	beatAt: number? }
 local scene: Scene? = nil
 local hallsEvent: RemoteEvent? = nil
 
@@ -768,7 +790,7 @@ local function chamberStep(current: Scene, root: BasePart, humanoid: Humanoid, b
 		if once(current, "surface") then
 			humanoid.PlatformStand = true
 			holdMine("climb")
-			keep(current, sound(nil, SPLASH, 0.8, 0.7, false))
+			keep(current, waterSound("splash", 0.8, 0.7))
 			-- (Said, so it is plain what happened: it swallowed you, and it gave you back.)
 			Cinema.think(Players.LocalPlayer.Character, "It... spat me out?", 2.6)
 		end
@@ -834,7 +856,9 @@ local function chamberStep(current: Scene, root: BasePart, humanoid: Humanoid, b
 			Cinema.cut()
 		end
 		if b > BEAT.key + 2.4 and once(current, "click") then
-			keep(current, sound(nil, CLICK, 0.9, 0.55, false))
+			-- THE KEY TURNING (the hundred-and-forty-sixth pass, StorySounds.KeyTurn): the bit into the wards, the levers,
+			-- the bolt going back. It was a light switch's click.
+			keep(current, sound("KeyTurn", CLICK, 0.9, 0.55, false))
 		end
 		-- Low, ahead of you and to your right, looking up: your face over the lock as the key goes in, the wheel beside
 		-- you. (It looked at the lock from your side, with you half out of the picture: check_shots.py.)
@@ -998,6 +1022,11 @@ local CRUNCHES = { 0.45, 0.9 }
 -- HANG: how fast you fall while time all but stops over it (studs a second).
 local MAW_DEEP, MAW_RISE, LUNGE = 116, 34, 0.55
 local HANG = 2
+-- How far past its stop it overshoots on the lunge (a back-out ease: 1.4 is about a tenth of the rise), and how far it
+-- throws itself up into the bite, as shares of MAW_RISE.
+local LUNGE_OVER, BITE_LURCH = 1.4, 0.22
+-- WIDE BEFORE THE BITE: in the creak it first gapes this much wider (radians), roaring, before it starts to close.
+local GAPE = 0.16
 -- TURNING OVER to look: from lying on your back (as you came out of the tube) to face down into it, TURN seconds from
 -- a moment after it lights.
 local TURN_AT, TURN = 0.1, 0.55
@@ -1180,7 +1209,7 @@ local function afterBite(current: Scene, root: BasePart, m: number, side: Vector
 			end
 			throat.pulse.Brightness = 4
 		end
-		keep(current, sound(nil, SPLASH, 1, 0.55, false))
+		keep(current, waterSound("splash", 1, 0.55))
 		keep(current, sound("MawRoar", BASS, 0.6, 0.3, false))
 		Cinema.impact(1.6)
 		Cinema.shake(2.8)
@@ -1227,9 +1256,34 @@ local function mawStep(current: Scene, root: BasePart, humanoid: Humanoid, m: nu
 		Cinema.shake(1.2)
 	end
 	-- THE LUNGE: up out of the dark at you, fast and then slowing, as it opens.
-	local rest: CFrame = current.mawRest or mouth.hinge
-	current.mawRest = rest
-	local lunge = if m < JAWS.reveal then 0 else 1 - (1 - math.clamp((m - JAWS.reveal) / LUNGE, 0, 1)) ^ 3
+	-- HEAVIER (the two-hundred-and-fifty-first pass, "improve the overall animation, make it more dramatic"): it comes
+	-- up PAST where it stops and sinks back onto it, the way something that weighs that much would (LUNGE_OVER of the
+	-- rise); then it heaves slowly while you hang, breathing at you; it weaves its head after you, and as it bites it
+	-- throws itself up into the bite (BITE_LURCH of the rise) and sinks back.
+	local base: CFrame = current.mawRest or mouth.hinge
+	current.mawRest = base
+	local lunge = 0
+	if m >= JAWS.reveal then
+		local u = math.clamp((m - JAWS.reveal) / LUNGE, 0, 1) - 1
+		lunge = 1 + (LUNGE_OVER + 1) * u ^ 3 + LUNGE_OVER * u ^ 2
+		lunge += 0.05 * math.sin((m - JAWS.reveal) * 2.2) * math.clamp((m - JAWS.reveal - LUNGE) / 0.4, 0, 1)
+		local b = m - (JAWS.snap - 0.1)
+		if b > 0 then
+			lunge += BITE_LURCH * (if b < 0.1 then b / 0.1 else math.exp(-(b - 0.1) * 3))
+		end
+	end
+	local weave = 0
+	local jolt = 0
+	if m >= JAWS.reveal then
+		-- Its head after you while you hang, slow; a hard judder of the whole head as it springs open; a jerk on the bite.
+		weave = 0.05 * math.sin((m - JAWS.reveal) * 1.4) * math.clamp((m - JAWS.reveal - LUNGE) / 0.5, 0, 1)
+		jolt = 0.035 * math.exp(-(m - JAWS.reveal) * 6) * math.sin((m - JAWS.reveal) * 38)
+		local b = m - JAWS.snap
+		if b > 0 then
+			jolt += 0.06 * math.exp(-b * 5) * math.sin(b * 30)
+		end
+	end
+	local rest = base * CFrame.Angles(weave + jolt, 0.6 * weave, 0.5 * jolt)
 	-- (Only while it rises: carrying every part of it each frame once it has stopped would be work for nothing.)
 	if lunge ~= current.lungeAt then
 		current.lungeAt = lunge
@@ -1278,14 +1332,23 @@ local function mawStep(current: Scene, root: BasePart, humanoid: Humanoid, m: nu
 	-- THE JAWS: shut in the dark; SPRUNG open as it lunges; breathing, slow, while you hang; then shut on you.
 	local upper, lower = 0.04, 0.03
 	if m >= JAWS.reveal and m < JAWS.snap - CREAK then
-		local u = 1 - (1 - math.clamp((m - JAWS.reveal) / 0.35, 0, 1)) ^ 3
-		local breath = 0.03 * math.sin((m - JAWS.reveal) * 2.2)
-		upper, lower = 0.04 + (0.86 - 0.04) * u + breath, 0.03 + (0.72 - 0.03) * u + breath
+		local t = m - JAWS.reveal
+		local u = 1 - (1 - math.clamp(t / 0.35, 0, 1)) ^ 3
+		local breath = 0.03 * math.sin(t * 2.2)
+		-- SPRUNG: it unhinges past wide open and judders back, and never holds quite still after (a quiver in the jaw).
+		local spring = 0.16 * math.exp(-t * 5) * math.sin(t * 22)
+		local quiver = 0.012 * math.sin(t * 57) + 0.008 * math.sin(t * 31)
+		upper = 0.04 + (0.86 - 0.04) * u + breath + spring + quiver
+		lower = 0.03 + (0.72 - 0.03) * u + breath + spring * 0.8 - quiver
 	elseif m < JAWS.snap then
-		-- CREAKING SHUT, slowly, a third of the way; then the slam.
-		local creak = ease((m - (JAWS.snap - CREAK)) / (CREAK - 0.25))
+		-- WIDE FIRST (GAPE), roaring, as if to take all of you; then CREAKING SHUT, slowly, straining, a third of the
+		-- way; then the slam.
+		local w = (m - (JAWS.snap - CREAK)) / (CREAK - 0.25)
+		local wide = GAPE * math.sin(math.pi * math.clamp(w / 0.45, 0, 1))
+		local creak = ease(math.clamp((w - 0.3) / 0.7, 0, 1))
+		local strain = 0.015 * math.sin(m * 60) * creak
 		local slam = math.clamp((m - (JAWS.snap - 0.25)) / 0.25, 0, 1) ^ 3
-		local up, lo = 0.86 - 0.3 * creak, 0.72 - 0.25 * creak
+		local up, lo = 0.86 + wide - 0.3 * creak + strain, 0.72 + wide * 0.8 - 0.25 * creak - strain
 		upper, lower = up + (0.02 - up) * slam, lo + (0.02 - lo) * slam
 	elseif m >= JAWS.snap then
 		-- SHUT, and crunching: giving a little and biting down again, twice.
@@ -1298,14 +1361,35 @@ local function mawStep(current: Scene, root: BasePart, humanoid: Humanoid, m: nu
 		end
 		upper, lower = 0.02 + gape, 0.02 + gape * 0.8
 	end
+	-- HUNGRY: its throat churns as it comes for you, hardest as you drop in; and its TONGUE REACHES up for you while you
+	-- fall into it, settling back as the jaws start to close.
+	if Maw.hunger then
+		Maw.hunger(mouth, if m < JAWS.reveal then 0.1 else 0.4 + 0.6 * ease(math.clamp((m - JAWS.face) / (JAWS.bite - JAWS.face), 0, 1)))
+		Maw.reach(mouth, ease(math.clamp((m - JAWS.face - 0.3) / (JAWS.bite - JAWS.face - 0.3), 0, 1))
+			* (1 - ease(math.clamp((m - (JAWS.snap - 0.5)) / 0.4, 0, 1))))
+	end
 	Maw.set(mouth, upper, lower)
-	-- ITS LIGHT: nothing until it comes for you, then all at once (one stutter as it catches), then never steady.
+	-- ITS LIGHT: nothing until it comes for you, then all at once (one stutter as it catches), then never steady; and
+	-- on the bite it flares, once, through the teeth, and sinks.
 	if m < JAWS.reveal then
 		Maw.light(mouth, 0)
 	elseif m < JAWS.reveal + 0.12 then
 		Maw.light(mouth, 0.3)
 	else
-		Maw.light(mouth, 1, os.clock())
+		local flare = if m >= JAWS.snap then 0.45 * math.exp(-(m - JAWS.snap) * 4) else 0
+		Maw.light(mouth, 1 + flare, os.clock())
+	end
+	-- ITS ROAR AS IT GAPES, before it closes: the whole shaft shaking.
+	if m >= JAWS.snap - CREAK + 0.08 and once(current, "gape") then
+		keep(current, sound("MawRoar", BASS, 0.75, 0.28, false))
+		Cinema.shake(1.8)
+	end
+	-- YOUR HEART, while you hang over it: a beat at a time, faster and louder the closer the bite, and stopped dead by it.
+	if m >= JAWS.reveal + 0.4 and m < JAWS.snap - 0.15 and m >= (current.beatAt or 0) then
+		local k = math.clamp((m - JAWS.reveal) / (JAWS.snap - JAWS.reveal), 0, 1)
+		current.beatAt = m + 0.8 - 0.42 * k
+		keep(current, sound("Heartbeat", BASS, 0.4 + 0.4 * k, 0.55, false))
+		Cinema.shake(0.3 + 0.5 * k)
 	end
 	if m >= JAWS.reveal and once(current, "reveal") then
 		-- IT COMES: a roar, an impact frame, the shaft shaking, its breath coming up out of it.
@@ -1383,6 +1467,9 @@ local function mawStep(current: Scene, root: BasePart, humanoid: Humanoid, m: nu
 		if m > JAWS.snap - 0.05 and once(current, "snap") then
 			-- THE SLAM: everything at once.
 			keep(current, sound("JawsShut", BASS, 1, 0.3, false))
+			if Cinema and Cinema.climax then
+				Cinema.climax(0.75)
+			end
 			keep(current, sound("MawRoar", BASS, 0.8, 0.26, false))
 			Cinema.impact(2)
 			Cinema.shake(3.8)
@@ -1584,6 +1671,10 @@ local function started(player: Player, began: number, slide: number, gates: numb
 	-- as they shoot out of it, and at the very end the one chord that resolves.
 	local current = scene :: Scene
 	local rush = sound("FlumeRush", nil, 0, 1, true)
+	-- THE SCORE (the two-hundred-and-eleventh pass): dread, growing down the flume and into the dark.
+	if Cinema and Cinema.score then
+		Cinema.score("Halls")
+	end
 	if rush then
 		TweenService:Create(rush, TweenInfo.new(1.2), { Volume = 0.55 }):Play()
 		current.rush = rush
@@ -1881,5 +1972,5 @@ function FloodedHallsClient.start()
 	print("FloodedHallsClient: running, " .. FloodedHallsClient.VERSION)
 end
 
-FloodedHallsClient.STAMP = "bfede0cc"
+FloodedHallsClient.STAMP = "1c3a6b78"
 return FloodedHallsClient

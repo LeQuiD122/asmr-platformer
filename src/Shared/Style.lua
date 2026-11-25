@@ -152,5 +152,16 @@ function Style.fit(panel: GuiObject, design: Vector2): UIScale
 	return scale
 end
 
-Style.STAMP = "34c3e714"
+-- LESS MOTION WHEN ASKED (the hundred-and-sixty-second pass): Roblox's own Reduce Motion, which a player turns on in
+-- Roblox's settings when a moving picture makes them unwell. Read here for every screen: on, the camera is nudged and
+-- not shaken, it is not punched in, nothing flashes, and what streams past streams less (Cinema, the slime's launch,
+-- the keypad's burst, a level finished). On the client only.
+function Style.lessMotion(): boolean
+	local ok, on = pcall(function()
+		return game:GetService("GuiService").ReducedMotionEnabled
+	end)
+	return ok and on == true
+end
+
+Style.STAMP = "8898a74b"
 return Style

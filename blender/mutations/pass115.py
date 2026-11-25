@@ -60,7 +60,7 @@ MUTATIONS = [
     ('nothing standing in for the chord', HC, TRUE, 'sound("MorningChord", nil, 0.7, 1, false) or sound("EndChord", nil, 0.7, 1, false)', 'sound("MorningChord", nil, 0.7, 1, false)'),
     ('never going out of sight', HC, TRUE, 'seen = 1 - math.clamp((b - (TRUE.done - 2.6)) / 2.2, 0, 1)', 'seen = 1'),
     ('never ending', HC, TRUE, '\telse\n\t\tendScene()\n\tend\nend\n\n-- THE GATE CHAMBER', '\tend\nend\n\n-- THE GATE CHAMBER'),
-    ('its chord not listed', BOOT, TRUE, '"ClockPunch",\n\t\t"MorningChord", "PoolsSong", "BarStrike", "BrickBurst" }', '"ClockPunch",\n\t\t"PoolsSong", "BarStrike", "BrickBurst" }'),
+    ('its chord not listed', BOOT, TRUE, '"ClockPunch",\n\t\t"MorningChord", "PoolsSong",', '"ClockPunch",\n\t\t"PoolsSong",'),
     ("his face's shot moved without the check", HC, SHOTS, 'Cinema.point(CFrame.lookAt(at(0, 5.2, MARSH.stop + 7), at(0, 4.7, MARSH.stop)), 38)', 'Cinema.point(CFrame.lookAt(at(0, 5.2, MARSH.stop + 3), at(0, 4.7, MARSH.stop)), 38)'),
     ('a name never declared', HC, PARSE, 'local span = MARSH.stop - from.Z', 'local span = MARSH.stop - form.Z'),
 ]

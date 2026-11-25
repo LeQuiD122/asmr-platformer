@@ -1083,6 +1083,9 @@ local function moveSled(serverNow: number)
 		showRide(false)
 		if Cinema and Cinema.active() then
 			Cinema.sound("PoolPlunge", 0.9, { keep = true })
+			-- THE TURN (the two-hundred-and-eleventh pass): the slide has the party's song for its score; the plunge is
+			-- its climax.
+			Cinema.climax(1.12)
 		end
 		-- THE POOL, held a moment after the splash, then the camera is theirs.
 		scene.landedAt = os.clock()
@@ -1491,5 +1494,5 @@ function SkyPoolsClient.start()
 	RunService.RenderStepped:Connect(step)
 end
 
-SkyPoolsClient.STAMP = "6361e442"
+SkyPoolsClient.STAMP = "44ad1308"
 return SkyPoolsClient

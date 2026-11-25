@@ -36,6 +36,16 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 local UIService = {}
 
+-- THE RUN'S PANELS ARE A RUN'S (the hundred-and-thirty-ninth pass): the mode, the hardcore clock and the best times stayed
+-- up in the lobby after a Hardcore run, the clock at nought and the board over the promenade, which has boards of its
+-- own. They show on a level (and in the back rooms, a fall from one), and nowhere else.
+-- AND NOT UNDER A SCENE (the hundred-and-fortieth pass: UIService.sceneOn, from Cinema): the best times were left over an
+-- ending's picture.
+local sceneHeld = false
+local function onLevel(): boolean
+	return player:GetAttribute("InLevel") ~= nil and not sceneHeld
+end
+
 -- ===================================================================== tokens
 
 -- A DARK, DESATURATED PLUM -- not black, and not an inverted light theme.
@@ -141,8 +151,9 @@ modeButton.Name = "ModeButton"
 -- mode became a vote -- a readout that large is claiming an importance it no longer has, and
 -- it sat in the corner cluttering the view for the whole of every run.
 --
--- 96 by 26 still reads at a glance and takes a sixth of the area.
-modeButton.Size = UDim2.new(0, 96, 0, 26)
+-- 96 by 26 still reads at a glance and takes a sixth of the area. MODE_TALL is what the panels over it stack on.
+local MODE_TALL = 26
+modeButton.Size = UDim2.new(0, 96, 0, MODE_TALL)
 modeButton.AnchorPoint = Vector2.new(1, 1)
 modeButton.Position = UDim2.new(1, -SPACE.xl, 1, -SPACE.xl)
 modeButton.BackgroundColor3 = COLOUR.surface
@@ -238,7 +249,8 @@ modeButton.MouseLeave:Connect(releaseMode)
 local timerPanel = panel("HardcoreTimer", screenGui)
 timerPanel.Size = UDim2.new(0, 208, 0, 46)
 timerPanel.AnchorPoint = Vector2.new(1, 1)
-timerPanel.Position = UDim2.new(1, -SPACE.xl, 1, -(SPACE.xl + 44 + SPACE.sm))
+-- A step over the mode readout (it was placed as if the readout were still 44 tall, a 26-pixel gap under it).
+timerPanel.Position = UDim2.new(1, -SPACE.xl, 1, -(SPACE.xl + MODE_TALL + SPACE.sm))
 timerPanel.Visible = false
 
 local timerText = newLabel(timerPanel, TEXT.mono, COLOUR.textPrimary, Style.FONT.number)
@@ -314,15 +326,30 @@ watchHand.BackgroundColor3 = COLOUR.hardcore
 watchHand.BorderSizePixel = 0
 watchHand.Parent = watchRing
 
+-- A PRESS, HEARD (the hundred-and-forty-ninth pass): AudioService.press, the one soft sound every menu in the game makes
+-- (the hundred-and-forty-fourth pass), here for the run screen's own: the clock folding down and opening, the best times
+-- put away and brought back, as a card goes and comes (two notes down, two up). They were the last presses in silence.
+local function pressSound(kind: string)
+	local found = script.Parent and script.Parent:FindFirstChild("AudioService")
+	if found and found:IsA("ModuleScript") then
+		local ok, audio = pcall(require, found)
+		if ok and type(audio) == "table" and type(audio.press) == "function" then
+			audio.press(kind)
+		end
+	end
+end
+
 local function showTimer()
-	timerPanel.Visible = timerShown and not timerFolded
-	timerPill.Visible = timerShown and timerFolded
+	timerPanel.Visible = timerShown and not timerFolded and onLevel()
+	timerPill.Visible = timerShown and timerFolded and onLevel()
 end
 timerFold.Activated:Connect(function()
+	pressSound("close")
 	timerFolded = true
 	showTimer()
 end)
 timerPill.Activated:Connect(function()
+	pressSound("open")
 	timerFolded = false
 	showTimer()
 end)
@@ -345,7 +372,7 @@ end
 local tooltip = panel("Tooltip", screenGui)
 tooltip.Size = UDim2.new(0, 320, 0, 40)
 tooltip.AnchorPoint = Vector2.new(1, 1)
-tooltip.Position = UDim2.new(1, -SPACE.xl, 1, -(SPACE.xl + 44 + SPACE.sm + 46 + SPACE.sm))
+tooltip.Position = UDim2.new(1, -SPACE.xl, 1, -(SPACE.xl + MODE_TALL + SPACE.sm + 46 + SPACE.sm))
 tooltip.BackgroundTransparency = 1
 tooltip.Visible = false
 
@@ -386,13 +413,26 @@ end
 
 -- ===================================================================== the blackout
 --
--- A full-screen black sheet the completion banner sits ON TOP of, for the one ending that needs
--- the picture to go away: the dive at the end of City Shore, where the water closes over you.
---
--- ZIndex rather than creation order, because this ScreenGui is in Sibling mode: the sheet is
--- above every HUD panel and the banner and its two labels are above the sheet. A blackout that
--- covered the banner it exists to frame would be a blank screen with nothing on it.
+-- A full-screen black sheet, for the moves the server makes (Bootstrap's ScreenFade): into a level and out of one, a
+-- story's move between its levels, the back rooms. No ending fades to black any more (the dive's banner comes up over
+-- the sea), so nothing has to sit on it but the level's name. BLACKOUT_ZINDEX is still the layer the completion banner
+-- and its vignette are drawn above the HUD's panels at.
 local BLACKOUT_ZINDEX = 5
+
+-- ITS OWN SCREEN, AND ALL OF IT (the hundred-and-thirty-seventh pass): every move into and out of a level comes under a
+-- dip now (Bootstrap), and the sheet was in the HUD's screen, which stops short of Roblox's own bar along the top, so a
+-- strip of the world showed above every fade.
+-- OVER EVERYTHING THAT CAN BE OPEN (the hundred-and-forty-third pass): at 30 it was level with the shop and under the post
+-- box (31), the welcome (35) and the journal (45), so a run that started with one of them open had it floating on the
+-- black. 46 is over all of those, and over a scene's bars and the death card, which are never up for a move (a scene has
+-- ended before the way home, and the card is put away as its button is pressed). Under only the squish room's own cover
+-- (50) and the Studio test panel (60).
+local fadeGui = Instance.new("ScreenGui")
+fadeGui.Name = "Fade"
+fadeGui.IgnoreGuiInset = true
+fadeGui.ResetOnSpawn = false
+fadeGui.DisplayOrder = 46
+fadeGui.Parent = playerGui
 
 local blackout = Instance.new("Frame")
 blackout.Name = "Blackout"
@@ -402,15 +442,73 @@ blackout.BorderSizePixel = 0
 blackout.Size = UDim2.new(1, 0, 1, 0)
 blackout.Visible = false
 blackout.ZIndex = BLACKOUT_ZINDEX
-blackout.Parent = screenGui
+blackout.Parent = fadeGui
+
+-- THE LEVEL'S NAME ON THE BLACK, while it is built and streamed in round its start: which level, in spaced capitals over
+-- its name, and a rule drawing itself under them. It goes with the black.
+local fadeCard = Instance.new("Frame")
+fadeCard.Name = "Card"
+fadeCard.BackgroundTransparency = 1
+fadeCard.AnchorPoint = Vector2.new(0.5, 0.5)
+fadeCard.Position = UDim2.fromScale(0.5, 0.46)
+fadeCard.Size = UDim2.new(0.9, 0, 0, 96)
+fadeCard.ZIndex = BLACKOUT_ZINDEX + 1
+fadeCard.Parent = blackout
+local fadeEyebrow = newLabel(fadeCard, TEXT.label, COLOUR.textSecondary, Style.FONT.heading)
+fadeEyebrow.Size = UDim2.new(1, 0, 0, 22)
+fadeEyebrow.ZIndex = BLACKOUT_ZINDEX + 1
+fadeEyebrow.TextTransparency = 1
+local fadeTitle = newLabel(fadeCard, 40, COLOUR.textPrimary, Style.FONT.display)
+fadeTitle.Position = UDim2.new(0, 0, 0, 28)
+fadeTitle.Size = UDim2.new(1, 0, 0, 48)
+fadeTitle.ZIndex = BLACKOUT_ZINDEX + 1
+fadeTitle.TextTransparency = 1
+fadeTitle.TextScaled = true
+local fadeTitleMost = Instance.new("UITextSizeConstraint")
+fadeTitleMost.MaxTextSize = 40
+fadeTitleMost.Parent = fadeTitle
+local fadeRule = Instance.new("Frame")
+fadeRule.AnchorPoint = Vector2.new(0.5, 0)
+fadeRule.Position = UDim2.new(0.5, 0, 0, 86)
+fadeRule.Size = UDim2.fromOffset(0, 2)
+fadeRule.BackgroundColor3 = COLOUR.gold
+fadeRule.BackgroundTransparency = 1
+fadeRule.BorderSizePixel = 0
+fadeRule.ZIndex = BLACKOUT_ZINDEX + 1
+fadeRule.Parent = fadeCard
 
 local blackoutToken = 0
 
-function UIService.fadeToBlack(seconds: number?)
+-- The card's words, faded in over the black, or out with it.
+local function showCard(on: boolean, seconds: number)
+	local info = TweenInfo.new(seconds, MOTION.style, Enum.EasingDirection.Out)
+	TweenService:Create(fadeEyebrow, info, { TextTransparency = if on then 0.15 else 1 }):Play()
+	TweenService:Create(fadeTitle, info, { TextTransparency = if on then 0 else 1 }):Play()
+	TweenService:Create(fadeRule, info, { BackgroundTransparency = if on then 0.2 else 1,
+		Size = UDim2.fromOffset(if on then 120 else 0, 2) }):Play()
+end
+
+-- `card` (Bootstrap): { eyebrow = "Level 2", title = "Sky Pools" }, put on the black if it is black or going black.
+function UIService.fadeCard(card: any)
+	if type(card) ~= "table" or type(card.title) ~= "string" then
+		return
+	end
+	local eyebrow = if type(card.eyebrow) == "string" then card.eyebrow else ""
+	fadeEyebrow.Text = (string.upper(eyebrow):gsub(".", "%0 ")):sub(1, -2)
+	fadeTitle.Text = card.title
+	if blackout.Visible then
+		showCard(true, 0.5)
+	end
+end
+
+function UIService.fadeToBlack(seconds: number?, card: any?)
 	blackoutToken += 1
 	blackout.Visible = true
 	TweenService:Create(blackout, TweenInfo.new(seconds or 0.45, MOTION.style,
 		Enum.EasingDirection.Out), { BackgroundTransparency = 0 }):Play()
+	if card then
+		UIService.fadeCard(card)
+	end
 end
 
 function UIService.fadeFromBlack(seconds: number?)
@@ -419,6 +517,7 @@ function UIService.fadeFromBlack(seconds: number?)
 	local over = seconds or 0.7
 	TweenService:Create(blackout, TweenInfo.new(over, MOTION.style, Enum.EasingDirection.Out),
 		{ BackgroundTransparency = 1 }):Play()
+	showCard(false, math.min(0.3, over * 0.4))
 	-- Hidden once it is clear, so a transparent sheet is not sitting over the HUD swallowing
 	-- nothing in particular for the rest of the session.
 	task.delay(over + 0.05, function()
@@ -426,6 +525,21 @@ function UIService.fadeFromBlack(seconds: number?)
 			blackout.Visible = false
 		end
 	end)
+end
+
+-- A CUT TO BLACK THAT FADES BACK (the hundred-and-thirty-seventh pass): black at once, then the picture back over
+-- `seconds`. For a move that has already happened (a fall caught, Chill), so it reads as a cut, never as a jump.
+function UIService.dip(seconds: number?)
+	blackoutToken += 1
+	blackout.Visible = true
+	blackout.BackgroundTransparency = 0
+	UIService.fadeFromBlack(seconds or 0.5)
+end
+
+-- Black, or still mostly black: what the tokens a run paid wait for (ShopService). Or the join card still up (the
+-- hundred-and-fifty-ninth pass: ReplicatedFirst's Arrival, `Arriving` on you), which is black too.
+function UIService.isBlack(): boolean
+	return (blackout.Visible and blackout.BackgroundTransparency < 0.6) or player:GetAttribute("Arriving") == true
 end
 
 -- ===================================================================== completion
@@ -987,7 +1101,7 @@ titleSpacer.Parent = leaderboardContent
 -- The caller still gets to hide it outright: `visible` is whether anything wants it shown at
 -- all, and the mode rule decides whether chill is allowed to.
 local function leaderboardShouldShow(visible: boolean): boolean
-	return visible and (currentMode == "hardcore" or chillBoardEnabled)
+	return visible and (currentMode == "hardcore" or chillBoardEnabled) and onLevel()
 end
 
 local leaderboardWanted = false
@@ -1093,6 +1207,7 @@ tabTag.Parent = leaderboard
 
 local function toggleLeaderboard()
 	leaderboardOpen = not leaderboardOpen
+	pressSound(if leaderboardOpen then "open" else "close")
 	applyCollapse()
 end
 
@@ -1129,8 +1244,11 @@ local function nameFor(userId: number): string
 	return name
 end
 
+-- FROM THE CONTENT, where the rows are (the hundred-and-thirty-ninth pass). This looked in the panel itself, which has no
+-- rows since they moved into Content, so nothing was ever cleared: every refresh (each spawn in Hardcore, each fall)
+-- drew the whole board again under the last, and "No times yet" stacked up down the screen.
 local function clearRows()
-	for _, child in ipairs(leaderboard:GetChildren()) do
+	for _, child in ipairs(leaderboardContent:GetChildren()) do
 		if child.Name == "Row" or child.Name == "Empty" then
 			child:Destroy()
 		end
@@ -1143,10 +1261,38 @@ function UIService.reapplyCollapse()
 	applyCollapse()
 end
 
+-- AS MANY ROWS AS THE PANEL HOLDS (the hundred-and-thirty-ninth pass): the board asks for a hundred, and every one was
+-- drawn, down past the panel's foot (off the bottom of a computer's screen; down over a phone's, where the board is at
+-- the top), with a name looked up on the web for each. TOP_ROWS now, and if you are on the board further down, you in
+-- the last of them at your own place. AND ONE REFRESH AT A TIME: the names are found before anything is drawn, and a
+-- refresh that a newer one overtakes while it waits gives way, so two close together (the push and the pull of one
+-- spawn) never draw into each other.
+local TOP_ROWS = 4
+local refreshTicket = 0
+
 function UIService.refreshLeaderboard(data: { { userId: number, time: number } })
+	refreshTicket += 1
+	local ticket = refreshTicket
+	local shown: { { rank: number, userId: number, time: number } } = {}
+	for i = 1, math.min(#data, TOP_ROWS) do
+		table.insert(shown, { rank = i, userId = data[i].userId, time = data[i].time })
+	end
+	for i = TOP_ROWS + 1, #data do
+		if data[i].userId == player.UserId then
+			shown[TOP_ROWS] = { rank = i, userId = data[i].userId, time = data[i].time }
+			break
+		end
+	end
+	local names: { string } = {}
+	for index, entry in ipairs(shown) do
+		names[index] = nameFor(entry.userId)
+		if refreshTicket ~= ticket then
+			return
+		end
+	end
 	clearRows()
 
-	if #data == 0 then
+	if #shown == 0 then
 		local empty = newLabel(leaderboardContent, TEXT.body, COLOUR.textMuted, Style.FONT.body)
 		empty.Name = "Empty"
 		empty.Size = UDim2.new(1, 0, 0, 44)
@@ -1158,7 +1304,7 @@ function UIService.refreshLeaderboard(data: { { userId: number, time: number } }
 		return
 	end
 
-	for i, entry in ipairs(data) do
+	for i, entry in ipairs(shown) do
 		local mine = entry.userId == player.UserId
 
 		local row = Instance.new("Frame")
@@ -1176,18 +1322,19 @@ function UIService.refreshLeaderboard(data: { { userId: number, time: number } }
 		rowCorner.CornerRadius = Style.RADIUS.small
 		rowCorner.Parent = row
 
-		local rank = newLabel(row, TEXT.body, if i == 1 then COLOUR.gold else COLOUR.textMuted, Style.FONT.heading)
+		local rank = newLabel(row, TEXT.body, if entry.rank == 1 then COLOUR.gold else COLOUR.textMuted, Style.FONT.heading)
 		rank.Size = UDim2.new(0, 22, 1, 0)
 		rank.Position = UDim2.new(0, SPACE.sm, 0, 0)
 		rank.TextXAlignment = Enum.TextXAlignment.Left
-		rank.Text = tostring(i)
+		rank.TextScaled = entry.rank > 99
+		rank.Text = tostring(entry.rank)
 
 		local who = newLabel(row, TEXT.body, if mine then COLOUR.textPrimary else COLOUR.textSecondary, Style.FONT.body)
 		who.Size = UDim2.new(1, -(SPACE.sm + 22 + 84), 1, 0)
 		who.Position = UDim2.new(0, SPACE.sm + 22, 0, 0)
 		who.TextXAlignment = Enum.TextXAlignment.Left
 		who.TextTruncate = Enum.TextTruncate.AtEnd
-		who.Text = nameFor(entry.userId)
+		who.Text = names[i]
 
 		-- Times right-aligned and monospaced, so the digits form a column you can compare
 		-- straight down instead of a ragged edge you have to read row by row.
@@ -1228,13 +1375,80 @@ do
 		modeButton.AnchorPoint = Vector2.new(1, 0)
 		modeButton.Position = UDim2.new(1, -SPACE.xl, 0, top)
 		timerPanel.AnchorPoint = Vector2.new(1, 0)
-		timerPanel.Position = UDim2.new(1, -SPACE.xl, 0, top + 26 + SPACE.sm)
+		timerPanel.Position = UDim2.new(1, -SPACE.xl, 0, top + MODE_TALL + SPACE.sm)
+		-- AND THE FOLDED CLOCK WITH IT (the hundred-and-thirty-ninth pass): it kept the bottom corner it was built in, under
+		-- the jump button.
+		timerPill.AnchorPoint = Vector2.new(1, 0)
+		timerPill.Position = timerPanel.Position
 		tooltip.AnchorPoint = Vector2.new(1, 0)
-		tooltip.Position = UDim2.new(1, -SPACE.xl, 0, top + 26 + SPACE.sm + 46 + SPACE.sm)
+		tooltip.Position = UDim2.new(1, -SPACE.xl, 0, top + MODE_TALL + SPACE.sm + 46 + SPACE.sm)
 		leaderboard.AnchorPoint = Vector2.new(0, 0)
 		leaderboard.Position = UDim2.new(0, SPACE.xl, 0, SPACE.xl)
 	end
 end
 
-UIService.STAMP = "75a6c86e"
+-- On a level and off it: the run's panels follow you (onLevel, at the top).
+local function showForPlace()
+	modeButton.Visible = onLevel()
+	showTimer()
+	leaderboard.Visible = leaderboardShouldShow(leaderboardWanted)
+end
+player:GetAttributeChangedSignal("InLevel"):Connect(showForPlace)
+showForPlace()
+
+-- A scene has the camera, or has given it back (Cinema).
+function UIService.sceneOn(on: boolean)
+	sceneHeld = on
+	showForPlace()
+end
+
+-- ===================================================================== chat
+--
+-- CHAT IN THE GAME'S OWN LOOK (the hundred-and-sixty-first pass). What players type over their heads was Roblox's own
+-- white bubble in Roblox's own face, beside the story's cream bubbles in Nunito (Style.BUBBLE, the hundred-and-nineteenth
+-- pass: "they should have the same style"), and the chat window and the bar you type into were Roblox's grey. Now a
+-- bubble over anyone's head is the story's bubble (cream, dark ink, the bold face, its corners), and the window and the
+-- bar are the game's panel and ink in its faces. Each property is set on its own and guarded, so a chat Roblox has
+-- changed under this keeps its own look for that one thing rather than stopping the screen; with the old chat, none.
+task.spawn(function()
+	local chat = game:GetService("TextChatService")
+	local function set(name: string, values: { [string]: any }): Instance?
+		local config = chat:WaitForChild(name, 10)
+		if not config then
+			return nil
+		end
+		for key, value in pairs(values) do
+			pcall(function()
+				(config :: any)[key] = value
+			end)
+		end
+		return config
+	end
+	local bubbles = set("BubbleChatConfiguration", {
+		BackgroundColor3 = Style.BUBBLE.fill,
+		BackgroundTransparency = 0,
+		TextColor3 = Style.BUBBLE.ink,
+		FontFace = Style.BUBBLE.font,
+		TextSize = Style.SIZE.body,
+		TailVisible = true,
+	})
+	if bubbles and not bubbles:FindFirstChildOfClass("UICorner") then
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = Style.BUBBLE.radius
+		corner.Parent = bubbles
+	end
+	set("ChatWindowConfiguration", {
+		BackgroundColor3 = Style.COLOUR.panel,
+		TextColor3 = Style.COLOUR.ink,
+		FontFace = Style.FONT.body,
+	})
+	set("ChatInputBarConfiguration", {
+		BackgroundColor3 = Style.COLOUR.panelRaised,
+		TextColor3 = Style.COLOUR.ink,
+		PlaceholderColor3 = Style.COLOUR.inkMuted,
+		FontFace = Style.FONT.body,
+	})
+end)
+
+UIService.STAMP = "5d894e66"
 return UIService

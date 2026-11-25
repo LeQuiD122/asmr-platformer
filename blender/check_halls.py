@@ -387,7 +387,7 @@ def main():
         fail("FloodedHallsService has no ownsFall, so nothing can tell the kill plane that a rider "
              "on the flume is not falling.")
     boot_text = boot.read_text(encoding="utf-8") if boot.exists() else ""
-    kill = boot_text[boot_text.index("if hrp.Position.Y < killY"):] if "if hrp.Position.Y < killY" in boot_text else ""
+    kill = boot_text[boot_text.index("local fell = hrp.Position.Y < killY"):] if "local fell = hrp.Position.Y < killY" in boot_text else ""
     kill = kill[:kill.index(" then")] if " then" in kill else kill
     if "FloodedHallsService.ownsFall" not in kill:
         fail("the kill plane does not exempt a flume rider, so the ride ends by teleporting them "
@@ -405,10 +405,51 @@ def main():
     if "function LightingService.clearLevelLook" not in light or "LightingService.clearLevelLook()" not in light:
         fail("LightingService does not sweep away a level's own post-processing when a region is "
              "applied, so a level that ends mid-run leaves its look on the lobby.")
-    for named in ("HallsBloom", "HallsBlur", "HallsGrade"):
+    for named in ("HallsBlur",):
         if named not in text:
             fail("the halls' %s is unnamed, so the sweep in LightingService cannot tell it from "
                  "one of the service's own." % named)
+
+    # ---- THE HALLS LIT AS THEIR OWN (the hundred-and-sixty-eighth pass, from your note of 2026-11-03: "fix the lighting
+    # in level 4 flooded halls, it's too bright in there").
+    #
+    # The level's palette was applied AFTER the halls were built, so it swept their bloom and grade away and lit the
+    # baths with the default's outdoor afternoon, every time, since September. The palette goes first now, and it is
+    # the halls' own: dim, with little of the sky's fill, little haze (haze is light) and one tight bloom. And the
+    # halls set none of the global light themselves, so there is one owner of it.
+    palette_at = boot_text.find("pcall(LightingService.apply, level.backdrop)")
+    if not (0 < palette_at < boot_text.find("FloodedHallsService.build(origin, levelInstance)")
+            < boot_text.find("return FloodedHallsService.applyAtmosphere()")):
+        fail("Bootstrap applies the level's light after the halls are built, so it sweeps their own look away and "
+             "lights the baths as the beach is.")
+    halls_light = light[light.find("\tfloodedHalls = {"):light.find("\t},", light.find("\tfloodedHalls = {"))]
+    if "\tfloodedHalls = {" not in light:
+        fail("LightingService has no floodedHalls palette, so the baths are lit by the default's afternoon.")
+    else:
+        def lit(name):
+            found = re.search(r"\t%s = ([\d.]+)," % name, halls_light)
+            return float(found.group(1)) if found else None
+
+        outdoor = re.search(r"\toutdoor = Color3\.fromRGB\((\d+), (\d+), (\d+)\)", halls_light)
+        for name, most, why in (("brightness", 1.0, "the light through the openings"),
+                                ("haze", 0.6, "the haze, which is light"),
+                                ("diffuse", 0.45, "the sky's light on every surface")):
+            value = lit(name)
+            if value is None or value > most:
+                fail("LightingService: the halls' %s (%s) is up past %g, too bright for the baths at midnight."
+                     % (why, value, most))
+        threshold = lit("bloomThreshold")
+        if threshold is None or threshold < 1.8:
+            fail("LightingService: the halls' bloom starts at %s, low enough for the lit walls to bloom, not only the "
+                 "windows." % threshold)
+        if not outdoor or max(int(c) for c in outdoor.groups()) > 80:
+            fail("LightingService: the halls' outdoor fill is a sky's (%s), so every open bay is lit as if outside."
+                 % (outdoor.groups() if outdoor else None))
+    for setting in ("lighting.Brightness =", "lighting.Ambient =", "lighting.OutdoorAmbient =",
+                    "lighting.ExposureCompensation =", 'Instance.new("BloomEffect")', 'Instance.new("ColorCorrectionEffect")'):
+        if setting in text:
+            fail("FloodedHallsService sets the global light itself (%s), so the halls' look has two owners and the "
+                 "palette's is swept or doubled." % setting)
 
     # ---- A BASIN FITS BETWEEN THE LANE AND THE WALL.
     #
@@ -761,6 +802,16 @@ def main():
             fail("The corner fallback lays a chunk across the path %g studs past the last one, but "
                  "a chunk's entry reaches %.1f to the side with its shelves, so it reaches back "
                  "into the chunk before it." % (gap + bar, max(entry_reach)))
+        # HARDER FROM CHUNK TO CHUNK (205), from your note of 2026-11-07: a six-stud jump at every boundary and a climb
+        # averaging over three a landing, never past the four a jump can take with the gap.
+        if gap < 6:
+            fail("The gaps between chunks are back to an easy step (CHUNK_GAP %g, six since the 205th pass)." % gap)
+        steps = re.search(r"^local STEP_CHOICES = \{ ([\d, ]+) \}", level_text, re.M)
+        if steps:
+            climb = [float(s) for s in steps.group(1).split(",")]
+            if sum(climb) / len(climb) < 3 or max(climb) > 4:
+                fail("The climb between landings is easy again or past a jump (STEP_CHOICES average %.1f, most %g)."
+                     % (sum(climb) / len(climb), max(climb)))
         # A character clears about 8.2 studs of distance, per the note at STEP_CHOICES.
         if gap + bar - min(entry_width) / 2 > 8.2:
             fail("The corner fallback leaves a %.1f-stud jump onto the narrowest entry (%g wide). A "
@@ -1431,6 +1482,13 @@ def main():
             fail("audio: %s is not made, or not written to audio/story" % name)
         if '"%s"' % name not in boot_text or "%s = true" % name not in boot_text:
             fail("Bootstrap: %s is not in the list of story sounds, or not marked as having a stand-in" % name)
+
+    # MATCHED GUMS (the two-hundred-and-twelfth pass): the upper jaw has no UVs for a texture, so when the lower jaw wears
+    # its generated one the upper is coloured to match it, not left the old near-black.
+    MAW_TEXT = (HERE.parent / "src" / "Client" / "Services" / "Maw.lua").read_bytes().decode("utf-8").replace("\r\n", "\n")
+    if 'if lowerJaw and lowerJaw.TextureID ~= "" then\n\t\t\tparts[1][2] = TEXTURED_FLESH' not in MAW_TEXT \
+            or '{ "Maw_UpperJaw", FLESH, 0.07, upper },' not in MAW_TEXT.split("local parts = {", 1)[-1][:200]:
+        fail("Maw: the upper jaw is not matched to the textured lower jaw (they read as two different mouths)")
 
     print("flooded halls: scale %g, bay %g, lane +/-%g inside a %g-wide corridor, walkway %g "
           "studs above the water, %d mesh kinds placed."

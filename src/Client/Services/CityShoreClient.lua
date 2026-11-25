@@ -66,15 +66,15 @@ local Cinema: any = (function()
 end)()
 
 local CityShoreClient = {}
-CityShoreClient.VERSION = "the hundred-and-twenty-ninth pass, 2026-10-22"
+CityShoreClient.VERSION = "the two-hundred-and-eighth pass, 2026-11-12"
 
 type Gull = { body: BasePart, left: BasePart, right: BasePart, home: Vector3, out: Vector3, flap: number, fled: number? }
 type Scene = { began: number, water: number, tip: Vector3, from: Vector3, facing: Vector3, splash: Vector3?,
 	splashAt: number?, lamp: Vector3?, held: { Instance }, carryFrom: Vector3?, carryAt: number?, told: boolean,
 	shot: string?, maren: BasePart?, gulls: { Gull }, rush: BasePart?, wind: Sound?, sunWas: number?,
-	shafts: { { part: BasePart, rest: CFrame, phase: number } }, fish: { { part: BasePart, from: Vector3, to: Vector3, speed: number } },
+	shafts: { { part: BasePart, rest: CFrame, phase: number, beams: { { beam: Beam, clear: number } }? } }, fish: { { part: BasePart, from: Vector3, to: Vector3, speed: number } },
 	hit: { [string]: boolean }, streaks: ParticleEmitter?, dropTop: number?, marenFigure: Model?,
-	marenJoints: { [string]: any }?, underFx: { PostEffect } }
+	marenJoints: { [string]: any }?, underFx: { PostEffect }, hidden: { BasePart }, ceiling: BasePart? }
 local scene: Scene? = nil
 -- The fastest the diver falls and drifts while the scene is on (studs a second).
 local FALL_SPEED = 110
@@ -89,6 +89,11 @@ local SPLASH_SINK = 1.5
 local WATER_SHOT = 120
 -- THE HIT, held: seconds the camera stays at the surface on the splash before it goes under after them.
 local SPLASH_HOLD = 0.6
+-- THE DROWNED STREET (the two-hundred-and-eighth pass): how far under the splash it lies (it was 120: too far for its lamp
+-- to be found, or for its light to be drawn on every machine), and how far round the splash the sea is taken off this
+-- screen while the camera is under it (drown).
+local DEEP_DOWN = 70
+local DROWN_REACH = 320
 local divers: { [Player]: { began: number, ends: number, model: Instance?, joints: { [string]: any }? } } = {}
 local stepped: RBXScriptConnection? = nil
 
@@ -138,6 +143,12 @@ local function endScene(now: boolean?)
 	for _, thing in ipairs(current.held) do
 		thing:Destroy()
 	end
+	-- The sea, back on this screen (drown hid it for the last shot).
+	for _, part in ipairs(current.hidden) do
+		if part.Parent then
+			part.LocalTransparencyModifier = 0
+		end
+	end
 	if Poses and current.marenJoints then
 		for _, joint in pairs(current.marenJoints) do
 			Poses.drive(joint, CFrame.identity)
@@ -177,7 +188,8 @@ local function beginScene(water: number, tip: Vector3)
 	local current: Scene = { began = os.clock(), water = water, tip = tip, from = root.Position, facing = facing,
 		held = {}, carryFrom = nil, carryAt = nil, told = false, shot = nil, maren = maren, gulls = {}, rush = nil,
 		wind = nil, sunWas = nil, shafts = {}, fish = {}, hit = {}, streaks = nil, dropTop = nil,
-		marenFigure = if figure and figure:IsA("Model") then figure else nil, marenJoints = nil, underFx = {} }
+		marenFigure = if figure and figure:IsA("Model") then figure else nil, marenJoints = nil, underFx = {},
+		hidden = {}, ceiling = nil }
 	scene = current
 	humanoid.PlatformStand = true
 	-- THE GULLS, circling halfway down the fall out from the board, which you drop straight through.
@@ -293,6 +305,8 @@ local function beginScene(water: number, tip: Vector3)
 		-- that grow to their loudest at the end, so it is started to end as they reach the water (the hang
 		-- off the board, then the rest of the height at FALL_SPEED), and never before they are off the board.
 		Cinema.sound("DiveBoard", 0.9, { fallback = "rbxasset://sounds/button.wav", speed = 0.4, keep = true })
+		-- THE SCORE (the two-hundred-and-eleventh pass): wistful, growing as they go up and out over the drop.
+		Cinema.score("Shore")
 		local fall = HANG_SECONDS + math.max(0, root.Position.Y - water - HANG_SPEED * HANG_SECONDS) / FALL_SPEED
 		task.delay(math.max(0.5, fall - 7), function()
 			if scene == current then
@@ -355,6 +369,14 @@ local function marenReacts(current: Scene, toward: Vector3, since: number)
 end
 
 -- A part of the scene under the water, this client's alone.
+-- THE LIGHT SHAFTS under the water (the two-hundred-and-thirteenth pass): how clear each of a shaft's three beams is
+-- at its brightest, and how wide against the shaft; and the fade along it, clear at both ends.
+local SHAFT_LAYERS = { { wide = 1, clear = 0.84 }, { wide = 1.7, clear = 0.91 }, { wide = 2.6, clear = 0.955 } }
+local function shaftFade(clear: number): NumberSequence
+	return NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, clear),
+		NumberSequenceKeypoint.new(0.75, clear + (1 - clear) * 0.35), NumberSequenceKeypoint.new(1, 1) })
+end
+
 local function under(current: Scene, name: string, size: Vector3, cf: CFrame, colour: Color3): Part
 	local part = Instance.new("Part")
 	part.Name = name
@@ -372,6 +394,30 @@ local function under(current: Scene, name: string, size: Vector3, cf: CFrame, co
 	return part
 end
 
+-- THE CAMERA GOES UNDER: the sea taken off this screen (every part of the backdrop near the splash that lies at the
+-- water's level: its wave, its foam, what floats on it), so nothing of it is between the eye and the street; and the
+-- surface drawn from underneath instead, a pale ceiling over the dark. Put back when the scene ends (endScene).
+local function drown(current: Scene, at: Vector3)
+	local backdrop = workspace:FindFirstChild("Backdrop")
+	if backdrop then
+		for _, item in ipairs(backdrop:GetDescendants()) do
+			if item:IsA("BasePart") and item.LocalTransparencyModifier < 1 then
+				local half = item.Size / 2
+				local reach = math.max(half.X, half.Z)
+				local away = Vector2.new(item.Position.X - at.X, item.Position.Z - at.Z).Magnitude - reach
+				if away < DROWN_REACH and item.Position.Y - half.Y < current.water + 50 and item.Position.Y + half.Y > current.water - 90 then
+					item.LocalTransparencyModifier = 1
+					table.insert(current.hidden, item)
+				end
+			end
+		end
+	end
+	local ceiling = current.ceiling
+	if ceiling then
+		ceiling.Transparency = 0.15
+	end
+end
+
 -- THE WATER CLOSES OVER THEM: the dark under the surface round their way down, the drowned street
 -- far below with its one lamp still on, bubbles going up, and the view going green and soft.
 local function splashed(at: Vector3)
@@ -382,29 +428,89 @@ local function splashed(at: Vector3)
 	current.splash = at
 	current.splashAt = os.clock()
 	local deep = Color3.fromRGB(10, 34, 42)
-	local floor = at.Y - 120
-	for _, wall in ipairs({ { Vector3.new(160, 120, 1), Vector3.new(0, -60, 80) }, { Vector3.new(160, 120, 1), Vector3.new(0, -60, -80) },
-		{ Vector3.new(1, 120, 160), Vector3.new(80, -60, 0) }, { Vector3.new(1, 120, 160), Vector3.new(-80, -60, 0) },
-		{ Vector3.new(160, 1, 160), Vector3.new(0, -120, 0) } }) do
+	local floor = at.Y - DEEP_DOWN
+	for _, wall in ipairs({ { Vector3.new(160, DEEP_DOWN + 6, 1), Vector3.new(0, -DEEP_DOWN / 2 + 3, 80) },
+		{ Vector3.new(160, DEEP_DOWN + 6, 1), Vector3.new(0, -DEEP_DOWN / 2 + 3, -80) },
+		{ Vector3.new(1, DEEP_DOWN + 6, 160), Vector3.new(80, -DEEP_DOWN / 2 + 3, 0) },
+		{ Vector3.new(1, DEEP_DOWN + 6, 160), Vector3.new(-80, -DEEP_DOWN / 2 + 3, 0) },
+		{ Vector3.new(160, 1, 160), Vector3.new(0, -DEEP_DOWN, 0) } }) do
 		under(current, "Deep", wall[1], CFrame.new(at + wall[2]), deep)
 	end
-	-- The street down there: roofs, and the lamp on its post.
-	local street = at + current.facing * 22
+	-- THE SURFACE FROM UNDERNEATH, over the whole of it: pale, the light coming down through it. Unseen until the camera
+	-- is under (drown): from above it would be a pale square lying on the sea.
+	local ceiling = under(current, "SurfaceUnder", Vector3.new(160, 1, 160), CFrame.new(at + Vector3.new(0, 6, 0)), Color3.fromRGB(150, 206, 200))
+	ceiling.Transparency = 1
+	current.ceiling = ceiling
+	-- The street down there: roofs, and the lamp on its post. (Forty studs ahead of where you went in, the two-hundred-and-
+	-- thirty-fifth pass: at twenty-two the camera looked at it from almost straight above, and a lamp from above is a
+	-- dot on a disc.)
+	local street = at + current.facing * 40
+	local side = Vector3.new(-current.facing.Z, 0, current.facing.X)
 	for index, roof in ipairs({ { -18, 6, 14, 10 }, { 20, -8, 16, 18 }, { -6, -26, 12, 8 }, { 28, 22, 10, 14 } }) do
 		under(current, "DrownedRoof", Vector3.new(roof[3], roof[4], roof[3]),
 			CFrame.new(street.X + roof[1], floor + roof[4] / 2, street.Z + roof[2]) * CFrame.Angles(0, index * 0.4, 0),
 			Color3.fromRGB(26, 44, 50))
 	end
+	-- THE LAMP, SEEN AS A LAMP (the two-hundred-and-thirty-fifth pass, from your note of 2026-11-10, "the lamp at the
+	-- bottom is no longer visible", seen in play on 2026-11-21: the street under it was a pale disc thirty-four studs
+	-- across, lit, with a pale ball of halo fifteen across on top, and from above that was all there was, a pale blob,
+	-- no post, no lantern). Now: a cobbled street, dark, that only the lamp's own light makes a pool on; a post painted
+	-- a lighter iron so that light catches it, twenty studs tall with a crossbar; a lantern of four warm panes in a dark
+	-- frame under a pointed cap and a finial; and only a small amber glow round it, as light in murky water has.
 	local post = Vector3.new(street.X, floor, street.Z)
-	under(current, "LampPost", Vector3.new(0.6, 14, 0.6), CFrame.new(post + Vector3.new(0, 7, 0)), Color3.fromRGB(40, 46, 50))
-	local head = under(current, "LampHead", Vector3.new(1.4, 1.2, 1.4), CFrame.new(post + Vector3.new(0, 14.4, 0)),
-		Color3.fromRGB(250, 226, 170))
-	head.Transparency = 0.2
+	local iron = Color3.fromRGB(70, 86, 84)
+	local frameIron = Color3.fromRGB(30, 34, 36)
+	local cobbles = under(current, "LampStreet", Vector3.new(30, 0.6, 30), CFrame.new(post + Vector3.new(0, 0.3, 0)),
+		Color3.fromRGB(58, 62, 58))
+	cobbles.Material = Enum.Material.Cobblestone
+	local kerb = under(current, "LampKerb", Vector3.new(30, 0.8, 1.4), CFrame.new(post + side * 4 + Vector3.new(0, 0.4, 0)),
+		Color3.fromRGB(84, 86, 80))
+	kerb.CFrame = CFrame.lookAt(kerb.Position, kerb.Position + current.facing) * CFrame.Angles(0, math.pi / 2, 0)
+	under(current, "LampFoot", Vector3.new(1.8, 1.2, 1.8), CFrame.new(post + Vector3.new(0, 1.2, 0)), iron)
+	under(current, "LampPost", Vector3.new(0.8, 20, 0.8), CFrame.new(post + Vector3.new(0, 10.6, 0)), iron)
+	under(current, "LampCrossbar", Vector3.new(2.4, 0.3, 0.3), CFrame.new(post + Vector3.new(0, 18, 0)), iron)
+	local headAt = post + Vector3.new(0, 21.8, 0)
+	local head = under(current, "LampHead", Vector3.new(2.6, 3.2, 2.6), CFrame.new(headAt), Color3.fromRGB(255, 196, 112))
+	head.Material = Enum.Material.SmoothPlastic
+	-- The frame round the panes: four corner bars, a sill under and a band over.
+	for _, corner in ipairs({ { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 } }) do
+		under(current, "LampFrame", Vector3.new(0.25, 3.4, 0.25), CFrame.new(headAt + Vector3.new(corner[1] * 1.35, 0, corner[2] * 1.35)),
+			frameIron)
+	end
+	under(current, "LampFrame", Vector3.new(3, 0.3, 3), CFrame.new(headAt - Vector3.new(0, 1.75, 0)), frameIron)
+	under(current, "LampFrame", Vector3.new(3.1, 0.3, 3.1), CFrame.new(headAt + Vector3.new(0, 1.75, 0)), frameIron)
+	-- The cap stepped to a point: a wide course, a narrower one, and the finial.
+	under(current, "LampCap", Vector3.new(2.6, 0.5, 2.6), CFrame.new(headAt + Vector3.new(0, 2.15, 0)), frameIron)
+	under(current, "LampCap", Vector3.new(1.6, 0.6, 1.6), CFrame.new(headAt + Vector3.new(0, 2.7, 0)), frameIron)
+	under(current, "LampCap", Vector3.new(0.8, 0.5, 0.8), CFrame.new(headAt + Vector3.new(0, 3.25, 0)), frameIron)
+	under(current, "LampFinial", Vector3.new(0.35, 0.8, 0.35), CFrame.new(headAt + Vector3.new(0, 3.9, 0)), frameIron)
+	-- The lantern is lit by lights that are not inside it (a light inside a part does not light that part): one under
+	-- it, which throws the pool on the cobbles and lights the post; one to the side, which is its own panes.
+	local glowAt = under(current, "LampGlow", Vector3.new(0.2, 0.2, 0.2), CFrame.new(headAt - Vector3.new(0, 3, 0)),
+		Color3.fromRGB(255, 236, 190))
+	glowAt.Transparency = 1
 	local light = Instance.new("PointLight")
-	light.Color = Color3.fromRGB(255, 206, 140)
-	light.Brightness = 3
-	light.Range = 40
-	light.Parent = head
+	light.Color = Color3.fromRGB(255, 190, 110)
+	light.Brightness = 7
+	light.Range = 30
+	light.Shadows = false
+	light.Parent = glowAt
+	local lensAt = under(current, "LampLens", Vector3.new(0.2, 0.2, 0.2), CFrame.new(headAt + side * 2.4 + current.facing * -2.4),
+		Color3.fromRGB(255, 236, 190))
+	lensAt.Transparency = 1
+	local lens = Instance.new("PointLight")
+	lens.Color = Color3.fromRGB(255, 214, 150)
+	lens.Brightness = 4
+	lens.Range = 8
+	lens.Shadows = false
+	lens.Parent = lensAt
+	-- The glow: what a light does to water with silt in it. Two small amber shells, lit by nothing but their own
+	-- colour, so they are there on a machine that draws no far lights. (The fifteen-stud pale one was the blob.)
+	for index, wide in ipairs({ 4.6, 7.4 }) do
+		local halo = under(current, "LampHalo", Vector3.new(wide, wide, wide), CFrame.new(headAt), Color3.fromRGB(255, 186, 104))
+		halo.Shape = Enum.PartType.Ball
+		halo.Transparency = 0.8 + 0.09 * index
+	end
 	current.lamp = head.Position
 	local column = under(current, "Bubbles", Vector3.new(8, 60, 8), CFrame.new(at - Vector3.new(0, 34, 0)), deep)
 	column.Transparency = 1
@@ -441,11 +547,41 @@ local function splashed(at: Vector3)
 		local a = k / 7 * math.pi * 2 + math.random()
 		local r = 8 + math.random() * 22
 		local top = at + Vector3.new(math.cos(a) * r, -1, math.sin(a) * r)
-		local shaft = under(current, "LightShaft", Vector3.new(2 + math.random() * 3, 70, 0.2),
+		-- SOFT SHAFTS (the two-hundred-and-thirteenth pass, from your screenshot of 2026-11-13: the light "glitched"):
+		-- each was a flat see-through slab 70 studs long, and from under the water they read as hard panes of glass
+		-- across the shot. Now each is a beam of light, always turned to the eye, soft at its edges and fading out at
+		-- both ends, hung from an unseen holder that sways as the slab did.
+		local wide = 2 + math.random() * 3
+		local shaft = under(current, "LightShaft", Vector3.new(0.2, 0.2, 0.2),
 			CFrame.new(top - Vector3.new(0, 35, 0)) * CFrame.Angles(0, a, 0.18), Color3.fromRGB(200, 236, 230))
-		shaft.Transparency = 0.9
-		shaft.Material = Enum.Material.SmoothPlastic
-		table.insert(current.shafts, { part = shaft, rest = shaft.CFrame, phase = math.random() * 6 })
+		shaft.Transparency = 1
+		local high = Instance.new("Attachment")
+		high.Position = Vector3.new(0, 35, 0)
+		high.Parent = shaft
+		local low = Instance.new("Attachment")
+		low.Position = Vector3.new(0, -35, 0)
+		low.Parent = shaft
+		-- Three beams to a shaft, a faint core inside two wider and fainter, so its edges fall away softly (a beam
+		-- has no soft edge of its own, and the soft texture tried first does not load); twelve segments, because
+		-- a beam of one samples its fade only at its two ends, which are clear, and it vanished.
+		local beams: { { beam: Beam, clear: number } } = {}
+		for layer, spec in ipairs(SHAFT_LAYERS) do
+			local beam = Instance.new("Beam")
+			beam.Name = "ShaftLayer" .. layer
+			beam.Attachment0 = high
+			beam.Attachment1 = low
+			beam.FaceCamera = true
+			beam.Width0 = wide * spec.wide * 0.7
+			beam.Width1 = wide * spec.wide * 1.3
+			beam.Segments = 12
+			beam.Color = ColorSequence.new(Color3.fromRGB(200, 236, 230))
+			beam.LightEmission = 0.2
+			beam.LightInfluence = 0.3
+			beam.Transparency = shaftFade(spec.clear)
+			beam.Parent = shaft
+			table.insert(beams, { beam = beam, clear = spec.clear })
+		end
+		table.insert(current.shafts, { part = shaft, rest = shaft.CFrame, phase = math.random() * 6, beams = beams })
 	end
 	for k = 1, 5 do
 		local depth = 10 + k * 7
@@ -458,6 +594,7 @@ local function splashed(at: Vector3)
 	if Cinema then
 		Cinema.fade(current.wind, 0.3)
 		Cinema.sound("DiveSplash", 1, { fallback = "rbxasset://sounds/impact_water.mp3", speed = 0.6, keep = true })
+		Cinema.climax(1)
 		Cinema.sound("UnderwaterHum", 0.55, { looped = true, fadeIn = 1.5 })
 		task.delay(2.6, function()
 			if scene == current then
@@ -596,7 +733,10 @@ local function stepScene()
 	end
 	for _, shaft in ipairs(current.shafts) do
 		shaft.part.CFrame = shaft.rest * CFrame.Angles(0.04 * math.sin(now * 0.5 + shaft.phase), 0, 0.03 * math.sin(now * 0.4 + shaft.phase))
-		shaft.part.Transparency = 0.86 + 0.06 * math.sin(now * 0.8 + shaft.phase)
+		-- (The shaft breathes, a little brighter and dimmer.)
+		for _, layer in ipairs(shaft.beams or {}) do
+			layer.beam.Transparency = shaftFade(math.clamp(layer.clear + 0.03 * math.sin(now * 0.8 + shaft.phase), 0, 1))
+		end
 	end
 	for _, fish in ipairs(current.fish) do
 		local since = splash and (now - (current.splashAt :: number)) or 0
@@ -721,6 +861,7 @@ local function stepScene()
 		-- the lamp at once, and they were behind the camera within a second.
 		if current.shot ~= "under" then
 			shot("under")
+			drown(current, splash)
 			for _, fx in ipairs(current.underFx) do
 				fx.Enabled = true
 			end
@@ -729,7 +870,9 @@ local function stepScene()
 		local eye = here - current.facing * 7 + side * 1.5 + Vector3.new(0, 3 - math.min(since, 10) * 0.2, 0)
 		eye = Vector3.new(eye.X, math.min(eye.Y, current.water - 1.5), eye.Z)
 		local lamp = current.lamp or (here - Vector3.new(0, 100, 0))
-		Cinema.point(CFrame.lookAt(eye, here:Lerp(lamp, math.clamp((since - 2) / 3.5, 0, 0.7))), 66)
+		-- (Further onto the lamp than before, the two-hundred-and-thirty-fifth pass: it sits a little under the middle of the
+		-- picture, below the card that comes up over the middle at the end.)
+		Cinema.point(CFrame.lookAt(eye, here:Lerp(lamp, math.clamp((since - 2) / 3.5, 0, 0.92))), 62)
 	end
 end
 
@@ -782,5 +925,5 @@ function CityShoreClient.start()
 	print("CityShoreClient: running, " .. CityShoreClient.VERSION)
 end
 
-CityShoreClient.STAMP = "bf8a0666"
+CityShoreClient.STAMP = "b1d8bd87"
 return CityShoreClient

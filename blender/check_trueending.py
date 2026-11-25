@@ -264,8 +264,12 @@ for needle, why in (
 ):
     if needle not in give:
         fail("EconomyService.trueEnding " + why)
-call = re.search(r'if player:GetAttribute\("ClockedIn"\) == true and EconomyService and EconomyService\.trueEnding then\n'
-                 r'\t+pcall\(EconomyService\.trueEnding, player\)\n\t+end\n\t+if finishRunFor then', BOOT)
+# (Handed to finishFrom as what that ending does first, since the hundred-and-seventy-eighth pass: a late arrival from
+# halls that are gone gives nothing.)
+call = re.search(r'FloodedHallsService\.attachSlide\(built :: Model, finishFrom\(levelInstance, function\(player\)\n'
+                 r'(?:\t+--[^\n]*\n)*'
+                 r'\t+if player:GetAttribute\("ClockedIn"\) == true and EconomyService and EconomyService\.trueEnding then\n'
+                 r'\t+pcall\(EconomyService\.trueEnding, player\)\n\t+end\n\t+end\)\)', BOOT)
 if not call:
     fail("Bootstrap: the true ending's reward is not given to a rider who clocked in as they come through the gates")
 if BOOT.count("EconomyService.trueEnding, player") != 1:
@@ -274,10 +278,12 @@ plaque = ECONOMY[ECONOMY.find("local function keyTag(player: Player)"):ECONOMY.f
 for needle, why in (
     ("if not (profile and profile.Data.TrueEnding == true) then\n\t\tif existing then\n\t\t\texisting:Destroy()",
      "is over the head of someone who has not seen the true ending"),
-    ("gui.Size = UDim2.new(3.6, 0, 0.95, 0)", "is not sized in studs (it would stay huge far away)"),
+    ("gui.Size = UDim2.new(TAGS.key, 0, TAGS.height / TAGS.bottom, 0)", "is not sized in studs (it would stay huge far away)"),
     ("gui.MaxDistance = 80", "is drawn from any distance"),
     ('shown.Enabled = player:GetAttribute("InLevel") == nil', "shows on a level"),
-    ("if head:FindFirstChild(VIP_TAG) then 4.75 else 3.35", "sits on top of the VIP tag"),
+    # (Beside it since the two-hundred-and-eighteenth pass: the two chips centred together, one height, side by side.)
+    ("shown.StudsOffset = Vector3.new(if vip then both / 2 - TAGS.key / 2 else 0, 0, 0)", "sits on top of the VIP tag"),
+    ("vip.StudsOffset = Vector3.new(-both / 2 + TAGS.vip / 2, 0, 0)", "is not beside the VIP tag, but on it"),
     ('word.Text = "KEY HOLDER"', "does not say what it is"),
 ):
     if needle not in plaque:
@@ -298,7 +304,8 @@ for needle, why in (
     if needle not in DEV:
         fail("DevPanelClient " + why)
 for needle, why in (
-    ('if model.Name ~= "Watcher" then', "hides someone other than the Watcher"),
+    # Pinned to its own function: aheadGone (172) asks the same of the Watcher on the way ahead.
+    ('local function stoppedWaiting(model: Instance)\n\tif model.Name ~= "Watcher" then', "hides someone other than the Watcher"),
     ('Players.LocalPlayer:GetAttribute("TrueEnding") == true then\n\t\t\titem.LocalTransparencyModifier = 1',
      "never empties his ledge for someone who has seen the true ending"),
     ("model.DescendantAdded:Connect(hide)", "misses what of him arrives later"),

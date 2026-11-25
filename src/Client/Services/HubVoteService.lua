@@ -219,6 +219,12 @@ local function show(visible: boolean)
 	end
 end
 
+-- A server's word for a person (hardcore, medium), as a person reads it (Hardcore, Medium).
+local function cap(word: any): string
+	local text = tostring(word)
+	return text:sub(1, 1):upper() .. text:sub(2)
+end
+
 local function describe(state): string
 	local leading = state.leading
 	if not leading then
@@ -237,9 +243,11 @@ local function describe(state): string
 	-- table serialised as a one-element array and it alone read correctly, which is exactly
 	-- the pattern that got reported.
 	local votes = state.leadingVotes or {}
-	return ("%s (%d)   %s (%d)   %s (%d)"):format(
-		name, votes.level or 0, leading.mode, votes.mode or 0,
-		leading.length, votes.length or 0)
+	-- CAPITALISED AND PUT APART (the hundred-and-thirty-ninth pass): "City Shore (2)   hardcore (1)   medium (3)" read
+	-- as the server's own words.
+	return ("%s (%d)  ·  %s (%d)  ·  %s (%d)"):format(
+		name, votes.level or 0, cap(leading.mode), votes.mode or 0,
+		cap(leading.length), votes.length or 0)
 end
 
 -- THE RESULT CARD LEAVES ON ITS OWN.
@@ -367,8 +375,9 @@ function HubVoteService.onResult(result)
 		headline.Text = tostring(result.levelName)
 	end
 	if detail then
-		detail.Text = ("%s  -  %s run  -  %d %s voting"):format(
-			tostring(result.mode), tostring(result.length),
+		-- In a person's words, put apart with dots (it was the server's lowercase words, put apart with dashes).
+		detail.Text = ("%s  ·  %s run  ·  %d %s voted"):format(
+			cap(result.mode), cap(result.length),
 			tonumber(result.voters) or 0,
 			if (tonumber(result.voters) or 0) == 1 then "player" else "players")
 	end
@@ -428,8 +437,7 @@ function HubVoteService.onOpened(payload)
 	local many = #names > 1
 	local title = table.concat(names, " and ") .. (if many then " are open" else " is open")
 	local body = if many then "New levels. Step on their pads to vote for them." else "A new level. Step on its pad to vote for it."
-	HubVoteService.say("NEW", title, body)
-	tock(2)
+	HubVoteService.tell("NEW", title, body, true)
 end
 
 -- A HELD MESSAGE on the card, to you alone: a short badge in the disc, a headline and a line under it, for
@@ -465,6 +473,73 @@ function HubVoteService.say(badge: string, title: string, body: string)
 			show(false)
 		end
 	end)
+end
+
+-- ONE NOTICE AT A TIME, AND NEVER UNDER A SCENE (the hundred-and-forty-second pass, from your notes: "polishing the
+-- game"): what a run says as it ends (a challenge done, a level opened, the story going on without you) came up in the
+-- middle of its ending, half under the scene's top bar, and a second notice wiped the first before it could be read. Each
+-- now waits its turn (OPENED_FOR seconds apiece, the last NOTICES_KEPT at most), and none comes up while a scene has the
+-- camera or the screen is black (for a minute and a half at most). An answer to something you have just done (the chest,
+-- Start while a run is on, the admin's command) is still said at once (say).
+type Notice = { badge: string, title: string, body: string, chime: boolean }
+local notices: { Notice } = {}
+local noticing = false
+local NOTICES_KEPT = 4
+
+-- A module beside this one (Cinema, UIService), found when first wanted: this needs neither to run.
+local besideCache: { [string]: any } = {}
+local function besideModule(name: string): any
+	if besideCache[name] == nil then
+		local found = script.Parent and script.Parent:FindFirstChild(name)
+		local loaded: any = false
+		if found and found:IsA("ModuleScript") then
+			local ok, module = pcall(require, found)
+			if ok and type(module) == "table" then
+				loaded = module
+			end
+		end
+		besideCache[name] = loaded
+	end
+	return besideCache[name] or nil
+end
+
+local function heldBack(): boolean
+	local cinema = besideModule("Cinema")
+	local ui = besideModule("UIService")
+	return (cinema ~= nil and cinema.active()) or (ui ~= nil and type(ui.isBlack) == "function" and ui.isBlack())
+end
+
+local function nextNotice()
+	if noticing then
+		return
+	end
+	local notice = table.remove(notices, 1)
+	if not notice then
+		return
+	end
+	noticing = true
+	task.spawn(function()
+		local began = os.clock()
+		while heldBack() and os.clock() - began < 90 do
+			task.wait(0.25)
+		end
+		HubVoteService.say(notice.badge, notice.title, notice.body)
+		if notice.chime then
+			tock(2)
+		end
+		task.wait(OPENED_FOR)
+		noticing = false
+		nextNotice()
+	end)
+end
+
+-- A NOTICE, in its turn (the chime with it, for a level opened).
+function HubVoteService.tell(badge: string, title: string, body: string, chime: boolean?)
+	if #notices >= NOTICES_KEPT then
+		table.remove(notices, 1)
+	end
+	table.insert(notices, { badge = badge, title = title, body = body, chime = chime == true })
+	nextNotice()
 end
 
 -- AN ADMIN'S /levels (EconomyService), to them alone: every level open for them, or back to their own progress.
@@ -509,7 +584,10 @@ local function liftLid()
 		return
 	end
 	local rest = lid.CFrame
-	local hinge = rest * CFrame.new(0, -lid.Size.Y / 2, lid.Size.Z / 2)
+	-- ON ITS OWN HINGE where it says where that is (the hundred-and-eighty-third pass): the made chest's lid hangs lower
+	-- at the front, where its hasp is, than at the back where it is hinged, so the bottom of its box is not the hinge.
+	local at = lid:GetAttribute("Hinge")
+	local hinge = rest * (if typeof(at) == "Vector3" then CFrame.new(at) else CFrame.new(0, -lid.Size.Y / 2, lid.Size.Z / 2))
 	local open = hinge * CFrame.Angles(math.rad(70), 0, 0) * hinge:Inverse() * rest
 	TweenService:Create(lid, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { CFrame = open }):Play()
 	task.delay(3.5, function()
@@ -748,7 +826,7 @@ local function noticeDone()
 	if #fresh > 1 then
 		title = #fresh .. " challenges done"
 	end
-	HubVoteService.say("+" .. reward, title, ("%s. %d of %d done today."):format(table.concat(words, ", "), #doneList,
+	HubVoteService.tell("+" .. reward, title, ("%s. %d of %d done today."):format(table.concat(words, ", "), #doneList,
 		#split(ids)))
 end
 
@@ -892,10 +970,10 @@ function HubVoteService.onStory(payload)
 		local extra = if type(payload.extra) == "table" then payload.extra else {}
 		local playing = tonumber(extra.playing) or 1
 		local who = if playing == 1 then "1 player is" else playing .. " players are"
-		HubVoteService.say("STORY", "Waiting for the others",
+		HubVoteService.tell("STORY", "Waiting for the others",
 			("%s still on %s. The story goes on when they finish."):format(who, tostring(extra.level or "the level")))
 	elseif payload.what == "behind" then
-		HubVoteService.say("STORY", "The story went on without you", "Step on the Story pad to go on from where your save is.")
+		HubVoteService.tell("STORY", "The story went on without you", "Step on the Story pad to go on from where your save is.")
 	end
 end
 
@@ -903,7 +981,7 @@ end
 -- reaching the end together pays.
 function HubVoteService.onFriend(payload)
 	local percent = if type(payload) == "table" then tonumber(payload.percent) or 20 else 20
-	HubVoteService.say("+" .. percent .. "%", "Running with a friend",
+	HubVoteService.tell("+" .. percent .. "%", "Running with a friend",
 		("A friend of yours is on this run. Reach the end and it pays %d%% more tokens."):format(percent))
 end
 
@@ -1000,5 +1078,5 @@ task.spawn(function()
 	end)
 end)
 
-HubVoteService.STAMP = "39a9ce1b"
+HubVoteService.STAMP = "9f52f1f8"
 return HubVoteService

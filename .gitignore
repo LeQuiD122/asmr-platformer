@@ -5,3 +5,12 @@ __pycache__/
 pass_*/
 passes_*/
 *.zip
+
+# store-page working files (the finished icon and thumbnails are in media/)
+release/clips/
+release/out/
+release/shots/
+release/store_drafts/
+# Studio autosaves and hand-off change lists
+_recovery/
+CHANGES_SINCE_PASS_*.txt

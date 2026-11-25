@@ -7,11 +7,12 @@
 --
 -- Now a promenade on piers over the sea: a PLAZA in the middle (you arrive there, by the fountain, among benches,
 -- under the canopy), and round it four places of their own, each down a wide boardwalk:
---   the LEVEL GATES (north)   the level pads in an arc round the start, the length and mode keys on the way in
+--   the LEVEL GATES (north)   the level pads in an arc round the start (a long Chill run)
 --   the HALL OF FAME (east)   the leaderboard facing the way in, your statue and its pose keys
 --   the ARCADE (west)         the shop's kiosk facing the way in, the daily chest, the two boards, the post box, and
 --                             a small closed house in the corner with a yellow light in its doorway
---   the GARDEN (south)        a lawn, benches facing the sea, planters, the seaside viewer, the lift to the squish room
+--   the GARDEN (south)        a lawn, benches facing the sea, planters, the seaside viewer, the lift to the squish room,
+--                             and in its west wing the WORKSHOP: the mode and length keys and a start of their own
 --
 -- EVERY PLACE IS HERE, from the lobby's origin, and only here: HubService builds from it, SquishRoomService puts its
 -- lift by it, blender/plan_lobby.py draws it and blender/check_hub.py checks that nothing crowds anything, that
@@ -31,7 +32,8 @@ LobbyLayout.DECKS = {
 	gates = { x = 0, z = -122, w = 108, d = 76 },
 	fame = { x = 104, z = 0, w = 56, d = 76 },
 	arcade = { x = -104, z = 0, w = 56, d = 76 },
-	garden = { x = 0, z = 106, w = 96, d = 48 },
+	-- Wider (the two-hundred-and-fifth pass): its west wing is the WORKSHOP, by the squish room's lift (AT below).
+	garden = { x = 0, z = 106, w = 176, d = 48 },
 }
 
 -- THE WALKS: a boardwalk from the plaza to each place, as wide as `width`, edge to edge, railed both sides.
@@ -46,16 +48,22 @@ LobbyLayout.WALKS = {
 LobbyLayout.AT = {
 	-- THE PLAZA
 	spawn = Vector3.new(0, 1.5, -22), -- facing the gates up the walk
+	fingerpost = Vector3.new(9, 1, -30), -- ahead of you on the right as you arrive: its arms point down the four walks
 	pool = Vector3.new(0, 1, 12), -- the pool and the fountain in it
-	-- THE LEVEL GATES: the start in the middle of the arc of pads, so the last thing you do is step into it; the length
-	-- and mode keys across the way in, so you walk over them on the way.
+	-- THE LEVEL GATES: the start in the middle of the arc of pads, so the last thing you do is step into it. It begins a
+	-- long Chill run (the two-hundred-and-fifth pass); the mode and length keys are in the workshop now (below).
 	start = Vector3.new(0, 1.8, -118),
-	modeRow = Vector3.new(0, 0, -104),
-	lengthRow = Vector3.new(0, 0, -94),
 	-- THE HALL OF FAME
 	board = Vector3.new(124, 8, 0), -- the leaderboard on the far side, facing the way in (-X)
 	statue = Vector3.new(104, 3.5, -22), -- facing its keys (+Z)
 	poseRow = Vector3.new(104, 1.5, -14), -- the pose keys' middle, a row along x in front of the statue
+	-- THE VIP LOUNGE (the two-hundred-and-thirteenth pass): the hall's south half, behind a velvet rope, its way in on
+	-- the north side facing the hall (LOUNGE below, its size).
+	vipLounge = Vector3.new(104, 1, 20),
+	-- THE BILLBOARDS (the two-hundred-and-fourteenth pass): at the Level Gates deck's far side, either side of the arc of
+	-- pads, facing the plaza (+Z), where everyone looks as they arrive.
+	adBoardWest = Vector3.new(-33, 1, -152),
+	adBoardEast = Vector3.new(33, 1, -152),
 	-- THE ARCADE
 	kiosk = Vector3.new(-120, 1, 0), -- on the far side, facing the way in (+X)
 	chest = Vector3.new(-92, 1, -22),
@@ -66,7 +74,17 @@ LobbyLayout.AT = {
 	-- THE GARDEN
 	viewer = Vector3.new(40, 1, 106), -- the telescope, looking out east over the rail
 	lift = Vector3.new(-38, 1, 104), -- the squish room's lift, its door toward the garden (+X)
+	-- THE WORKSHOP, the garden's west wing (the two-hundred-and-fifth pass, from your note of 2026-11-07: options and the
+	-- difficulty "in a specifically dedicated area for customisation"): the length keys and the mode keys, a start of its
+	-- own behind them, and a signboard at the wing's far end facing in.
+	lengthRow = Vector3.new(-66, 0, 95),
+	modeRow = Vector3.new(-66, 0, 108),
+	workshopStart = Vector3.new(-66, 1.8, 120),
+	workshopBoard = Vector3.new(-81, 1, 106),
 }
+
+-- THE VIP LOUNGE's rope, across (x) and deep (z), and its gateway's width.
+LobbyLayout.LOUNGE = { w = 22, d = 18, gate = 4.5 }
 
 -- THE LEVEL PADS: round the start, on an arc `radius` from it, `spread` degrees across, facing it.
 LobbyLayout.ARC = { radius = 30, spread = 172 }
@@ -81,11 +99,13 @@ LobbyLayout.BENCHES = {
 	{ x = -8, z = 118, facing = 0 },
 	{ x = 10, z = 118, facing = 0 },
 	{ x = 26, z = 118, facing = 0 },
+	{ x = 62, z = 118, facing = 0 }, -- and in its east wing, the workshop's other side
+	{ x = 78, z = 118, facing = 0 },
 }
 LobbyLayout.PLANTERS = {
 	{ x = -32, z = -32 }, { x = 32, z = -32 }, { x = -32, z = 32 }, { x = 32, z = 32 },
 	{ x = -38, z = 92 }, { x = 38, z = 92 }, { x = -20, z = 96 }, { x = 20, z = 96 },
-	{ x = 120, z = 28 }, { x = -86, z = 28 },
+	{ x = 120, z = 28 }, { x = -86, z = 28 }, { x = 70, z = 92 },
 }
 
 -- THE LAMP POSTS (x, z), each a real light: the plaza has its columns' lamps and the canopy's lanterns, and every
@@ -189,5 +209,5 @@ function LobbyLayout.over(offset: Vector3, slack: number): boolean
 	return false
 end
 
-LobbyLayout.STAMP = "d2908861"
+LobbyLayout.STAMP = "9c2c93b6"
 return LobbyLayout

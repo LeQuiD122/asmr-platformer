@@ -29,7 +29,7 @@ MUTATIONS = [
     ('caught and nobody told', ROOMS, STORY, 'model:SetAttribute("Caught", true)', 'model:SetAttribute("Hunting", true)'),
     ('walking on with you', ROOMS, STORY, 'model:SetAttribute("Paused", true)', 'model:SetAttribute("Paused", false)'),
     ('never taking hold', STALK, STORY, 'if real:GetAttribute("Caught") == true then', 'if real:GetAttribute("Caught") == "yes" then'),
-    ('his arms hanging', STALK, STORY, 'drive(one, "Shoulder" .. side, CFrame.Angles(1.65 * g, 0, -0.32 * sign * g))', 'drive(one, "Shoulder" .. side, CFrame.Angles(0, 0, 0))'),
+    ('his arms hanging', STALK, STORY, 'drive(one, "Shoulder" .. side, CFrame.Angles(HOLD.shoulder * g, -HOLD.shoulderYaw * sign * g,', 'drive(one, "Shoulder" .. side, CFrame.Angles(0 * g, -HOLD.shoulderYaw * sign * g,'),
     ('the face two slabs again', STORYC, STORY, 'local SCREAM = 1.6', 'local SCREAM = 1'),
     ('his face a flash', STORYC, STORY, 'local CAUGHT = { loom = 0.35, face = 1.9, black = 3.5 }', 'local CAUGHT = { loom = 0.35, face = 0.6, black = 3.5 }'),
     ('the lobby before the black', BOOT, STORY, 'task.wait(3.9)', 'task.wait(1.5)'),

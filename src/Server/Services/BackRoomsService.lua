@@ -34,29 +34,46 @@ local TILE = 4
 local HEIGHT = 10 -- carpet to ceiling
 local DOOR_HEIGHT = 7.5
 
+-- BIGGER (the two-hundred-and-twenty-fifth pass, "you could make the backrooms bigger"): the old rooms are the
+-- top left now; east of them a hall of square pillars, south of them a wing of offices and long corridors, and the way
+-- out moved to the far corner of that wing.
 local MAP = {
-	"##################################",
-	"#S......#............#...........#",
-	"#.......#............#...........#",
-	"#.......#....##......#....####...#",
-	"#............##...........#..#...#",
-	"#.......#............#....#..#...#",
-	"####.####............##.###..##.##",
-	"#...........######...............#",
-	"#...........#....#...............#",
-	"#...##......#....#....#######....#",
-	"#...##......#........##xxxxx##...#",
-	"#...........#....#...Lxxxxxxx#...#",
-	"###.#####.#########..#xxxxxxx#..##",
-	"#.......#............##xxxxx##...#",
-	"#.......#.............#######....#",
-	"#..##...#...##...................#",
-	"#..##.......##...#######.###.#####",
-	"#.......#........#.........#.....#",
-	"#.......#........#.........#.....#",
-	"####.######......#....##...#.....#",
-	"#................#....##.........D",
-	"##################################",
+	"######################################################",
+	"#S......#............#...........#...................#",
+	"#.......#............#...............................#",
+	"#.......#....##......#....####...#..##....##....##...#",
+	"#............##...........#..#......##....##....##...#",
+	"#.......#............#....#..#...#...................#",
+	"####.####............##.###..##.##...................#",
+	"#...........######..................##....##....##...#",
+	"#...........#....#..................##....##....##...#",
+	"#...##......#....#....#######....#...................#",
+	"#...##......#........##xxxxx##...#...................#",
+	"#...........#....#...Lxxxxxxx#...#..##....##....##...#",
+	"###.#####.#########..#xxxxxxx#..#######.######.#######",
+	"#.......#............##xxxxx##...#.....#......#......#",
+	"#.......#.............#######..........#......#......#",
+	"#..##...#...##.........................#.............#",
+	"#..##.......##...#######.###.#######.###......#......#",
+	"#.......#........#.........#.....#.....#......####.###",
+	"#.......#........#.........#...........#.............#",
+	"####.######......#....##...#.....#...........#.......#",
+	"#................#....##...............#.....#.......#",
+	"####.#######.#######.#########.#####.#########.###.###",
+	"#......#..........#.........#........#.......#.......#",
+	"#......#..........#.........#........#.......#.......#",
+	"#......####.#######....##...####.#####...##..#.......#",
+	"#....................................................#",
+	"#..##.......................##.............##........#",
+	"#..##....#######.#####......##.....#######.....#####.#",
+	"#........#...........#.............#.....#.........#.#",
+	"####.#####...........#....#######..#.....#.........#.#",
+	"#........#....##.....#....#.....#..#.....######.####.#",
+	"#........#....##..........#.....#........#...........#",
+	"#.................................#......#...........D",
+	"#..##....#...........#....#.....#.....#..#....##.....#",
+	"#..##....#...........#....#.....#.....#..#....##.....#",
+	"######################################################",
 }
 
 -- The palette of the lobby's own back door (HubService.buildBackDoor), so the two are one place.
@@ -169,7 +186,7 @@ end
 -- them WRONG, the way things are in rooms like these: too tall and thin, too big, pressed flat into the wall, the same
 -- thing three times in a row. In nobody's way (they do not collide), and every one held by what it is sunk into.
 local SUNK_SEED = 1983
-local SUNK_WALLS, SUNK_FLOORS, SUNK_CEILINGS = 13, 7, 5
+local SUNK_WALLS, SUNK_FLOORS, SUNK_CEILINGS = 24, 13, 9
 local WALL_REACH = 2.2 -- studs a thing reaches out of a wall at most: a corridor is a tile (4) across
 
 local function decor(model: Model, name: string, size: Vector3, cf: CFrame, colour: Color3, material: Enum.Material?,
@@ -403,6 +420,10 @@ end
 -- OUT first. One for each player down here, and gone when they leave.
 local HUNT_AFTER, HUNT_CHANCE, HUNT_EARLY = 30, 0.35, NumberRange.new(12, 18)
 local WALK, WALK_LATE, CATCH = 11.5, 13.5, 3.2
+-- IN HIS HANDS (the hundred-and-sixty-seventh pass, from your note of 2026-11-03: "it incorrectly positions the characters
+-- in the hands of the monster"): his hands close round whoever stands GRIP studs in front of him (StalkerClient's HOLD is
+-- fitted to it), so at the catch he is squared up to you that far off. Written on him for your screen (Grip).
+local GRIP = 4.6
 type Hunt = { token: number, model: Model?, onCaught: (Player, Vector3) -> () }
 local hunts: { [Player]: Hunt } = {}
 local tubes: { SurfaceLight } = {}
@@ -511,10 +532,33 @@ local function welded(parent: BasePart, child: BasePart, at: CFrame)
 	child.CFrame = parent.CFrame * at
 end
 
+-- ROUNDED (the two-hundred-and-twenty-third pass, from "make the backrooms character even better": filmed, he was a
+-- pale head on flat black sticks with gaps at every joint). Each limb's own block stays as the joint carries it (his
+-- hold is summed from it, blender/check_backrooms.py) but is not drawn: a round limb is welded along it in its place.
+local function rounded(model: Model, limb: Part): Part
+	limb.Transparency = 1
+	local round = rigPart(model, limb.Name .. "Round", Vector3.new(limb.Size.Y, limb.Size.X, limb.Size.Z), limb.Color,
+		limb.Material)
+	round.Shape = Enum.PartType.Cylinder
+	welded(limb, round, CFrame.Angles(0, 0, math.rad(90)))
+	return round
+end
+
+-- A knob of a joint: a ball where two of his limbs meet, a little thicker than either, so it reads as bone under the
+-- cloth and not a gap.
+local function knob(model: Model, on: BasePart, offset: CFrame, across: number, colour: Color3, material: Enum.Material?)
+	local ball = rigPart(model, "Knob", Vector3.new(across, across, across), colour, material)
+	ball.Shape = Enum.PartType.Ball
+	welded(on, ball, offset)
+	return ball
+end
+
 local function marsh(at: Vector3): (Model, BasePart, CFrame)
 	local model = Instance.new("Model")
 	model.Name = "Marsh"
-	local suit, skin = Color3.fromRGB(24, 24, 28), Color3.fromRGB(214, 208, 200)
+	-- (A faded charcoal since the two-hundred-and-twenty-fourth pass: near black, he was a black cut-out against the
+	-- yellow walls and nothing of his shape read.)
+	local suit, skin = Color3.fromRGB(46, 43, 44), Color3.fromRGB(214, 208, 200)
 	local base = CFrame.new(at)
 	local root = decor(model, "Root", Vector3.new(1, 1, 1), base, suit)
 	root.Transparency = 1
@@ -529,10 +573,87 @@ local function marsh(at: Vector3): (Model, BasePart, CFrame)
 		local shin = rigPart(model, "Shin" .. tag, Vector3.new(0.32, 2.5, 0.32), suit, Enum.Material.Fabric)
 		joint("Knee" .. tag, thigh, shin, CFrame.new(0, -1.3, 0), CFrame.new(0, 1.25, 0))
 		welded(shin, rigPart(model, "Foot", Vector3.new(0.42, 0.24, 0.9), suit, Enum.Material.Fabric), CFrame.new(0, -1.3, -0.22))
+		-- Round, with a knob of a knee, and trousers too short for him: a band of grey sock over each ankle.
+		rounded(model, thigh)
+		rounded(model, shin)
+		knob(model, thigh, CFrame.new(0, -1.3, 0), 0.44, suit, Enum.Material.Fabric)
+		local sock = rigPart(model, "Sock", Vector3.new(0.34, 0.335, 0.335), Color3.fromRGB(92, 90, 88), Enum.Material.Fabric)
+		sock.Shape = Enum.PartType.Cylinder
+		welded(shin, sock, CFrame.new(0, -1.05, 0) * CFrame.Angles(0, 0, math.rad(90)))
+		-- IN HIS SOCKS (the two-hundred-and-twenty-fourth pass): no shoes, the soft thud of his step; long grey feet in
+		-- place of the black block (kept, not drawn: his hold is summed from where it is).
+		for _, weld in ipairs(shin:GetChildren()) do
+			if weld:IsA("Weld") and weld.Part1 and weld.Part1.Name == "Foot" then
+				weld.Part1.Transparency = 1
+			end
+		end
+		local sole = rigPart(model, "Sole", Vector3.new(0.4, 0.26, 1.2), Color3.fromRGB(92, 90, 88), Enum.Material.Fabric)
+		local soleMesh = Instance.new("SpecialMesh")
+		soleMesh.MeshType = Enum.MeshType.Sphere
+		soleMesh.Parent = sole
+		welded(shin, sole, CFrame.new(0, -1.3, -0.3))
 	end
 	-- STOOPED: the torso pitched forward over his hips (the rest of the waist's joint).
 	local torso = rigPart(model, "Torso", Vector3.new(1.15, 2.3, 0.55), suit, Enum.Material.Fabric)
 	joint("Spine", hips, torso, CFrame.new(0, 0.2, 0) * CFrame.Angles(math.rad(-16), 0, 0), CFrame.new(0, -1.15, 0))
+	-- AN OFFICE MAN, of a kind (the same pass): a white shirt's collar at his throat, a dark red tie hanging off his
+	-- stooped chest, his jacket's lapels, and the jacket's hem a little wider than him over his hips. His shoulders
+	-- hunched up round his neck.
+	local shirt, tieRed = Color3.fromRGB(206, 202, 192), Color3.fromRGB(88, 18, 22)
+	welded(torso, rigPart(model, "Collar", Vector3.new(0.5, 0.22, 0.12), shirt, Enum.Material.Fabric),
+		CFrame.new(0, 1.02, -0.26))
+	welded(torso, rigPart(model, "Shirt", Vector3.new(0.34, 1.3, 0.04), shirt, Enum.Material.Fabric),
+		CFrame.new(0, 0.38, -0.27))
+	welded(torso, rigPart(model, "Tie", Vector3.new(0.14, 1.25, 0.05), tieRed, Enum.Material.Fabric),
+		CFrame.new(0, 0.32, -0.3))
+	for _, side in ipairs({ -1, 1 }) do
+		welded(torso, rigPart(model, "Lapel", Vector3.new(0.16, 1.1, 0.05), Color3.fromRGB(58, 55, 58), Enum.Material.Fabric),
+			CFrame.new(side * 0.24, 0.45, -0.29) * CFrame.Angles(0, 0, side * 0.22))
+		knob(model, torso, CFrame.new(side * 0.6, 1.08, 0.02), 0.5, suit, Enum.Material.Fabric)
+	end
+	welded(torso, rigPart(model, "Hem", Vector3.new(1.25, 0.5, 0.62), suit, Enum.Material.Fabric), CFrame.new(0, -1.0, 0))
+	-- A HUMP over his shoulder blades, the jacket strained across it: the stoop of something folded too long under
+	-- ceilings too low for it.
+	local hump = rigPart(model, "Hump", Vector3.new(1.05, 1.25, 0.62), suit, Enum.Material.Fabric)
+	local humpMesh = Instance.new("SpecialMesh")
+	humpMesh.MeshType = Enum.MeshType.Sphere
+	humpMesh.Parent = hump
+	welded(torso, hump, CFrame.new(0, 0.55, 0.2))
+	-- DONE UP, AND BADGED (the two-hundred-and-twenty-fifth pass, "refine him"): two dull buttons doing his jacket up
+	-- under the end of his tie, a breast pocket's flap, and clipped to it the staff badge of the baths, his name on it
+	-- faded. Only close up, at the catch, can it be read.
+	for _, high in ipairs({ -0.42, -0.66 }) do
+		local button = rigPart(model, "Button", Vector3.new(0.12, 0.12, 0.12), Color3.fromRGB(28, 26, 26))
+		button.Shape = Enum.PartType.Ball
+		welded(torso, button, CFrame.new(0, high, -0.27))
+	end
+	welded(torso, rigPart(model, "Pocket", Vector3.new(0.34, 0.07, 0.05), Color3.fromRGB(58, 55, 58), Enum.Material.Fabric),
+		CFrame.new(0.36, 0.3, -0.29))
+	local badge = rigPart(model, "Badge", Vector3.new(0.34, 0.2, 0.03), Color3.fromRGB(226, 220, 200))
+	welded(torso, badge, CFrame.new(0.36, 0.42, -0.31))
+	local badgeGui = Instance.new("SurfaceGui")
+	badgeGui.Face = Enum.NormalId.Front
+	badgeGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	badgeGui.PixelsPerStud = 300
+	badgeGui.Parent = badge
+	local badgeWords = Instance.new("TextLabel")
+	badgeWords.Size = UDim2.fromScale(1, 1)
+	badgeWords.BackgroundTransparency = 1
+	badgeWords.TextColor3 = Color3.fromRGB(52, 40, 22)
+	badgeWords.TextTransparency = 0.25
+	badgeWords.TextScaled = true
+	badgeWords.FontFace = Style.WORLD.plain
+	badgeWords.Text = "E. MARSH\nSTAFF"
+	badgeWords.Parent = badgeGui
+	-- His trouser hems dark with the carpet's damp, a band above each sock.
+	for _, shinName in ipairs({ "ShinL", "ShinR" }) do
+		local shinPart = model:FindFirstChild(shinName)
+		if shinPart and shinPart:IsA("BasePart") then
+			local hem = rigPart(model, "DampHem", Vector3.new(0.22, 0.345, 0.345), Color3.fromRGB(32, 30, 31), Enum.Material.Fabric)
+			hem.Shape = Enum.PartType.Cylinder
+			welded(shinPart, hem, CFrame.new(0, -0.78, 0) * CFrame.Angles(0, 0, math.rad(90)))
+		end
+	end
 	-- ARMS PAST HIS KNEES: upper arm and forearm, hanging straight down whatever his stoop, long fingers off the hand.
 	for _, side in ipairs({ -1, 1 }) do
 		local tag = if side < 0 then "L" else "R"
@@ -543,19 +664,56 @@ local function marsh(at: Vector3): (Model, BasePart, CFrame)
 		joint("Elbow" .. tag, upper, lower, CFrame.new(0, -1.15, 0), CFrame.new(0, 1.15, 0))
 		local hand = rigPart(model, "Hand", Vector3.new(0.26, 0.55, 0.18), skin)
 		welded(lower, hand, CFrame.new(0, -1.4, -0.02))
-		for k = -1, 1 do
-			welded(hand, rigPart(model, "Finger", Vector3.new(0.07, 0.95, 0.07), skin), CFrame.new(k * 0.08, -0.72, 0)
-				* CFrame.Angles(0, 0, k * 0.08))
+		rounded(model, upper)
+		rounded(model, lower)
+		knob(model, upper, CFrame.new(0, -1.15, 0), 0.38, suit, Enum.Material.Fabric)
+		-- A shirt cuff out of his sleeve, too short for his arms.
+		local cuff = rigPart(model, "Cuff", Vector3.new(0.22, 0.3, 0.3), shirt, Enum.Material.Fabric)
+		cuff.Shape = Enum.PartType.Cylinder
+		welded(lower, cuff, CFrame.new(0, -1.08, 0) * CFrame.Angles(0, 0, math.rad(90)))
+		-- FIVE LONG FINGERS (they were three pegs), each in two joints curling forward, with a dark nail: the middle
+		-- ones longest, reaching as far as the three did.
+		for k = 1, 5 do
+			local long = ({ 0.62, 0.86, 0.95, 0.88, 0.66 })[k]
+			local first = rigPart(model, "Finger", Vector3.new(0.065, long * 0.55, 0.065), skin)
+			welded(hand, first, CFrame.new((k - 3) * 0.052, -0.27, 0) * CFrame.Angles(0.1, 0, (k - 3) * 0.07)
+				* CFrame.new(0, -long * 0.275, 0))
+			local second = rigPart(model, "Finger", Vector3.new(0.055, long * 0.5, 0.055), skin)
+			welded(first, second, CFrame.new(0, -long * 0.275, 0) * CFrame.Angles(0.4, 0, 0) * CFrame.new(0, -long * 0.25, 0))
+			welded(second, rigPart(model, "Nail", Vector3.new(0.058, 0.13, 0.03), Color3.fromRGB(120, 112, 96)),
+				CFrame.new(0, -long * 0.2, -0.025))
 		end
 	end
 	-- THE NECK further forward, the head bowed furthest.
 	local neck = rigPart(model, "Neck", Vector3.new(0.3, 0.9, 0.3), skin)
 	joint("NeckJ", torso, neck, CFrame.new(0, 1.15, 0) * CFrame.Angles(math.rad(-22), 0, 0), CFrame.new(0, -0.42, 0))
+	rounded(model, neck)
 	local head = rigPart(model, "Head", Vector3.new(1.15, 1.45, 1.1), skin)
 	joint("HeadJ", neck, head, CFrame.new(0, 0.45, 0) * CFrame.Angles(math.rad(-18), 0, 0), CFrame.new(0, -0.72, 0))
 	-- The seam, down the middle of where his face is not: a hair of dark on the front of the head, welded to it.
 	local seam = rigPart(model, "Seam", Vector3.new(0.05, 1.0, 0.02), Color3.fromRGB(70, 40, 40))
 	welded(head, seam, CFrame.new(0, -0.08, -0.56))
+	-- A MADE HEAD (the two-hundred-and-eleventh pass, from your note of 2026-11-07: "make the back rooms monster
+	-- scarier"). Where Assets/Props has Marsh_Head (Studio's generator: a pale, long, faceless head, its skin like wax), it
+	-- is worn over the plain one, a little larger and longer than a head should be, and the plain one and its seam go.
+	-- Its front is its own -Z, unless it says otherwise (FrontYaw, radians about Y).
+	local props = game:GetService("ReplicatedStorage"):FindFirstChild("Assets")
+	props = props and props:FindFirstChild("Props")
+	local made = props and props:FindFirstChild("Marsh_Head")
+	local madePart = made and (if made:IsA("BasePart") then made else made:FindFirstChildWhichIsA("BasePart", true))
+	if madePart then
+		local face = madePart:Clone()
+		face.Name = "MadeHead"
+		face.Size = madePart.Size * (head.Size.Y * 1.35 / madePart.Size.Y)
+		face.Anchored = false
+		face.Massless = true
+		face.CanCollide, face.CanQuery, face.CanTouch = false, false, false
+		face.Parent = model
+		local yaw = madePart:GetAttribute("FrontYaw")
+		welded(head, face, CFrame.new(0, 0.12, 0) * CFrame.Angles(0, if typeof(yaw) == "number" then yaw else 0, 0))
+		head.Transparency = 1
+		seam.Transparency = 1
+	end
 	local headAt = head.CFrame
 	-- His breath, heard before he is seen: the growl from the bottom of the flume, slowed, round him.
 	local stories = game:GetService("SoundService"):FindFirstChild("StorySounds")
@@ -591,6 +749,38 @@ local function lightsNear(at: Vector3?)
 			end
 		end
 	end
+end
+
+-- Open floor all the way from one point to another (every tile under the line walkable), as the rooms are laid out.
+local function openLine(from: Vector3, to: Vector3): boolean
+	local gap = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
+	local steps = math.max(1, math.ceil(gap.Magnitude / (TILE / 4)))
+	for k = 0, steps do
+		local x, y = tileOf(from + gap * (k / steps))
+		if not walkable(x, y) then
+			return false
+		end
+	end
+	return true
+end
+
+-- WHERE HE STANDS TO HOLD YOU: GRIP studs from you on open floor, back the way he came if it is open, else whichever of
+-- the four ways out of your tile is open and nearest to where he is (in the black at the catch, so the step is never
+-- seen). Nil if none is.
+local function squaredUp(you: Vector3, him: Vector3): Vector3?
+	local feet = Vector3.new(you.X, him.Y, you.Z)
+	local back = Vector3.new(him.X - you.X, 0, him.Z - you.Z)
+	if back.Magnitude > 0.05 and openLine(feet, feet + back.Unit * GRIP) then
+		return feet + back.Unit * GRIP
+	end
+	local best, nearest = nil, math.huge
+	for _, way in ipairs({ Vector3.xAxis, -Vector3.xAxis, Vector3.zAxis, -Vector3.zAxis }) do
+		local spot = feet + way * GRIP
+		if openLine(feet, spot) and (spot - him).Magnitude < nearest then
+			best, nearest = spot, (spot - him).Magnitude
+		end
+	end
+	return best
 end
 
 local function chase(player: Player, hunt: Hunt)
@@ -647,6 +837,7 @@ local function chase(player: Player, hunt: Hunt)
 	-- each frame. When he stops to tilt his head, and when a long way off down a straight he rushes, is written on him
 	-- (Paused, Rushing) for every screen to draw (StalkerClient).
 	local rushUntil = 0
+	local spotted = false
 	while hunts[player] == hunt and hunt.token == token and player.Parent and player:GetAttribute("InLevel") == "backRooms" do
 		local dt = RunService.Heartbeat:Wait()
 		local character = player.Character
@@ -671,6 +862,14 @@ local function chase(player: Player, hunt: Hunt)
 		local walking = now >= pauseUntil
 		local speed = if now - began > 20 then WALK_LATE else WALK
 		local far = Vector3.new(target.Position.X - here.X, 0, target.Position.Z - here.Z).Magnitude
+		-- HE SEES YOU (the two-hundred-and-twenty-sixth pass, "improve the backrooms monster even more"): the first time
+		-- there is open floor between you, he stops dead, a long moment, staring; then comes at you all at once.
+		if not spotted and far < 44 and openLine(here, target.Position) then
+			spotted = true
+			pauseUntil = now + 0.9
+			rushUntil = now + 2.1
+			model:SetAttribute("Spotted", now)
+		end
 		if now >= rushUntil and far > 14 and math.random() < dt * 0.18 then
 			rushUntil = now + 0.6
 		end
@@ -700,7 +899,14 @@ local function chase(player: Player, hunt: Hunt)
 			hunts[player] = nil
 			lightsNear(nil)
 			-- HE HAS YOU: every screen draws him bent over you, his arms round you (StalkerClient), while yours plays the
-			-- rest (the hundred-and-twenty-fifth pass).
+			-- rest (the hundred-and-twenty-fifth pass). Squared up to you first, GRIP studs off and facing you, so his
+			-- hands close round you (your own screen sets you exactly there: StoryClient's caught).
+			local spot = squaredUp(target.Position, here)
+			if spot then
+				here = spot
+				model:PivotTo(CFrame.lookAt(here, Vector3.new(target.Position.X, here.Y, target.Position.Z)))
+				model:SetAttribute("Grip", GRIP)
+			end
 			model:SetAttribute("Paused", true)
 			model:SetAttribute("Caught", true)
 			pcall(hunt.onCaught, player, head.Position)
@@ -829,7 +1035,7 @@ function BackRoomsService.build(onExit: (Player) -> ())
 		end
 	end
 	local damp = Random.new(1983)
-	for _ = 1, 18 do
+	for _ = 1, 34 do
 		if #faces == 0 then
 			break
 		end
@@ -841,7 +1047,7 @@ function BackRoomsService.build(onExit: (Player) -> ())
 				across, Vector3.yAxis, -f.out), DAMP, Enum.Material.Plaster)
 		patch.Transparency = 0.35
 	end
-	for _ = 1, 9 do
+	for _ = 1, 18 do
 		local x, y = damp:NextInteger(1, cols - 2), damp:NextInteger(1, rows - 2)
 		if charAt(x, y) == "." then
 			local across = damp:NextNumber(1.4, 3.2)
@@ -1026,5 +1232,5 @@ function BackRoomsService.build(onExit: (Player) -> ())
 	print(("BackRoomsService: built, %d lights, %d parts."):format(#lights, #made:GetDescendants()))
 end
 
-BackRoomsService.STAMP = "ca6fa480"
+BackRoomsService.STAMP = "2b79ce56"
 return BackRoomsService

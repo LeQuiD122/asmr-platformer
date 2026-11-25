@@ -85,7 +85,8 @@ type Live = { gui: ScreenGui, top: Frame, bottom: Frame, veil: Frame, fov: numbe
 	aim: CFrame?, eye: Vector3?, at: number, cut: boolean, shake: number, focus: DepthOfFieldEffect?,
 	ending: boolean, told: boolean, finishing: boolean, readUntil: number, freeAt: number, queue: number,
 	sounds: { Sound }, lines: { Frame }, lineAmount: number, burst: number, kick: number, flash: Frame,
-	impactFx: ColorCorrectionEffect?, waver: number }
+	impactFx: ColorCorrectionEffect?, waver: number, began: number, most: number, overdue: boolean,
+	rested: { DepthOfFieldEffect }? }
 -- THE SPEED LINES: this many, streaming in from the edges of the picture.
 local LINE_COUNT = 36
 local live: Live? = nil
@@ -171,14 +172,21 @@ local function left()
 		end
 	end
 end
-local wasIn = Players.LocalPlayer:GetAttribute("InLevel")
-Players.LocalPlayer:GetAttributeChangedSignal("InLevel"):Connect(function()
-	local now = Players.LocalPlayer:GetAttribute("InLevel")
-	if wasIn ~= nil and now ~= wasIn and now ~= "backRooms" then
-		left()
-	end
-	wasIn = now
-end)
+-- ONLY ON A CLIENT (the hundred-and-fiftieth pass). In Studio the server loads SunkenCityClient to see that it loads
+-- (SunkenCityService's check), and that loads this; there is no LocalPlayer on the server, so reading one here failed
+-- that check with "attempt to index nil with 'GetAttribute'" (your Output of 2026-10-31) and it said the level's
+-- client could not load when it could.
+local me = Players.LocalPlayer
+if me then
+	local wasIn = me:GetAttribute("InLevel")
+	me:GetAttributeChangedSignal("InLevel"):Connect(function()
+		local now = me:GetAttribute("InLevel")
+		if wasIn ~= nil and now ~= wasIn and now ~= "backRooms" then
+			left()
+		end
+		wasIn = now
+	end)
+end
 
 -- True once an ending's story has been told (done(), its captions read), or when there is no scene:
 -- what the banner waits for before it comes up.
@@ -199,6 +207,108 @@ function Cinema.hush()
 	end
 end
 
+-- ===== A SCENE ALWAYS LETS GO (the hundred-and-fortieth pass, from your notes: "polishing the game") =====
+--
+-- A scene ends when its own code says so. The levels' loops are guarded (a failure there ends the scene), but one that
+-- stopped short anywhere else left you held still, the prompts away and the camera where it was, until you left the
+-- level. So each scene has a time it may not run past (MOST: an ending, the longest of which, the halls' true ending,
+-- is about a minute and a half; a moment, a secret's or the clock's, well under twenty seconds), and past it the scene
+-- is put away as if the lobby had taken you; a new character (you reset, or died) ends it the same way, since all a
+-- scene holds is the old one; and Roblox's own Reset is held back while one plays.
+local MOST = { ending = 150, moment = 45 }
+
+local function allowReset(on: boolean)
+	pcall(function()
+		game:GetService("StarterGui"):SetCore("ResetButtonCallback", on)
+	end)
+end
+
+-- Every frame of a scene: you drawn (showYou), and the scene's time kept.
+local function sceneStep()
+	showYou()
+	local current = live
+	if current and not current.overdue and os.clock() - current.began > current.most then
+		current.overdue = true
+		warn(("Cinema: a scene ran past its %d seconds, so it is put away and the camera given back"):format(current.most))
+		task.defer(left)
+	end
+end
+
+-- (On a client only, as the watch on InLevel above is: the server's check loads this too.)
+if me then
+	me.CharacterAdded:Connect(function()
+		if live then
+			left()
+		end
+	end)
+end
+
+-- A module beside this one, found when wanted and asked to do something (nothing here needs one to be there).
+local function besideDo(name: string, how: (any) -> ())
+	local found = script.Parent and script.Parent:FindFirstChild(name)
+	if not (found and found:IsA("ModuleScript")) then
+		return
+	end
+	local ok, module = pcall(require, found)
+	if ok and type(module) == "table" then
+		local fine, err = pcall(how, module)
+		if not fine then
+			warn(("Cinema: %s could not be put away for a scene: %s"):format(name, tostring(err)))
+		end
+	end
+end
+
+-- WHAT IS OPEN, PUT AWAY AS A SCENE STARTS: the pause card, the journal, the shop, the emotes and the words you could say
+-- were left up over it (caught in the back rooms with the journal open; off the board with Maren's choices still up). And
+-- the post box's card (the hundred-and-forty-third pass), which is the shop's but not the shop, and held your controls.
+local function closeOverlays()
+	besideDo("PauseMenuService", function(m)
+		if m.isOpen() then
+			m.setOpen(false)
+		end
+	end)
+	besideDo("JournalService", function(m)
+		if m.isOpen() then
+			m.toggle()
+		end
+	end)
+	besideDo("ShopService", function(m)
+		m.close()
+		if m.closeCodes then
+			m.closeCodes()
+		end
+	end)
+	besideDo("EmoteService", function(m)
+		m.close()
+	end)
+	besideDo("TalkClient", function(m)
+		if m.dismiss and m.isOpen() then
+			m.dismiss()
+		end
+	end)
+end
+
+-- AND AS THE SCREEN GOES BLACK FOR A MOVE (the client Bootstrap's ScreenFade, the hundred-and-forty-third pass): the same
+-- list, so a run started from the lobby never carries the shop or the journal onto the level.
+Cinema.closeOverlays = closeOverlays
+
+-- AND OFF THE PICTURE WHILE IT PLAYS: the marks a material left on your lens (the camera is somewhere else now), the
+-- material hints at the bottom, and the run's panels (the best times over an ending's picture). Back as it ends.
+local function quietScreens(on: boolean)
+	local playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	for _, name in ipairs({ "MaterialLensMarks", "Hints" }) do
+		local gui = playerGui and playerGui:FindFirstChild(name)
+		if gui and gui:IsA("ScreenGui") then
+			gui.Enabled = not on
+		end
+	end
+	besideDo("UIService", function(m)
+		if m.sceneOn then
+			m.sceneOn(on)
+		end
+	end)
+end
+
 function Cinema.begin(options: { hush: boolean? }?)
 	if live then
 		return
@@ -213,6 +323,8 @@ function Cinema.begin(options: { hush: boolean? }?)
 	if not camera or not playerGui then
 		return
 	end
+	-- What is open put away first, before the controls are taken: the shop gives them back as it closes.
+	closeOverlays()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "Cinema"
 	gui.IgnoreGuiInset = true
@@ -308,7 +420,10 @@ function Cinema.begin(options: { hush: boolean? }?)
 	live = { gui = gui, top = top, bottom = bottom, veil = veil, fov = camera.FieldOfView, controls = found,
 		words = words, aim = nil, eye = nil, at = os.clock(), cut = true, shake = 0, focus = nil,
 		ending = ending, told = false, finishing = false, readUntil = 0, freeAt = 0, queue = 0, sounds = {},
-		lines = lines, lineAmount = 0, burst = 0, kick = 0, flash = flash, impactFx = nil, waver = 0 }
+		lines = lines, lineAmount = 0, burst = 0, kick = 0, flash = flash, impactFx = nil, waver = 0, began = os.clock(),
+		most = if ending then MOST.ending else MOST.moment, overdue = false }
+	allowReset(false)
+	quietScreens(true)
 	if ending then
 		tell("began")
 	end
@@ -316,7 +431,7 @@ function Cinema.begin(options: { hush: boolean? }?)
 	pcall(function()
 		RunService:UnbindFromRenderStep(SHOW)
 	end)
-	RunService:BindToRenderStep(SHOW, Enum.RenderPriority.Camera.Value + 2, showYou)
+	RunService:BindToRenderStep(SHOW, Enum.RenderPriority.Camera.Value + 2, sceneStep)
 end
 
 -- A point `eye` looking at `at` would see it from, pulled in toward `at` if something solid is
@@ -460,24 +575,55 @@ function Cinema.point(cf: CFrame, fov: number?, steady: boolean?)
 	drawLines(current, dt)
 end
 
+-- LESS MOTION WHEN ASKED (the hundred-and-sixty-second pass, Style.lessMotion): how much of each a scene keeps for
+-- someone who has asked Roblox for less motion (the jolt, the lens punched in, the picture swimming, the lines
+-- streaming past). Its impacts keep no flash and no black and white at all (Cinema.impact).
+local CALM = { shake = 0.2, kick = 0.25, waver = 0.35, lines = 0.4 }
+
+-- FELT IN YOUR HANDS (the hundred-and-sixty-fourth pass): a scene's impacts and jolts in a controller's or a phone's
+-- motors too (Haptics, beside this module; nothing here needs it, and none of it is motion on the screen, so less motion
+-- asked for keeps it).
+local function inHands(how: (any) -> ())
+	local found = script.Parent and script.Parent:FindFirstChild("Haptics")
+	if found and found:IsA("ModuleScript") then
+		local ok, haptics = pcall(require, found)
+		if ok and type(haptics) == "table" then
+			pcall(how, haptics)
+		end
+	end
+end
+
 -- THE PICTURE SWIMMING, `amount` 0 to 1 (the hundred-and-twenty-sixth pass, under the Sunken City's water): what a scene
 -- sees through moving water, a slow roll and the lens breathing. 0 puts it right.
 function Cinema.waver(amount: number)
 	local current = live
 	if current then
-		current.waver = math.clamp(amount, 0, 1)
+		current.waver = math.clamp(amount, 0, 1) * (if Style.lessMotion() then CALM.waver else 1)
 	end
 end
 
 -- AN IMPACT FRAME (`strength` about 1; 1.5 for a crash): two frames in hard black and white, a soft white
 -- flash, a burst of speed lines, the lens punched in and a jolt; then the colour comes back a little punchier
 -- and settles. Brief, and never a full white: a beat, not a strobe.
-function Cinema.impact(strength: number?)
+-- DARK (the two-hundred-and-twenty-sixth pass, from "fix the white flash" after the back rooms catch): the same beat
+-- with no white in it, for a scare in a lit room, where the white flash bleached the whole picture: the colour drained
+-- and the picture dropped toward black for a moment instead, then back.
+function Cinema.impact(strength: number?, dark: boolean?)
 	local current = live
 	if not current then
 		return
 	end
 	local s = math.clamp(strength or 1, 0.2, 2)
+	inHands(function(haptics)
+		haptics.impact(s)
+	end)
+	-- LESS MOTION WHEN ASKED (the hundred-and-sixty-second pass): no hard black and white, no flash, no burst of lines;
+	-- the lens barely in, and a nudge.
+	if Style.lessMotion() then
+		current.kick = math.max(current.kick, 9 * s * CALM.kick)
+		current.shake = math.max(current.shake, 1.2 * s * CALM.shake)
+		return
+	end
 	current.burst = math.max(current.burst, math.min(1, 0.9 * s))
 	current.kick = math.max(current.kick, 9 * s)
 	current.shake = math.max(current.shake, 1.2 * s)
@@ -490,10 +636,11 @@ function Cinema.impact(strength: number?)
 		fx = made
 	end
 	local effect = fx :: ColorCorrectionEffect
-	effect.Saturation = -1
-	effect.Contrast = 0.9
-	effect.Brightness = 0.12
-	current.flash.BackgroundTransparency = 0.55
+	effect.Saturation = if dark then -0.6 else -1
+	effect.Contrast = if dark then 0.45 else 0.9
+	effect.Brightness = if dark then -0.18 else 0.12
+	current.flash.BackgroundColor3 = if dark then Color3.new(0, 0, 0) else Color3.new(1, 1, 1)
+	current.flash.BackgroundTransparency = if dark then 0.6 else 0.55
 	TweenService:Create(current.flash, TweenInfo.new(0.22, Enum.EasingStyle.Quad), { BackgroundTransparency = 1 }):Play()
 	task.delay(0.07, function()
 		if live == current and effect.Parent then
@@ -607,7 +754,7 @@ end
 function Cinema.speedLines(amount: number)
 	local current = live
 	if current then
-		current.lineAmount = math.clamp(amount, 0, 1)
+		current.lineAmount = math.clamp(amount, 0, 1) * (if Style.lessMotion() then CALM.lines else 1)
 	end
 end
 
@@ -632,11 +779,43 @@ end
 function Cinema.shake(amount: number)
 	local current = live
 	if current then
-		current.shake = math.max(current.shake, amount)
+		current.shake = math.max(current.shake, amount * (if Style.lessMotion() then CALM.shake else 1))
+		inHands(function(haptics)
+			haptics.jolt(amount)
+		end)
 	end
 end
 
 -- Depth of field: sharp at `distance` studs from the camera, soft before and beyond it. nil turns it off.
+-- ONE DEPTH OF FIELD AT A TIME (the two-hundred-and-eighth pass, from your note of 2026-11-12: "the animation for the
+-- locker 3 on level 4 is just blurred"). The Flooded Halls keep a depth of field of their own in Lighting (HallsBlur:
+-- the far end of a corridor going soft), and a scene's focus was a second one beside it. Two at once is not something
+-- the engine promises anything about, and on your screen it came out as the whole picture soft: the locker, the card
+-- in it and the wall behind it alike. So while a scene has a focus, any other depth of field in Lighting is rested
+-- (switched off, remembered), and put back when the scene lets its focus go or ends.
+local function restFocus(current: Live, on: boolean)
+	if on then
+		if current.rested then
+			return
+		end
+		local rested: { DepthOfFieldEffect } = {}
+		for _, item in ipairs(Lighting:GetChildren()) do
+			if item:IsA("DepthOfFieldEffect") and item.Enabled and item ~= current.focus then
+				item.Enabled = false
+				table.insert(rested, item)
+			end
+		end
+		current.rested = rested
+	else
+		for _, item in ipairs(current.rested or {}) do
+			if item.Parent then
+				item.Enabled = true
+			end
+		end
+		current.rested = nil
+	end
+end
+
 function Cinema.focus(distance: number?, strength: number?)
 	local current = live
 	if not current then
@@ -647,10 +826,12 @@ function Cinema.focus(distance: number?, strength: number?)
 			current.focus:Destroy()
 			current.focus = nil
 		end
+		restFocus(current, false)
 		return
 	end
 	local effect = current.focus
 	if not effect then
+		restFocus(current, true)
 		effect = Instance.new("DepthOfFieldEffect")
 		effect.Name = "CinemaFocus"
 		effect.Parent = Lighting
@@ -658,9 +839,12 @@ function Cinema.focus(distance: number?, strength: number?)
 	end
 	local dof = effect :: DepthOfFieldEffect
 	dof.FocusDistance = distance
-	dof.InFocusRadius = math.max(2, distance * 0.35)
+	-- SHARP WELL EITHER SIDE OF IT: the thing looked at has a depth of its own (a locker is two studs deep, and the
+	-- camera is often pulled in to within three of it), so nothing nearer than half way to it, nor within three studs
+	-- behind it, goes soft. And what is nearer than that only a little: a blurred foreground reads as a fault.
+	dof.InFocusRadius = math.max(3, distance * 0.5)
 	dof.FarIntensity = strength or 0.45
-	dof.NearIntensity = (strength or 0.45) * 0.6
+	dof.NearIntensity = (strength or 0.45) * 0.3
 end
 
 -- The picture to black (`on`) or back from it, at once or over `seconds`: a cut to black.
@@ -877,6 +1061,44 @@ function Cinema.fade(s: Sound?, seconds: number?)
 	out:Play()
 end
 
+-- ===== THE SCORE (the two-hundred-and-eleventh pass, from your note of 2026-11-13: "the scenes lack music, specifically
+-- for setting up a specific mood for a climax of the animation, like they do in live-action movies") =====
+--
+-- Cinema.score(name) starts a level's bed (StorySounds "<name>ScoreLoop", audio/gen_score_sfx.py) quietly as its ending
+-- begins and lets it grow while the scene builds, SCORE.grow seconds to its full SCORE.top. Cinema.climax(pitch) is the
+-- turn: the bed is cut off and the hit lands (ScoreHit, at the level's own pitch), and the level's chord follows it as
+-- it always has. Both are the scene's: gone with it, and with the lobby taking you.
+local SCORE = { start = 0.08, top = 0.42, grow = 24, cut = 0.25 }
+local scoring: { bed: Sound?, token: number } = { bed = nil, token = 0 }
+function Cinema.score(name: string)
+	if not live or scoring.bed then
+		return
+	end
+	local bed = Cinema.sound(name .. "ScoreLoop", SCORE.start, { looped = true, fadeIn = 2.5 })
+	if not bed then
+		return
+	end
+	scoring.bed = bed
+	scoring.token += 1
+	local token = scoring.token
+	task.delay(2.6, function()
+		if scoring.token == token and bed.Parent then
+			TweenService:Create(bed, TweenInfo.new(SCORE.grow, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
+				{ Volume = SCORE.top }):Play()
+		end
+	end)
+end
+function Cinema.climax(pitch: number?)
+	local bed = scoring.bed
+	scoring.bed = nil
+	scoring.token += 1
+	if bed and bed.Parent then
+		TweenService:Create(bed, TweenInfo.new(SCORE.cut), { Volume = 0 }):Play()
+		game:GetService("Debris"):AddItem(bed, SCORE.cut + 0.1)
+	end
+	Cinema.sound("ScoreHit", 0.85, { keep = true, pitch = pitch or 1 })
+end
+
 -- Seconds until every caption asked for so far has been read (0 when there is nothing to read).
 function Cinema.readingLeft(): number
 	local current = live
@@ -923,6 +1145,9 @@ function Cinema.finish(now: boolean?)
 		return
 	end
 	live = nil
+	-- (The score's bed goes with the scene, faded with its other sounds.)
+	scoring.bed = nil
+	scoring.token += 1
 	if current.ending and not current.told then
 		current.told = true
 		tell("done")
@@ -937,6 +1162,8 @@ function Cinema.finish(now: boolean?)
 	if current.focus then
 		current.focus:Destroy()
 	end
+	-- (And any depth of field the scene's own had rested, back on.)
+	restFocus(current, false)
 	if current.impactFx then
 		current.impactFx:Destroy()
 	end
@@ -968,6 +1195,21 @@ function Cinema.finish(now: boolean?)
 	pcall(function()
 		ProximityPromptService.Enabled = true
 	end)
+	allowReset(true)
+	quietScreens(false)
+	-- THE WORDS GO AT ONCE when the lobby has taken you (the hundred-and-seventy-eighth pass, from your test of
+	-- 2026-11-04): "The Hold" and the outfall's name were still being read out over the lobby seconds after you were back.
+	if now and current.words then
+		for _, label in ipairs(current.words:GetDescendants()) do
+			if label:IsA("TextLabel") then
+				TweenService:Create(label, TweenInfo.new(0.25), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+			end
+		end
+		local band = current.gui:FindFirstChild("CaptionBand")
+		if band and band:IsA("Frame") then
+			TweenService:Create(band, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
+		end
+	end
 	local open = TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 	TweenService:Create(current.top, open, { Size = UDim2.fromScale(1, 0) }):Play()
 	TweenService:Create(current.bottom, open, { Size = UDim2.fromScale(1, 0) }):Play()
@@ -977,5 +1219,5 @@ function Cinema.finish(now: boolean?)
 	end)
 end
 
-Cinema.STAMP = "87246380"
+Cinema.STAMP = "c2320b3c"
 return Cinema

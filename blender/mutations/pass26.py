@@ -37,7 +37,7 @@ MUTATIONS = [
     ("an emote spammed", ECON, SHOP, "if now - (lastEmote[player] or 0) < EMOTE_GAP", "if now - (lastEmote[player] or 0) < 0"),
     ("an emote nobody else sees", ECON, SHOP, "remote:FireAllClients(player, item.id, workspace:GetServerTimeNow())",
      "remote:FireClient(player, item.id, workspace:GetServerTimeNow())"),
-    ("a pose that does not exist", POSES, SHOP, "function Poses.stretch(", "function Poses.stretchh("),
+    ("a pose that does not exist", POSES, SHOP, 'function Poses.emoteStretch(', 'function Poses.emoteStretchh('),
     ("a pose never let go of", EMOTE, SHOP, "\t\t\tPoses.drive(joint, CFrame.identity)\n", "\n"),
     ("moving not ending it", EMOTE, SHOP, "Vector3.new(v.X, 0, v.Z).Magnitude > MOVING", "Vector3.new(v.X, 0, v.Z).Magnitude > 9e9"),
     ("an emote over an ending", EMOTE, SHOP, "return not (cinema and cinema.active and cinema.active())", "return true"),

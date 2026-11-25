@@ -12,7 +12,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local DevPanelClient = {}
-DevPanelClient.VERSION = "the test panel, 2026-10-06"
+DevPanelClient.VERSION = "the test panel, 2026-11-14 (with the sound audition)"
 
 local BUTTONS = {
 	{ action = "tokens", text = "+500 tokens" },
@@ -38,6 +38,7 @@ local BUTTONS = {
 	{ action = "squish", text = "Squish room / lobby" },
 	{ action = "storyKnown", text = "Know the whole story" },
 	{ action = "trueEnding", text = "True ending on/off" },
+	{ action = "teleprinter", text = "Teleprinter answered on/off" },
 }
 
 local ui: { [string]: any } = {}
@@ -333,6 +334,138 @@ local function clientSelfTest()
 	end
 end
 
+-- ITS SIZE AND PLACE, YOURS (the two-hundred-and-third pass, from your note of 2026-11-06: "I wanna be able to resize the
+-- dev panel"). Dragged by its title to move it and by the grip at its bottom right corner to size it, always within the
+-- screen and never smaller than `minWidth` by `minHeight`; its buttons in as many columns as its width holds (`cell`
+-- pixels each, up to four), scrolling when they do not all fit. It stays as you left it until you leave.
+local SIZE = { width = 360, height = 540, minWidth = 240, minHeight = 180, cell = 160, title = 34, grip = 22 }
+
+-- GO TO A LEVEL (the same pass: "and be able to teleport to different levels right away"): a button a level, read from
+-- LevelDefinitions (and the sandbox of every material), each starting that level for you at once, out of any run you are
+-- in: Bootstrap's dev "level". Locked or not; a run started so is a run like any other.
+local function levelsToGo(): { { levelId: number, name: string } }
+	local found = ReplicatedStorage:FindFirstChild("Shared")
+	local module = found and found:FindFirstChild("LevelDefinitions")
+	if not (module and module:IsA("ModuleScript")) then
+		return {}
+	end
+	local ok, definitions = pcall(require, module)
+	if not ok or type(definitions) ~= "table" then
+		return {}
+	end
+	local out = {}
+	for _, level in ipairs(definitions.All or {}) do
+		table.insert(out, { levelId = level.levelId, name = level.name })
+	end
+	table.sort(out, function(a, b)
+		return a.levelId < b.levelId
+	end)
+	if definitions.Sandbox then
+		table.insert(out, { levelId = definitions.Sandbox.levelId, name = "Sandbox" })
+	end
+	return out
+end
+
+-- ===== THE SOUND AUDITION (the two-hundred-and-fifteenth pass; SoundAudition.lua has why and what) =====
+--
+-- A row a sound: NOW (what the game plays there, a take at random, through AudioService as a run does), then each sound
+-- to try beside it. Press to hear; LIKE marks the last one heard on that row (press again to unmark it). What you like is
+-- said in Output ("SOUND AUDITION") and kept on you as an attribute (Liked_<row>) until you leave.
+local function auditionSection(scroll: ScrollingFrame, layouts: { UIGridLayout }, order: number)
+	local shared = ReplicatedStorage:FindFirstChild("Shared")
+	local module = shared and shared:FindFirstChild("SoundAudition")
+	local audioModule = script.Parent and script.Parent:FindFirstChild("AudioService")
+	if not (module and module:IsA("ModuleScript") and audioModule and audioModule:IsA("ModuleScript")) then
+		return
+	end
+	local okA, Audition = pcall(require, module)
+	local okB, audio = pcall(require, audioModule)
+	if not (okA and okB) then
+		return
+	end
+	local SoundService = game:GetService("SoundService")
+	local player = Players.LocalPlayer
+	local function play(id: string?, take: string?, event: string?, volume: number)
+		local sound = Instance.new("Sound")
+		sound.Name = "Audition"
+		sound.Volume = volume
+		if take and event then
+			audio.applyTake(sound, take)
+			audio.dress(sound, event)
+		elseif id then
+			sound.SoundId = "rbxassetid://" .. id
+		end
+		sound.Parent = SoundService
+		sound:Play()
+		task.delay(6, function()
+			sound:Destroy()
+		end)
+	end
+	local head = kit.label(scroll, "AuditionTitle", "Hear the sounds: press to hear, LIKE for the last one heard", kit.CHUNKY,
+		15, kit.LOOK.ink)
+	head.Size = UDim2.new(1, -8, 0, 20)
+	head.TextWrapped = true
+	head.LayoutOrder = order
+	for k, slot in ipairs(Audition.SLOTS) do
+		local rowTitle = kit.label(scroll, "Audition_" .. slot.slot, ("%s: %s"):format(slot.slot, slot.what), kit.BODY, 14,
+			kit.LOOK.ink)
+		rowTitle.Size = UDim2.new(1, -8, 0, 18)
+		rowTitle.LayoutOrder = order + k * 2 - 1
+		local grid = Instance.new("Frame")
+		grid.Name = "AuditionRow_" .. slot.slot
+		grid.BackgroundTransparency = 1
+		grid.Size = UDim2.new(1, -8, 0, 0)
+		grid.AutomaticSize = Enum.AutomaticSize.Y
+		grid.LayoutOrder = order + k * 2
+		grid.Parent = scroll
+		local cells = Instance.new("UIGridLayout")
+		cells.CellPadding = UDim2.fromOffset(8, 8)
+		cells.SortOrder = Enum.SortOrder.LayoutOrder
+		cells.Parent = grid
+		table.insert(layouts, cells)
+		local last: any = nil
+		local liked: { [string]: boolean } = {}
+		local words: { [string]: TextLabel } = {}
+		local function button(name: string, text: string, place: number, look: Color3, ink: Color3, pressed: () -> ())
+			local holder, face, content = kit.squishy(grid, name, look, ink)
+			holder.LayoutOrder = place
+			local said = kit.buttonWords(content, text, ink, 14)
+			face.Activated:Connect(pressed)
+			return said
+		end
+		button("Now", "NOW", 0, kit.LOOK.tile, kit.LOOK.ink, function()
+			local event = slot.now[math.random(1, #slot.now)]
+			local takes = audio.takesFor(event)
+			if #takes > 0 then
+				play(nil, takes[math.random(1, #takes)], event, slot.volume)
+			end
+			last = nil
+		end)
+		for place, try in ipairs(slot.try) do
+			words[try.id] = button("Try_" .. try.id, try.name, place, kit.LOOK.pink, kit.LOOK.pinkInk, function()
+				play(try.id, nil, nil, slot.volume)
+				last = try
+			end)
+		end
+		button("Like", "LIKE", #slot.try + 1, kit.LOOK.tile, kit.LOOK.pinkInk, function()
+			local try = last
+			if not try then
+				return
+			end
+			liked[try.id] = not liked[try.id] or nil
+			words[try.id].Text = (if liked[try.id] then "LIKED " else "") .. try.name
+			local ids = {}
+			for id in pairs(liked) do
+				table.insert(ids, id)
+			end
+			table.sort(ids)
+			player:SetAttribute("Liked_" .. slot.slot, if #ids > 0 then table.concat(ids, ",") else nil)
+			print(("SOUND AUDITION: %s %s %s (%s)"):format(slot.slot, if liked[try.id] then "liked" else "unliked", try.name,
+				try.id))
+		end)
+	end
+end
+
 local function build()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "DevPanel"
@@ -358,38 +491,146 @@ local function build()
 	panel.Active = true
 	panel.Visible = false
 	panel.Position = UDim2.fromOffset(12, 64 + kit.MIN_TOUCH + 10)
-	panel.Size = UDim2.fromOffset(330, 0)
-	panel.AutomaticSize = Enum.AutomaticSize.Y
+	panel.Size = UDim2.fromOffset(SIZE.width, SIZE.height)
 	panel.BackgroundColor3 = kit.LOOK.tile
 	panel.Parent = gui
 	kit.corner(panel, UDim.new(0, 18))
 	kit.stroke(panel, kit.LOOK.pinkInk, 3)
-	local pad = Instance.new("UIPadding")
-	pad.PaddingTop = UDim.new(0, 10)
-	pad.PaddingBottom = UDim.new(0, 12)
-	pad.PaddingLeft = UDim.new(0, 10)
-	pad.PaddingRight = UDim.new(0, 10)
-	pad.Parent = panel
+	-- THE TITLE, which you drag to move the panel.
+	local title = kit.label(panel, "Title", "Studio test panel (F8)", kit.CHUNKY, 17, kit.LOOK.pinkInk)
+	title.Position = UDim2.fromOffset(12, 6)
+	title.Size = UDim2.new(1, -24, 0, SIZE.title - 8)
+	title.Active = true
+	-- THE BUTTONS, scrolling under it, leaving the grip its corner.
+	local scroll = Instance.new("ScrollingFrame")
+	scroll.Name = "Scroll"
+	scroll.BackgroundTransparency = 1
+	scroll.BorderSizePixel = 0
+	scroll.Position = UDim2.fromOffset(10, SIZE.title)
+	scroll.Size = UDim2.new(1, -20, 1, -(SIZE.title + SIZE.grip + 4))
+	scroll.CanvasSize = UDim2.new()
+	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	scroll.ScrollingDirection = Enum.ScrollingDirection.Y
+	scroll.ScrollBarThickness = 6
+	scroll.ScrollBarImageColor3 = kit.LOOK.pinkInk
+	scroll.Parent = panel
 	local column = Instance.new("UIListLayout")
 	column.Padding = UDim.new(0, 8)
 	column.SortOrder = Enum.SortOrder.LayoutOrder
-	column.Parent = panel
-	local title = kit.label(panel, "Title", "Studio test panel (F8)", kit.CHUNKY, 17, kit.LOOK.pinkInk)
-	title.Size = UDim2.new(1, 0, 0, 24)
-	title.LayoutOrder = 0
-	-- TWO TO A ROW, so the panel stays on a phone's screen in the Device Emulator as the buttons grow.
+	column.Parent = scroll
+	-- GO TO A LEVEL NOW: its own row of buttons, first.
+	local levelsTitle = kit.label(scroll, "LevelsTitle", "Go to a level now", kit.CHUNKY, 15, kit.LOOK.ink)
+	levelsTitle.Size = UDim2.new(1, -8, 0, 20)
+	levelsTitle.LayoutOrder = 0
+	local levelGrid = Instance.new("Frame")
+	levelGrid.Name = "Levels"
+	levelGrid.BackgroundTransparency = 1
+	levelGrid.Size = UDim2.new(1, -8, 0, 0)
+	levelGrid.AutomaticSize = Enum.AutomaticSize.Y
+	levelGrid.LayoutOrder = 1
+	levelGrid.Parent = scroll
+	local levelCells = Instance.new("UIGridLayout")
+	levelCells.CellPadding = UDim2.fromOffset(8, 8)
+	levelCells.SortOrder = Enum.SortOrder.LayoutOrder
+	levelCells.Parent = levelGrid
+	for order, level in ipairs(levelsToGo()) do
+		local holder, face, content = kit.squishy(levelGrid, "Level_" .. level.levelId, kit.LOOK.tile, kit.LOOK.ink)
+		holder.LayoutOrder = order
+		kit.buttonWords(content, ("%d  %s"):format(level.levelId, level.name), kit.LOOK.ink, 15)
+		face.Activated:Connect(function()
+			kit.sound("buttonClick", 0.5)
+			close()
+			if remote then
+				remote:FireServer("level", level.levelId)
+			end
+		end)
+	end
 	local grid = Instance.new("Frame")
 	grid.Name = "Buttons"
 	grid.BackgroundTransparency = 1
-	grid.Size = UDim2.new(1, 0, 0, 0)
+	grid.Size = UDim2.new(1, -8, 0, 0)
 	grid.AutomaticSize = Enum.AutomaticSize.Y
-	grid.LayoutOrder = 1
-	grid.Parent = panel
+	grid.LayoutOrder = 2
+	grid.Parent = scroll
 	local cells = Instance.new("UIGridLayout")
-	cells.CellSize = UDim2.new(0.5, -4, 0, kit.MIN_TOUCH + 5)
 	cells.CellPadding = UDim2.fromOffset(8, 8)
 	cells.SortOrder = Enum.SortOrder.LayoutOrder
 	cells.Parent = grid
+	-- THE SOUND AUDITION, under the buttons.
+	local layouts = { cells, levelCells }
+	auditionSection(scroll, layouts, 10)
+	-- AS MANY COLUMNS AS ITS WIDTH HOLDS, one to four, kept so as it is sized.
+	local function fitColumns()
+		local columns = math.clamp(math.floor((panel.AbsoluteSize.X - 28) / SIZE.cell), 1, 4)
+		for _, layout in ipairs(layouts) do
+			layout.CellSize = UDim2.new(1 / columns, -8 * (columns - 1) / columns, 0, kit.MIN_TOUCH + 5)
+		end
+	end
+	panel:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitColumns)
+	fitColumns()
+	-- THE GRIP, bottom right: drag it to size the panel.
+	local grip = Instance.new("TextButton")
+	grip.Name = "Grip"
+	grip.AnchorPoint = Vector2.new(1, 1)
+	grip.Position = UDim2.new(1, -6, 1, -6)
+	grip.Size = UDim2.fromOffset(SIZE.grip, SIZE.grip)
+	grip.BackgroundTransparency = 1
+	grip.AutoButtonColor = false
+	grip.FontFace = kit.CHUNKY
+	grip.TextSize = 20
+	grip.TextColor3 = kit.LOOK.pinkInk
+	grip.Text = "\u{25E2}"
+	grip.Parent = panel
+	-- MOVED OR SIZED by a drag that began on the title or the grip, followed wherever the pointer goes until it lets go.
+	local UserInputService = game:GetService("UserInputService")
+	local dragging: { kind: string, from: Vector2, start: Vector2 }? = nil
+	local function begin(kind: string)
+		return function(input: InputObject)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = {
+					kind = kind,
+					from = Vector2.new(input.Position.X, input.Position.Y),
+					start = if kind == "move" then Vector2.new(panel.Position.X.Offset, panel.Position.Y.Offset)
+						else Vector2.new(panel.Size.X.Offset, panel.Size.Y.Offset),
+				}
+			end
+		end
+	end
+	title.InputBegan:Connect(begin("move"))
+	grip.InputBegan:Connect(begin("size"))
+	UserInputService.InputChanged:Connect(function(input: InputObject)
+		local drag = dragging
+		if not drag or (input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch) then
+			return
+		end
+		local moved = Vector2.new(input.Position.X, input.Position.Y) - drag.from
+		local screen = gui.AbsoluteSize
+		if drag.kind == "move" then
+			local size = panel.AbsoluteSize
+			local to = drag.start + moved
+			panel.Position = UDim2.fromOffset(math.clamp(to.X, 0, math.max(0, screen.X - size.X)),
+				math.clamp(to.Y, 0, math.max(0, screen.Y - size.Y)))
+		else
+			local at = Vector2.new(panel.Position.X.Offset, panel.Position.Y.Offset)
+			local to = drag.start + moved
+			panel.Size = UDim2.fromOffset(math.clamp(to.X, SIZE.minWidth, math.max(SIZE.minWidth, screen.X - at.X)),
+				math.clamp(to.Y, SIZE.minHeight, math.max(SIZE.minHeight, screen.Y - at.Y)))
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = nil
+		end
+	end)
+	-- Never taller than the screen it opens on.
+	panel:GetPropertyChangedSignal("Visible"):Connect(function()
+		local screen = gui.AbsoluteSize
+		if panel.Visible and screen.Y > 0 then
+			local at = Vector2.new(panel.Position.X.Offset, panel.Position.Y.Offset)
+			panel.Size = UDim2.fromOffset(math.min(panel.Size.X.Offset, math.max(SIZE.minWidth, screen.X - at.X - 8)),
+				math.min(panel.Size.Y.Offset, math.max(SIZE.minHeight, screen.Y - at.Y - 8)))
+		end
+	end)
 	for order, button in ipairs(BUTTONS) do
 		local holder, face, content = kit.squishy(grid, button.action, kit.LOOK.pink, kit.LOOK.pinkInk)
 		holder.LayoutOrder = order
@@ -434,5 +675,5 @@ function DevPanelClient.start()
 	print("DevPanelClient: running (Studio only), " .. DevPanelClient.VERSION)
 end
 
-DevPanelClient.STAMP = "61fc5413"
+DevPanelClient.STAMP = "37eb0a07"
 return DevPanelClient

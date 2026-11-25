@@ -150,6 +150,12 @@ local function hushLobby(on: boolean)
 			intoHush(music)
 		end
 		TweenService:Create(group, TweenInfo.new(0.8), { Volume = 0 }):Play()
+		-- (And quiet for certain a second later, whatever became of the fade.)
+		task.delay(1, function()
+			if level ~= nil then
+				group.Volume = 0
+			end
+		end)
 	else
 		TweenService:Create(group, TweenInfo.new(1.5), { Volume = 1 }):Play()
 	end
@@ -214,6 +220,11 @@ end
 -- A sound at a place in the world, on this screen alone: on an attachment in one invisible holder, gone after `lasts`
 -- seconds (a slot's length at its pitch: so a take is never heard running on into the next, region or not).
 local function lobbyAt(sound: Sound, at: Vector3?, volume: number, pitch: number, near: number, far: number, lasts: number)
+	-- IN THE LOBBY'S GROUP, as everything under the lobby is (the two-hundred-and-ninth pass, from your note of
+	-- 2026-11-13: "I hear lobby sounds when playing different levels"): this screen's own lobby sounds, the sea beds and
+	-- the things that happen, were the one part of the lobby outside it, and a take begun as a run started played on
+	-- over the level. In the group they go quiet with the rest the moment you are in any level.
+	sound.SoundGroup = lobbyGroup()
 	sound.Volume = volume
 	sound.PlaybackSpeed = pitch
 	if at then
@@ -283,6 +294,7 @@ local function lobbyOn(on: boolean)
 		local own = folder:FindFirstChild("SeaBed_" .. k)
 		if own and own:IsA("Sound") then
 			local s = own:Clone()
+			s.SoundGroup = lobbyGroup()
 			s.Looped = true
 			s.Volume = 0
 			s.TimePosition = math.random() * 20
@@ -502,5 +514,5 @@ function AmbienceService.start()
 	print("AmbienceService: running")
 end
 
-AmbienceService.STAMP = "93ae5f36"
+AmbienceService.STAMP = "93150068"
 return AmbienceService

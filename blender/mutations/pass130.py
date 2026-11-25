@@ -35,7 +35,7 @@ MUTATIONS = [
     ('a placed lobby sound in a level', AMB, STORY, 'if item:IsA("Sound") then\n\t\titem.SoundGroup = lobbyGroup()', 'if item:IsA("Sound") and not item:FindFirstAncestorWhichIsA("BasePart") then\n\t\titem.SoundGroup = lobbyGroup()'),
     ('a stand-in everywhere at once', HUBS, STORY, 'fromLobby(swell, 60, 320)', 'swell.Parent = folder'),
     ('the clock up in Chill', UIS, STORY, 'if not hardcore then\n\t\tUIService.setTimerVisible(false)', 'if false then\n\t\tUIService.setTimerVisible(false)'),
-    ('the clock never folding', UIS, STORY, 'timerFold.Activated:Connect(function()\n\ttimerFolded = true', 'timerFold.Activated:Connect(function()\n\ttimerFolded = false'),
+    ('the clock never folding', UIS, STORY, 'pressSound("close")\n\ttimerFolded = true', 'pressSound("close")\n\ttimerFolded = false'),
     ('walking out of a scene', CINEMA, STORY, '\tholdStill(true)\n', '\n'),
     ('prompts over a scene', CINEMA, STORY, 'ProximityPromptService.Enabled = false', 'ProximityPromptService.Enabled = true'),
     ('a scene over the lobby', CINEMA, STORY, 'if wasIn ~= nil and now ~= wasIn and now ~= "backRooms" then', 'if false then'),

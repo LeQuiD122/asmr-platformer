@@ -613,7 +613,7 @@ else:
 for needle, why in (
     ("SkyPoolsService.build(levelInstance", "Bootstrap never builds the pools"),
     ("SkyPoolsService.attachSlide(", "Bootstrap never attaches the slide"),
-    ("finishRunFor(player)", "the slide's arrival does not finish the run"),
+    ("finishFrom(levelInstance)", "the slide's arrival does not finish the run"),
     ("finishPart.CanTouch = false", "the old finish line is not stood down, so the finale deck ends the run"),
     ("if SkyPoolsService.clearWater then", "the terrain water is never cleared, so the next level starts "
                                           "with pools of water standing in its sky"),
@@ -621,7 +621,7 @@ for needle, why in (
 ):
     if needle not in sky_block:
         fail(why)
-kill = BOOT[BOOT.index("if hrp.Position.Y < killY"):]
+kill = BOOT[BOOT.index("local fell = hrp.Position.Y < killY"):]
 kill = kill[:kill.index(" then")]
 if "SkyPoolsService.ownsFall(player)" not in kill:
     fail("the kill plane does not exempt a slide rider, so the ride ends in the clouds")
@@ -1006,19 +1006,124 @@ for label, worst in report.items():
           "mouth %s"
           % (label, worst["apart"], worst["long"], worst["drop"], worst["slide"][0], worst["slide"][1],
              worst["steep"], nearest))
-# THE FALLS BREAK UP (the hundred-and-first pass): a fall's sheet goes down VEIL_REACH studs at most, thinning as it
-# goes, and its streaks and mist carry on; a sheet from a pool to the clouds is a thin white line through everything.
+# THE WATER IS A RIBBON (the two-hundred-and-fourth pass, from your note of 2026-11-06: "I want the waterfall to be more
+# realistic"). Every fall is two flat ribbons of falling water drawn with the falls' own texture, running DOWN (a
+# positive speed runs a beam's texture from its first attachment, the lip, to its second), the front one faster; no
+# sheet of see-through plastic is left. A long fall's ribbons fade to nothing within RIBBON_REACH (the hundred-and-first
+# pass: a long pale sheet seen from the side was a white line through everything; a flat ribbon edge on is nothing, and
+# it still breaks up). The arcs are ropes of water on their parabola, the jet a rope going up; the overflow by each pool
+# is the pool's own terrain water, wading deep over the pool's tile, filled from inside the deck so it has a level top.
 SKY_TEXT = "\n".join(SKY_SOURCE)
-reach = re.search(r"^local VEIL_REACH = ([\d.]+)", SKY_TEXT, re.M)
-if not reach or float(reach.group(1)) > 60:
-    fail("SkyPoolsService: a fall's sheet reaches further than 60 studs (a white line to the clouds)")
+fall_ = SKY_TEXT[SKY_TEXT.find("local function waterfall("):SKY_TEXT.find("-- ===== POOL TOYS =====")]
+reach = re.search(r"^local RIBBON_REACH = ([\d.]+)", SKY_TEXT, re.M)
+if not reach or float(reach.group(1)) > 300:
+    fail("SkyPoolsService: a fall's ribbons reach further than 300 studs before they break up")
+texture_ = re.search(r'^local FALL_TEXTURE = "rbxassetid://(\d+)"', SKY_TEXT, re.M)
+if not texture_:
+    fail("SkyPoolsService: the falling water has no texture of its own (FALL_TEXTURE)")
+layers_ = re.findall(r"\{ out = ([\d.]+), widen = [\d.]+, scale = [\d.]+, speed = ([\d.]+), alpha = ([\d.]+),", SKY_TEXT)
+if len(layers_) != 2:
+    fail("SkyPoolsService: a fall is not two ribbons of water (RIBBONS)")
+elif not all(float(speed) > 0 for _, speed, _ in layers_):
+    fail("SkyPoolsService: a fall's water runs up its ribbon (a positive TextureSpeed runs it down from the lip)")
+elif not float(layers_[1][1]) > float(layers_[0][1]) or not float(layers_[1][0]) > float(layers_[0][0]):
+    fail("SkyPoolsService: the front ribbon is not in front of the sheet and faster, so the water does not slide over itself")
 for needle, why in (
-    ("local reach = math.min(height, VEIL_REACH)", "a fall's sheet goes all the way down"),
-    ("local alpha = veil.alpha + (1 - veil.alpha) * thin * 0.92", "a long fall's sheet does not thin as it falls"),
-    ('sheet:SetAttribute("Alpha", alpha)', "the shimmer puts a long fall's sheet back to solid"),
+    ("local reach = math.min(height, RIBBON_REACH)", "a fall's ribbons go all the way down however far it falls"),
+    ("local ribbon = waterBeam(foam, top + facing * (layer.out * 0.4), leaving,", "a fall's ribbons do not hang from its lip"),
+    ("-Vector3.yAxis, across)", "a fall's ribbons are turned to the camera instead of lying across the fall"),
+    ("NumberSequenceKeypoint.new(1, if long then 1 else", "a long fall's ribbons do not fade to nothing"),
+    ("ribbon.TextureSpeed = layer.speed", "a fall's water does not run"),
+    ('block(parent, "FallSplash"', "a short fall lands on the water below it with no churn"),
 ):
-    if needle not in SKY_TEXT:
+    if needle not in fall_:
         fail("SkyPoolsService: " + why)
+beam_ = SKY_TEXT[SKY_TEXT.find("local function waterBeam("):SKY_TEXT.find("local function waterfall(")]
+for needle, why in (
+    ("beam.FaceCamera = across == nil", "a ribbon given a way to lie still turns to the camera"),
+    ("local side = across or (if math.abs(along.Y) < 0.9 then Vector3.yAxis else Vector3.xAxis):Cross(along).Unit",
+     "a ribbon's width does not lie across it (a Beam's width lies along its attachments' Y)"),
+    ("return CFrame.fromMatrix(at, along, side)", "a beam's curve does not leave along its attachment's X"),
+    ("beam.Texture = FALL_TEXTURE", "the water on a beam is not drawn with the falls' texture"),
+):
+    if needle not in beam_:
+        fail("SkyPoolsService: " + why)
+if 'block(parent, "Waterfall"' in SKY_TEXT or '"SkyFall")' in SKY_TEXT:
+    fail("SkyPoolsService: a fall is a sheet of see-through plastic again (the glass columns)")
+arc_ = SKY_TEXT[SKY_TEXT.find("local function arc("):SKY_TEXT.find("local function tower(")]
+for needle, why in (
+    ('stream.Name = "FountainArc"', "the fountain's arcs are not ropes of water"),
+    ("local throw = out * reach + Vector3.yAxis * (4 * rise - drop)", "an arc does not leave along its throw"),
+    ("local landing = out * reach - Vector3.yAxis * (4 * rise + drop)", "an arc does not arrive along its fall"),
+    ("stream.CurveSize0 = throw.Magnitude / 3", "an arc's curve is not its parabola at the nozzle"),
+    ("stream.CurveSize1 = landing.Magnitude / 3", "an arc's curve is not its parabola where it lands"),
+):
+    if needle not in arc_:
+        fail("SkyPoolsService: " + why)
+if "block(parent, \"FountainArc\"" in arc_ or "Enum.PartType.Cylinder" in arc_:
+    fail("SkyPoolsService: an arc is glass cylinders end to end again")
+# The cubic a Beam draws through P0, P0 + d0/3, P3 - d1/3, P3 IS the parabola the drops fly: checked, not assumed.
+for reach_, rise_, drop_ in ((12, 7, 3.2), (20, 3, 1), (8, 10, 6)):
+    d0_ = (reach_, 4 * rise_ - drop_)
+    d1_ = (reach_, -4 * rise_ - drop_)
+    p0_, p3_ = (0.0, 0.0), (reach_, -drop_)
+    p1_ = (p0_[0] + d0_[0] / 3, p0_[1] + d0_[1] / 3)
+    p2_ = (p3_[0] - d1_[0] / 3, p3_[1] - d1_[1] / 3)
+    for k_ in range(11):
+        u_ = k_ / 10
+        bez_ = [(1 - u_) ** 3 * p0_[i] + 3 * (1 - u_) ** 2 * u_ * p1_[i] + 3 * (1 - u_) * u_ * u_ * p2_[i] + u_ ** 3 * p3_[i]
+                for i in (0, 1)]
+        path_ = (reach_ * u_, rise_ * 4 * u_ * (1 - u_) - drop_ * u_)
+        if math.dist(bez_, path_) > 1e-6:
+            fail("the arcs' Beam curve is not their parabola (reach %s, rise %s): off by %.3f at %.1f"
+                 % (reach_, rise_, math.dist(bez_, path_), u_))
+            break
+tower_ = SKY_TEXT[SKY_TEXT.find("local function tower("):SKY_TEXT.find("local function finalPool(")]
+for needle, why in (
+    ("jet.Transparency = 1", "the jet is a glass rod again"),
+    ('rope.Name = "JetWater"', "the jet is not a rope of water going up"),
+    ("local rope = waterBeam(jet, foot, Vector3.yAxis, crown, Vector3.yAxis, nil)", "the jet's water does not run up"),
+):
+    if needle not in tower_:
+        fail("SkyPoolsService: " + why)
+terrace_ = SKY_TEXT[SKY_TEXT.find("local function terrace("):SKY_TEXT.find("local function capOf(")]
+rill_ = re.search(r"^local RILL_DEEP = ([\d.]+)", SKY_TEXT, re.M)
+if not rill_ or not 0.2 <= float(rill_.group(1)) <= 1:
+    fail("SkyPoolsService: the overflow's water is not wading deep (RILL_DEEP between 0.2 and 1)")
+for needle, why in (
+    ("fillWater(frame * CFrame.new(rillMid, RILL_DEEP - 2, 0), Vector3.new(rillLong, 4, channel + 2))",
+     "the overflow is not the pool's water, filled from inside the deck a stud into each kerb"),
+    ('tiled(block(parent, "SpillBed"', "the overflow runs over the deck rather than the pool's tile"),
+    ("local kerbHigh = RILL_DEEP + 0.25", "the overflow's kerbs do not stand over its water"),
+    ('block(parent, "SpillSill"', "nothing holds the overflow's water at the pool's end"),
+    ("waterfall(parent, frame * Vector3.new(lipX + 0.2, RILL_DEEP - 0.1, 0), frame.RightVector, channel, groundY, 90)",
+     "the overflow does not go over the prow's lip at its own water's level"),
+):
+    if needle not in terrace_:
+        fail("SkyPoolsService: " + why)
+if 'water(parent, "Spill"' in SKY_TEXT or "local function water(" in SKY_TEXT:
+    fail("SkyPoolsService: the overflow is a sheet of see-through plastic on the deck again")
+# HEAPED, NOT PILLOWS: the near clouds' domes, every one a Cloud in the sea's folder (the slide's camera thins them and
+# the storm greys them by that name) and none topping out at or over the eight studs the slide's camera is told the
+# clouds end above their top; the towering clouds far out of the slide's way.
+cloud_all_ = SKY_TEXT[SKY_TEXT.find("local CLOUD_DETAIL ="):SKY_TEXT.find("-- ===== AND IT MOVES =====")]
+head_ = re.search(r"^local CLOUD_HEAD_ABOVE = ([\d.]+)", SKY_TEXT, re.M)
+if not head_ or float(head_.group(1)) >= 8:
+    fail("SkyPoolsService: a cloud's domes rise to where the slide's camera thinks it is clear of the clouds")
+if 'model:SetAttribute("CloudTop", h.cloudTop + 8)' not in SKY_TEXT:
+    fail("SkyPoolsService: the slide's camera is told the clouds end somewhere else")
+for needle, why in (
+    ("local high = math.min(topY, base.Y + CLOUD_HEAD_ABOVE)", "a dome is not held under the clouds' ceiling"),
+    ('local dome = ellipsoid(folder, "Cloud", ', "a dome is not a Cloud in the cloud sea's folder"),
+    ("cloudDome(folder, foot, headWide, headTall, headTop, light)", "the near clouds have no domes"),
+    ('ellipsoid(folder, "CloudTower"', "there are no towering clouds out on the horizon"),
+    ("local reach = rng:NextNumber(1500, 2200)", "the towering clouds stand where the slide goes"),
+):
+    if needle not in cloud_all_:
+        fail("SkyPoolsService: " + why)
+detail_ = re.search(r"^local CLOUD_DETAIL = (\d+)", SKY_TEXT, re.M)
+if not detail_ or int(detail_.group(1)) >= S.get("CLOUD_REACH", 2400):
+    fail("SkyPoolsService: every cloud to the horizon is heaped, hundreds of domes nobody is near")
 # THE ARCHES ON THE WAY DOWN (the hundred-and-eighth pass): each hoop a tagged model with its middle; on the rider's
 # screen, glowing up ahead, flaring under, sparkling, its air and a small shake; lit in small steps; all of it taken
 # off again (a ride's lights left burning would pile up ride after ride).

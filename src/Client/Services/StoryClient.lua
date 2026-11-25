@@ -29,6 +29,14 @@ local Cinema: any = (function()
 	local found = script.Parent and script.Parent:WaitForChild("Cinema", 15)
 	return if found and found:IsA("ModuleScript") then require(found) else nil
 end)()
+-- His own mouth, cut from his made head (the two-hundred-and-twenty-seventh pass): MarshMouth beside this.
+local MarshMouth: any = (function()
+	local found = script.Parent and script.Parent:FindFirstChild("MarshMouth")
+	local ok, loaded = pcall(function()
+		return if found and found:IsA("ModuleScript") then require(found) else nil
+	end)
+	return if ok then loaded else nil
+end)()
 local Maw: any = (function()
 	local found = script.Parent and script.Parent:FindFirstChild("Maw")
 	return if found and found:IsA("ModuleScript") then require(found) else nil
@@ -113,6 +121,18 @@ local function whisper(text: string)
 	end)
 end
 
+-- HOW TO READ IT, ON THE DEVICE IN HAND (the hundred-and-forty-seventh pass): the card said "Press J" to a controller and
+-- a phone too. The journal's own words for it (JournalService's line in the corner).
+local function readHint(): string
+	local input = game:GetService("UserInputService")
+	if input:GetLastInputType().Name:sub(1, 7) == "Gamepad" then
+		return "Kept in your journal. Press D-pad up to read it."
+	elseif input.TouchEnabled and not input.KeyboardEnabled then
+		return "Kept in your journal. Tap the book to read it."
+	end
+	return "Kept in your journal. Press J to read it."
+end
+
 -- "Secret 2 of 5": the card after a moment, as the keepsakes have.
 local function card(title: string, found: number, total: number)
 	local screen = gui("SecretCard", 23)
@@ -144,7 +164,7 @@ local function card(title: string, found: number, total: number)
 	list.Parent = paper
 	for index, row in ipairs({ { ("SECRET %d OF %d"):format(found, total), 12, Color3.fromRGB(180, 170, 140) },
 		{ title, 18, Color3.fromRGB(236, 232, 218) },
-		{ "Kept in your journal. Press J to read it.", 14, Color3.fromRGB(200, 192, 170) } }) do
+		{ readHint(), 14, Color3.fromRGB(200, 192, 170) } }) do
 		local label = Instance.new("TextLabel")
 		label.BackgroundTransparency = 1
 		label.Size = UDim2.new(1, 0, 0, 0)
@@ -356,12 +376,18 @@ local function dust(at: Vector3)
 end
 
 -- THE SCENE'S END, whichever way it ends: the pose let go, the bar back on your back, the camera given back.
-local scene: { prying: boolean, token: number } = { prying = false, token = 0 }
+local scene: { prying: boolean, token: number, held: BasePart? } = { prying = false, token = 0, held = nil }
 local function endScene()
 	act(nil)
 	barInHands(false)
 	twoShotSide = nil
 	scene.prying = false
+	-- LET GO OF (the lever's scene holds you at the box, leverBox).
+	local held = scene.held
+	scene.held = nil
+	if held and held.Parent then
+		held.Anchored = false
+	end
 	busy = false
 	if Cinema then
 		Cinema.finish()
@@ -494,6 +520,161 @@ local function strikeBricks(data: { [string]: any })
 	end)
 end
 
+-- THE BAR AS A LEVER (the two-hundred-and-seventh pass, from your note of 2026-11-10: "improve the animation drastically
+-- for the level 2 chest that should be prised up with a bar"). The tin box was opened as a locker is: standing, three
+-- tugs at the air in front of it, the lid still, and then it flew open. Now you get down to it: set in front of the
+-- box on the floor it stands on and held there (it is under water, and you drifted up off it), down on your haunches
+-- (Poses.lever), the bar's claw kept under the lid's front edge wherever the lid is and its handle in your hands, and
+-- your weight borne down on it three times (Poses.LEVER's clock, which the server lifts the lid by, so the lid comes up
+-- under the claw as you heave): silt out of the seam and the bar's knock on each, the picture shaking harder through
+-- the long last one. Seen side on and low, the lid and your hands in the middle of the picture, closing in as it builds;
+-- then it gives: the knock of the clasp, an impact frame, and you thrown back off it as the lid goes over.
+-- (`stand` and `bar` are the two numbers Poses.lever's arms were fitted to: change them and the hands leave the bar.
+-- `eye` is how far to the side the camera stands, where there is room: far enough that you and the box are both whole.)
+local LEVER = { stand = 3.75, claw = 0.22, eye = 7.4, bar = 2.8 }
+local function leverBox(data: { [string]: any })
+	local at, out = data.at :: Vector3, data.out :: Vector3
+	local lid = data.lid
+	local character = Players.LocalPlayer.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not (character and root and root:IsA("BasePart") and humanoid) then
+		return
+	end
+	local flatOut = Vector3.new(out.X, 0, out.Z)
+	flatOut = if flatOut.Magnitude > 0.05 then flatOut.Unit else Vector3.zAxis
+	local right = (-flatOut):Cross(Vector3.yAxis)
+	local timing = Poses.LEVER
+	busy = true
+	scene.prying = true
+	scene.token += 1
+	twoShotSide = nil
+	local token = scene.token
+	local half = if typeof(data.half) == "number" then data.half else 0.6
+	local legs = if humanoid.RigType == Enum.HumanoidRigType.R6 then 2 else humanoid.HipHeight
+	local stand = Vector3.new(at.X, at.Y - half + legs + root.Size.Y / 2, at.Z) + flatOut * LEVER.stand
+	local goal = CFrame.lookAt(stand, stand - flatOut)
+	local from = root.CFrame
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.Anchored = true
+	scene.held = root
+	Cinema.begin({ hush = false })
+	-- The bar off your back and in your hands: drawn by this scene each frame, from the lid's edge to your grip.
+	barInHands(true)
+	local bar = barHeld.hand
+	if bar then
+		local weld = bar:FindFirstChildOfClass("WeldConstraint")
+		if weld then
+			weld:Destroy()
+		end
+		bar.Anchored = true
+		bar.Size = Vector3.new(0.2, 0.2, LEVER.bar)
+	end
+	-- WHICH SIDE TO WATCH FROM: the one with more room at the box's own height, measured here and kept. (twoShot would
+	-- have measured from where you were when you pressed the key: afloat over the pool, with room on every side, and
+	-- then the wall beside the box pulled the camera in until neither you nor the box was whole.)
+	-- (Aimed a stud higher and a little nearer you than the lid, the two-hundred-and-thirty-fifth pass: at the lid's own
+	-- height your head was above the top of the picture, seen in play on 2026-11-21.)
+	local chest = Vector3.new(at.X, at.Y + half + 1.5, at.Z) + flatOut * 1.9
+	local function room(side: number): number
+		return (Cinema.clear(chest + right * side * LEVER.eye + flatOut * 1.2 + Vector3.new(0, 0.9, 0), chest, { character }) - chest).Magnitude
+	end
+	local rightRoom, leftRoom = room(1), room(-1)
+	local side = if math.max(rightRoom, leftRoom) < 3.2 then 0 elseif leftRoom > rightRoom + 0.5 then -1 else 1
+	act("lever")
+	Cinema.think(character, tostring(data.think or "Let's see what's in here."), 2.8)
+	local rightHand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
+	local leftHand = character:FindFirstChild("LeftHand") or character:FindFirstChild("Left Arm")
+	local seamRest = at + Vector3.new(0, half, 0) + flatOut * 0.78
+	local began = os.clock()
+	local heaves = table.clone(timing.heaves)
+	local gave = false
+	local hook
+	hook = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - began
+		if scene.token ~= token or not scene.prying then
+			hook:Disconnect()
+			return
+		end
+		-- Down to it, in the first moment, and kept there.
+		if root.Parent then
+			local u = math.clamp(t / 0.45, 0, 1)
+			root.CFrame = from:Lerp(goal, u * u * (3 - 2 * u))
+		end
+		-- WHERE THE CLAW BITES: under the front edge of the lid, wherever the lid is now (the server lifts it).
+		local seam = seamRest
+		if not gave and typeof(lid) == "Instance" and lid:IsA("BasePart") and lid.Parent then
+			seam = lid.CFrame * Vector3.new(0, -lid.Size.Y / 2, -lid.Size.Z / 2)
+		end
+		local pull = Poses.leverPull(t)
+		-- THE BAR, from the claw to your grip: square to the box, never flatter than its rim lets it lie nor steeper than a
+		-- bar could be worked. (With no hands to find, it drops as you bear on it.)
+		if bar and bar.Parent and not gave then
+			local rise = 0.9 - 0.55 * pull
+			local tip = seam - flatOut * LEVER.claw
+			local grip: Vector3? = nil
+			if rightHand and rightHand:IsA("BasePart") and leftHand and leftHand:IsA("BasePart") then
+				grip = (rightHand.Position + leftHand.Position) / 2
+			elseif rightHand and rightHand:IsA("BasePart") then
+				grip = rightHand.Position
+			end
+			if grip then
+				local toGrip = grip - tip
+				rise = math.clamp(math.atan2(toGrip.Y, math.max(0.3, toGrip:Dot(flatOut))), 0.12, 1.25)
+			end
+			local along = flatOut * math.cos(rise) + Vector3.yAxis * math.sin(rise)
+			bar.CFrame = CFrame.lookAt(tip, tip + along) * CFrame.new(0, 0, -LEVER.bar / 2)
+		end
+		-- EACH HEAVE: the bar's knock, lower and harder each time, silt out of the seam, and the picture jolted.
+		while heaves[1] and t >= heaves[1] do
+			local index = #timing.heaves - #heaves + 1
+			table.remove(heaves, 1)
+			Cinema.shake(0.25 + 0.12 * index)
+			Cinema.sound("BarStrike", 0.35 + 0.1 * index, { pitch = 0.62 + 0.05 * index, keep = true })
+			dust(seam)
+		end
+		-- THE LAST ONE HELD: the picture shaking harder the longer it is.
+		local last = timing.heaves[#timing.heaves]
+		if t > last + 0.35 and not gave then
+			Cinema.shake(0.15 + 0.45 * math.clamp((t - last - 0.35) / math.max(0.05, timing.gives - last - 0.35), 0, 1))
+		end
+		-- THE SHOT: side on and a little over the box, you and it both whole in the picture with the bar between,
+		-- closing in as the heaves build; from above only if neither side has room.
+		local build = math.clamp(t / timing.gives, 0, 1)
+		local mid = if gave then at + Vector3.new(0, half + 0.7, 0) + flatOut * 0.9 else chest
+		local eye
+		if side == 0 then
+			eye = Cinema.clear(mid + flatOut * 3.5 + Vector3.new(0, 6, 0), mid, { character })
+		else
+			eye = Cinema.clear(mid + right * side * (LEVER.eye - 1.3 * build) + flatOut * 1.2
+				+ Vector3.new(0, 0.9 + 0.4 * build, 0), mid, { character })
+		end
+		Cinema.point(CFrame.lookAt(eye, mid), 56 - 5 * build)
+		if t >= timing.gives and not gave then
+			-- IT GIVES: the clasp's knock, the jolt, and you thrown back off it as the lid goes over.
+			gave = true
+			Cinema.impact(0.9)
+			Cinema.shake(0.8)
+			Cinema.sound("ClockPunch", 0.8, { pitch = 0.78, keep = true })
+			dust(seam)
+			act("startle")
+			barInHands(false)
+			task.delay(0.6, function()
+				if scene.token == token and acting.now and acting.now.pose == "startle" then
+					act("ponder")
+				end
+			end)
+		end
+		-- Nothing came of it: the scene ends by itself.
+		if t > timing.gives + 4 then
+			hook:Disconnect()
+			if scene.token == token and scene.prying then
+				endScene()
+			end
+		end
+	end)
+end
+
 -- THE BAR AT WORK (Interactables' "pry"): you turn to it, set the bar, three hard tugs with the dust coming out, and
 -- on the last it gives (the server opens it then): an impact frame and a jump back. Then the scene of what was in it
 -- (moment, or peek for the board) takes over; with nothing in it (an empty locker) it ends by itself.
@@ -504,6 +685,10 @@ local function pry(data: { [string]: any })
 	end
 	if data.strike == true and typeof(data.out) == "Vector3" and Poses and Poses.STRIKES then
 		strikeBricks(data)
+		return
+	end
+	if data.lever == true and typeof(data.out) == "Vector3" and Poses and Poses.LEVER and Poses.lever then
+		leverBox(data)
 		return
 	end
 	busy = true
@@ -928,8 +1113,32 @@ end
 -- "the animation of the backrooms monster kill is weird", it was two flat red slabs filling the picture, too near
 -- and too small to be a face.
 local SCREAM = 1.6
-type Screamer = { model: Model, left: { { part: BasePart, offset: CFrame } }, right: { { part: BasePart, offset: CFrame } },
-	gullet: PointLight }
+-- A fang carries its base length and which way it points (+1 up, -1 down): it grows out of the gum as the mouth opens.
+type Piece = { part: BasePart, offset: CFrame, len: number?, dir: number?, eyelid: number? }
+-- A strand of spit from under the lid to the jaw, stretching as it opens and snapping at `snap` (how far open).
+type Strand = { top: BasePart, bottom: BasePart, from: CFrame, to: CFrame, snap: number, broken: boolean? }
+type Screamer = { model: Model, left: { Piece }, right: { Piece }, gullet: PointLight,
+	lid: { Piece }?, jaw: { Piece }?, hinge: CFrame?, jawHinge: CFrame?, strands: { Strand }?,
+	lidTurn: number?, jawTurn: number?, throatAt: CFrame?, own: boolean?, scale: Vector3?, eyeOpen: number? }
+
+-- HIS MADE HEAD (the two-hundred-and-twenty-first pass, from your note: "it still has the old head-opening animation even
+-- though there is a new head model"). BackRoomsService has worn Assets/Props.Marsh_Head over the plain head since the
+-- two-hundred-and-eleventh pass, but the screamer still built the old head (two pale halves on a seam) and opened that
+-- in front of him, while his new head stayed on behind it. Now, where the made head is there, it is the head that
+-- opens: the whole of it hinges up and back from the top of the skull like a lid, fangs hanging from under it, onto a
+-- red jaw with a row of fangs and the throat's light where his face was. The halves stay for a place without the model.
+local function madeHeadTemplate(): BasePart?
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local props = assets and assets:FindFirstChild("Props")
+	local made = props and props:FindFirstChild("Marsh_Head")
+	if not made then
+		return nil
+	end
+	local part = if made:IsA("BasePart") then made else made:FindFirstChildWhichIsA("BasePart", true)
+	return part
+end
+-- His made head's height on him (BackRoomsService: 1.35 of the plain head's 1.45), a little bigger here so it reads.
+local MADE_HEIGHT = 1.45 * 1.35 * 1.15
 local function screamerFace(): Screamer
 	local model = Instance.new("Model")
 	model.Name = "Screamer"
@@ -948,9 +1157,190 @@ local function screamerFace(): Screamer
 		p.Parent = model
 		return p
 	end
+	-- Fangs a little darker than bone, so the light in the throat does not blow them out to white.
+	local fang = Color3.fromRGB(196, 184, 160)
+	local template = madeHeadTemplate()
+	local lid: { Piece }?, jaw: { Piece }?, hinge: CFrame? = nil, nil, nil
+	local jawHinge: CFrame?, strands: { Strand }? = nil, nil
+	local lidTurn, jawTurn, throatAt, own = math.rad(40), math.rad(22), nil, false
+	local screamerScale: Vector3? = nil
+	local mouth = if template and MarshMouth then MarshMouth.pieces() else nil
+	if template and mouth then
+		-- HIS OWN MOUTH (the two-hundred-and-twenty-seventh pass, from your question: "do you think having his mouth
+		-- actually open instead of just having another fake one underneath would be better?"). His head cut at his lips
+		-- (MarshMouth): his skull tips back a little on the hinge under his ears and his own jaw drops wide, his chin and
+		-- his lower lip going with it, onto a dark palate and the floor of his mouth, a tongue, and teeth rooted on both
+		-- his lips. One head, opening; no lid, nothing underneath.
+		own = true
+		local scale = template.Size * (MADE_HEIGHT / template.Size.Y) / mouth.meshSize
+		local function cloned(part: MeshPart): BasePart
+			local copy = part:Clone()
+			copy.Anchored = true
+			copy.Size = part.Size * scale
+			copy.Parent = model
+			return copy
+		end
+		lid = { { part = cloned(mouth.skull), offset = CFrame.identity } }
+		if mouth.palate then
+			table.insert(lid, { part = cloned(mouth.palate), offset = CFrame.identity })
+		end
+		-- HIS EYES (the two-hundred-and-twenty-eighth pass): his lids, cut from his skull, and what is behind them.
+		for i, lidPart in ipairs(mouth.lids) do
+			table.insert(lid, { part = cloned(lidPart), offset = CFrame.identity, eyelid = i })
+		end
+		for _, eyePart in ipairs(MarshMouth.eyeParts(scale)) do
+			eyePart.part.Anchored = true
+			eyePart.part.Parent = model
+			table.insert(lid, { part = eyePart.part, offset = eyePart.offset })
+		end
+		jaw = { { part = cloned(mouth.jaw), offset = CFrame.identity } }
+		if mouth.floor then
+			table.insert(jaw, { part = cloned(mouth.floor), offset = CFrame.identity })
+		end
+		hinge = CFrame.new(MarshMouth.HINGE * scale)
+		jawHinge = hinge
+		lidTurn, jawTurn = math.rad(13), math.rad(38)
+		-- A tongue lying in his jaw, thick and wet.
+		local tongue = piece("Tongue", Vector3.new(0.62, 0.15, 0.85) * scale.Y, Color3.fromRGB(110, 30, 38))
+		tongue.Reflectance = 0.08
+		local tongueMesh = Instance.new("SpecialMesh")
+		tongueMesh.MeshType = Enum.MeshType.Sphere
+		tongueMesh.Parent = tongue
+		table.insert(jaw, { part = tongue, offset = CFrame.new((mouth.middle + MarshMouth.NORMAL * 0.04
+			+ Vector3.new(0, 0, -0.1)) * scale) * CFrame.Angles(-math.atan(MarshMouth.SLOPE), 0, 0) })
+		-- His teeth, on his lips: growing out of the gums as he opens.
+		for _, tooth in ipairs(MarshMouth.teeth()) do
+			local long = tooth.len * scale.Y
+			local part = piece("Fang", Vector3.new(0.05 * scale.Y, long, 0.05 * scale.Y), fang)
+			local spindle = Instance.new("SpecialMesh")
+			spindle.MeshType = Enum.MeshType.Sphere
+			spindle.Parent = part
+			table.insert(if tooth.upper then lid else jaw, { part = part, offset = MarshMouth.toothFrame(tooth, scale),
+				len = long, dir = 1 })
+		end
+		-- Spit between his lips, snapping as he opens.
+		strands = {}
+		local spit = Color3.fromRGB(112, 38, 42)
+		for i, x in ipairs({ -0.28, -0.12, 0.03, 0.15, 0.3 }) do
+			local lip = MarshMouth.lipAt(x)
+			if lip then
+				-- Thin and round, tapering at the ends (filmed square and thick, they were red bars across his mouth).
+				local function thread(): BasePart
+					local p = piece("Spit", Vector3.new(0.03, 0.03, 0.1) * (MADE_HEIGHT / 2.2), spit)
+					p.Reflectance = 0.18
+					p.Transparency = 1
+					local round = Instance.new("SpecialMesh")
+					round.MeshType = Enum.MeshType.Sphere
+					round.Parent = p
+					return p
+				end
+				local at = CFrame.new((lip + Vector3.new(0, 0, 0.05)) * scale)
+				table.insert(strands, { top = thread(), bottom = thread(), from = at, to = at,
+					snap = ({ 1.04, 1.14, 1.22, 1.08, 1.18 })[i] })
+			end
+		end
+		throatAt = CFrame.new((mouth.middle + Vector3.new(0, -0.04, 0.32)) * scale)
+		screamerScale = scale
+	end
+	if template and not own then
+		-- THE LID: his made head itself, its face (-Z, or FrontYaw) toward you.
+		local head = template:Clone()
+		head.Name = "Lid"
+		head.Anchored = true
+		head.CanCollide, head.CanQuery, head.CanTouch = false, false, false
+		head.CastShadow = false
+		head.Size = template.Size * (MADE_HEIGHT / template.Size.Y)
+		head.Parent = model
+		local yaw = template:GetAttribute("FrontYaw")
+		local turn = CFrame.Angles(0, if typeof(yaw) == "number" then yaw else 0, 0)
+		local hs = head.Size
+		local hh, hd, hw = hs.Y, hs.Z, hs.X
+		-- Hinged at the top of the back of the skull, so it tips up and back off his face.
+		-- (Pass 222's play test: hinged at the top and tipped 58 degrees he looked up at the sky over a gap. Hinged at
+		-- the ears now, and tipped less, it is a mouth.)
+		hinge = CFrame.new(0, hh * 0.1, hd * 0.32)
+		lid = { { part = head, offset = turn } }
+		-- Fangs under the lid's front edge, pointing down: they come up with it, and grow out of the gum as it opens.
+		-- The third and seventh are the long ones, a pair of real fangs among the rest.
+		local scale = MADE_HEIGHT / 2.2
+		-- On the underside of his head, at the chin (pass 222's play test: rooted near its middle they were inside it,
+		-- and never seen).
+		local lidRoot = -hh * 0.4
+		for k = 1, 9 do
+			local x = (k - 5) * hw * 0.085
+			local len = 0.5 * scale * (if k == 3 or k == 7 then 1.4 else 1 - 0.25 * math.abs(k - 5) / 4)
+			local tooth = piece("Fang", Vector3.new(0.07 * scale, len, 0.07 * scale), fang)
+			local spindle = Instance.new("SpecialMesh")
+			spindle.MeshType = Enum.MeshType.Sphere
+			spindle.Parent = tooth
+			local z = -hd * (0.3 - 0.06 * math.abs(k - 5) / 4)
+			-- Each leaning its own way, raked toward you, not a row of pegs.
+			local lean = ({ 0.1, -0.15, 0.05, 0.2, -0.05, 0.15, -0.1, 0.08, -0.2 })[k]
+			table.insert(lid, { part = tooth, offset = CFrame.new(x, lidRoot, z) * CFrame.Angles(-0.3, 0, lean + (k - 5) * 0.06),
+				len = len, dir = -1 })
+		end
+		-- THE JAW left behind where his face was: the red of the mouth, and a row of fangs standing up out of it. It
+		-- drops a little on its own hinge, low at the back, as the lid goes up: a mouth opening both ways.
+		jaw = {}
+		jawHinge = CFrame.new(0, -hh * 0.32, hd * 0.3)
+		-- A deep, dark mouth, sunk into where his face was (not a ball standing out of it).
+		local mouth = piece("Mouth", Vector3.new(hw * 0.7, hh * 0.38, hd * 0.6), Color3.fromRGB(42, 6, 9))
+		local bowl = Instance.new("SpecialMesh")
+		bowl.MeshType = Enum.MeshType.Sphere
+		bowl.Parent = mouth
+		table.insert(jaw, { part = mouth, offset = CFrame.new(0, -hh * 0.16, hd * 0.06) })
+		local jawRoot = -hh * 0.02 - 0.225 * scale
+		-- THE LOWER JAW ITSELF (from the same test: the fangs stood on nothing): a pale chin under them, and red gum
+		-- along its top that the fangs stand in.
+		local chin = piece("Chin", Vector3.new(hw * 0.78, hh * 0.26, hd * 0.74), Color3.fromRGB(226, 212, 196))
+		local chinMesh = Instance.new("SpecialMesh")
+		chinMesh.MeshType = Enum.MeshType.Sphere
+		chinMesh.Parent = chin
+		table.insert(jaw, { part = chin, offset = CFrame.new(0, jawRoot - hh * 0.1, -hd * 0.02) })
+		local gum = piece("Gum", Vector3.new(hw * 0.68, hh * 0.08, hd * 0.6), flesh)
+		local gumMesh = Instance.new("SpecialMesh")
+		gumMesh.MeshType = Enum.MeshType.Sphere
+		gumMesh.Parent = gum
+		table.insert(jaw, { part = gum, offset = CFrame.new(0, jawRoot + 0.01, -hd * 0.05) })
+		for k = 1, 8 do
+			local a = (k - 4.5) / 3.5
+			-- Uneven, as teeth are: no two the same height (a level row was a cake's candles in the play test).
+			local len = 0.45 * scale * ({ 0.8, 1.35, 0.7, 1.0, 0.85, 1.1, 1.4, 0.75 })[k]
+			local tooth = piece("Fang", Vector3.new(0.07 * scale, len, 0.07 * scale), fang)
+			local spindle = Instance.new("SpecialMesh")
+			spindle.MeshType = Enum.MeshType.Sphere
+			spindle.Parent = tooth
+			-- round the front of the jaw, an arc
+			local lean = ({ -0.2, 0.1, -0.05, 0.18, -0.15, 0.06, -0.1, 0.2 })[k]
+			table.insert(jaw, { part = tooth, offset = CFrame.new(a * hw * 0.3, jawRoot, -hd * (0.26 - 0.1 * a * a))
+				* CFrame.Angles(-0.35, 0, lean - a * 0.3), len = len, dir = 1 })
+		end
+		-- SPIT, strung between the lid and the jaw: it stretches as he opens and snaps a strand at a time, each leaving a
+		-- drip hanging from the lid. Wet and dark, not bright.
+		strands = {}
+		local spit = Color3.fromRGB(112, 38, 42)
+		for i, x in ipairs({ -0.28, -0.12, 0.03, 0.15, 0.3 }) do
+			local function thread(name: string): BasePart
+				-- (0.035 was too fine to see from over your shoulder.)
+				local p = piece(name, Vector3.new(0.065, 0.065, 0.1) * scale, spit)
+				p.Reflectance = 0.18
+				p.Transparency = 1
+				return p
+			end
+			local u = x / 0.3
+			table.insert(strands, {
+				top = thread("Spit"),
+				bottom = thread("Spit"),
+				from = CFrame.new(x * hw, lidRoot + 0.04, -hd * 0.27),
+				to = CFrame.new(x * hw * 0.9, jawRoot, -hd * (0.24 - 0.1 * u * u)),
+				-- Two go on the throw open (its overshoot reaches about 1.1), the rest on the lunge.
+				snap = ({ 1.04, 1.14, 1.22, 1.08, 1.18 })[i],
+			})
+		end
+	end
 	-- Each half's pieces, by where they sit from its hinge (the back edge of the face on its side).
-	local halves = {}
-	for _, side in ipairs({ -1, 1 }) do
+	local halves = { [-1] = {}, [1] = {} }
+	for _, side in ipairs(if template then {} else { -1, 1 }) do
 		local list = {}
 		-- ROUND, a head's half (the hundred-and-thirty-third pass): blocks, they read as two slabs.
 		local half = piece("Half", Vector3.new(0.62, 1.8, 1.3) * SCREAM, skin)
@@ -972,27 +1362,112 @@ local function screamerFace(): Screamer
 		end
 		halves[side] = list
 	end
-	local throat = piece("Throat", Vector3.new(1.0, 1.4, 0.2) * SCREAM, flesh)
+	local throat = piece("Throat", if template then Vector3.new(0.6, 0.5, 0.2) else Vector3.new(1.0, 1.4, 0.2) * SCREAM, flesh)
 	throat.Name = "Throat"
+	if template then
+		-- Round and deep in the mouth, not a flat red square at the lens on the lunge.
+		local deep = Instance.new("SpecialMesh")
+		deep.MeshType = Enum.MeshType.Sphere
+		deep.Parent = throat
+	end
 	local gullet = Instance.new("PointLight")
 	gullet.Color = Color3.fromRGB(255, 70, 50)
 	gullet.Brightness = 0
-	gullet.Range = 9 * SCREAM
+	gullet.Range = if template then 4 else 9 * SCREAM
 	gullet.Shadows = false
 	gullet.Parent = throat
 	-- A pale light on his skin, from over the face, so the halves read as a head and not as slabs.
 	local pale = Instance.new("PointLight")
 	pale.Color = Color3.fromRGB(236, 230, 214)
-	pale.Brightness = 1.3
+	pale.Brightness = if template then 0.35 else 1.3
 	pale.Range = 7 * SCREAM
 	pale.Shadows = false
 	pale.Parent = throat
 	model.Parent = workspace.CurrentCamera
-	return { model = model, left = halves[-1], right = halves[1], gullet = gullet }
+	return { model = model, left = halves[-1], right = halves[1], gullet = gullet, lid = lid, jaw = jaw, hinge = hinge,
+		jawHinge = jawHinge, strands = strands, lidTurn = lidTurn, jawTurn = jawTurn, throatAt = throatAt, own = own,
+		scale = screamerScale, eyeOpen = 0 }
+end
+
+-- A fang where its gum is in `frame`, grown to `grow` of its length out of it.
+local function setFang(entry: Piece, frame: CFrame, grow: number)
+	local len, dir = entry.len, entry.dir
+	if not (len and dir) then
+		entry.part.CFrame = frame * entry.offset
+		return
+	end
+	local long = len * grow
+	local size = entry.part.Size
+	entry.part.Size = Vector3.new(size.X, long, size.Z)
+	entry.part.CFrame = frame * entry.offset * CFrame.new(0, dir * long / 2, 0)
+end
+
+-- A thread between two points, or hidden if there is nothing to draw.
+local function stretch(part: BasePart, a: Vector3, b: Vector3)
+	local d = (b - a).Magnitude
+	if d < 0.02 then
+		part.Transparency = 1
+		return
+	end
+	local size = part.Size
+	part.Size = Vector3.new(size.X, size.Y, d)
+	part.CFrame = CFrame.lookAt((a + b) / 2, b)
+	part.Transparency = 0
 end
 
 -- Where the face is (its centre's frame, facing you) and how far open (0 shut, 1 wide).
 local function placeScreamer(face: Screamer, at: CFrame, open: number)
+	local lid, jaw, hinge = face.lid, face.jaw, face.hinge
+	if lid and jaw and hinge then
+		-- The made head: up and back off his face on its hinge, the jaw where it was.
+		local tipped = at * hinge * CFrame.Angles((face.lidTurn or math.rad(40)) * open, 0, 0) * hinge:Inverse()
+		local jawHinge = face.jawHinge or CFrame.new()
+		local dropped = at * jawHinge * CFrame.Angles(-(face.jawTurn or math.rad(22)) * open, 0, 0) * jawHinge:Inverse()
+		-- The fangs come out of the gums as he opens, short at first, then their whole length and more.
+		local grow = 0.3 + 0.8 * math.clamp(open, 0, 1.3)
+		for _, entry in ipairs(lid) do
+			if entry.eyelid and face.scale and MarshMouth then
+				-- His lids, up and back into his head as his eyes open.
+				entry.part.CFrame = tipped * MarshMouth.lidTurn(entry.eyelid, face.scale, face.eyeOpen or 1)
+				continue
+			end
+			setFang(entry, tipped, grow)
+			-- Its fangs are inside his head until it lifts: not to be seen through his face.
+			if entry.part.Name == "Fang" then
+				entry.part.Transparency = if open > 0.05 then 0 else 1
+			end
+		end
+		for _, entry in ipairs(jaw) do
+			setFang(entry, dropped, grow)
+			-- Shut, the jaw is inside his head and not to be seen through it (his own jaw, MouthJaw, is his chin: always).
+			entry.part.Transparency = if open > 0.02 or entry.part.Name == "MouthJaw" then 0 else 1
+		end
+		-- The spit: sagging between the two while it holds, then a drip left hanging from the lid.
+		for _, strand in ipairs(face.strands or {}) do
+			local a = (tipped * strand.from).Position
+			local b = (dropped * strand.to).Position
+			-- Once snapped it stays snapped, though the mouth eases back a little after its first throw.
+			if open >= strand.snap then
+				strand.broken = true
+			end
+			if open <= 0.08 then
+				strand.top.Transparency, strand.bottom.Transparency = 1, 1
+			elseif not strand.broken then
+				local sag = (a + b) / 2 - Vector3.new(0, 0.12 * (b - a).Magnitude, 0)
+				stretch(strand.top, a, sag)
+				stretch(strand.bottom, sag, b)
+			else
+				stretch(strand.top, a, a - Vector3.new(0, 0.2, 0))
+				strand.bottom.Transparency = 1
+			end
+		end
+		local throat = face.model:FindFirstChild("Throat")
+		if throat and throat:IsA("BasePart") then
+			throat.CFrame = at * (face.throatAt or CFrame.new(0, -0.15, 0.35))
+			throat.Transparency = if open > 0.02 then 0 else 1
+		end
+		return
+	end
 	local swing = math.rad(78) * open
 	local h = 0.62 * SCREAM
 	for _, entry in ipairs(face.left) do
@@ -1017,6 +1492,52 @@ end
 -- LUNGES at you; black. The server takes you to the lobby in the black (Bootstrap waits for it).
 local CAUGHT = { loom = 0.35, face = 1.9, black = 3.5 }
 local LUNGE_AT = 1.15 -- seconds into his face that it lunges at you
+
+-- IN HIS HANDS (the hundred-and-sixty-seventh pass, from your note of 2026-11-03: "it incorrectly positions the
+-- characters in the hands of the monster"): BackRoomsService squared him up to you, Grip studs off; here, in the black
+-- before the lights come back, you are set exactly there, facing him, so his hands (StalkerClient's HOLD) close round
+-- you and not the air beside you. Your screen's own place for you is a step ahead of the server's, which is the gap this
+-- closes. Nothing is done if he was not squared up (no Grip on him).
+local function holdMe(character: Model?)
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local rooms = workspace:FindFirstChild("BackRooms")
+	if not (root and root:IsA("BasePart") and rooms) then
+		return
+	end
+	local holder: Model? = nil
+	local nearest = math.huge
+	for _, item in ipairs(rooms:GetChildren()) do
+		if item.Name == "Marsh" and item:IsA("Model") and item:GetAttribute("Caught") == true and item.PrimaryPart then
+			local gap = ((item.PrimaryPart :: BasePart).Position - root.Position).Magnitude
+			if gap < nearest then
+				holder, nearest = item, gap
+			end
+		end
+	end
+	local grip = holder and holder:GetAttribute("Grip")
+	if not (holder and holder.PrimaryPart and typeof(grip) == "number") then
+		return
+	end
+	local his = (holder.PrimaryPart :: BasePart).CFrame
+	local ahead = Vector3.new(his.LookVector.X, 0, his.LookVector.Z)
+	if ahead.Magnitude < 0.05 then
+		return
+	end
+	local spot = Vector3.new(his.Position.X, root.Position.Y, his.Position.Z) + ahead.Unit * grip
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.CFrame = CFrame.lookAt(spot, Vector3.new(his.Position.X, spot.Y, his.Position.Z))
+end
+
+-- THE CAMERA KEPT IN THE ROOM (the same pass): the rooms are four studs across in places, and a shot from eight studs to
+-- one side was in the wall. How far there is to look from, from `mid` along `way`, up to `most`.
+local function roomAlong(mid: Vector3, way: Vector3, most: number, ignore: { Instance }): number
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = ignore
+	local hit = workspace:Raycast(mid, way * most, params)
+	return if hit then hit.Distance else most
+end
+
 local function caught(data: { [string]: any })
 	local at = data.at
 	if not Cinema or typeof(at) ~= "Vector3" then
@@ -1042,8 +1563,11 @@ local function caught(data: { [string]: any })
 	local eye = camera.CFrame
 	local character = Players.LocalPlayer.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
+	holdMe(character)
 	local face: Screamer? = nil
-	local current = { thought = false, opened = false, lunged = false, hidden = {} :: { BasePart } }
+	local current = { thought = false, opened = false, lunged = false, hidden = {} :: { BasePart },
+		mine = {} :: { [BasePart]: boolean },
+		side = nil :: Vector3?, ignore = (if character then { character } else {}) :: { Instance } }
 	local began = os.clock()
 	local loomed = false
 	local struck = false
@@ -1055,6 +1579,9 @@ local function caught(data: { [string]: any })
 			hook:Disconnect()
 			if face then
 				face.model:Destroy()
+			end
+			for item in pairs(current.mine) do
+				item.LocalTransparencyModifier = 0
 			end
 			return
 		end
@@ -1076,7 +1603,7 @@ local function caught(data: { [string]: any })
 			Cinema.cut()
 			sound("MawGrowl", "rbxasset://sounds/bass.mp3", 0.8, 0.7)
 			Cinema.shake(1.4)
-			Cinema.impact(0.6)
+			Cinema.impact(0.6, true)
 		end
 		if t >= CAUGHT.loom + 0.45 and not current.thought then
 			current.thought = true
@@ -1086,49 +1613,113 @@ local function caught(data: { [string]: any })
 			struck = true
 			face = screamerFace()
 			Cinema.cut()
+			-- Your thought gone with the cut (the two-hundred-and-twenty-fifth pass: "What IS that?!" hung on into his face).
+			local gui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+			local thought = gui and gui:FindFirstChild("CinemaThought")
+			if thought then
+				thought:Destroy()
+			end
 			-- His own head put out of the way on this screen: the face that opens is in its place.
 			if headPart and headPart:IsA("BasePart") then
 				for _, item in ipairs(headPart.Parent and headPart.Parent:GetDescendants() or {}) do
 					if item:IsA("BasePart") and (item == headPart or item:IsDescendantOf(headPart)
-						or item.Name == "Seam" or item.Name == "Face") then
+						or item.Name == "Seam" or item.Name == "Face" or item.Name == "MadeHead"
+						or string.sub(item.Name, 1, 5) == "Mouth") then
 						item.LocalTransparencyModifier = 1
 						table.insert(current.hidden, item)
 					end
 				end
 			end
-			-- OVER YOUR SHOULDER, back far enough to see all of his head.
-			eye = CFrame.lookAt(his - toward * 5.6 + across * 1.7 + Vector3.new(0, 0.5, 0), his)
+			-- OVER YOUR SHOULDER, back far enough to see all of his head (and never past a wall behind you).
+			-- Aimed a little over his head, so the lid going up stays in the picture and does not fill the top of it.
+			local aim = his + Vector3.new(0, 0.45, 0)
+			-- FROM WHERE THERE IS ROOM (pass 223's play test: from behind you in a four-stud room the wall stopped the lens
+			-- two studs off his face). Over your shoulder if that way has the room, else along whichever way out of the
+			-- room has most, never more than 5.9 off.
+			local back = (-toward * 5.9 + across * 1.7).Unit
+			local best, room = back, roomAlong(aim, back, 6.5, current.ignore)
+			for _, way in ipairs({ (-toward + across).Unit, (-toward - across).Unit, across, -across }) do
+				local here = roomAlong(aim, way, 6.5, current.ignore) * 0.85
+				if room < 5 and here > room then
+					best, room = way, here
+				end
+			end
+			local off = math.clamp(room - 0.5, 1.5, 5.9)
+			eye = CFrame.lookAt(Cinema.clear(aim + best * off + Vector3.new(0, 0.05, 0), aim, current.ignore), aim)
 		end
 		if face then
 			local s = t - CAUGHT.face
-			local open = math.clamp((s - 0.35) / 0.3, 0, 1)
-			if open > 0 and not current.opened then
+			-- THE THROW OPEN: a beat shut, shuddering harder; then flung open past wide and easing back (an overshoot),
+			-- quivering as he roars; wider again as he comes at you.
+			local p = math.clamp((s - 0.35) / 0.26, 0, 1)
+			local q = p - 1
+			local open = if p <= 0 then 0 else 1 + 2.70158 * q * q * q + 1.70158 * q * q
+			local lunge = math.clamp((s - LUNGE_AT) / 0.35, 0, 1) ^ 2
+			if p >= 1 then
+				open += 0.035 * math.sin(s * 26) + 0.25 * lunge
+			end
+			local quake = if p <= 0 then 0.07 * math.clamp(s / 0.35, 0, 1) else 0.018
+			local shudder = CFrame.Angles(math.noise(s * 31, 0.5) * quake, math.noise(s * 29, 7.5) * quake,
+				math.noise(s * 33, 13.5) * quake)
+			if p > 0 and not current.opened then
 				current.opened = true
 				for light, brightness in pairs(was) do
-					light.Brightness = brightness * 1.6
+					light.Brightness = brightness * 1.25
 				end
 				sound("ScreamerStab", "rbxasset://sounds/bass.mp3", 1, 1)
 				sound("MawRoar", "rbxasset://sounds/bass.mp3", 1, 0.8)
-				Cinema.impact(1.6)
+				Cinema.impact(1.6, true)
 				Cinema.shake(3)
 			end
-			local lunge = math.clamp((s - LUNGE_AT) / 0.35, 0, 1) ^ 2
 			if lunge > 0 and not current.lunged then
 				current.lunged = true
-				Cinema.impact(2)
+				Cinema.impact(2, true)
 				Cinema.shake(4)
 			end
-			-- His face where his head is, facing you, and on the lunge flying at the lens.
+			-- His face where his head is, facing you, and on the lunge flying at the lens, his head cocking as it comes.
 			local from = his:Lerp(eye.Position + eye.LookVector * 1.4, lunge)
-			placeScreamer(face, CFrame.lookAt(from, eye.Position), open)
-			face.gullet.Brightness = 2 + 3 * open + math.random() * 1.5
-			Cinema.point(eye, 52 + 12 * lunge)
+			-- HIS EYES FLY OPEN (the two-hundred-and-twenty-eighth pass): half open as the shot comes, then wide, a beat
+			-- before his mouth.
+			face.eyeOpen = 0.45 + 0.55 * math.clamp((s - 0.1) / 0.08, 0, 1)
+			placeScreamer(face, CFrame.lookAt(from, eye.Position) * CFrame.Angles(0, 0, 0.22 * lunge) * shudder, open)
+			-- NOTHING OF YOURS IN THE WAY (pass 222's play test: a big hair took half the picture): your head and what you
+			-- wear on it, where it lies across the line from the lens to his face, kept out of this shot. Your shoulder
+			-- and body stay, so you are still seen there.
+			if character then
+				local lens = eye.Position
+				local line = from - lens
+				for _, item in ipairs(character:GetDescendants()) do
+					if item:IsA("BasePart") and (item.Name == "Head" or item:FindFirstAncestorWhichIsA("Accessory")) then
+						local k = math.clamp((item.Position - lens):Dot(line) / line:Dot(line), 0, 1)
+						local off = (lens + line * k - item.Position).Magnitude
+						if off < item.Size.Magnitude * 0.5 + 0.5 then
+							item.LocalTransparencyModifier = 1
+							current.mine[item] = true
+						end
+					end
+				end
+			end
+			face.gullet.Brightness = 2 + 3 * math.min(open, 1) + 1.2 * math.sin(s * 19) ^ 2 + math.random() * 0.6
+			-- WIDER WHERE THE WALLS PUSH THE LENS IN (pass 223's play test: in the four-stud rooms the camera came to two
+			-- studs off and his face filled the screen, nostrils and all, before it opened). Wide enough to hold about four
+			-- studs of him, his head and the lid going up.
+			local near = (eye.Position - his).Magnitude
+			local fits = math.deg(2 * math.atan(2.1 / math.max(near, 0.5)))
+			Cinema.point(eye, math.clamp(math.max(52 + 5 * math.min(open, 1), fits), 40, 88) + 10 * lunge)
 		elseif loomed then
-			-- HE HAS YOU: side on, far enough off to see all of it, you and him folded down over you, easing in.
+			-- HE HAS YOU: side on, far enough off to see all of it, you and him folded down over you, easing in. From the
+			-- side with the more room, chosen once; where neither side has room for it (a corridor), from behind you and
+			-- a little to one side, along it; and never past a wall.
 			local k = math.clamp((t - CAUGHT.loom) / (CAUGHT.face - CAUGHT.loom), 0, 1)
 			local mid = me:Lerp(his, 0.5) + Vector3.new(0, 0.6, 0)
-			local from = mid + across * (8 - 1.5 * k) - toward * 1 + Vector3.new(0, 1.8, 0)
-			Cinema.point(CFrame.lookAt(from, mid), 60 - 4 * k)
+			if not current.side then
+				local left, right = roomAlong(mid, across, 8, current.ignore), roomAlong(mid, -across, 8, current.ignore)
+				current.side = if math.max(left, right) >= 5 then (if left >= right then across else -across)
+					else (across * 0.45 - toward).Unit
+			end
+			local side = current.side :: Vector3
+			local want = mid + side * (8 - 1.5 * k) - toward * 1 + Vector3.new(0, 1.8, 0)
+			Cinema.point(CFrame.lookAt(Cinema.clear(want, mid, current.ignore), mid), 60 - 4 * k)
 		else
 			Cinema.point(eye, 70)
 		end
@@ -1140,6 +1731,9 @@ local function caught(data: { [string]: any })
 				face = nil
 			end
 			for _, item in ipairs(current.hidden) do
+				item.LocalTransparencyModifier = 0
+			end
+			for item in pairs(current.mine) do
 				item.LocalTransparencyModifier = 0
 			end
 			for light, brightness in pairs(was) do
@@ -1274,11 +1868,76 @@ local function stoppedWaiting(model: Instance)
 	model.DescendantAdded:Connect(hide)
 end
 
+-- HE COMES NEARER (the hundred-and-seventy-second pass): the Watcher on the way ahead of you (StoryService's
+-- watcherAhead) is gone before you reach him. Within AHEAD.near studs he fades in AHEAD.fade seconds, with a breath
+-- under everything, and is not seen again where he stood.
+local AHEAD = { near = 34, fade = 0.7 }
+local function aheadGone(model: Instance)
+	if model.Name ~= "Watcher" then
+		return
+	end
+	local function watch()
+		local hook
+		hook = RunService.Heartbeat:Connect(function()
+			local character = Players.LocalPlayer.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+			local his = model:FindFirstChild("HumanoidRootPart")
+			if not model.Parent then
+				hook:Disconnect()
+				return
+			end
+			if not (root and root:IsA("BasePart") and his and his:IsA("BasePart"))
+				or (root.Position - his.Position).Magnitude > AHEAD.near then
+				return
+			end
+			hook:Disconnect()
+			sound("MawGrowl", "rbxasset://sounds/bass.mp3", 0.22, 0.55)
+			local began = os.clock()
+			local fade
+			fade = RunService.Heartbeat:Connect(function()
+				local k = math.clamp((os.clock() - began) / AHEAD.fade, 0, 1)
+				for _, item in ipairs(model:GetDescendants()) do
+					if item:IsA("BasePart") or item:IsA("Decal") then
+						item.LocalTransparencyModifier = math.max(item.LocalTransparencyModifier, k)
+					end
+				end
+				if k >= 1 or not model.Parent then
+					fade:Disconnect()
+					-- GONE IS GONE (the hundred-and-seventy-ninth pass): nothing of him left on this screen to walk into or
+					-- to catch the camera, in the group that meets nothing (StoryService's apparitions), whatever the
+					-- server has him in.
+					for _, item in ipairs(model:GetDescendants()) do
+						if item:IsA("BasePart") then
+							item.CanQuery = false
+							pcall(function()
+								item.CollisionGroup = "Apparitions"
+							end)
+						end
+					end
+				end
+			end)
+		end)
+	end
+	-- (Written on him by the server just after he is made, so it may arrive a moment after he does.)
+	if model:GetAttribute("Ahead") == true then
+		watch()
+	else
+		local waiting
+		waiting = model:GetAttributeChangedSignal("Ahead"):Connect(function()
+			if model:GetAttribute("Ahead") == true then
+				waiting:Disconnect()
+				watch()
+			end
+		end)
+	end
+end
+
 local function startTellers()
 	local function add(model: Instance)
 		if model:IsA("Model") and not tellers[model] then
 			tellers[model] = { joints = nil, at = nil, clock = 0, playing = false }
 			stoppedWaiting(model)
+			aheadGone(model)
 		end
 	end
 	-- The people, and (the hundred-and-nineteenth pass) any player saying a line of their own (Townsfolk.speakAs tags
@@ -1344,6 +2003,14 @@ function StoryClient.start()
 			endScene()
 		end)
 	end
+	-- His head cut at the lips, in the background, ready for when he opens it (MarshMouth).
+	if MarshMouth then
+		task.spawn(MarshMouth.prepare)
+		-- And the lobby leviathan's jaw (the two-hundred-and-twenty-ninth pass).
+		if MarshMouth.leviathan then
+			task.spawn(MarshMouth.leviathan)
+		end
+	end
 	-- The people's gestures first: they need nothing but the people.
 	startTellers()
 	oneOfARow()
@@ -1391,5 +2058,5 @@ function StoryClient.start()
 	print("StoryClient: running, " .. StoryClient.VERSION)
 end
 
-StoryClient.STAMP = "fb1f02a8"
+StoryClient.STAMP = "3da889d8"
 return StoryClient

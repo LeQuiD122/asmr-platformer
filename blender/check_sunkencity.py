@@ -176,8 +176,8 @@ panel_bottom = -M["GANTRY_BEAM_DEPTH"] + panel_y - panel_h / 2
 if top_of_thing > panel_bottom - 1:
     fail("the thing's back reaches %.1f under the surface and the road signs hang to %.1f"
          % (top_of_thing, panel_bottom))
-if -(K["MONSTER_DEPTH"] + K["MONSTER_BOB"]) - g_down < -K["FLOOR_DEPTH"] + 5:
-    fail("the thing swims into the sea floor")
+if -(K["MONSTER_DEPTH"] + K["MONSTER_BOB"] + P.get("DIVE", 0.0)) - g_down < -K["FLOOR_DEPTH"] + 5:
+    fail("the thing swims into the sea floor (on its way back, DIVE deeper)")
 # The two things you can walk into stand beside the street: its body must clear both.
 tower_face = CAP_HALF + K["AQ_NECK"] - K["ROT_WALL"]
 if tower_face - body < 1:
@@ -212,9 +212,72 @@ for needle, why in (
     ("function SunkenPath.along", "SunkenPath has no patrol along the route"),
     ('model:GetAttribute("MonsterLine")', "SunkenPath never reads the route's line"),
     ("function SunkenPath.drainFrame", "the drain's ride is not shared, so the client cannot draw it"),
+    ("function SunkenPath.drainShare(t: number, seconds: number): number", "the drain's clock is not shared"),
 ):
     if needle not in PATH_SOURCE:
         fail(why)
+# THE PULL IS QUICK (205), from your note of 2026-11-07: "the whirlpool should suck me down in the first animation a bit
+# faster". The funnel takes FUNNEL_TIME of the ride's time, under its half, and the shaft keeps its own; the rider's
+# client and the server both run the clock through drainShare, so they agree where the rider is.
+funnel_time = re.search(r"^SunkenPath\.FUNNEL_TIME = ([\d.]+)", PATH_SOURCE, re.M)
+drain_seconds = re.search(r"^SunkenPath\.DRAIN_SECONDS = ([\d.]+)", PATH_SOURCE, re.M)
+if not funnel_time or not 0.3 <= float(funnel_time.group(1)) < 0.5:
+    fail("the whirlpool takes half the ride or more to pull you down the funnel again (FUNNEL_TIME)")
+elif drain_seconds and float(drain_seconds.group(1)) * (1 - float(funnel_time.group(1))) < 6.5:
+    fail("the drop down the shaft is quicker than it was (under 6.5 seconds), not only the funnel")
+if "local u = SunkenPath.drainShare(t, current.seconds)" not in CLIENT_SOURCE:
+    fail("the rider's client runs the drain's clock evenly, slow through the funnel")
+if "SunkenPath.drainShare(t, seconds)" not in CITY_SOURCE:
+    fail("the server runs the drain's clock evenly, and puts a rider it is moving somewhere else")
+
+# THE AQUARIUM (205), from your note of 2026-11-07: "I want some sort of underwater fog so that I can't see everything
+# that is underwater to create a scarier atmosphere, also I don't want these holes where the aquarium triangle transfer
+# starts, and I don't want my camera to be able to move beyond the aquarium's glass". Both of the tunnel's mouths closed
+# round it (slabs, a wedge under each slope of its roof, a band over the ridge); the tower, the tunnel and the gallery
+# marked as rooms the camera keeps to, those under the water murky; the camera held in them; the murk on your screen.
+aq_fn = CITY_SOURCE[CITY_SOURCE.find("local function aquarium("):CITY_SOURCE.find("-- ===== WATER YOU CAN SWIM IN =====")]
+for needle, why in (
+    ("mouth(xc + ROT_R - ROT_WALL / 2 - 0.5, ROT_WALL + 2.4, ROT_R * math.sin(math.pi * 3 / ROT_SEGMENTS) + 1,",
+     "the tunnel's mouth in the tower is open round its roof"),
+    ("mouth(tunnelTo - 0.8, 1.2, TUNNEL_W / 2 + 0.6, ty + TUNNEL_H, wallColour)", "the tunnel's mouth into the gallery is open round its roof"),
+    ('local wedge = Instance.new("WedgePart")', "the triangles beside the tunnel's roof are not filled"),
+    ("* (if side < 0 then CFrame.Angles(math.pi, 0, 0) else CFrame.Angles(0, 0, math.pi))",
+     "a wedge beside the roof is turned so it fills the tunnel instead of the hole"),
+    ('CollectionService:AddTag(keep, "CameraRoom")', "the aquarium's rooms are not marked for the camera"),
+    ('keep:SetAttribute("Murk", murky)', "the aquarium's rooms do not say which are under the water"),
+    ("cameraRoom(Vector3.new(ROOM_L - 0.6, ROOM_H - 0.6, ROOM_W - 0.6), room * CFrame.new(0, ty + ROOM_H / 2, 0), true)",
+     "the camera can leave the gallery through its window"),
+    ("local tunnelBack = xc + square / 2 - 1", "the tunnel's camera room does not reach back into the tower's"),
+):
+    if needle not in aq_fn:
+        fail("SunkenCityService: " + why)
+if aq_fn.count("mouth(") < 3:
+    fail("SunkenCityService: the tunnel's mouths are not both closed")
+VIEW = (SRC / "Client" / "Services" / "ViewModeService.lua").read_text(encoding="utf-8").replace("\r\n", "\n")
+for needle, why in (
+    ('CollectionService:GetInstanceAddedSignal("CameraRoom"):Connect(added)', "the camera never learns the rooms it keeps to"),
+    ("if #keep.rooms == 0 or not keep.inside(head) then", "the camera is held in a room you are not in"),
+    ("camera.CFrame = CFrame.new(last) * camera.CFrame.Rotation", "the camera is not brought back inside the room"),
+    ('if state.view == "third" and not scene then\n\t\tkeep.hold(', "the camera is held during a scene or in first person"),
+    ("\tkeep.watch()\n", "the camera's rooms are never watched for"),
+):
+    if needle not in VIEW:
+        fail("ViewModeService: " + why)
+murk = re.search(r"MURK = \{ density = ([\d.]+), colour = Color3\.fromRGB\((\d+), (\d+), (\d+)\)", CLIENT_SOURCE)
+if not murk or float(murk.group(1)) < 0.4:
+    fail("SunkenCityClient: the aquarium's water is clear to the far end (its murk under 0.4)")
+elif max(int(murk.group(i)) for i in (2, 3, 4)) > 90:
+    fail("SunkenCityClient: the aquarium's murk is a pale haze, not dark water")
+for needle, why in (
+    ('track("CameraRoom", function(item)\n\t\tif item:IsA("BasePart") and item:GetAttribute("Murk") == true then',
+     "the murky rooms are never collected"),
+    ("guard(\"the aquarium's murk\", aquarium.step, at)", "the murk is never stepped"),
+    ("if at and under == nil then", "the murk fights the drain's own water"),
+    ("if atmosphere.Parent and math.abs(atmosphere.Density - MURK.density) < 0.05 then",
+     "the murk puts back air someone else has set since"),
+):
+    if needle not in CLIENT_SOURCE:
+        fail("SunkenCityClient: " + why)
 
 # The server takes only Hardcore players, only above the water, only outside the shelters; the
 # mirror only a Hardcore player, once a server.
@@ -244,7 +307,7 @@ steps = ("noteFall(player)", "TimerService.resetTimer(player)", "syncTimer(playe
          "hrp.CFrame = CFrame.new(levelInstance.startPosition + Vector3.new(0, 3, 0))")
 send = BOOT[BOOT.find("sendBackToStart = function"):]
 send = send[:send.find("\nend\n")]
-branch = BOOT[BOOT.find('if state.mode == "hardcore" then', BOOT.find("if hrp.Position.Y < killY")):]
+branch = BOOT[BOOT.find('if state.mode == "hardcore" then', BOOT.find("local fell = hrp.Position.Y < killY")):]
 branch = branch[:branch.find("else")]
 for step in steps:
     if step not in send:
@@ -497,12 +560,12 @@ if not block:
 for needle, why in (
     ("SunkenCityService.build(levelInstance", "Bootstrap never builds the city"),
     ("SunkenCityService.attach(", "Bootstrap never attaches the drain"),
-    ("finishRunFor(player)", "the drain does not finish the run"),
+    ("finishFrom(levelInstance)", "the drain does not finish the run"),
     ("finishPart.CanTouch = false", "the old finish line is not stood down, so the pier ends the run"),
 ):
     if block and needle not in block:
         fail(why)
-kill_line = BOOT[BOOT.index("if hrp.Position.Y < killY"):]
+kill_line = BOOT[BOOT.index("local fell = hrp.Position.Y < killY"):]
 kill_line = kill_line[:kill_line.index(" then")]
 if "SunkenCityService.ownsFall(player)" not in kill_line:
     fail("the kill plane does not exempt a drain rider, so the ride ends at the kill plane")
@@ -1376,10 +1439,19 @@ else:
     if math.atan(turn) > S_["SWAY_TURN"] + 0.005:
         fail("the thing turns up to %.2f off the path and gen_serpent.py measures its fluke at %.2f"
              % (math.atan(turn), S_["SWAY_TURN"]))
+# THE CREST IN SHORT PIECES (the two-hundred-and-second pass, seen in play): as one plate, its faces were long triangles
+# from near the head to near the tail, each corner on its own bone, and in every bend they cut straight across the loop:
+# the flat striped web. A strip of pieces CREST_STEP studs along the keel bends with the body under each.
+crest_gen = SERPENT_GEN[SERPENT_GEN.find("def crest(bm):"):SERPENT_GEN.find("def fluke(bm):")]
+crest_step = re.search(r"^CREST_STEP = ([\d.]+)", SERPENT_GEN, re.M)
+if "G.plate(" in crest_gen:
+    fail("the serpent's crest is one plate again, and its long faces stretch into a web across every turn")
+elif not crest_step or float(crest_step.group(1)) > 2.0 or "s += CREST_STEP" not in crest_gen:
+    fail("the serpent's crest is not made in short pieces along the keel, so it cuts across the body's bends")
 for needle, why in (
     ("SunkenPath.body(b, t, -0.5 * SPACING, SPACING, SEGMENTS + 1, thingPoints)",
      "the serpent is not laid on the path's own points"),
-    ("SeaRig.follow(mesh.chain, mesh.rig.rest, joints, true, mesh.posed)",
+    ("SeaRig.follow(mesh.chain, mesh.rig.rest, joints, true, mesh.posed, mesh.across)",
      "the serpent is not kept level, so it rolls over where it turns back"),
     ("if b and (#segments > 0 or thingMesh) then", "the thing is only moved when it is built from parts"),
     ("function SunkenPath.body", "SunkenPath cannot give the whole body at once"),
@@ -1692,7 +1764,12 @@ say_body = say_body[:say_body.find("\nend\n")]
 if "gui.AlwaysOnTop = true" not in say_body:
     fail("a speech bubble can be hidden behind the room")
 # ONE SIZE OF TEXT FOR EVERY LINE (twentieth pass): the bubble fits the words, the words never fit the bubble.
-if "label.TextSize = if shout then SHOUT_TEXT else SPEECH_TEXT" not in say_body or "TextScaled" in say_body         or "label.AutomaticSize = Enum.AutomaticSize.XY" not in say_body:
+# (The two-hundredth pass: the bubble is sized by laidOut, to its words or, for a long line, to its whole width.)
+laid_body = NPC_SOURCE[NPC_SOURCE.find("local function laidOut(label: TextLabel, text: string)"):]
+laid_body = laid_body[:laid_body.find("\nend\n")]
+if "label.TextSize = if shout then SHOUT_TEXT else SPEECH_TEXT" not in say_body or "TextScaled" in say_body \
+        or "laidOut(label, text)" not in say_body \
+        or "label.AutomaticSize = if long then Enum.AutomaticSize.Y else Enum.AutomaticSize.XY" not in laid_body:
     fail("a speech bubble's words are scaled to its box again, so the same person shouts one line and mutters the next")
 # EVERYTHING THEY SAY, from the lines to the end of the reactions, however long the lines grow (a
 # fixed window stopped short of the reactions once the story got longer).

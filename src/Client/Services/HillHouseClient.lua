@@ -272,6 +272,8 @@ local function beginScene(model: Model)
 	hideKey(model, false)
 	Cinema.begin()
 	Cinema.sound("KeyLift", 0.5, { keep = true })
+	-- THE SCORE (the two-hundred-and-eleventh pass): warm and held, until the clock goes again.
+	Cinema.score("Hill")
 	Cinema.caption("Hill House", "His key, on its green ribbon. Where you left it last night.", 6)
 end
 
@@ -326,6 +328,7 @@ local function stepScene()
 			current.started = true
 			swinging[model] = os.clock()
 			Cinema.sound("ClockStart", 0.6, { keep = true })
+			Cinema.climax(1.06)
 			Cinema.caption("His clock", "Four minutes to midnight since 1979. It is going again.", 5)
 		end
 	else
@@ -403,5 +406,5 @@ function HillHouseClient.start()
 	print("HillHouseClient: running, " .. HillHouseClient.VERSION)
 end
 
-HillHouseClient.STAMP = "899d813c"
+HillHouseClient.STAMP = "940260b5"
 return HillHouseClient

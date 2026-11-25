@@ -78,6 +78,43 @@ SIZES = ((16.0, 8.0), (12.0, 10.0))
 # coating drapes instead. It must be <= 0 everywhere so the top of the mesh is unchanged and
 # the measured surfaceOffset stays valid.
 RELIEF = None
+# How finely a draped shard is cut (add_draped_plate): its outline in pieces at most this long, and this many rings
+# toward its middle. Only used with a RELIEF; the flat shells are as they were.
+DRAPE_STEP = 0.35
+DRAPE_RINGS = 5
+# The grid a draped shard's top is cut on: across the grooves (z) finely, along them (x) coarsely.
+DRAPE_ACROSS = 0.2
+DRAPE_ALONG = 0.4
+
+
+def clip_to_box(poly, x0, z0, x1, z1):
+    """A convex polygon cut to an axis-aligned box (Sutherland-Hodgman), winding kept."""
+    def cut(points, inside, cross):
+        out = []
+        for k in range(len(points)):
+            a, b = points[k - 1], points[k]
+            ina, inb = inside(a), inside(b)
+            if inb:
+                if not ina:
+                    out.append(cross(a, b))
+                out.append(b)
+            elif ina:
+                out.append(cross(a, b))
+        return out
+
+    def at_x(xv):
+        return lambda a, b: (xv, a[1] + (b[1] - a[1]) * (xv - a[0]) / (b[0] - a[0]))
+
+    def at_z(zv):
+        return lambda a, b: (a[0] + (b[0] - a[0]) * (zv - a[1]) / (b[1] - a[1]), zv)
+
+    pts = list(poly)
+    for inside, cross in ((lambda p: p[0] >= x0, at_x(x0)), (lambda p: p[0] <= x1, at_x(x1)),
+                          (lambda p: p[1] >= z0, at_z(z0)), (lambda p: p[1] <= z1, at_z(z1))):
+        if not pts:
+            break
+        pts = cut(pts, inside, cross)
+    return pts
 
 
 def relief_at(x, z):
@@ -404,6 +441,73 @@ def build_shards(size_x, size_z, name, seed):
     # Both plates share one outline, and it is the band's outer face (see PLATE_CORNER).
     plate_bound = rounded_rect(plate_x, plate_z, PLATE_CORNER, PLATE_CORNER_STEPS)
 
+    def add_draped_plate(shape, top_z, tier):
+        """A top shard that FOLLOWS a relief (the butter sticks, the two-hundred-and-forty-third pass).
+
+        A shard was its outline and nothing inside it, so the relief could only move its corners: a shard
+        across a groove between two sticks stayed one flat tilted polygon, and the coating came out as a
+        crumpled heap instead of three draped ridges (seen in Roblox, 2026-11-22). Now the outline is cut
+        into short pieces and the inside into rings toward the middle, every point raised or lowered by the
+        relief, so the shard bends into the groove with the butter. The underside of the shard is the
+        same outline fanned from its middle (it is never seen, only its thickness is).
+        """
+        # Short enough to follow a stick's rounded shoulder, few enough to stay under Roblox's 20,000
+        # triangles for the whole coating.
+        step = DRAPE_STEP
+        ring_count = DRAPE_RINGS
+        edge = []
+        m = len(shape)
+        for k in range(m):
+            ax, az = shape[k]
+            bx, bz = shape[(k + 1) % m]
+            pieces = max(1, int(math.ceil(math.hypot(bx - ax, bz - az) / step)))
+            for p in range(pieces):
+                t = p / pieces
+                edge.append((ax + (bx - ax) * t, az + (bz - az) * t))
+        n = len(edge)
+        cx = sum(p[0] for p in shape) / m
+        cz = sum(p[1] for p in shape) / m
+        start = len(verts)
+        # Top: cut on a GRID LINED UP WITH THE GROOVES (fine across them, coarse along them), each grid square
+        # clipped to the shard. Rings toward the middle crossed the steep sides of a groove at every angle and
+        # left them jagged; lines parallel to the groove make its sides straight.
+        xs = [p[0] for p in shape]
+        zs = [p[1] for p in shape]
+        gx0 = math.floor(min(xs) / DRAPE_ALONG) * DRAPE_ALONG
+        gz0 = math.floor(min(zs) / DRAPE_ACROSS) * DRAPE_ACROSS
+        gx = gx0
+        while gx < max(xs):
+            gz = gz0
+            while gz < max(zs):
+                piece = clip_to_box(shape, gx, gz, gx + DRAPE_ALONG, gz + DRAPE_ACROSS)
+                if len(piece) >= 3 and polygon_area(piece) > 1e-5:
+                    first = len(verts)
+                    for x, z in piece:
+                        verts.append((x, z, top_z + relief_at(x, z)))
+                    for k in range(1, len(piece) - 1):
+                        faces.append((first, first + k, first + k + 1))
+                gz += DRAPE_ACROSS
+            gx += DRAPE_ALONG
+        # The outline's own points on top, for the walls below.
+        top_edge = len(verts)
+        for x, z in edge:
+            verts.append((x, z, top_z + relief_at(x, z)))
+        # Underneath, a shell's thickness lower everywhere: the outline and its middle.
+        under = len(verts)
+        for x, z in edge:
+            verts.append((x, z, top_z - SHELL_THICKNESS + relief_at(x, z)))
+        centre_under = len(verts)
+        verts.append((cx, cz, top_z - SHELL_THICKNESS + relief_at(cx, cz)))
+        for k in range(n):
+            faces.append((under + (k + 1) % n, under + k, centre_under))
+        # The walls, only where the shard meets the coating's own edge (as the flat plates do).
+        for k in range(n):
+            nk = (k + 1) % n
+            if on_outer_edge(edge[k], edge[nk], plate_bound):
+                faces.append((top_edge + k, under + k, under + nk, top_edge + nk))
+        groups.append({"first": start, "last": len(verts) - 1, "tier": tier,
+                       "cx": cx, "cz": cz, "area": polygon_area(shape)})
+
     def add_plate(top_z, facing_up, tier):
         """A flat fractured slab, used for both the top of the coating and the plate
         underneath it. `facing_up` flips the winding so the outward face is the one you
@@ -416,6 +520,9 @@ def build_shards(size_x, size_z, name, seed):
         for poly in voronoi_cells(make_seeds(plate_x, plate_z, rng), plate_bound):
             shape = inset(poly, GROOVE) if GROOVE > 0 else poly
             if len(shape) < 3 or polygon_area(shape) < MIN_SHARD_AREA:
+                continue
+            if facing_up and RELIEF is not None:
+                add_draped_plate(shape, top_z, tier)
                 continue
             start = len(verts)
             n = len(shape)

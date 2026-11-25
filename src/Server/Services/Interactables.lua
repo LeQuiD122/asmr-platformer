@@ -32,6 +32,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Debris = game:GetService("Debris")
 -- One look for the whole game (the ninety-ninth pass): every face, colour, corner and outline.
 local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Style"))
+-- When a lever's heaves come and when its lid gives (Poses.LEVER), the same clock the player's own screen acts it by.
+local Poses = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Poses"))
 
 local Interactables = {}
 
@@ -642,7 +644,11 @@ end
 -- tug, PRY_SECONDS later, rather than flying open before anyone has touched it. `on.secret` names what is in it.
 -- `strike`: swung into, not levered (the bricks): the scene is three blows (StoryClient), and it is told which way is
 -- out of the thing (the host's LookVector).
-type Handlers = { open: (Player) -> (), look: (Player) -> (), secret: string?, strike: boolean? }
+-- `lever`: borne down on, not tugged (the tin box, the two-hundred-and-seventh pass): the thing works its own lid as
+-- the heaves come (`lever` is called as the scene begins and runs Poses.LEVER's clock), gives when that clock says, and
+-- the scene is told which part is its `lid`, so the bar can be kept under its edge.
+type Handlers = { open: (Player) -> (), look: (Player) -> (), secret: string?, strike: boolean?, lever: ((Player) -> ())?,
+	lid: BasePart? }
 local PRY_SECONDS = 1.75
 local function openable(host: BasePart, action: string, object: string, needsBar: boolean, refusal: string,
 	on: Handlers): ProximityPrompt
@@ -664,9 +670,15 @@ local function openable(host: BasePart, action: string, object: string, needsBar
 				if remote then
 					remote:FireClient(player, "pry", { at = host.Position, object = object,
 						think = if secret and secret.think then secret.think[1] else "Let's see what's in here.",
-						strike = on.strike == true, out = host.CFrame.LookVector })
+						strike = on.strike == true, out = host.CFrame.LookVector, lever = on.lever ~= nil, lid = on.lid,
+						half = host.Size.Y / 2 })
 				end
 				wait = PRY_SECONDS
+				local lever = on.lever
+				if lever then
+					wait = Poses.LEVER.gives
+					task.spawn(lever, player)
+				end
 			end
 			task.delay(wait, function()
 				on.open(player)
@@ -853,12 +865,57 @@ function Interactables.locker(parent: Instance, base: CFrame, opts: { label: str
 end
 
 -- A small tin box with a lid, on `base`, that the bar opens.
+--
+-- LEVERED OPEN, AND SEEN TO BE (the two-hundred-and-seventh pass, from your note of 2026-11-10: "improve the animation
+-- drastically for the level 2 chest that should be prised up with a bar"). The lid did nothing for the whole of the
+-- bar's work and then swung open by itself. Now the lid is worked: it strains up on each of the three heaves
+-- (LOCKBOX.strain, on Poses.LEVER's clock, which the player's own screen acts by), drops back rattling after the first
+-- two but not quite shut (LOCKBOX.kept), and is held up shaking through the last; then the clasp snaps off and is
+-- thrown clear, and the lid is flung back and bounces on its hinge. And there is something to see in it: the dark of
+-- the box, the photograph lying in it, and a warm light out of it as it opens. All of it here, on the server, so
+-- everyone in the pool sees the same box.
+-- (The strain is what a clasp still holding allows: the lid's front edge a tenth of a stud up, then a fifth, then a
+-- third, and only then the clasp goes. At nineteen degrees the lid stood open over a clasp that had not moved.)
+local LOCKBOX = { strain = { math.rad(4), math.rad(8), math.rad(13) }, kept = { math.rad(1), math.rad(3) },
+	open = math.rad(108) }
 function Interactables.lockbox(parent: Instance, base: CFrame, secret: string, eye: CFrame)
 	local tin = Color3.fromRGB(96, 110, 104)
-	local box = piece(parent, "Lockbox", Vector3.new(2.2, 1.2, 1.5), base * CFrame.new(0, 0.6, 0), tin, Enum.Material.Metal, true)
+	local iron = Color3.fromRGB(52, 58, 58)
+	-- A BOX THAT HAS BEEN UNDER WATER: its body rusted (CorrodedMetal), two iron straps round it and over the lid, a
+	-- carrying handle at each end. It was two plain blocks and a clasp. The straps' lid halves turn with the lid (`rides`).
+	local box = piece(parent, "Lockbox", Vector3.new(2.2, 1.2, 1.5), base * CFrame.new(0, 0.6, 0), tin, Enum.Material.CorrodedMetal, true)
 	local lid = piece(parent, "LockboxLid", Vector3.new(2.25, 0.2, 1.55), base * CFrame.new(0, 1.3, 0), tin, Enum.Material.Metal)
-	piece(parent, "LockboxClasp", Vector3.new(0.3, 0.4, 0.08), base * CFrame.new(0, 1.05, -0.78), Color3.fromRGB(196, 160, 84),
-		Enum.Material.Metal)
+	local clasp = piece(parent, "LockboxClasp", Vector3.new(0.3, 0.4, 0.08), base * CFrame.new(0, 1.05, -0.78),
+		Color3.fromRGB(196, 160, 84), Enum.Material.Metal)
+	local rides: { [BasePart]: CFrame } = {}
+	for _, x in ipairs({ -0.62, 0.62 }) do
+		piece(parent, "LockboxStrap", Vector3.new(0.2, 1.2, 0.05), base * CFrame.new(x, 0.6, -0.765), iron, Enum.Material.Metal)
+		piece(parent, "LockboxStrap", Vector3.new(0.2, 1.2, 0.05), base * CFrame.new(x, 0.6, 0.765), iron, Enum.Material.Metal)
+		local over = piece(parent, "LockboxStrap", Vector3.new(0.2, 0.05, 1.6), base * CFrame.new(x, 1.415, 0), iron, Enum.Material.Metal)
+		rides[over] = lid.CFrame:ToObjectSpace(over.CFrame)
+		local lip = piece(parent, "LockboxStrap", Vector3.new(0.2, 0.24, 0.05), base * CFrame.new(x, 1.3, -0.8), iron, Enum.Material.Metal)
+		rides[lip] = lid.CFrame:ToObjectSpace(lip.CFrame)
+	end
+	for _, x in ipairs({ -1.13, 1.13 }) do
+		piece(parent, "LockboxHandle", Vector3.new(0.08, 0.1, 0.62), base * CFrame.new(x * 1.03, 0.78, 0), iron, Enum.Material.Metal)
+		for _, z in ipairs({ -0.28, 0.28 }) do
+			piece(parent, "LockboxHandle", Vector3.new(0.14, 0.2, 0.08), base * CFrame.new(x, 0.84, z), iron, Enum.Material.Metal)
+		end
+	end
+	-- What is in it, under the lid until it opens: the dark of the box, and the photograph.
+	local inside = piece(parent, "LockboxInside", Vector3.new(1.9, 0.06, 1.2), base * CFrame.new(0, 1.185, 0),
+		Color3.fromRGB(18, 20, 20), Enum.Material.SmoothPlastic)
+	local photoAt = base * CFrame.new(0.15, 1.225, 0.05) * CFrame.Angles(0, 0.35, 0)
+	piece(parent, "LockboxPhoto", Vector3.new(0.85, 0.03, 0.6), photoAt, Color3.fromRGB(232, 224, 204), Enum.Material.SmoothPlastic)
+	piece(parent, "LockboxPhotoPicture", Vector3.new(0.66, 0.034, 0.42), photoAt, Color3.fromRGB(112, 104, 92),
+		Enum.Material.SmoothPlastic)
+	local glow = Instance.new("PointLight")
+	glow.Name = "LockboxGlow"
+	glow.Color = Color3.fromRGB(255, 214, 150)
+	glow.Brightness = 0
+	glow.Range = 9
+	glow.Shadows = false
+	glow.Parent = inside
 	-- Bubbles off it, a few at a time: what catches the eye of someone swimming over.
 	local bubbles = Instance.new("ParticleEmitter")
 	bubbles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
@@ -871,21 +928,68 @@ function Interactables.lockbox(parent: Instance, base: CFrame, secret: string, e
 	bubbles.Rate = 1.5
 	bubbles.Parent = lid
 	local hinge = base * CFrame.new(0, 1.3, 0.75)
+	-- The lid about its hinge: one number, turned by whichever swing is the latest (a new tween takes over the last).
+	-- UP IS A TURN FORWARD ABOUT X (the front, -Z, lifting). It was turned the other way, to -110 degrees: the lid's front
+	-- edge went DOWN through the box and the lid came to rest hanging behind it, which is most of why this never read
+	-- as a lid being opened.
+	local rel = hinge:ToObjectSpace(lid.CFrame)
+	local turn = Instance.new("NumberValue")
+	turn.Changed:Connect(function(value: number)
+		lid.CFrame = hinge * CFrame.Angles(value, 0, 0) * rel
+		for part, at in pairs(rides) do
+			part.CFrame = lid.CFrame * at
+		end
+	end)
+	local function swing(to: number, seconds: number, style: Enum.EasingStyle, direction: Enum.EasingDirection?)
+		TweenService:Create(turn, TweenInfo.new(seconds, style, direction or Enum.EasingDirection.Out), { Value = to }):Play()
+	end
+	local timing = Poses.LEVER
 	openable(box, "Prise open", "Tin box", true, "The lid is rusted down. It would take something to prise it.", {
+		lid = lid,
+		lever = function()
+			for index, at in ipairs(timing.heaves) do
+				task.delay(at, function()
+					if index < #timing.heaves then
+						-- UP ON THE HEAVE, and back down as the weight comes off: not quite shut, a little less each time.
+						swing(LOCKBOX.strain[index], 0.14, Enum.EasingStyle.Quad)
+						bubbles:Emit(5 * index)
+						task.delay(0.17, function()
+							swing(LOCKBOX.kept[index], 0.34, Enum.EasingStyle.Bounce)
+						end)
+					else
+						-- THE LAST IS HELD: up slowly under the whole of your weight, until the clasp goes.
+						swing(LOCKBOX.strain[index], math.max(0.1, timing.gives - at - 0.05), Enum.EasingStyle.Sine,
+							Enum.EasingDirection.InOut)
+						bubbles.Rate = 10
+					end
+				end)
+			end
+		end,
 		open = function()
-			local rel = hinge:ToObjectSpace(lid.CFrame)
-			local turn = Instance.new("NumberValue")
-			turn.Changed:Connect(function(value: number)
-				lid.CFrame = hinge * CFrame.Angles(value, 0, 0) * rel
-			end)
-			TweenService:Create(turn, TweenInfo.new(0.8, Enum.EasingStyle.Back), { Value = math.rad(-110) }):Play()
+			-- IT GIVES. The clasp snaps off and is thrown clear of the box, turning over; the lid is flung back and
+			-- bounces on its hinge; the light comes out of it.
+			swing(LOCKBOX.open, 0.9, Enum.EasingStyle.Elastic)
+			local front = base.LookVector
+			clasp.Anchored = false
+			clasp.CanCollide = false
+			clasp.AssemblyLinearVelocity = front * 16 + Vector3.new(0, 13, 0) + base.RightVector * 4
+			clasp.AssemblyAngularVelocity = Vector3.new(22, 9, 30)
+			TweenService:Create(clasp, TweenInfo.new(0.6, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, 0, false, 1.1),
+				{ Transparency = 1 }):Play()
+			Debris:AddItem(clasp, 2)
+			TweenService:Create(glow, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Brightness = 1.4 }):Play()
+			bubbles:Emit(36)
 			bubbles.Rate = 30
 			task.delay(1.5, function()
 				bubbles.Rate = 1
 			end)
 		end,
 		look = function(player: Player)
-			Interactables.reveal(player, secret, eye, box.Position, box)
+			-- LOOKED INTO, FROM ABOVE AND IN FRONT (the two-hundred-and-thirty-fifth pass, seen in play on 2026-11-21): it
+			-- was looked at from the box's own height, at the middle of its body, and with the lid back the picture was
+			-- ten seconds of the rusted side of a tin. Now it is on the photograph, `rise` studs over it, as the hole
+			-- behind the loose bricks is.
+			Interactables.reveal(player, secret, eye, photoAt.Position + Vector3.new(0, 0.05, 0), box, nil, nil, 2.2)
 		end,
 		secret = secret,
 	})
@@ -978,5 +1082,5 @@ function Interactables.loosePlank(parent: Instance, base: CFrame, secret: string
 	})
 end
 
-Interactables.STAMP = "3ee2e4f1"
+Interactables.STAMP = "d86f603a"
 return Interactables

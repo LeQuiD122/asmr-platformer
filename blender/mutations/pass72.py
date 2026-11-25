@@ -67,7 +67,7 @@ MUTATIONS = [
      '\t\t\tif name == "Challenges" or name == "ChallengesDone" then\n\t\t\t\tnoticeDone()\n\t\t\tend\n', ""),
     ("a save loading told as done", VOTE, HUBCHECK, 'if type(ids) == "string" and ids == knownIds and seenDone then',
      'if type(ids) == "string" and seenDone then'),
-    ("the card silent", VOTE, HUBCHECK, 'HubVoteService.say("+" .. reward, title,', 'print("+" .. reward, title,'),
+    ("the card silent", VOTE, HUBCHECK, 'HubVoteService.tell("+" .. reward, title,', 'print("+" .. reward, title,'),
     ("no countdown", VOTE, HUBCHECK, 'foot.Text = ("New ones in %dh %02dm")', 'foot.Text = ("%dh %02dm")'),
     ("the countdown on the wrong clock", VOTE, HUBCHECK, "nextAt - workspace:GetServerTimeNow()", "nextAt - os.time()"),
     ("a level without one", CAT, SHOP, '\t{ id = "halls", text = "Finish the Flooded Halls", reward = 45, level = 4 },\n', ""),

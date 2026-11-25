@@ -4,7 +4,9 @@
     python audio/gen_story_sfx.py Siren        only those named
 
 Writes audio/story/<Name>.wav, the same nine names as before (and one new one, JournalAdd) (so each goes into SoundService.StorySounds in place
-of the old one, and nothing in the game changes but the sound), each at the loudness of the one it replaces:
+of the old one, and nothing in the game changes but the sound), each at the loudness of the one it replaces; and three
+the levels played from the engine's own sounds until the hundred-and-forty-sixth pass (python audio/gen_story_sfx.py
+HarbourRain HarbourBell KeyTurn writes only those):
 
   GateGroan    Outfall 3 going up: iron dragged over iron, the real way it groans (friction catching and slipping,
                thousands of times a second, ringing the gate's own plate), the screw's clanks, water pouring off it
@@ -22,6 +24,13 @@ of the old one, and nothing in the game changes but the sound), each at the loud
                over it on a wooden bar, ringing on in a room
   JournalAdd   new (the journal looked for it and played a stock click instead): something put in your journal, a few
                quick pencil strokes on paper, the pencil set down, the page settling
+  HarbourRain  the Sunken City's rain (a seamless bed): rain on the harbour at night, heard from the causeway, soft and
+               even, drops on water near you and the rest a hush out over the sea (it was the engine's falling wind,
+               played fast: the one pitched-up sound left in the levels)
+  HarbourBell  the drowned church's bell tolling once: a cast bronze bell, low, its hum and its partials ringing on over
+               the water (it was the engine's electronic ping, slowed down)
+  KeyTurn      the key going into Outfall 3's lock and turning: the bit sliding into the wards, the levers lifting with
+               two clunks, the bolt going back heavily, in the tiled chamber (it was a light switch's click)
 
 Nothing here is a bare tone. Seeded from each name, so re-running writes the same files.
 """
@@ -32,9 +41,9 @@ import numpy as np
 from scipy import signal
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from sfx_kit import (SR, bp, brown, bubble, bubbles, drift, env, fade, felt_piano, finish, hp, limit, lp, match,  # noqa
-                     modal, n_, peak, phase, pink, place, resonate, reverb, rng_for, sculpted, splash, strike, swell,
-                     t_, white, wood_bar, write)
+from sfx_kit import (SR, bell, bp, brown, bubble, bubbles, drift, env, fade, felt_piano, finish, finish_loop, hp,  # noqa
+                     limit, lp, match, modal, n_, peak, phase, pink, place, resonate, reverb, rng_for, sculpted, splash,
+                     strike, swell, t_, white, wood_bar, write)
 
 HERE = pathlib.Path(__file__).resolve().parent
 STORY = HERE / "story"
@@ -291,9 +300,69 @@ def journal_add(rng):
     return finish(x, -20.0, high_cut=5000, fade_out=0.15)
 
 
+RAIN_LOOP, RAIN_OVERLAP = 24.0, 2.0
+
+
+def harbour_rain(rng):
+    """Rain on the harbour at night, from the causeway: a soft, even hush of rain out over the water, the near drops
+    landing on the sea round you (each a tick and its small bubble), now and then a heavier one close by. Low and
+    rounded (the sound taste): the hush rolled off well under the hiss a camera's microphone hears, and the drops'
+    bubbles the larger, lower ones."""
+    d = RAIN_LOOP + RAIN_OVERLAP
+    t = t_(d)
+    # Far: the hush over the water, breathing a little as gusts move it.
+    hush = lp(bp(pink(d, rng), 160, 2400), 1700) * (0.85 + 0.15 * drift(d, rng, rate=0.25))
+    # Near: drops on the water, a few hundred a second, their bubbles low.
+    near = bubbles(d, rng, 260 * (0.8 + 0.2 * drift(d, rng, rate=0.4, lo=0.0, hi=1.0)), r_mm=(1.6, 4.5), beta=2.6,
+                   xi=(0.04, 0.16), loud=0.5, size_gain=1.0)
+    near = lp(near, 2600)
+    # Close, and heavier, every second or two: one landing near enough to hear it splash.
+    heavy = np.zeros(n_(d))
+    at = 0.4
+    while at < d - 0.5:
+        drop = bubble(rng.uniform(380, 720), rng, xi=rng.uniform(0.1, 0.3), seconds=0.25)
+        tick = lp(white(0.012, rng), 1800) * env(t_(0.012), 0.0004, 0.003)
+        piece = place(0.26, [(0.0, 0.5, peak(tick)), (0.004, 1.0, peak(drop))])
+        a = n_(at)
+        heavy[a:a + len(piece)] += rng.uniform(0.4, 1.0) * piece[:len(heavy) - a]
+        at += rng.uniform(0.6, 2.2)
+    x = 1.0 * peak(hush) + 0.45 * peak(near) + 0.22 * peak(heavy)
+    x = reverb(x, "harbour", rng, wet=0.25)[:len(t)]
+    return finish_loop(x, RAIN_LOOP, RAIN_OVERLAP, -22.0, low_cut=60, high_cut=3200)
+
+
+def harbour_bell(rng):
+    """The drowned church's bell, tolling once: a big cast bell (its hum an octave under the prime, its minor tierce,
+    its quint), struck by its clapper, ringing on a long while over the water and the rooftops."""
+    d = 10.0
+    body = bell(196.0, d, rng, t60=7.0, hardness=0.52)
+    clapper = strike(0.3, [92, 210], [0.08, 0.04], [1.0, 0.3], rng, hardness=0.3)
+    x = place(d, [(0.0, 1.0, peak(body)), (0.0, 0.25, peak(clapper))])
+    x = reverb(x, "harbour", rng, wet=0.4)[:n_(d)]
+    return finish(x, -18.0, low_cut=45, high_cut=3200, fade_out=2.0)
+
+
+def key_turn(rng):
+    """The key into Outfall 3's lock and turned: its bit sliding in over the wards (a short dry scrape), the levers lifted
+    one and then the other (two clunks), and the bolt drawn back, heavy, with the door's iron ringing a little after it,
+    in the tiled chamber."""
+    d = 1.6
+    scrape_t = t_(0.28)
+    scrape = lp(bp(white(0.28, rng), 700, 3600), 2600) * np.sin(np.pi * np.clip(scrape_t / 0.28, 0, 1)) ** 1.2
+    lever = lambda f: strike(0.3, [f, f * 2.4, f * 5.1], [0.08, 0.04, 0.015], [1.0, 0.35, 0.12], rng, hardness=0.5)  # noqa
+    bolt = strike(0.6, [128, 300, 690, 1450], [0.18, 0.09, 0.045, 0.02], [1.0, 0.5, 0.25, 0.1], rng, hardness=0.6)
+    thump = lp(white(0.08, rng), 220) * env(t_(0.08), 0.001, 0.02)
+    ring = strike(1.0, [410, 1033, 1870], [0.5, 0.3, 0.18], [1.0, 0.4, 0.2], rng, hardness=0.4)
+    x = place(d, [(0.0, 0.35, peak(scrape)), (0.36, 0.7, peak(lever(240))), (0.55, 0.6, peak(lever(212))),
+                  (0.86, 1.0, peak(bolt)), (0.86, 0.6, peak(thump)), (0.9, 0.12, peak(ring))])
+    x = reverb(x, "tiles", rng, wet=0.3)[:n_(d)]
+    return finish(x, -19.0, low_cut=50, high_cut=4000, fade_out=0.35)
+
+
 SOUNDS = [("GateGroan", gate_groan), ("WaterRush", water_rush), ("Siren", siren), ("MawRumble", maw_rumble),
           ("MawGrowl", maw_growl), ("MawRoar", maw_roar), ("JawsShut", jaws_shut), ("Heartbeat", heartbeat),
-          ("SecretSting", secret_sting), ("JournalAdd", journal_add)]
+          ("SecretSting", secret_sting), ("JournalAdd", journal_add), ("HarbourRain", harbour_rain),
+          ("HarbourBell", harbour_bell), ("KeyTurn", key_turn)]
 
 if __name__ == "__main__":
     only = set(sys.argv[1:])

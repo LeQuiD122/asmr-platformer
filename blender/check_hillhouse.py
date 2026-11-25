@@ -374,6 +374,41 @@ if "Neon" in code:
 if 'words.FontFace = Style.WORLD.sign' not in HOUSE or 'Instance.new("SurfaceGui")' not in HOUSE:
     fail("HillHouseService: the house's name is not in the world's print on its gatepost")
 
+# HILL HOUSE FINISHED (the two-hundred-and-twelfth pass): dressed outside and in, its porch a hood and not two wings, the
+# shutters clear of the windows and of each other, the hall's linings facing into it, and no terrain in the hall.
+for name in ("Quoin", "StringCourse", "Gutter", "Downpipe", "DownpipeClip", "Shutter", "FlowerBox", "PorchFascia",
+             "DoorPilaster", "Panelling", "Wallpaper", "Skirting", "Cornice", "HallCeiling", "PendantShade", "ChairSeat",
+             "Footstool", "BookcaseBack", "Book", "ShipHull", "PaintingFrame", "BarometerCase", "UmbrellaStand"):
+    if '"%s"' % name not in HOUSE:
+        fail("HillHouseService: the house has no %s (Hill House as finished in the two-hundred-and-twelfth pass)" % name)
+if 'wedge(parent, "PorchRoof"' in HOUSE:
+    fail("HillHouseService: the porch is two wedges again (they read as a pair of black wings)")
+shutter = re.search(r'local shutter = frontWall \* CFrame\.new\(mid \+ side \* \(half \+ ([\d.]+)\), cy, -[\d.]+\)\n'
+                    r'\t+part\(parent, "Shutter", Vector3\.new\(([\d.]+),', HOUSE)
+if not shutter:
+    fail("HillHouseService: the shutters' width and place are not where this reads them")
+else:
+    off, wide = float(shutter.group(1)), float(shutter.group(2))
+    if off - wide / 2 < 0:
+        fail("HillHouseService: a shutter covers its window's edge")
+    if off + wide / 2 > 1.75:
+        fail("HillHouseService: the upstairs windows' shutters run into each other (3.5 between the windows)")
+if "inZ - 0.06) * CFrame.Angles(0, math.pi, 0), W - 2, { { -6, -2 } }" not in HOUSE:
+    fail("HillHouseService: the back wall's lining does not face into the hall (or its window's hole is not turned "
+         "with it), so its skirting and cornice are inside the wall")
+if "CFrame.new(-inX + 0.2, floorY + 6.2, 5) * CFrame.Angles(0, -math.pi / 2, 0)" not in HOUSE:
+    fail("HillHouseService: the painting faces the wall it hangs on")
+if "CFrame.new(inX - 0.2, floorY + 5.5, 3.2) * CFrame.Angles(0, math.pi / 2, 0)" not in HOUSE:
+    fail("HillHouseService: the barometer faces the wall it hangs on")
+hollow = re.search(r"local hollow = houseMid \+ Vector3\.new\(0, \(STOREY - ([\d.]+)\) / 2, 0\)\n"
+                   r"\tworkspace\.Terrain:FillBlock\(CFrame\.lookAt\(hollow, hollow \+ inward\), "
+                   r"Vector3\.new\(HOUSE_W - 2, STOREY \+ ([\d.]+), HOUSE_D - 2\),\n\t\tEnum\.Material\.Air\)", HOUSE)
+if not hollow:
+    fail("HillHouseService: the crag's ground is not cleared out of the hall, so it shows up through the boards")
+elif (float(hollow.group(1)) + float(hollow.group(2))) / 2 < 1.5:
+    fail("HillHouseService: the hall's hollow starts too near the house's foot; the cell of ground under the boards "
+         "still renders up through them")
+
 if problems:
     for problem in problems:
         print("FAIL: " + problem)

@@ -48,7 +48,7 @@ local PRINT_SIZE = Vector3.new(1.3, 0.05, 1.6)
 -- were behind its pad. Turned, they lead, as the flat prints' tops do.
 local MESH_TURN = CFrame.Angles(0, math.pi, 0)
 local PRINT_LIFE: { [string]: number } = { HeartStep = 6, StarStep = 6, HoneyPaw = 10, BubbleSole = 2.6, SlimeStep = 5,
-	EmberStep = 5 }
+	EmberStep = 5, GildedSteps = 7, PenguinSteps = 7, CatPaw = 6 }
 
 -- THE PACKS: which material takes each one is made of, and how loud. Every pack plays its takes at their own pitch
 -- (a little either side, PITCH_SPREAD), never pitched up: a chunk's sound sped up is a squeak, not a chunk.
@@ -129,6 +129,13 @@ local function drawPrint(canvas: Frame, id: string, colour: Color3, accent: Colo
 			local y = if k == 1 or k == 4 then 0.36 else 0.24
 			shape(canvas, UDim2.fromScale(0.2, 0.2), UDim2.fromScale(x, y), ink, true)
 		end
+	elseif id == "CatPaw" then
+		-- A cat's paw: a round pad, and four toe beans over it.
+		shape(canvas, UDim2.fromScale(0.5, 0.42), UDim2.fromScale(0.5, 0.66), ink, true)
+		for k, x in ipairs({ 0.22, 0.4, 0.6, 0.78 }) do
+			local y = if k == 1 or k == 4 then 0.4 else 0.26
+			shape(canvas, UDim2.fromScale(0.18, 0.2), UDim2.fromScale(x, y), ink, true)
+		end
 	elseif id == "SlimeStep" then
 		-- A blob with two drips running off its heel.
 		shape(canvas, UDim2.fromScale(0.62, 0.5), UDim2.fromScale(0.5, 0.4), ink, true)
@@ -140,6 +147,19 @@ local function drawPrint(canvas: Frame, id: string, colour: Color3, accent: Colo
 		shape(canvas, UDim2.fromScale(0.56, 0.8), UDim2.fromScale(0.5, 0.5), accent, true).Name = "Edge"
 		shape(canvas, UDim2.fromScale(0.34, 0.56), UDim2.fromScale(0.5, 0.5), colour, true).Name = "Heat"
 		shape(canvas, UDim2.fromScale(0.16, 0.26), UDim2.fromScale(0.5, 0.48), Color3.fromRGB(255, 226, 150), true).Name = "Core"
+	elseif id == "PenguinSteps" then
+		-- A penguin's foot: three toes spread from a heel, pale blue in the snow.
+		local ice = Color3.fromRGB(176, 210, 240)
+		shape(canvas, UDim2.fromScale(0.22, 0.3), UDim2.fromScale(0.5, 0.72), ice, true)
+		for k, turn in ipairs({ -28, 0, 28 }) do
+			shape(canvas, UDim2.fromScale(0.13, 0.46), UDim2.fromScale(0.5 + (k - 2) * 0.18, 0.38), ice, false, turn)
+		end
+	elseif id == "GildedSteps" then
+		-- VIP: a sole of beaten gold, a paler gold heel and toe, and a glint (the two-hundred-and-thirteenth pass).
+		shape(canvas, UDim2.fromScale(0.56, 0.84), UDim2.fromScale(0.5, 0.5), Color3.fromRGB(232, 184, 80), true)
+		shape(canvas, UDim2.fromScale(0.4, 0.32), UDim2.fromScale(0.5, 0.3), Color3.fromRGB(255, 226, 150), true)
+		shape(canvas, UDim2.fromScale(0.34, 0.26), UDim2.fromScale(0.5, 0.72), Color3.fromRGB(250, 206, 110), true)
+		shape(canvas, UDim2.fromScale(0.14, 0.14), UDim2.fromScale(0.4, 0.26), Color3.new(1, 1, 1), true).BackgroundTransparency = 0.3
 	else -- BubbleSole: a ring with a glint
 		local ring = shape(canvas, UDim2.fromScale(0.74, 0.74), UDim2.fromScale(0.5, 0.5), accent, true)
 		ring.BackgroundTransparency = 1
@@ -175,15 +195,29 @@ local function meshPrint(id: string, frame: CFrame, life: number): BasePart?
 	local found = piece and cosmetics and cosmetics:FindFirstChild(piece.mesh)
 	local template = if found and found:IsA("MeshPart") then found
 		elseif found then found:FindFirstChildWhichIsA("MeshPart", true) else nil
-	if not (piece and template) then
+	-- ("Flat": the print drawn flat on the ground (drawPrint), as the penguin's is; the two-hundred-and-fifteenth pass.)
+	if not (piece and template) or piece.mesh == "Flat" then
 		return nil
 	end
+	-- Turned to lead with its toe, where its mesh was made facing another way (`yaw`).
+	frame = frame * CFrame.Angles(0, math.rad(piece.yaw or 0), 0)
 	local part = (template :: MeshPart):Clone()
 	part.Name = "StepPrint"
 	local base = part.Size
 	local size = base * (piece.size / math.max(base.X, base.Y, base.Z))
-	part.Size = size * Vector3.new(1.25, 1, 1.25)
-	part.CFrame = frame * CFrame.new(0, size.Y * 0.5 + 0.12, 0)
+	-- LAID FLAT whichever way its mesh was made (the two-hundred-and-fourteenth pass: a generated print may lie in any
+	-- plane): its thinnest side turned to face up, and only its flat sides grown and shrunk.
+	local thin = if base.X <= base.Y and base.X <= base.Z then "X" elseif base.Z <= base.Y then "Z" else "Y"
+	local lie = if thin == "X" then CFrame.Angles(0, 0, math.pi / 2)
+		elseif thin == "Z" then CFrame.Angles(-math.pi / 2, 0, 0) else CFrame.identity
+	local flat = if thin == "X" then Vector3.new(0, 1, 1) elseif thin == "Z" then Vector3.new(1, 1, 0) else Vector3.new(1, 0, 1)
+	local upright = Vector3.one - flat
+	local depth = if thin == "X" then size.X elseif thin == "Z" then size.Z else size.Y
+	local function across(f: number): Vector3
+		return flat * f + upright
+	end
+	part.Size = size * across(1.25)
+	part.CFrame = frame * CFrame.new(0, depth * 0.5 + 0.12, 0) * lie
 	part.Color = piece.colours[math.random(1, #piece.colours)]
 	part.Material = if piece.material == "Glass" then Enum.Material.Glass else Enum.Material.SmoothPlastic
 	part.Transparency = piece.alpha or 0
@@ -196,7 +230,7 @@ local function meshPrint(id: string, frame: CFrame, life: number): BasePart?
 	part.Parent = printFolder()
 	-- Pressed in: down to flush, and to its size, quickly.
 	TweenService:Create(part, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { Size = size,
-		CFrame = frame * CFrame.new(0, size.Y * 0.35, 0) }):Play()
+		CFrame = frame * CFrame.new(0, depth * 0.35, 0) * lie }):Play()
 	local hold = life * 0.45
 	local fade = TweenInfo.new(life - hold, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, hold)
 	TweenService:Create(part, fade, { Transparency = 1 }):Play()
@@ -205,12 +239,43 @@ local function meshPrint(id: string, frame: CFrame, life: number): BasePart?
 	end
 	if id == "HoneyPaw" then
 		TweenService:Create(part, TweenInfo.new(life, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, 0, false, 0.12),
-			{ Size = size * Vector3.new(0.7, 0.6, 0.7) }):Play()
+			{ Size = size * (flat * 0.7 + upright * 0.6) }):Play()
 	elseif id == "BubbleSole" then
 		TweenService:Create(part, TweenInfo.new(life, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0.12),
-			{ Size = size * Vector3.new(1.45, 1, 1.45) }):Play()
+			{ Size = size * across(1.45) }):Play()
 	end
 	return part
+end
+
+-- THE LOBBY'S DECK LAYERS (the two-hundred-and-fourteenth pass): its inlay and trim are scenery that nothing hits (CanQuery
+-- off), lying over the floor a body walks on, so a print laid on the floor was under them, never seen. A print on the
+-- lobby's floor is lifted to the top of whichever layer covers it.
+local deckLayers: { BasePart }? = nil
+local function onDeck(at: Vector3): Vector3
+	if not deckLayers then
+		local found = {}
+		local hub = workspace:FindFirstChild("Hub")
+		if hub then
+			for _, part in ipairs(hub:GetDescendants()) do
+				if part:IsA("BasePart") and (part.Name == "DeckInlay" or part.Name == "DeckTrim") then
+					table.insert(found, part)
+				end
+			end
+		end
+		deckLayers = found
+	end
+	local top = at.Y
+	for _, layer in ipairs(deckLayers :: { BasePart }) do
+		if layer.Parent then
+			local inside = layer.CFrame:PointToObjectSpace(at)
+			local half = layer.Size / 2
+			local surface = layer.Position.Y + half.Y
+			if math.abs(inside.X) <= half.X and math.abs(inside.Z) <= half.Z and surface >= at.Y and surface - at.Y < 0.6 then
+				top = math.max(top, surface)
+			end
+		end
+	end
+	return Vector3.new(at.X, top, at.Z)
 end
 
 -- A print at `at` on a surface facing `up`, the toe towards `ahead`.
@@ -218,6 +283,9 @@ local function lay(id: string, at: Vector3, up: Vector3, ahead: Vector3)
 	local item = ShopCatalog.get(id)
 	if not item then
 		return
+	end
+	if up.Y > 0.9 then
+		at = onDeck(at)
 	end
 	local forward = ahead - up * ahead:Dot(up)
 	if forward.Magnitude < 0.05 then
@@ -420,7 +488,17 @@ local function step()
 			local flat = ahead - up * ahead:Dot(up)
 			if flat.Magnitude > 0.05 then
 				local side = up:Cross(-flat.Unit)
-				lay(footprint, hit.Position + side * (0.45 * w.foot), up, ahead)
+				local spot = hit.Position + side * (0.45 * w.foot)
+				lay(footprint, spot, up, ahead)
+				-- AND THE GROUND KEEPS IT (the two-hundred-and-forty-sixth pass): your own print pressed into the materials
+				-- that hold marks, in its own shape, at this very spot (GroundMarks.stampAt).
+				-- (Everyone's, since the two-hundred-and-forty-seventh pass: another player's paw leaves a paw-shaped dent.)
+				local marks = script.Parent:FindFirstChild("GroundMarks")
+				if marks and marks:IsA("ModuleScript") then
+					pcall(function()
+						(require(marks) :: any).stampAt(spot, ahead, footprint, character)
+					end)
+				end
 			end
 		end
 		if wearsSound then
@@ -472,6 +550,34 @@ function StepService.preview(item: any)
 	end
 end
 
+-- NOTHING LEFT UNDER IT (the two-hundred-and-forty-fifth pass, from your list of 2026-11-22: on ice, clay and the rest that
+-- give way, the paw prints stayed hanging in the air over the hole). Four times a second each print looks straight down
+-- for something solid (collision only, so a sensor tile over a hole does not count); with nothing there it drops into
+-- the hole and fades out.
+local under = RaycastParams.new()
+under.FilterType = Enum.RaycastFilterType.Exclude
+under.RespectCanCollide = true
+local function dropUnsupported()
+	local characters: { Instance } = { printFolder() }
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player.Character then
+			table.insert(characters, player.Character)
+		end
+	end
+	under.FilterDescendantsInstances = characters
+	for _, part in ipairs(prints) do
+		if part.Parent and not part:GetAttribute("Dropped") then
+			local hit = workspace:Raycast(part.Position + Vector3.new(0, 0.6, 0), Vector3.new(0, -1.8, 0), under)
+			if not hit then
+				part:SetAttribute("Dropped", true)
+				TweenService:Create(part, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+					{ Position = part.Position - Vector3.new(0, 3, 0), Transparency = 1 }):Play()
+				game:GetService("Debris"):AddItem(part, 0.6)
+			end
+		end
+	end
+end
+
 function StepService.start()
 	RunService.Heartbeat:Connect(function()
 		local ok, err = pcall(step)
@@ -479,8 +585,17 @@ function StepService.start()
 			warnOnce("StepService: " .. tostring(err))
 		end
 	end)
+	task.spawn(function()
+		while true do
+			task.wait(0.25)
+			local ok, err = pcall(dropUnsupported)
+			if not ok then
+				warnOnce("StepService: " .. tostring(err))
+			end
+		end
+	end)
 	print("StepService: running, " .. StepService.VERSION)
 end
 
-StepService.STAMP = "f8fc4255"
+StepService.STAMP = "c10931d2"
 return StepService

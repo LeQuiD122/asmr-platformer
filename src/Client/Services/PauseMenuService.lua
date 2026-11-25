@@ -42,6 +42,44 @@ local leaveRemote: RemoteEvent? = nil
 -- The button a controller starts on when the menu opens (Keep running).
 local firstButton: TextButton? = nil
 
+-- WHERE YOU ARE (the hundred-and-thirty-ninth pass): the card said "This run", the level of the last vote (or "-"), "Keep
+-- running" and "Leave to the lobby" in the lobby too, where there is no run and leaving does nothing. In the lobby and the
+-- squish room it says where you are, its first button is Back and there is no way out to show, and the shop, the
+-- emotes and the invite move up into its place; in the back rooms it says so, and the way out is there. On a level it is
+-- as it was. `face` holds the card's pieces (build), `runName` the level the last vote chose.
+local face: { [string]: any } = {}
+local function showFace()
+	local card = panel
+	if not (card and face.heading) then
+		return
+	end
+	local me = Players.LocalPlayer
+	local level = me:GetAttribute("InLevel")
+	local rooms = level == "backRooms"
+	local running = level ~= nil and not rooms
+	face.heading.Text = if rooms then "The back rooms" elseif running then "This run" else "In the lobby"
+	local where = "Harrow Bay"
+	if rooms then
+		where = "Find the way out"
+	elseif running then
+		where = tostring(face.runName or "-")
+	elseif me:GetAttribute("InSquishRoom") then
+		where = "The squish room"
+	end
+	face.place.Text = where
+	face.chips.Visible = running
+	face.leave.Visible = level ~= nil
+	face.resume.Text = if level ~= nil then "Keep running" else "Back"
+	local top = if running then 128 else 102
+	face.resume.Position = UDim2.new(0, 26, 0, top)
+	face.leave.Position = UDim2.new(0, 26, 0, top + 54)
+	local rowY = if face.leave.Visible then top + 108 else top + 54
+	for _, button in ipairs(face.row) do
+		button.Position = UDim2.new(button.Position.X.Scale, button.Position.X.Offset, 0, rowY)
+	end
+	card.Size = UDim2.new(0.92, 0, 0, rowY + 44 + 24)
+end
+
 -- WHAT THE INVITE SAYS on Roblox's own invite screen: why to come (ShopCatalog.REWARD.FRIEND, also told on the card
 -- when a run starts with a friend in it). Nil where this Roblox has no such options, and the screen is the plain one.
 local INVITE_WORDS = "Come and play Harrow Bay with me: a friend in your run pays 20% more tokens."
@@ -76,6 +114,18 @@ local function invite()
 	end)
 end
 
+-- A PRESS, HEARD (the hundred-and-forty-fourth pass): AudioService.press, the one soft sound every menu in the game makes
+-- (a felt tap, two notes up as a card opens and down as it goes). The pause card made none.
+local function pressSound(kind: string)
+	local found = script.Parent and script.Parent:FindFirstChild("AudioService")
+	if found and found:IsA("ModuleScript") then
+		local ok, audio = pcall(require, found)
+		if ok and type(audio) == "table" and type(audio.press) == "function" then
+			audio.press(kind)
+		end
+	end
+end
+
 local function usingPad(): boolean
 	return UserInputService:GetLastInputType().Name:sub(1, 7) == "Gamepad"
 end
@@ -85,7 +135,9 @@ local function slide()
 	if not frame then
 		return
 	end
+	pressSound(if open then "open" else "close")
 	if open then
+		showFace()
 		frame.Visible = true
 	end
 	local to = if open then UDim2.new(0.5, 0, 0.5, 0) else UDim2.new(0.5, 0, 1.6, 0)
@@ -294,6 +346,9 @@ local function build()
 	inviteButton.Position = UDim2.new(2 / 3, -4, 0, 236)
 	inviteButton.Size = UDim2.new(1 / 3, -23, 0, 44)
 
+	face.heading, face.place, face.chips, face.resume, face.leave = heading, place, chips, resume, leave
+	face.row = { shopButton, emotesButton, inviteButton }
+
 	resume.Activated:Connect(function()
 		open = false
 		slide()
@@ -373,10 +428,9 @@ function PauseMenuService.setRun(levelName: string, mode: string, length: string
 		return
 	end
 
-	local place = root:FindFirstChild("Place")
-	if place and place:IsA("TextLabel") then
-		place.Text = levelName
-	end
+	-- The level's name goes on the card when you are in it (showFace), not over "In the lobby" as the vote ends.
+	face.runName = levelName
+	showFace()
 
 	local hardcore = mode:lower() == "hardcore"
 	local modeChip = root:FindFirstChild("ModeChip")
@@ -418,6 +472,45 @@ task.spawn(function()
 		leaveRemote = leave
 	end
 
+	-- THE LOBBY'S "BRING A FRIEND" BOARD (HubService, the two-hundred-and-thirty-seventh pass): its prompt is this menu's
+	-- invite, by the start where you are about to run.
+	local CollectionService = game:GetService("CollectionService")
+	-- Once each (the lobby goes away during a run and comes back, and the tag says so each time).
+	local hooked: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+	local function hookInvite(board: Instance)
+		-- Your own face in the poster's YOU circle (the two-hundred-and-fortieth pass): on your screen only.
+		local poster = board:WaitForChild("Poster", 10)
+		local you = poster and poster:FindFirstChild("YouFace", true)
+		if you and you:IsA("ImageLabel") then
+			you.Image = "rbxthumb://type=AvatarHeadShot&id=" .. Players.LocalPlayer.UserId .. "&w=150&h=150"
+			local mark = you:FindFirstChild("Mark")
+			if mark and mark:IsA("TextLabel") and Players.LocalPlayer.UserId > 0 then
+				mark.Visible = false
+			end
+		end
+		-- (Under the board since the same pass, on an attachment.)
+		local spot = board:WaitForChild("InviteSpot", 10)
+		local prompt = spot and spot:WaitForChild("InvitePrompt", 10)
+		if prompt and prompt:IsA("ProximityPrompt") and not hooked[prompt] then
+			hooked[prompt] = true
+			prompt.Triggered:Connect(function(player: Player)
+				if player == Players.LocalPlayer then
+					invite()
+				end
+			end)
+		end
+	end
+	for _, board in ipairs(CollectionService:GetTagged("InviteBoard")) do
+		task.spawn(hookInvite, board)
+	end
+	CollectionService:GetInstanceAddedSignal("InviteBoard"):Connect(function(board: Instance)
+		task.spawn(hookInvite, board)
+	end)
+
+	-- Where you are, as you go there (showFace).
+	Players.LocalPlayer:GetAttributeChangedSignal("InLevel"):Connect(showFace)
+	Players.LocalPlayer:GetAttributeChangedSignal("InSquishRoom"):Connect(showFace)
+
 	-- The result of the vote is what this run IS, so the banner's announcement is also the
 	-- menu's summary. One source, two places it is shown.
 	local voteState = remotes and remotes:FindFirstChild("HubVoteState")
@@ -443,5 +536,5 @@ task.spawn(function()
 	end, false, Enum.KeyCode.M, Enum.KeyCode.Escape, Enum.KeyCode.DPadDown)
 end)
 
-PauseMenuService.STAMP = "466ea02d"
+PauseMenuService.STAMP = "2c4c2fe2"
 return PauseMenuService

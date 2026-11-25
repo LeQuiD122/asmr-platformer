@@ -18,7 +18,7 @@ CHECKERS = [
     "check_luau_syntax", "check_lua", "check_story", "check_hub", "check_chunk_forms", "check_plan_shapes",
     "check_halls", "check_skypools", "check_sunkencity", "check_shop", "check_devices", "check_squishroom",
     "check_stamps", "check_backrooms", "check_shots", "check_audio", "check_style", "check_hillhouse",
-    "check_trueending",
+    "check_trueending", "check_polish", "check_feel", "check_standards", "check_touch", "check_surfaces", "check_letgo", "check_made",
 ]
 
 

@@ -55,6 +55,30 @@ local ShopLook: any = (function(): any
 	end
 	return nil
 end)()
+-- The items as little moving models (the two-hundred-and-twelfth pass); without it, the drawings.
+local ShopModels: any = (function(): any
+	local found = script.Parent and script.Parent:FindFirstChild("ShopModels")
+	if found and found:IsA("ModuleScript") then
+		local ok, loaded = pcall(require, found)
+		if ok and type(loaded) == "table" then
+			return loaded
+		end
+		warn("ShopService: ShopModels failed to load, so the items are drawn flat: " .. tostring(loaded))
+	end
+	return nil
+end)()
+
+-- Rewarded video ads (the two-hundred-and-thirteenth pass): the Run boost's "watch an ad" price.
+local AdOffers: any = (function(): any
+	local found = script.Parent and script.Parent:FindFirstChild("AdOffers")
+	if found and found:IsA("ModuleScript") then
+		local ok, loaded = pcall(require, found)
+		if ok and type(loaded) == "table" then
+			return loaded
+		end
+	end
+	return nil
+end)()
 
 local ShopService = {}
 ShopService.VERSION = "the shop, 2026-10-22"
@@ -128,6 +152,11 @@ local shop = {
 	rays = {} :: { Frame }, -- the sunbursts behind the icons
 	sheens = {} :: { { grad: UIGradient, phase: number } }, -- the sheen across each card
 	breathe = {} :: { UIScale }, -- the prices you can pay
+	-- THE BOUTIQUE (the Wear tab): its shelves and what of them is yours, as the server last said (nil until asked).
+	boutique = nil :: { items: { any }, mine: { [number]: boolean }, at: number }?,
+	boutiqueAsking = false,
+	adReady = false, -- Roblox has a rewarded video ad for you (asked as the shop opens: AdOffers.ready)
+	adWatching = false, -- one is playing, asked for from here
 }
 
 -- ===== SMALL THINGS =====
@@ -159,30 +188,28 @@ local function label(parent: Instance, name: string, text: string, font: Font, s
 	return l
 end
 
--- A sound from the game's own takes (SoundService.MaterialSounds: a keypad click for a tap, bubble wrap
--- for a purchase), or a built-in one where those are not imported.
+-- A PRESS (the hundred-and-forty-fourth pass): AudioService.press, the one soft sound every menu in the game makes, a felt
+-- tap for "buttonClick" and a bubble and a note for "bubblePop" (the names the shop and its kit's users still say). It
+-- looked in MaterialSounds for takes named "buttonClick_" and "bubblePop_", which nothing there is named, so every press
+-- was the engine's electronic ping an octave up; and a bubble wrap sheet found that way played whole.
 local function uiSound(event: string, volume: number)
-	local folder = SoundService:FindFirstChild("MaterialSounds")
-	local takes = {}
-	if folder then
-		for _, s in ipairs(folder:GetChildren()) do
-			if s:IsA("Sound") and s.Name:sub(1, #event + 1) == event .. "_" then
-				table.insert(takes, s)
-			end
+	local kind = if event == "bubblePop" then "good" elseif event == "buttonClick" then "tap" else event
+	local found = script.Parent and script.Parent:FindFirstChild("AudioService")
+	if found and found:IsA("ModuleScript") then
+		local ok, audio = pcall(require, found)
+		if ok and type(audio) == "table" and type(audio.press) == "function" then
+			audio.press(kind, volume)
+			return
 		end
 	end
-	local made: Sound
-	if #takes > 0 then
-		made = (takes[math.random(1, #takes)] :: Sound):Clone()
-	else
-		made = Instance.new("Sound")
-		made.SoundId = "rbxasset://sounds/electronicpingshort.wav"
-		made.PlaybackSpeed = if event == "bubblePop" then 1.4 else 2
-	end
+	-- An older AudioService: a soft click, lowered. Never the ping.
+	local made = Instance.new("Sound")
+	made.SoundId = "rbxasset://sounds/clickfast.wav"
+	made.PlaybackSpeed = 0.75
 	made.Volume = volume
 	made.Parent = SoundService
 	made:Play()
-	game:GetService("Debris"):AddItem(made, 3)
+	game:GetService("Debris"):AddItem(made, 2)
 end
 
 -- A TACTILE BUTTON: a coloured face on a darker lip. Pressed, the face sinks onto the lip; let go, it
@@ -328,6 +355,20 @@ end
 local function drawIcon(icon: Frame, item: any)
 	local ink = item.accent
 	local kind = item.kind
+	if kind == "avatar" then
+		-- A BOUTIQUE ITEM: Roblox's own picture of it, in the disc.
+		local picture = Instance.new("ImageLabel")
+		picture.Name = "Picture"
+		picture.AnchorPoint = Vector2.new(0.5, 0.5)
+		picture.Position = UDim2.fromScale(0.5, 0.5)
+		picture.Size = UDim2.fromScale(0.86, 0.86)
+		picture.BackgroundTransparency = 1
+		picture.ScaleType = Enum.ScaleType.Fit
+		picture.Image = ("rbxthumb://type=Asset&id=%d&w=150&h=150"):format(item.assetId)
+		picture.Parent = icon
+		corner(picture, UDim.new(0.5, 0))
+		return
+	end
 	if kind == "trail" then
 		blob(icon, UDim2.fromScale(0.3, 0.3), UDim2.fromScale(0.68, 0.5), ink, true)
 		blob(icon, UDim2.fromScale(0.2, 0.2), UDim2.fromScale(0.42, 0.5), ink, true).BackgroundTransparency = 0.3
@@ -337,6 +378,12 @@ local function drawIcon(icon: Frame, item: any)
 		ring.BackgroundTransparency = 1
 		stroke(ring, ink, 3)
 		blob(icon, UDim2.fromScale(0.22, 0.22), UDim2.fromScale(0.5, 0.5), ink, true)
+	elseif kind == "pal" then
+		local body = blob(icon, UDim2.fromScale(0.56, 0.5), UDim2.fromScale(0.5, 0.56), item.colour, true)
+		stroke(body, ink, 2)
+		for _, x in ipairs({ 0.4, 0.6 }) do
+			blob(icon, UDim2.fromScale(0.07, 0.09), UDim2.fromScale(x, 0.52), ink, true)
+		end
 	elseif kind == "steps" then
 		local left = blob(icon, UDim2.fromScale(0.2, 0.34), UDim2.fromScale(0.38, 0.58), ink, true)
 		left.Rotation = -12
@@ -445,6 +492,11 @@ local function tabGlyph(disc: Frame, tab: string, ink: Color3)
 		local c = blob(disc, UDim2.fromScale(0.6, 0.6), UDim2.fromScale(0.5, 0.5), LOOK.token, true)
 		stroke(c, LOOK.tokenEdge, 2)
 		blob(c, UDim2.fromScale(0.42, 0.42), UDim2.fromScale(0.5, 0.5), rgb(255, 238, 200), true)
+	elseif tab == "Wear" then
+		-- A T-shirt: its body and its two sleeves.
+		blob(disc, UDim2.fromScale(0.36, 0.44), UDim2.fromScale(0.5, 0.56), ink, false)
+		blob(disc, UDim2.fromScale(0.22, 0.2), UDim2.fromScale(0.3, 0.38), ink, false).Rotation = -30
+		blob(disc, UDim2.fromScale(0.22, 0.2), UDim2.fromScale(0.7, 0.38), ink, false).Rotation = 30
 	elseif tab == "Backgrounds" then
 		-- A swatch, shading from one colour into another.
 		local swatch = blob(disc, UDim2.fromScale(0.58, 0.58), UDim2.fromScale(0.5, 0.5), LOOK.white, false)
@@ -455,12 +507,14 @@ local function tabGlyph(disc: Frame, tab: string, ink: Color3)
 	end
 end
 
--- THE BEST VALUE of the token packs: the most tokens for each Robux, from the catalogue's own numbers.
+-- THE BEST VALUE of the token packs: the most tokens for each Robux, at the prices Roblox gives you (the
+-- hundred-and-sixtieth pass: ShopCatalog.robuxFor).
 local function bestPack(): string?
 	local best, most = nil, 0
 	for _, item in ipairs(ShopCatalog.inTab("Tokens")) do
-		if item.kind == "tokens" and type(item.tokens) == "number" and type(item.robux) == "number" and item.robux > 0 then
-			local each = item.tokens / item.robux
+		local robux = ShopCatalog.robuxFor(item)
+		if item.kind == "tokens" and type(item.tokens) == "number" and type(robux) == "number" and robux > 0 then
+			local each = item.tokens / robux
 			if each > most then
 				best, most = item.id, each
 			end
@@ -472,8 +526,75 @@ end
 -- ===== WHAT THE SERVER SAYS =====
 
 local function owned(id: string): boolean
+	-- A boutique item (Wear<asset id>): yours on Roblox.
+	if string.sub(id, 1, 4) == "Wear" then
+		local asset = tonumber(string.sub(id, 5))
+		return asset ~= nil and shop.boutique ~= nil and shop.boutique.mine[asset] == true
+	end
 	local data = shop.data
 	return data ~= nil and data.owned ~= nil and data.owned[id] == true
+end
+
+-- THE BOUTIQUE'S SHELVES as shop items (kind "avatar"), in its collections' order and colours.
+local function boutiqueItems(): { any }
+	local stock = shop.boutique
+	if not stock then
+		return {}
+	end
+	local colours = {}
+	for _, collection in ipairs(ShopCatalog.BOUTIQUE.collections) do
+		colours[collection.name] = collection
+	end
+	local out = {}
+	for _, entry in ipairs(stock.items) do
+		local collection = colours[entry.collection] or ShopCatalog.BOUTIQUE.collections[1]
+		table.insert(out, { id = "Wear" .. tostring(entry.id), tab = "Wear", kind = "avatar", name = entry.name,
+			blurb = ("%s, by %s"):format(entry.collection, entry.creator), listed = entry.price, assetId = entry.id,
+			colour = collection.colour, accent = collection.accent })
+	end
+	return out
+end
+
+-- A tab's items: the catalogue's, or the boutique's for Wear. A limited item only while it is here (or once it is
+-- yours), and those here now first in Featured.
+local function itemsFor(tab: string): { any }
+	if tab == "Wear" then
+		return boutiqueItems()
+	end
+	local list = {}
+	local vip = Players.LocalPlayer:GetAttribute("VIP") == true
+	if tab == "Featured" then
+		for _, item in ipairs(ShopCatalog.inSeason(nil, vip)) do
+			table.insert(list, item)
+		end
+	end
+	for _, item in ipairs(ShopCatalog.inTab(tab)) do
+		local state = if item.limited then ShopCatalog.season(item, nil, vip) else "on"
+		if not item.limited or ((state == "on" or state == "early") and not table.find(list, item)) or owned(item.id) then
+			if not table.find(list, item) then
+				table.insert(list, item)
+			end
+		end
+	end
+	return list
+end
+
+-- The time a limited item has left, in a few words ("Here 13d 4h", "Last day: 5h 20m").
+local function timeLeft(item: any): string?
+	local state, ends = ShopCatalog.season(item, nil, Players.LocalPlayer:GetAttribute("VIP") == true)
+	if state == "early" then
+		-- VIP EARLY: on sale to you before everyone else.
+		return "VIP early"
+	end
+	if state ~= "on" then
+		return nil
+	end
+	local left = math.max(0, ends - os.time())
+	local days, hours, minutes = math.floor(left / 86400), math.floor(left % 86400 / 3600), math.floor(left % 3600 / 60)
+	if days >= 1 then
+		return ("Here %dd %dh"):format(days, hours)
+	end
+	return ("Last day: %dh %02dm"):format(hours, minutes)
 end
 
 local function equipped(item: any): boolean
@@ -487,6 +608,37 @@ local function tokens(): number
 end
 
 local render: () -> () -- the grid, drawn again (declared here, made below)
+local paintRail: () -> () -- the side rail, painted again (declared here, made below)
+
+-- THE BOUTIQUE'S BANNER placed (above the grid, on every tab but Wear) and the grid under it; its three pictures the
+-- boutique's own, one from each of its first collections, once it has been asked for its shelves.
+local function placeBanner()
+	local banner, grid, top = ui.banner, ui.grid, ui.gridTop
+	if not (banner and grid and top) then
+		return
+	end
+	local showing = shop.tab ~= "Wear"
+	banner.Visible = showing
+	local h = if showing then (ui.bannerH or 70) + 8 else 0
+	banner.Position = UDim2.new(0, 16 + TILE_ROOM, 0, top + 4)
+	banner.Size = UDim2.new(1, -(36 + 2 * TILE_ROOM + 8), 0, h - 8)
+	grid.Position = UDim2.new(0, 16, 0, top + h)
+	grid.Size = UDim2.new(1, -36, 1, -(top + h + 18))
+	local stock = shop.boutique
+	if stock and ui.bannerPictures then
+		local picked, seen = {}, {}
+		for _, entry in ipairs(stock.items) do
+			if not seen[entry.collection] then
+				seen[entry.collection] = true
+				table.insert(picked, entry)
+			end
+		end
+		for k, picture in ipairs(ui.bannerPictures) do
+			local entry = picked[k]
+			picture.Image = if entry then ("rbxthumb://type=Asset&id=%d&w=150&h=150"):format(entry.id) else ""
+		end
+	end
+end
 local wearBackground: (string) -> () -- a background put on (made below, once ask is)
 
 -- THE TITLE in the colours of the background behind it (ShopLook calls this whenever the background changes).
@@ -615,7 +767,8 @@ local function accept(data: any)
 	-- (Drawn again only when it changes what is drawn: an answer about your tokens alone leaves the tiles as they are.)
 	if shop.open and drawnFrom(data) ~= shop.drawn then
 		render()
-	end
+	end	-- (The side rail: the 2x and the run boost as they are now.)
+	paintRail()
 end
 
 local function ask(action: string, id: string): any
@@ -652,8 +805,9 @@ local function wearPreview(item: any?)
 	if not (root and root:IsA("BasePart")) then
 		return
 	end
-	if item and (item.kind == "trail" or item.kind == "aura") then
-		ShopCatalog.wear(root, if item.kind == "trail" then item else nil, if item.kind == "aura" then item else nil, "ShopPreview")
+	if item and (item.kind == "trail" or item.kind == "aura" or item.kind == "pal") then
+		ShopCatalog.wear(root, if item.kind == "trail" then item else nil, if item.kind == "aura" then item else nil, "ShopPreview",
+			if item.kind == "pal" then item else nil)
 		shop.preview = item.id
 	else
 		ShopCatalog.wear(root, nil, nil, "ShopPreview")
@@ -753,6 +907,7 @@ local function crateRefused(result: any)
 	if type(result) ~= "table" then
 		return -- (ask has said the shop did not answer)
 	end
+	uiSound("no", 0.45)
 	toast(CRATE_WORDS[result.reason] or "The crate would not open. Try again in a moment.")
 end
 
@@ -788,6 +943,63 @@ local function openCrate(crate: any)
 				crateRefused(result)
 			end
 		end)
+end
+
+-- ===== THE VIP CRATE (the two-hundred-and-thirteenth pass), in the VIP lounge =====
+--
+-- A VIP's free background crate, once a day: the shop opens on the backgrounds and the crate shakes and opens there as a
+-- bought one does (ShopLook.crate). Not yet VIP: Roblox's own window for the pass. Already opened today: when the next is.
+local function vipPass(): any
+	return ShopCatalog.get("VIP")
+end
+
+function ShopService.vipCrate()
+	local player = Players.LocalPlayer
+	local vip = vipPass()
+	if player:GetAttribute("VIP") ~= true then
+		if vip and (vip.passId or 0) > 0 then
+			pcall(function()
+				MarketplaceService:PromptGamePassPurchase(player, vip.passId)
+			end)
+		end
+		return
+	end
+	local data = shop.data
+	if data and tonumber(data.vipCrateDay) == tonumber(data.vipToday) then
+		local left = 86400 - (os.time() % 86400)
+		toast(("Your next VIP crate is ready in %dh %02dm."):format(math.floor(left / 3600), math.floor(left % 3600 / 60)))
+		return
+	end
+	if not shop.open then
+		ShopService.open("Backgrounds")
+	end
+	local function refused(result: any)
+		if type(result) == "table" and result.reason == "tomorrow" then
+			toast("You have opened today's VIP crate. The next one is ready tomorrow.")
+			return
+		end
+		crateRefused(result)
+	end
+	local function opened(result: any): any
+		if type(result) == "table" and result.ok and result.tokens then
+			uiSound("buy", 0.6)
+			toast(("Your VIP crate: %d tokens (no background left for you)."):format(result.tokens))
+		end
+		return result
+	end
+	if ShopLook then
+		ShopLook.crate(function(): any
+			return opened(ask("vipCrate", "BgCrate"))
+		end, wearBackground, refused)
+		return
+	end
+	local result = opened(ask("vipCrate", "BgCrate"))
+	local won = if result and result.ok then ShopCatalog.get(result.won) else nil
+	if won then
+		toast(won.name .. " came out of your VIP crate.")
+	elseif not (result and result.ok) then
+		refused(result)
+	end
 end
 
 -- ===== PRESSING A PRICE =====
@@ -828,6 +1040,38 @@ local function pressPrice(item: any, tile: GuiObject)
 		end
 		return
 	end
+	-- A BOUTIQUE ITEM: Roblox's own window, which shows it and sells it; yours already, where to wear it.
+	if item.kind == "avatar" then
+		if owned(item.id) then
+			toast(item.name .. " is yours: put it on from your Roblox avatar.")
+			return
+		end
+		pcall(function()
+			MarketplaceService:PromptPurchase(player, item.assetId)
+		end)
+		return
+	end
+	-- FREE FOR AN AD: what it gives and what it takes, said first; then Roblox plays it (AdOffers, EconomyService).
+	if item.ad and shop.adReady and not shop.adWatching and AdOffers and shop.data and type(shop.data.adsLeft) == "table"
+		and (tonumber(shop.data.adsLeft[item.ad]) or 0) > 0 then
+		local left = tonumber(shop.data.adsLeft[item.ad]) or 0
+		confirm(("Watch a short video ad, and %s: %s. (%d left today)"):format(item.name, item.blurb:lower(), left),
+			"Watch the ad", function()
+				shop.adWatching = true
+				shop.adReady = false
+				render()
+				AdOffers.watch(item.ad)
+			end)
+		return
+	end
+	-- VIP ONLY: what VIP is, and the way to it.
+	if item.earn == "vip" and not owned(item.id) then
+		confirm(("%s comes with VIP, with a fifth more tokens every run, a free crate every day and the VIP lounge.")
+			:format(item.name), "See VIP", function()
+			ShopService.showTab("Passes")
+		end)
+		return
+	end
 	-- EARNED, NOT SOLD: said what it takes.
 	if item.earn and not owned(item.id) then
 		toast("Finish the story to get " .. item.name .. ".")
@@ -843,7 +1087,7 @@ local function pressPrice(item: any, tile: GuiObject)
 			toast("You have " .. item.name .. ".")
 			return
 		end
-		if (isPass and passId == 0) or (not isPass and productId == 0) then
+		if (isPass and passId == 0) or (not isPass and productId == 0) or not ShopCatalog.onSale(item) then
 			toast(item.name .. " is not on sale yet.")
 			return
 		end
@@ -894,6 +1138,7 @@ local function pressPrice(item: any, tile: GuiObject)
 			pop(if fresh and fresh:IsA("GuiObject") then fresh else tile)
 			toast(item.name .. " is yours.")
 		elseif result and result.reason == "short" then
+			uiSound("no", 0.45)
 			toast("Not enough tokens.")
 		end
 	end)
@@ -908,20 +1153,24 @@ end
 local KIND_WORDS: { [string]: string } = {
 	trail = "A ribbon that follows you, for everyone to see. Wear one at a time.",
 	aura = "A glow all around you, for everyone to see. Wear one at a time.",
+	pal = "A little friend who follows you about, for everyone to see. One at a time. Press it to bring it out.",
 	steps = "Prints where you walk, for everyone to see. Each fades after a moment.",
 	sound = "A soft sound now and then as you walk in the lobby and the squish room. Never on a level, where the chunks speak.",
-	emote = "Play it from the emote picker (G, or right on the D-pad), and anyone near you sees it.",
+	emote = "Play it from the emote picker (G, right on the D-pad, or Emotes in the menu), and anyone near you sees it.",
 	pass = "A Roblox pass: bought once with Robux, and yours for good.",
 	product = "Bought with Robux, and kept until you use it.",
 	tokens = "Tokens to spend here, bought with Robux.",
-	background = "A background for this shop, behind everything in it. Only you see it. Tap it to try it.",
+	background = "A background for this shop, behind everything in it. Only you see it. Press it to try it.",
 	crate = "Opens to a background you do not have yet. Once you have all of one rarity, the rest share its chance.",
+	avatar = "A Roblox avatar item, from the Roblox catalog: bought with Robux in Roblox's own window, and yours on "
+		.. "Roblox for good, to wear anywhere.",
 }
 local EARN_WORDS: { [string]: string } = {
 	story = "Not sold: finish the story to get it.",
 	starter = "Not sold on its own: it comes with the starter pack.",
 	materials = "Not sold: stand on every material in the levels to get it.",
 	crate = "Not sold on its own: it comes out of the background crates.",
+	vip = "Not sold: it comes with VIP, as long as you have it.",
 }
 
 local function hideInfo()
@@ -1094,7 +1343,16 @@ local function makeTile(item: any, order: number): TextButton
 	icon.Parent = card
 	corner(icon, UDim.new(0.5, 0))
 	stroke(icon, item.accent, 3)
-	drawIcon(icon, item)
+	-- THE ITEM IN THE ROUND (the two-hundred-and-twelfth pass): a little moving model of it where there is one
+	-- (ShopModels), the drawing where there is not (passes, backgrounds) or if the module is missing.
+	local modelled = false
+	if ShopModels then
+		local ok, drawn = pcall(ShopModels.draw, icon, item)
+		modelled = ok and drawn == true
+	end
+	if not modelled then
+		drawIcon(icon, item)
+	end
 	local iconSwell = Instance.new("UIScale")
 	iconSwell.Parent = icon
 	swell = iconSwell
@@ -1175,6 +1433,24 @@ local function makeTile(item: any, order: number): TextButton
 		pad.Parent = badge
 	end
 	-- ITS RARITY (a background): a pill in the rarity's colour, on the foot of its icon.
+	-- HERE FOR A SEASON: its time left on a red pill where a rarity's would be, until it is yours.
+	local left = if item.limited and not owned(item.id) then timeLeft(item) else nil
+	if left then
+		local pill = label(card, "Season", left, CHUNKY, math.max(12, math.floor(13 * t)), LOOK.white)
+		pill.BackgroundTransparency = 0
+		pill.BackgroundColor3 = Color3.fromRGB(214, 70, 60)
+		pill.AnchorPoint = Vector2.new(0.5, 0.5)
+		pill.Position = UDim2.new(0.5, 0, 0, top + iconD - 4)
+		pill.AutomaticSize = Enum.AutomaticSize.X
+		pill.Size = UDim2.new(0, 0, 0, math.floor(20 * t))
+		pill.ZIndex = 3
+		corner(pill, UDim.new(0.5, 0))
+		stroke(pill, LOOK.white, 2)
+		local seasonPad = Instance.new("UIPadding")
+		seasonPad.PaddingLeft = UDim.new(0, 8)
+		seasonPad.PaddingRight = UDim.new(0, 8)
+		seasonPad.Parent = pill
+	end
 	local rarity = if item.rarity then ShopCatalog.RARITY[item.rarity] else nil
 	if rarity then
 		local pill = label(card, "Rarity", rarity.name, CHUNKY, math.max(12, math.floor(13 * t)), LOOK.white)
@@ -1211,16 +1487,34 @@ local function makeTile(item: any, order: number): TextButton
 		table.insert(shop.gleams, run)
 	end
 
-	-- THE PRICE: amber for tokens, green for Robux, grey for soon, the tab's own colours once it is yours.
+	-- THE PRICE: amber for tokens, green for Robux, grey for soon, the tab's own colours once it is yours. Robux at the
+	-- price Roblox gives you (the hundred-and-sixtieth pass: ShopCatalog.robuxFor), grey if Roblox says it is off sale.
 	local fill, edge, ink, words
 	if item.soon then
 		fill, edge, ink = LOOK.soon, LOOK.soonEdge, LOOK.soonInk
-		words = if item.price then tostring(item.price) else ("R$ " .. tostring(item.robux))
+		words = if item.price then tostring(item.price) else ("R$ " .. tostring(ShopCatalog.robuxFor(item)))
+	elseif item.ad and shop.adReady and not shop.adWatching and shop.data and type(shop.data.adsLeft) == "table"
+		and (tonumber(shop.data.adsLeft[item.ad]) or 0) > 0 then
+		-- FREE FOR AN AD (AdOffers): the reward said on the price itself.
+		fill, edge, ink, words = LOOK.robux, LOOK.robuxEdge, LOOK.robuxInk, "Free: watch an ad"
+	elseif item.kind == "avatar" then
+		-- A BOUTIQUE ITEM: yours on Roblox, or its Robux price.
+		if owned(item.id) then
+			fill, edge, ink, words = fam.pale, fam.edge, fam.ink, "Yours"
+		else
+			-- (Roblox's own price for it, as its catalogue search gave it.)
+			fill, edge, ink, words = LOOK.robux, LOOK.robuxEdge, LOOK.robuxInk, "R$ " .. tostring(item.listed)
+		end
+	elseif item.earn == "vip" and not owned(item.id) then
+		-- VIP's own: what it takes, where a price would be.
+		fill, edge, ink, words = LOOK.robux, LOOK.robuxEdge, LOOK.robuxInk, "VIP only"
 	elseif item.robux and not (item.kind == "background" and owned(item.id)) then
 		if item.passId ~= nil and owned(item.id) then
 			fill, edge, ink, words = fam.pale, fam.edge, fam.ink, "Owned"
+		elseif not ShopCatalog.onSale(item) then
+			fill, edge, ink, words = LOOK.soon, LOOK.soonEdge, LOOK.soonInk, "Not on sale"
 		else
-			fill, edge, ink, words = LOOK.robux, LOOK.robuxEdge, LOOK.robuxInk, "R$ " .. tostring(item.robux)
+			fill, edge, ink, words = LOOK.robux, LOOK.robuxEdge, LOOK.robuxInk, "R$ " .. tostring(ShopCatalog.robuxFor(item))
 		end
 	elseif item.kind == "crate" and shop.data and shop.data.crates == false then
 		-- Not offered where you are (Roblox's policy for paid random items).
@@ -1304,7 +1598,7 @@ local function makeTile(item: any, order: number): TextButton
 				end)
 			end
 			toast(if item.kind == "steps" then item.name .. ": look at your feet." else "Listen: " .. item.name .. ".")
-		elseif item.kind == "trail" or item.kind == "aura" then
+		elseif item.kind == "trail" or item.kind == "aura" or item.kind == "pal" then
 			if shop.preview == item.id then
 				wearPreview(nil)
 				toast("Preview off.")
@@ -1388,6 +1682,40 @@ local function tabIntoView(button: GuiObject)
 	end
 end
 
+-- THE BOUTIQUE'S SHELVES, asked of the server (EconomyService), and the shop drawn again with them (Wear's tiles, the
+-- banner's pictures). Once at a time.
+local ShopServiceAsk = {}
+function ShopServiceAsk.boutique()
+	if shop.boutiqueAsking then
+		return
+	end
+	shop.boutiqueAsking = true
+	task.spawn(function()
+		local functions = ReplicatedStorage:FindFirstChild("RemoteFunctions")
+		local remote = functions and functions:FindFirstChild("Boutique")
+		local ok, answer = false, nil
+		if remote and remote:IsA("RemoteFunction") then
+			ok, answer = pcall(function(): any
+				return remote:InvokeServer()
+			end)
+		end
+		shop.boutiqueAsking = false
+		if ok and type(answer) == "table" and type(answer.items) == "table" then
+			local owns = {}
+			for _, id in ipairs(answer.owned or {}) do
+				owns[id] = true
+			end
+			shop.boutique = { items = answer.items, mine = owns, at = os.clock() }
+		else
+			shop.boutique = { items = {}, mine = {}, at = os.clock() - ShopCatalog.BOUTIQUE.refresh + 30 }
+			toast("The boutique did not open. Try again in a moment.")
+		end
+		if shop.open then
+			render()
+		end
+	end)
+end
+
 render = function()
 	local grid = ui.grid
 	if not grid then
@@ -1399,9 +1727,17 @@ render = function()
 			old:Destroy()
 		end
 	end
+	-- (The boutique's banner over the grid, or not, for this tab.)
+	placeBanner()
 	local data = shop.data
 	if ui.loading then
-		ui.loading.Visible = not (data and data.ready)
+		local waiting = shop.tab == "Wear" and shop.boutique == nil
+		ui.loading.Visible = not (data and data.ready) or waiting
+		ui.loading.Text = if waiting then "Opening the boutique..." else "Opening your shop..."
+	end
+	-- THE BOUTIQUE asked for its shelves when it is opened (and again after its hour).
+	if shop.tab == "Wear" and (shop.boutique == nil or os.clock() - shop.boutique.at > ShopCatalog.BOUTIQUE.refresh) then
+		ShopServiceAsk.boutique()
 	end
 	-- THIS TAB'S COLOURS for everything drawn now; the rare tiles' gleams made afresh with them.
 	local fam = family(shop.tab)
@@ -1410,9 +1746,13 @@ render = function()
 	table.clear(shop.rays)
 	table.clear(shop.sheens)
 	table.clear(shop.breathe)
+	-- (The boutique's banner swept with the cards' light, a beat apart.)
+	if ui.bannerShine and shop.tab ~= "Wear" then
+		table.insert(shop.sheens, { grad = ui.bannerShine, phase = 2.5 })
+	end
 	grid.ScrollBarImageColor3 = fam.edge
 	local first: GuiObject? = nil
-	for order, item in ipairs(ShopCatalog.inTab(shop.tab)) do
+	for order, item in ipairs(itemsFor(shop.tab)) do
 		-- BOUGHT ONCE (the starter pack): off Featured once it is yours, and still in its own tab, Owned.
 		if not (shop.tab == "Featured" and item.once and owned(item.id)) then
 			local tile = makeTile(item, order)
@@ -1429,8 +1769,9 @@ render = function()
 	local progress = ui.progress
 	if progress then
 		local have, of = 0, 0
-		for _, item in ipairs(ShopCatalog.inTab(shop.tab)) do
-			if item.kind ~= "tokens" and item.kind ~= "product" and item.kind ~= "crate" and not item.soon then
+		for _, item in ipairs(itemsFor(shop.tab)) do
+			if item.kind ~= "tokens" and item.kind ~= "product" and item.kind ~= "crate" and item.kind ~= "avatar"
+				and not item.soon then
 				of += 1
 				if owned(item.id) then
 					have += 1
@@ -1514,8 +1855,9 @@ local function layout()
 	ui.tray.Position = UDim2.new(0, 12, 0, trayTop)
 	ui.tray.Size = UDim2.new(1, -24, 1, -(trayTop + 12))
 	local gridTop = trayTop + 4
-	ui.grid.Position = UDim2.new(0, 16, 0, gridTop)
-	ui.grid.Size = UDim2.new(1, -36, 1, -(gridTop + 18))
+	ui.gridTop = gridTop
+	ui.bannerH = math.max(MIN_TOUCH + 12, math.floor(70 * t))
+	placeBanner()
 	local gap = math.floor(12 * t)
 	local inner = (w - 36) - 16 - 2 * TILE_ROOM -- the scroll bar's room, and the room round the tiles
 	local cellW = math.floor((inner - gap * (shop.cols - 1)) / shop.cols)
@@ -1889,6 +2231,107 @@ local function build()
 	gridPad.PaddingLeft = UDim.new(0, TILE_ROOM)
 	gridPad.PaddingRight = UDim.new(0, TILE_ROOM)
 	gridPad.Parent = grid
+	-- THE BOUTIQUE'S BANNER (the two-hundred-and-fourteenth pass, from your note of 2026-11-14: "put the boutique ...
+	-- at the top of other tabs, which will lead to the tab ... like a quick link"): across the top of every tab but Wear,
+	-- in Wear's own colours: three of its real items in their discs, NEW: THE BOUTIQUE and what is in it, a light
+	-- sweeping across now and then, and the whole of it a button into Wear.
+	local wear = family("Wear")
+	local banner = Instance.new("TextButton")
+	banner.Name = "BoutiqueBanner"
+	banner.Text = ""
+	banner.AutoButtonColor = false
+	banner.BackgroundColor3 = wear.fill
+	banner.ZIndex = 4
+	banner.Parent = panel
+	corner(banner, UDim.new(0, 16))
+	stroke(banner, wear.edge, 3)
+	local bannerShine = Instance.new("UIGradient")
+	bannerShine.Rotation = 20
+	bannerShine.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.45, 0),
+		NumberSequenceKeypoint.new(0.5, 0.0), NumberSequenceKeypoint.new(0.55, 0), NumberSequenceKeypoint.new(1, 0) })
+	bannerShine.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, LOOK.white), ColorSequenceKeypoint.new(0.42, LOOK.white),
+		ColorSequenceKeypoint.new(0.5, wear.fill:Lerp(LOOK.white, 0.85)), ColorSequenceKeypoint.new(0.58, LOOK.white),
+		ColorSequenceKeypoint.new(1, LOOK.white) })
+	bannerShine.Offset = Vector2.new(-1, 0)
+	bannerShine.Parent = banner
+	local pictures = Instance.new("Frame")
+	pictures.Name = "Pictures"
+	pictures.BackgroundTransparency = 1
+	pictures.AnchorPoint = Vector2.new(0, 0.5)
+	pictures.Position = UDim2.new(0, 10, 0.5, 0)
+	pictures.Size = UDim2.new(0.3, 0, 0.84, 0)
+	pictures.ZIndex = 5
+	pictures.Parent = banner
+	local row = Instance.new("UIListLayout")
+	row.FillDirection = Enum.FillDirection.Horizontal
+	row.VerticalAlignment = Enum.VerticalAlignment.Center
+	row.Padding = UDim.new(0, 6)
+	row.Parent = pictures
+	local discs = {}
+	for k = 1, 3 do
+		local disc = Instance.new("Frame")
+		disc.Name = "Disc" .. k
+		disc.BackgroundColor3 = wear.pale
+		disc.Size = UDim2.fromScale(1, 1)
+		disc.ZIndex = 5
+		disc.Parent = pictures
+		corner(disc, UDim.new(0.5, 0))
+		stroke(disc, wear.edge, 2)
+		local square = Instance.new("UIAspectRatioConstraint")
+		square.AspectRatio = 1
+		square.Parent = disc
+		local picture = Instance.new("ImageLabel")
+		picture.Name = "Picture"
+		picture.BackgroundTransparency = 1
+		picture.AnchorPoint = Vector2.new(0.5, 0.5)
+		picture.Position = UDim2.fromScale(0.5, 0.5)
+		picture.Size = UDim2.fromScale(0.86, 0.86)
+		picture.ScaleType = Enum.ScaleType.Fit
+		picture.ZIndex = 6
+		picture.Parent = disc
+		table.insert(discs, picture)
+	end
+	local headline = label(banner, "Headline", "NEW: THE BOUTIQUE", CHUNKY, 20, wear.ink)
+	headline.AnchorPoint = Vector2.new(0, 1)
+	headline.Position = UDim2.new(0.32, 0, 0.52, 0)
+	headline.Size = UDim2.new(0.46, 0, 0.42, 0)
+	headline.TextXAlignment = Enum.TextXAlignment.Left
+	headline.TextScaled = true
+	headline.ZIndex = 5
+	local detail = label(banner, "Detail", "Real Roblox outfits for the bay: sailor hats, raincoats, slime and more",
+		BODY, 14, wear.edge)
+	detail.AnchorPoint = Vector2.new(0, 0)
+	detail.Position = UDim2.new(0.32, 0, 0.54, 0)
+	detail.Size = UDim2.new(0.46, 0, 0.34, 0)
+	detail.TextXAlignment = Enum.TextXAlignment.Left
+	detail.TextScaled = true
+	detail.ZIndex = 5
+	local go = label(banner, "Go", "Shop it", CHUNKY, 18, LOOK.white)
+	go.AnchorPoint = Vector2.new(1, 0.5)
+	go.Position = UDim2.new(1, -12, 0.5, 0)
+	go.Size = UDim2.new(0.18, 0, 0.62, 0)
+	go.BackgroundTransparency = 0
+	go.BackgroundColor3 = wear.edge
+	go.TextScaled = true
+	go.ZIndex = 5
+	corner(go, UDim.new(0.5, 0))
+	local goPad = Instance.new("UIPadding")
+	goPad.PaddingTop = UDim.new(0.18, 0)
+	goPad.PaddingBottom = UDim.new(0.18, 0)
+	goPad.Parent = go
+	banner.Activated:Connect(function()
+		uiSound("buttonClick", 0.5)
+		ShopService.showTab("Wear")
+	end)
+	banner.MouseEnter:Connect(function()
+		TweenService:Create(banner, TweenInfo.new(0.15), { BackgroundColor3 = wear.fill:Lerp(LOOK.white, 0.25) }):Play()
+	end)
+	banner.MouseLeave:Connect(function()
+		TweenService:Create(banner, TweenInfo.new(0.15), { BackgroundColor3 = wear.fill }):Play()
+	end)
+	ui.banner = banner
+	ui.bannerPictures = discs
+	ui.bannerShine = bannerShine
 	local loading = label(panel, "Loading", "Opening your shop...", CHUNKY, 20, LOOK.edge)
 	loading.Name = "Loading"
 	loading.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -2073,6 +2516,24 @@ function ShopService.open(tab: string?)
 	ui.screen.Enabled = true
 	ui.panel.Visible = true
 	shop.tab = tab or shop.tab
+	-- THE BOUTIQUE'S SHELVES asked for as the shop opens, for the banner's pictures (and Wear opens at once).
+	if shop.boutique == nil and not shop.boutiqueAsking then
+		task.defer(function()
+			if shop.open and shop.boutique == nil then
+				ShopServiceAsk.boutique()
+			end
+		end)
+	end
+	-- IS THERE AN AD FOR YOU (AdOffers): asked as the shop opens, as Roblox asks; the Run boost's price shows it.
+	if AdOffers and not shop.adWatching then
+		task.spawn(function()
+			local ready = AdOffers.ready()
+			if shop.open and ready ~= shop.adReady then
+				shop.adReady = ready
+				render()
+			end
+		end)
+	end
 	-- (Its tiles pop in, and its tabs pop up one after another: the one it opens on counts as chosen already, so it
 	-- pops up with the rest rather than bouncing first.)
 	shop.fresh = true
@@ -2371,12 +2832,16 @@ function ShopService.codesOpen(): boolean
 	return codes.screen ~= nil and codes.screen.Enabled == true
 end
 
+-- PUT AWAY FROM OUTSIDE (Cinema.closeOverlays: a scene starting, the screen going black for a move). A run starts for
+-- everyone standing in the lobby, and one started with you at the post box carried its card onto the level, holding your
+-- controls there.
+function ShopService.closeCodes()
+	closeCodes()
+end
+
 -- ===== TOKENS EARNED, said at the end of a run =====
 
-local function earned(amount: any, info: any)
-	if typeof(amount) ~= "number" then
-		return
-	end
+local function showEarned(amount: number, info: any)
 	local gui = Players.LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("TokenPop")
 	if not gui then
 		local made = Instance.new("ScreenGui")
@@ -2425,6 +2890,12 @@ local function earned(amount: any, info: any)
 		if info.friend then
 			table.insert(reasons, "With a friend")
 		end
+		if info.vip then
+			table.insert(reasons, "VIP +20%")
+		end
+		if info.boost then
+			table.insert(reasons, "Run boost 2x")
+		end
 		if info.starter then
 			table.insert(reasons, "Starter pack")
 		end
@@ -2451,6 +2922,9 @@ local function earned(amount: any, info: any)
 		end
 		if info.cache then
 			table.insert(reasons, "Hidden cache")
+		end
+		if info.teleprinter then
+			table.insert(reasons, "The teleprinter answered")
 		end
 	end
 	local ribbon = if type(info) == "table" and info.ribbon then "  and the green ribbon (Trails)" else ""
@@ -2480,6 +2954,44 @@ local function earned(amount: any, info: any)
 	end)
 end
 
+-- NOT UNDER A SCENE OR THE BLACK (the hundred-and-thirty-ninth pass): a run's tokens are paid as it is finished, in the
+-- middle of its ending, so this came up under the scene's bars, where nobody saw it, or under the black of the move
+-- home. It waits for the scene to give the camera back and the screen to clear (a minute at most), then says it.
+local besideCache: { [string]: any } = {}
+local function besideModule(name: string): any
+	if besideCache[name] == nil then
+		local found = script.Parent and script.Parent:FindFirstChild(name)
+		local loaded: any = false
+		if found and found:IsA("ModuleScript") then
+			local ok, module = pcall(require, found)
+			if ok and type(module) == "table" then
+				loaded = module
+			end
+		end
+		besideCache[name] = loaded
+	end
+	return besideCache[name] or nil
+end
+
+local function heldBack(): boolean
+	local cinema = besideModule("Cinema")
+	local ui = besideModule("UIService")
+	return (cinema ~= nil and cinema.active()) or (ui ~= nil and type(ui.isBlack) == "function" and ui.isBlack())
+end
+
+local function earned(amount: any, info: any)
+	if typeof(amount) ~= "number" then
+		return
+	end
+	task.spawn(function()
+		local began = os.clock()
+		while heldBack() and os.clock() - began < 60 do
+			task.wait(0.25)
+		end
+		showEarned(amount, info)
+	end)
+end
+
 -- ===== STARTING =====
 
 -- THE VIP BADGES' SHINE (EconomyService makes the badge, over a VIP player's head): every few seconds a light sweeps
@@ -2503,8 +3015,185 @@ local function shineVipBadges()
 	end)
 end
 
+-- ===== THE SIDE RAIL (the two-hundred-and-fifteenth pass, from your note of 2026-11-14: "on-screen things like 2x tokens
+-- could be featured as a small icon on the side somewhere, as well as the shop one") =====
+--
+-- Under the journal and the pause tab, in their look (a dark rounded tile, a thin edge): the SHOP (a little bag; opens
+-- the shop), 2x TOKENS (gold and lit when it is yours; dimmed with a + when it is not, and Roblox's own window for it on a
+-- press), and the RUN BOOST (only while you have one waiting, with how many). In the lobby and the squish room only: a
+-- run's screen stays clear (InLevel).
+local rail = { screen = nil :: ScreenGui?, double = nil :: TextButton?, boost = nil :: TextButton?,
+	boostCount = nil :: TextLabel?, plus = nil :: TextLabel?, doubleWords = nil :: TextLabel? }
+
+local function railTile(parent: Instance, name: string, order: number): TextButton
+	local tile = Instance.new("TextButton")
+	tile.Name = name
+	tile.LayoutOrder = order
+	tile.Size = UDim2.fromOffset(44, 44)
+	tile.BackgroundColor3 = Style.COLOUR.panel
+	tile.BackgroundTransparency = 0.15
+	tile.BorderSizePixel = 0
+	tile.AutoButtonColor = true
+	tile.Text = ""
+	tile.Parent = parent
+	corner(tile, UDim.new(0, 12))
+	local edge = stroke(tile, Style.COLOUR.accent, 1.5)
+	edge.Transparency = 0.55
+	return tile
+end
+
+paintRail = function()
+	local screen = rail.screen
+	if not screen then
+		return
+	end
+	local player = Players.LocalPlayer
+	screen.Enabled = player:GetAttribute("InLevel") == nil
+	local data = shop.data
+	local has = player:GetAttribute("DoubleTokens") == true
+	if rail.double and rail.doubleWords and rail.plus then
+		rail.doubleWords.TextColor3 = if has then LOOK.token else Style.COLOUR.ink:Lerp(LOOK.white, 0.55)
+		rail.doubleWords.TextTransparency = if has then 0 else 0.25
+		rail.plus.Visible = not has
+	end
+	local boosts = if data then tonumber(data.boosts) or 0 else 0
+	if rail.boost and rail.boostCount then
+		rail.boost.Visible = boosts > 0
+		rail.boostCount.Text = tostring(boosts)
+	end
+end
+
+local function buildRail()
+	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local screen = Instance.new("ScreenGui")
+	screen.Name = "SideRail"
+	screen.ResetOnSpawn = false
+	screen.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+	screen.DisplayOrder = 44
+	screen.Parent = playerGui
+	rail.screen = screen
+	local column = Instance.new("Frame")
+	column.Name = "Column"
+	-- Under the pause tab, in the same screen's terms (PauseMenuService: (1, -14, 0, 76), 44 tall), 10 below it.
+	column.AnchorPoint = Vector2.new(1, 0)
+	column.Position = UDim2.new(1, -14, 0, 76 + 44 + 10)
+	column.Size = UDim2.fromOffset(44, 160)
+	column.BackgroundTransparency = 1
+	column.Parent = screen
+	local list = Instance.new("UIListLayout")
+	list.FillDirection = Enum.FillDirection.Vertical
+	list.Padding = UDim.new(0, 8)
+	list.SortOrder = Enum.SortOrder.LayoutOrder
+	list.Parent = column
+
+	-- THE SHOP: a little stall, as the lobby's: a striped awning over an amber counter.
+	local shopTile = railTile(column, "Shop", 1)
+	local awning = Instance.new("Frame")
+	awning.AnchorPoint = Vector2.new(0.5, 0)
+	awning.Position = UDim2.new(0.5, 0, 0, 9)
+	awning.Size = UDim2.fromOffset(28, 11)
+	awning.BackgroundTransparency = 1
+	awning.ClipsDescendants = true
+	awning.Parent = shopTile
+	corner(awning, UDim.new(0, 4))
+	for k = 0, 3 do
+		local stripe = Instance.new("Frame")
+		stripe.Position = UDim2.fromOffset(k * 7, 0)
+		stripe.Size = UDim2.fromOffset(7, 11)
+		stripe.BackgroundColor3 = if k % 2 == 0 then Color3.fromRGB(244, 150, 180) else LOOK.white
+		stripe.BorderSizePixel = 0
+		stripe.Parent = awning
+	end
+	for k = 0, 3 do
+		local scallop = Instance.new("Frame")
+		scallop.Position = UDim2.fromOffset(8 + k * 7, 18)
+		scallop.Size = UDim2.fromOffset(7, 5)
+		scallop.BackgroundColor3 = if k % 2 == 0 then Color3.fromRGB(244, 150, 180) else LOOK.white
+		scallop.BorderSizePixel = 0
+		scallop.Parent = shopTile
+		corner(scallop, UDim.new(0.5, 0))
+	end
+	local counter = Instance.new("Frame")
+	counter.AnchorPoint = Vector2.new(0.5, 0)
+	counter.Position = UDim2.new(0.5, 0, 0, 25)
+	counter.Size = UDim2.fromOffset(24, 10)
+	counter.BackgroundColor3 = LOOK.token
+	counter.BorderSizePixel = 0
+	counter.Parent = shopTile
+	corner(counter, UDim.new(0, 3))
+	shopTile.Activated:Connect(function()
+		uiSound("buttonClick", 0.5)
+		ShopService.open()
+	end)
+
+	-- 2x TOKENS: yours, lit; not yet, dimmed with a + and Roblox's own window for it.
+	local double = railTile(column, "DoubleTokens", 2)
+	local words = label(double, "Words", "2x", CHUNKY, 20, LOOK.token)
+	words.Size = UDim2.fromScale(1, 1)
+	local plus = label(double, "Plus", "+", CHUNKY, 14, LOOK.white)
+	plus.AnchorPoint = Vector2.new(0.5, 0.5)
+	plus.Position = UDim2.new(1, -4, 0, 4)
+	plus.Size = UDim2.fromOffset(18, 18)
+	plus.BackgroundTransparency = 0
+	plus.BackgroundColor3 = LOOK.robux
+	corner(plus, UDim.new(0.5, 0))
+	rail.double, rail.doubleWords, rail.plus = double, words, plus
+	double.Activated:Connect(function()
+		uiSound("buttonClick", 0.5)
+		local item = ShopCatalog.get("DoubleTokens")
+		-- (A toast lives in the shop, so with the shop shut it is said by opening the shop, at the passes: the two-hundred-
+		-- and-eighteenth pass, from your note of 2026-11-16, "when I press on 2x and 2x run nothing happens".)
+		local prompted = false
+		if Players.LocalPlayer:GetAttribute("DoubleTokens") ~= true and item and (item.passId or 0) > 0 then
+			prompted = pcall(function()
+				MarketplaceService:PromptGamePassPurchase(Players.LocalPlayer, item.passId)
+			end)
+		end
+		if not prompted then
+			ShopService.open("Passes")
+			task.defer(toast, if Players.LocalPlayer:GetAttribute("DoubleTokens") == true
+				then "2x tokens is yours: every run pays double." else "2x tokens: every run pays double.")
+		end
+	end)
+
+	-- THE RUN BOOST: only while one is waiting, with how many.
+	local boost = railTile(column, "RunBoost", 3)
+	local arrow = label(boost, "Arrow", "2x", CHUNKY, 14, LOOK.robux)
+	arrow.Size = UDim2.new(1, 0, 0.6, 0)
+	local count = label(boost, "Count", "1", CHUNKY, 12, LOOK.white)
+	count.AnchorPoint = Vector2.new(0.5, 0.5)
+	count.Position = UDim2.new(1, -4, 0, 4)
+	count.Size = UDim2.fromOffset(18, 18)
+	count.BackgroundTransparency = 0
+	count.BackgroundColor3 = LOOK.robuxEdge
+	corner(count, UDim.new(0.5, 0))
+	local runWord = label(boost, "Run", "RUN", CHUNKY, 10, LOOK.white)
+	runWord.Position = UDim2.new(0, 0, 0.55, 0)
+	runWord.Size = UDim2.new(1, 0, 0.35, 0)
+	rail.boost, rail.boostCount = boost, count
+	boost.Activated:Connect(function()
+		uiSound("buttonClick", 0.5)
+		-- The shop at the run boost (Tokens), and how many are waiting.
+		ShopService.open("Tokens")
+		local waiting = if shop.data then tonumber(shop.data.boosts) or 0 else 0
+		task.defer(toast, ("You have %d run boost%s: your next finished run pays double."):format(waiting,
+			if waiting == 1 then "" else "s"))
+	end)
+
+	local player = Players.LocalPlayer
+	player:GetAttributeChangedSignal("InLevel"):Connect(paintRail)
+	player:GetAttributeChangedSignal("DoubleTokens"):Connect(paintRail)
+	paintRail()
+end
+
 function ShopService.start()
 	shineVipBadges()
+	-- THE PRICES ROBLOX GIVES YOU (the hundred-and-sixtieth pass), asked once; the tiles drawn again with them.
+	ShopCatalog.askPrices(function()
+		if shop.open then
+			render()
+		end
+	end)
 	local events = ReplicatedStorage:WaitForChild("RemoteEvents")
 	local functions = ReplicatedStorage:WaitForChild("RemoteFunctions")
 	shop.requestRemote = functions:WaitForChild("ShopRequest", 20) :: RemoteFunction?
@@ -2517,14 +3206,54 @@ function ShopService.start()
 		return
 	end
 	build()
+	buildRail()
 	;(update :: RemoteEvent).OnClientEvent:Connect(accept)
 	;(earnedEvent :: RemoteEvent).OnClientEvent:Connect(earned)
+	-- A BOUTIQUE ITEM BOUGHT: yours, said so, and its tile turned.
+	MarketplaceService.PromptPurchaseFinished:Connect(function(who: Player, assetId: number, bought: boolean)
+		if who ~= Players.LocalPlayer or not bought or not shop.boutique then
+			return
+		end
+		shop.boutique.mine[assetId] = true
+		uiSound("buy", 0.6)
+		toast("It's yours on Roblox now: put it on from your avatar.")
+		if shop.open and shop.tab == "Wear" then
+			render()
+		end
+	end)
+	-- AN AD WATCHED FROM HERE (AdOffers): said, and the shop drawn again with what you have now.
+	if AdOffers then
+		AdOffers.finished(function(what: string, ok: boolean, outcome: string)
+			if what ~= "boost" then
+				return
+			end
+			shop.adWatching = false
+			if ok then
+				uiSound("buy", 0.6)
+				local boosts = if shop.data then tonumber(shop.data.boosts) or 0 else 0
+				toast(if boosts > 1 then ("Run boost ready: your next %d runs pay double."):format(boosts)
+					else "Run boost ready: your next finished run pays double.")
+			elseif outcome == "limit" then
+				toast("That is today's ads watched. More tomorrow.")
+			else
+				toast("The ad did not play to the end, so there is no boost this time.")
+			end
+			if shop.open then
+				task.spawn(function()
+					shop.adReady = AdOffers.ready()
+					render()
+				end)
+			end
+		end)
+	end
 	-- THE KIOSK'S PROMPT (Roblox's own): heard here, so the server does nothing to open a shop.
 	ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt, who: Player)
 		if prompt.Name == "ShopPrompt" and who == Players.LocalPlayer then
 			ShopService.open()
 		elseif prompt.Name == "CodePrompt" and who == Players.LocalPlayer then
 			ShopService.openCodes()
+		elseif prompt.Name == "VipCratePrompt" and who == Players.LocalPlayer then
+			ShopService.vipCrate()
 		end
 	end)
 	local camera = workspace.CurrentCamera
@@ -2577,5 +3306,5 @@ ShopService.kit = {
 	hold = hold,
 }
 
-ShopService.STAMP = "9fa2efc2"
+ShopService.STAMP = "810e3dc0"
 return ShopService

@@ -15,6 +15,10 @@ export type MaterialDef = {
 	-- is a clock: this counts CONTACTS, so crossing a cell repeatedly breaks it down
 	-- even though no single visit is long.
 	stepsToCollapse: number?,
+	-- THE FLOOR GOING BEHIND YOU (the hundred-and-fifty-first pass): seconds from the first foot on a cell to it giving
+	-- way, whether anyone is still on it or not. Walk on and it goes behind you; stop, and it goes under you. A crossing
+	-- at a walk is always ahead of it. See CRUMBLE in DeformationService.
+	crumbleAfter: number?,
 	popCount: number?,
 	microBounceHeight: number?,
 	sfxEvent: string,
@@ -96,6 +100,19 @@ export type MaterialDef = {
 	stompBurn: number?,
 	regrowAfter: number?,
 	hotSpeed: number?,
+	-- WAXED BUTTER: how much of your speed a cell leaves you once its wax has been broken (see ButterWax).
+	softSpeed: number?,
+	-- (The two-hundred-and-forty-fifth pass, DeformationService.) The share of your jump's height kept while you are on it
+	-- (clay, memory foam); the speed a cell is packed toward by feet, and how many feet pack it (snow); and how many steps
+	-- a cell going through takes off the four round it (ice).
+	jumpScale: number?,
+	packedSpeed: number?,
+	packSteps: number?,
+	crackSpread: number?,
+	sinks: boolean?,
+	wearSteps: number?,
+	-- LIGHT SWITCHES: something of the cell stands above its tile, so it is sensed by a taller part (see LightSwitch).
+	proud: boolean?,
 	-- OOBLECK WADING. How fast you sink standing and moving (a full wade per second), the speed
 	-- below which you count as standing, how much of your speed the deepest wade takes, the landing
 	-- speed that hardens the pool, how long it stays hard, and when a hole fills back in.
@@ -119,7 +136,8 @@ local Materials: { [string]: MaterialDef } = {
 	},
 	ButterWax = {
 		category = "pace",
-		frictionOverride = 0.25,
+		-- (0.3 since the two-hundred-and-forty-fifth pass: at 0.25 whole wax threw you about more than it let you steer.)
+		frictionOverride = 0.3,
 		-- LONGER THAN EVERY OTHER MATERIAL, and butter is the one that earns it. This
 		-- is the wait between stepping off and the surface returning to pristine, and
 		-- the renderer holds most of the dent (WAX_RESIDUAL) for all of it -- so this
@@ -128,6 +146,12 @@ local Materials: { [string]: MaterialDef } = {
 		-- smoothed itself out before you were far enough along to look back at it,
 		-- which read as the butter springing back the way honey does.
 		decayDuration = 13,
+		-- THE WAX IS FAST AND THE BUTTER IS NOT (the two-hundred-and-seventh pass, from your note of 2026-11-06 about this
+		-- chunk's mechanics). Whole wax is what you slide on: slick, and all of your speed. A cell whose wax has already
+		-- been broken, by you or by whoever went before, is butter with a cracked skin on it: it holds your feet (no slide,
+		-- RunFeel) and leaves you this much of your speed, for as long as its footprint lasts (decayDuration). So a fresh
+		-- line across is quick and hard to steer, and your own trail, or the one in front of you, is slow and sure.
+		softSpeed = 0.72,
 		sfxMinGap = 0.2,
 		sfxEvent = "butterWaxCrack",
 		deformationAnim = "crack",
@@ -156,8 +180,13 @@ local Materials: { [string]: MaterialDef } = {
 		-- on it, it fails because it has been WORKED -- so the count below is the real
 		-- trigger and the clock is only the standing-still case.
 		-- 2.3 (was 3.0): every chunk that can drop you now gives way faster.
-		dissolveTime = 2.3,
-		stepsToCollapse = 3,
+		-- AND FASTER AGAIN (the hundred-and-fifty-first pass, from your test: crossed "within a second", never broken):
+		-- the sand you stepped on pours away 1.4 seconds after, whether you are on it or not, and two steps on one spot
+		-- are enough. A hole fills back in after six seconds, so whoever follows has a way across.
+		dissolveTime = 1.4,
+		crumbleAfter = 1.4,
+		regrowAfter = 6,
+		stepsToCollapse = 2,
 		sfxMinGap = 0.2,
 		sfxEvent = "kineticSandImprint",
 		deformationAnim = "imprint",
@@ -184,7 +213,10 @@ local Materials: { [string]: MaterialDef } = {
 		-- so it still bites a little.
 		frictionOverride = 0.12,
 		-- 1.9 (was 2.5): every chunk that can drop you now gives way faster.
-		dissolveTime = 1.9,
+		-- 1.1 now, and it crumbles behind you as well as under you (the hundred-and-fifty-first pass).
+		dissolveTime = 1.1,
+		crumbleAfter = 1.1,
+		regrowAfter = 6,
 		decayDuration = 7,
 		sfxMinGap = 0.2,
 		sfxEvent = "soapCrumble",
@@ -197,7 +229,10 @@ local Materials: { [string]: MaterialDef } = {
 	-- Not slippery: a biscuit has grip.
 	Cookie = {
 		category = "risk",
-		dissolveTime = 1.7,
+		-- 0.9 (was 1.7), the quickest of the crumbs: a dry biscuit goes the moment it has cracked.
+		dissolveTime = 0.9,
+		crumbleAfter = 0.9,
+		regrowAfter = 6,
 		decayDuration = 8,
 		sfxMinGap = 0.2,
 		-- ITS OWN CRUNCH (audio/gen_sheet_sfx.py, cookieCrunch_x4). Until its sheet is imported, the chocolate bar's dry
@@ -259,11 +294,12 @@ local Materials: { [string]: MaterialDef } = {
 		displaceFrom = 2,
 		displaceTilt = 2,
 		displaceLimit = 3,
-		-- A floating plate does not float for long.
-		sinkAfter = 8,
+		-- A floating plate does not float for long. 4.5 (was 8), with the other breaking materials (the hundred-and-fifty-
+		-- first pass).
+		sinkAfter = 4.5,
 		-- Standing on a cell packs it again this often. Two of these and the plates around you
-		-- are floating, and stepping off onto one of them is stepping into the brine.
-		creepEvery = 1.2,
+		-- are floating, and stepping off onto one of them is stepping into the brine. 0.9 (was 1.2).
+		creepEvery = 0.9,
 		sfxMinGap = 0.15,
 		sfxEvent = "saltCrunch",
 		deformationAnim = "compact",
@@ -281,7 +317,11 @@ local Materials: { [string]: MaterialDef } = {
 		-- Molten rock is not slippery, it is DRAGGING. The only friction override above 1
 		-- in the game, so crossing feels laboured rather than skated.
 		frictionOverride = 1.6,
-		stepsToCollapse = 3,
+		-- Two steps (was three), and the crust you stood on cracks through 1.6 seconds after (the hundred-and-fifty-first
+		-- pass): a raft that thin over moving rock never lasts.
+		stepsToCollapse = 2,
+		crumbleAfter = 1.6,
+		regrowAfter = 6,
 		decayDuration = 6,
 		sfxMinGap = 0.2,
 		sfxEvent = "lavaCrust",
@@ -300,10 +340,12 @@ local Materials: { [string]: MaterialDef } = {
 	Oobleck = {
 		category = "risk",
 		speedMultiplier = 1.0,
-		wadeStill = 1.1,
+		-- 1.4 and 0.55 (were 1.1 and 0.45, the hundred-and-fifty-first pass): standing, you are under in well under a
+		-- second; walking, about two.
+		wadeStill = 1.4,
 		-- High enough that a crossing at a walk visibly wades (sim_round3: 0.32 never reached the first
 		-- step), low enough that it still gets across.
-		wadeMoving = 0.45,
+		wadeMoving = 0.55,
 		wadeSlow = 8,
 		wadeDrag = 0.5,
 		-- A default jump lands at about fifty studs a second; walking off a step does not come close.
@@ -378,12 +420,18 @@ local Materials: { [string]: MaterialDef } = {
 	-- from the ice two chunks away.
 	Snow = {
 		category = "risk",
-		speedMultiplier = 0.86,
-		stepsToCollapse = 4,
+		-- FRESH SNOW IS DEEP, A TRODDEN TRAIL IS A LANE (the two-hundred-and-forty-sixth pass, 2026-11-22: "continue", to keeping the floor under a few): it no longer breaks behind a walking
+		-- foot (no stepsToCollapse, no crumbleAfter). Fresh snow is slow; every foot down a cell packs it toward
+		-- packedSpeed, so following a trail is quicker. Stand still and it still melts through (dissolveTime).
+		speedMultiplier = 0.78,
+		packedSpeed = 1.05,
+		packSteps = 2,
+		-- Two (was four), and the slush you packed slumps away 1.5 seconds after you (the hundred-and-fifty-first pass).
+		regrowAfter = 6,
 		-- AND a clock, because it is melting on its own. Long, so it is not the thing that
 		-- gets you -- it is the thing that reminds you the chunk is temporary.
-		-- 5.5 (was 7.0): every chunk that can drop you now gives way faster.
-		dissolveTime = 5.5,
+		-- 1.5 now (5.5 before, and 7.0 before that), the same as its crumble.
+		dissolveTime = 1.5,
 		decayDuration = 9,
 		sfxMinGap = 0.18,
 		sfxEvent = "snowPack",
@@ -398,10 +446,22 @@ local Materials: { [string]: MaterialDef } = {
 	-- being a risk -- the pressure comes from the surface itself rather than from a threat.
 	Foam = {
 		category = "pace",
-		speedMultiplier = 0.90,
+		-- NEVER DROPS YOU (the two-hundred-and-forty-sixth pass, 2026-11-22: "continue", to keeping the floor under a few): no crumbleAfter. Soft and slow instead: you wade in it, the jump
+		-- out is soft (jumpScale), and the dents stay twelve seconds.
+		speedMultiplier = 0.8,
 		-- The dwell sink is a client effect (see FOAM in DeformationRenderer); what the
 		-- server owns is how long the hollow you left stays behind you.
-		decayDuration = 5,
+		-- MEMORY FOAM REMEMBERS (the two-hundred-and-forty-fifth pass, from your list of 2026-11-22): it keeps your dents for
+		-- twelve seconds and soaks up some of your jump. (It still gives way under a foot that stays, as you asked in 205.)
+		decayDuration = 12,
+		jumpScale = 0.8,
+		-- Its dent goes deeper than the thin tile reaches, so it is watched by the taller sensor (DeformationService).
+		sinks = true,
+		-- AND IT GIVES OUT (the two-hundred-and-fifth pass, from your note of 2026-11-07: foam "should seem less solid
+		-- and have its own effect or drop me just how other chunks do"). A cell pressed gives out two seconds after the
+		-- first foot, whether you are on it or not, and swells back six seconds later: the slowest of everything that
+		-- breaks, because foam is a pace chunk, so a walker is always clear of it and only a dawdler goes through.
+		regrowAfter = 6,
 		sfxMinGap = 0.2,
 		sfxEvent = "foamCompress",
 		deformationAnim = "compress",
@@ -415,6 +475,10 @@ local Materials: { [string]: MaterialDef } = {
 	-- most of a run, so a platform you crossed early is still lit when you look back at it.
 	LightSwitch = {
 		category = "pace",
+		-- ITS ROCKERS STAND OVER THE CELL (the two-hundred-and-eighth pass): a foot on a raised half is a third of a stud
+		-- clear of the thin tile that senses it, so the cell is sensed by the taller part clay and salt use
+		-- (DeformationService's reachFor).
+		proud = true,
 		speedMultiplier = 0.95,
 		decayDuration = 30,
 		sfxMinGap = 0.2,
@@ -439,7 +503,12 @@ local Materials: { [string]: MaterialDef } = {
 		-- Four, the most of any material. A brick does not weaken the way sand or ice does
 		-- -- it either holds or it is gone -- so the count is high and nothing about the
 		-- surface gives way until the moment it does.
+		-- AND A BRICK WORKS LOOSE 1.6 seconds after a foot pressed it (the hundred-and-fifty-first pass, from your test:
+		-- four steps on one brick never happens in a crossing, so the bricks never came loose at all). The four stay, so
+		-- the three stages of a brick working loose can still be seen by anyone who keeps stamping on one.
 		stepsToCollapse = 4,
+		crumbleAfter = 1.6,
+		regrowAfter = 6,
 		decayDuration = 8,
 		sfxMinGap = 0.2,
 		sfxEvent = "legoClick",
@@ -462,9 +531,11 @@ local Materials: { [string]: MaterialDef } = {
 		category = "risk",
 		-- Draggy on cold coal: it crumbles under the ball of your foot.
 		speedMultiplier = 0.90,
-		igniteAfter = 0.9,
-		burnFor = 1.9,
-		spreadAfter = 0.8,
+		-- Caught in 0.6 (was 0.9) and ash 1.3 later (was 1.9): a coal you step on is gone in under two seconds (the
+		-- hundred-and-fifty-first pass).
+		igniteAfter = 0.6,
+		burnFor = 1.3,
+		spreadAfter = 0.6,
 		-- Low enough that one crossing burns patches, not the whole grill: sim_round3 measured 11 of 20
 		-- coals at 0.4, and sometimes all of them.
 		spreadChance = 0.22,
@@ -505,9 +576,18 @@ local Materials: { [string]: MaterialDef } = {
 		-- collapses the cell, so the stage that says "the next one will not hold" would
 		-- flash for a frame and then be gone -- a warning nobody could act on. Four steps
 		-- means all three are seen with a step left to use them.
-		stepsToCollapse = 4,
-		-- 3.8 (was 5.0): every chunk that can drop you now gives way faster.
-		dissolveTime = 3.8,
+		-- And it melts away 1.8 seconds after you were on it, whether or not you still are (the hundred-and-fifty-first
+		-- pass); the four steps stay, for the three stages.
+		-- 1.0 (the hundred-and-ninety-first pass, from your note of 2026-11-05: "the chocolate chunks take too long to
+		-- break"; 1.8 before, 3.8 before that, 5.0 before that), and its melt the same.
+		-- KEEPS ITS FLOOR WHILE YOU WALK (the two-hundred-and-forty-sixth pass, 2026-11-22: "continue", to keeping the floor under a few): no counted steps and no crumble any more. Where
+		-- it has melted (a cell still holding a footprint, twelve seconds) it holds your feet: softSpeed of your pace.
+		-- Stand still and it melts through (dissolveTime). The steps are still counted (packSteps), for the three
+		-- stages of almost-melted the renderer shows; they no longer break it.
+		softSpeed = 0.7,
+		packSteps = 4,
+		regrowAfter = 6,
+		dissolveTime = 1.0,
 		decayDuration = 12,
 		sfxMinGap = 0.2,
 		sfxEvent = "chocolateSnap",
@@ -530,6 +610,11 @@ local Materials: { [string]: MaterialDef } = {
 		-- TWO, the fewest of any material, tied with charcoal. Tempered chocolate has no
 		-- give at all before it breaks: there is no soft stage to spend a step on.
 		stepsToCollapse = 2,
+		-- And it snaps through 0.8 seconds after a foot (the hundred-and-ninety-first pass, from your note of 2026-11-05: "the
+		-- chocolate chunks take too long to break"; 1.2 before), the soonest anything gives way here and never under a
+		-- walker (check_feel): a crossing leaves a broken bar.
+		crumbleAfter = 0.8,
+		regrowAfter = 6,
 		-- No dissolveTime, and no frictionOverride either. Both belong to the warm bar --
 		-- cold chocolate neither melts under you nor slides you around, and giving it
 		-- either would blur the one contrast the pair exists to draw.
@@ -557,7 +642,9 @@ local Materials: { [string]: MaterialDef } = {
 		-- Documentation, as sand's is: the chunks stay in PACE slots, because a steady crossing
 		-- down the middle is safe.
 		category = "risk",
-		speedMultiplier = 0.93,
+		-- STICKY (the two-hundred-and-forty-fifth pass, from your list of 2026-11-22): it grips your soles. Slower, and a jump off it is two thirds of one.
+		speedMultiplier = 0.85,
+		jumpScale = 0.65,
 		-- Thirty seconds, down from the whole session (600): ridges and squeezed cells flatten out
 		-- again instead of holding the shape of the last crossing for good. See REGROW_DURATION.
 		decayDuration = 30,
@@ -567,7 +654,8 @@ local Materials: { [string]: MaterialDef } = {
 		displaceLimit = 3,
 		-- Standing on the edge cell tears it in three seconds; standing with a foot either side of
 		-- the edge line, in one and a half, because both feet are squeezing the same lip.
-		creepEvery = 1.5,
+		-- 1.1 now (the hundred-and-fifty-first pass): a little over two seconds on an edge, under one and a half astride.
+		creepEvery = 1.1,
 		sfxMinGap = 0.2,
 		sfxEvent = "claySquish",
 		deformationAnim = "squeeze",
@@ -587,7 +675,10 @@ local Materials: { [string]: MaterialDef } = {
 		-- continuous sink expresses -- this just puts it in your legs as well as your eyes.
 		speedMultiplier = 0.94,
 		-- 1.15 (was 1.6): every chunk that can drop you now gives way faster.
-		dissolveTime = 1.15,
+		-- 1.0 now, and it thins away behind you too (the hundred-and-fifty-first pass).
+		dissolveTime = 1.0,
+		crumbleAfter = 1.0,
+		regrowAfter = 6,
 		decayDuration = 7,
 		sfxMinGap = 0.2,
 		sfxEvent = "cloudHush",
@@ -640,7 +731,15 @@ local Materials: { [string]: MaterialDef } = {
 		-- same place that opens it. Leaving the timer in would also have made it break
 		-- under a player who had stopped moving, which reads as the game killing you for
 		-- nothing.
+		-- THAT WAS TOO KIND (the hundred-and-fifty-first pass, from your test: "Ice cracks under you. Don't wait
+		-- around." and it never went). A sheet you have stood on goes through 1.4 seconds after the first foot: not a
+		-- clock for loitering, the crack your weight started running on. Still three loads to open it at once, so both
+		-- stages of the crack are seen (check_lua holds the stages to the steps).
 		stepsToCollapse = 3,
+		-- THE CRACK RUNS ON (the two-hundred-and-forty-fifth pass, from your list of 2026-11-22): a cell going through weakens the four round it by this many steps.
+		crackSpread = 1,
+		crumbleAfter = 1.4,
+		regrowAfter = 6,
 		-- Longer than sand's 7: a crazed sheet you have already crossed should still look
 		-- crazed when you glance back at it from the next chunk.
 		decayDuration = 9,
@@ -721,19 +820,25 @@ local Materials: { [string]: MaterialDef } = {
 	-- texture over them -- which is a paint job, not a material. It looked like lava and
 	-- behaved exactly like the cream keyboard next to it.
 	--
-	-- What it borrows from Lava is the HEAT: a key glows where you stood and cools back over
-	-- a couple of seconds, so a crossing leaves a trail that fades behind you. What it does
-	-- NOT borrow is the danger. Real lava here is a risk material that gives way; these are
-	-- keycaps on a solid chassis, so they are pace -- and the point of the chunk is that
-	-- something that looks lethal turns out to be the softest thing in the level.
+	-- What it borrowed from Lava was the HEAT: a key glowed where you stood and cooled back over
+	-- a couple of seconds. It did NOT borrow the danger, and that was the trouble: keycaps on a
+	-- solid chassis, the same as the creamy board beside it but darker.
 	--
-	-- Slower than the cream keyboard because a molten key gives further before it bottoms
-	-- out, and the decay is long so the glow outlasts the footstep that made it.
+	-- KEYS OVER LAVA, AND THE LAVA UNDER THEM (the hundred-and-fifty-sixth pass, from your test of 2026-10-31: "keys over
+	-- lava should have way more functionality and looks, I couldn't tell those are different apart from glowing maybe").
+	-- There was no lava: the same pink keys as the creamy board's, a little glow where you stood. Now they float on a pool
+	-- of it (ChunkBuilder), and a key you stand on SINKS: stand on one for `dissolveTime` and it is under, and so are you.
+	-- Walk on and every key bobs back up behind you and cools. A key gone under is back after `regrowAfter`.
 	LavaKeys = {
-		category = "pace",
-		speedMultiplier = 0.88,
-		microBounceHeight = 1,
-		decayDuration = 8,
+		category = "risk",
+		speedMultiplier = 0.94,
+		dissolveTime = 1.3,
+		-- AND EACH ONE WEARS (the two-hundred-and-forty-ninth pass, from your note of 2026-11-22: "make it so that keys over
+		-- lava will degrade after"): every foot on a key chars it and cracks it a little more, and that stays when it cools;
+		-- the fourth melts it into the lava. It comes back new (regrowAfter). DeformationService `wear`.
+		wearSteps = 4,
+		regrowAfter = 5,
+		decayDuration = 3,
 		-- Both sounds are right and only one can play, so: the thock, because that is what
 		-- your foot is doing. The crust is what the surface is doing afterwards, and the
 		-- glow says that better than a second sample would.
@@ -761,12 +866,16 @@ local Materials: { [string]: MaterialDef } = {
 	-- on sinking under you, deeper and deeper, with the bed swelling up around the hollow; at full
 	-- squeeze it shivers and glows. JUMP out of the hollow and the dough gives the push back:
 	-- your jump is up to `chargeJump` times its normal height. The jump is always yours.
+	-- SOONER AND HIGHER (the hundred-and-ninety-third pass, from your note of 2026-11-05: "what does needoh chunk do other
+	-- than displace"). Its one trick waited a quarter second and then over a second more, so anyone walking across never
+	-- met it. Now it starts to give the moment you stop (0.12 s), is fully squeezed in 0.7 s more, and the jump out of the
+	-- hollow is up to 2.6 times a normal one: stop, sink, spring.
 	Needoh = {
 		category = "pace",
 		speedMultiplier = 0.90,
-		chargeAfter = 0.25,
-		chargeTime = 1.1,
-		chargeJump = 2.2,
+		chargeAfter = 0.12,
+		chargeTime = 0.7,
+		chargeJump = 2.6,
 		decayDuration = 5,
 		-- ITS OWN SOUND NOW. It borrowed clay's, and was reported as sounding exactly like the clay
 		-- chunk, which it did, being the same files. `needohSquish` (audio/gen_ending_sfx.py writes
@@ -781,9 +890,19 @@ local Materials: { [string]: MaterialDef } = {
 	},
 	BubbleWrap = {
 		category = "risk",
-		popCount = 4,
-		microBounceHeight = 4,
+		-- TWO POPS A CELL, AND NO BOUNCE (the hundred-and-fifty-fourth pass, from your test of 2026-10-31: "bubbles' way
+		-- of working can be improved"). It threw you four studs up on every touch, a third of a second apart, so walking
+		-- on it was a trampoline and the popping was lost under the bouncing. Now a step pops what is under it, a landing
+		-- from a jump pops a ring round it (and fresh wrap gives a little of the landing back), and a cell popped twice
+		-- gives way. See BUBBLE WRAP in DeformationService.
+		popCount = 2,
 		decayDuration = 7,
+		-- AND THE POPPED WRAP TEARS (the two-hundred-and-fifth pass, from your note of 2026-11-07: bubble wrap "should seem
+		-- less solid and have its own effect or drop me just how other chunks do"). Two pops on one cell was all that ever
+		-- broke it, and walking across a cell pops it once, so it never did. Now a cell gives way 1.6 seconds after the
+		-- first foot, shaken first, and is whole again six seconds later.
+		crumbleAfter = 1.6,
+		regrowAfter = 6,
 		-- THE SAME AS EVERY OTHER SURFACE now, one pop to a footfall. It was halved, for a crackle of overlapping pops,
 		-- and in play the pops ran on behind the feet that made them (reported as "way behind"); with its own crisp
 		-- takes (audio/gen_sheet_sfx.py) each lands as the foot does.
@@ -816,7 +935,7 @@ local Constants = {
 }
 
 return {
-	STAMP = "cb2d1920",
+	STAMP = "dd3a5a52",
 	Materials = Materials,
 	Constants = Constants,
 }

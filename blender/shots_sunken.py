@@ -34,6 +34,7 @@ DRAIN_R = num(SERVER, r"^local DRAIN_R = ([\d.]+)")[0]
 OUT_L, OUT_HALF, OUT_H = num(SERVER, r"local OUT_L, OUT_HALF, OUT_H = ([\d.]+), ([\d.]+), ([\d.]+)")
 HALL_L, HALL_W, HALL_H = num(SERVER, r"local HALL_L, HALL_W, HALL_H = ([\d.]+), ([\d.]+), ([\d.]+)")
 DRAIN_SECONDS = num(PATH, r"^SunkenPath\.DRAIN_SECONDS = ([\d.]+)")[0]
+FUNNEL_TIME = num(PATH, r"^SunkenPath\.FUNNEL_TIME = ([\d.]+)")[0]
 OUTFALL_SECONDS = num(PATH, r"^SunkenPath\.OUTFALL_SECONDS = ([\d.]+)")[0]
 REVEAL_SECONDS = num(PATH, r"^SunkenPath\.REVEAL_SECONDS = ([\d.]+)")[0]
 CIRCLE_OUT, CIRCLE_UP, CIRCLE_TURN = num(CLIENT, r"CIRCLE = \{ out = ([\d.]+), up = ([\d.]+), turn = ([\d.]+) \}")
@@ -107,11 +108,19 @@ def outfall_at(w):
     return at, flat(run)
 
 
+def drain_share(t):
+    """SunkenPath.drainShare: quicker through the funnel than down the shaft."""
+    w = min(1.0, max(0.0, t / DRAIN_SECONDS))
+    if w < FUNNEL_TIME:
+        return 0.5 * w / FUNNEL_TIME
+    return 0.5 + 0.5 * (w - FUNNEL_TIME) / (1 - FUNNEL_TIME)
+
+
 def ride(fps=60, start=v(18, 1.5, 4)):
     frames = []
     for i in range(int(DRAIN_SECONDS * fps)):
         t = i / fps
-        u = t / DRAIN_SECONDS
+        u = drain_share(t)
         at, facing, up = drain_at(u, start)
         head = at + v(0, 1.5, 0)
         body = {"head": at + up * 1.5, "feet": at - up * 2.5}

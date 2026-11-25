@@ -238,7 +238,7 @@ if "pcall(StoryService.opening, player, level.levelId)" not in STORY:
 for needle, why in (
     ("local function sal(", "StoryService no longer builds Sal and her cart"),
     ("local function pip(", "StoryService no longer builds Pip and her sandcastle"),
-    ("pcall(sal, folder, first)", "Sal is never stood on City Shore"),
+    ("pcall(sal, folder, first, along)", "Sal is never stood on City Shore"),
     ("pcall(pip, folder, mid)", "Pip is never stood on City Shore"),
     ('folder.Parent = levels', "City Shore's people are not put in Workspace.Levels, so they outlive the run"),
 ):
@@ -326,13 +326,28 @@ for needle, why in (
     if needle not in BOOT:
         fail(why)
 # (A story player goes on through storyStep instead, after the same hold: its next level, or the lobby to wait.)
-linger = re.search(r"sceneState\[player\] = nil\s*task\.wait\(([\d.]+)\)\s*(?:--[^\n]*\n\s*)*local going = storyRun\s*"
+# (The hold is counted a quarter of a second at a time since the two-hundred-and-seventh pass, so a runner the lobby
+# already has is not waited for, and is never taken home twice: see homeAlready below.)
+linger = re.search(r"sceneState\[player\] = nil\s*local read = 0\s*while read < ([\d.]+) and not homeAlready\(\) do\s*"
+                   r"task\.wait\(0\.25\)\s*read \+= 0\.25\s*end\s*if homeAlready\(\) then\s*return\s*end\s*"
+                   r"(?:--[^\n]*\n\s*)*local going = storyRun\s*"
                    r"if going and going\.players\[player\] and player\.Parent then\s*storyStep\(player\)\s*return\s*end\s*"
-                   r"if player\.Parent then\s*HubService\.returnToHub\(player\)", BOOT)
+                   r"(?:--[^\n]*\n\s*)*goHome\(player\)", BOOT)
 if not linger:
     fail("this check can no longer find the return to the lobby after a run")
 elif float(linger.group(1)) < 6:
     fail("the lobby comes back %s seconds after LEVEL COMPLETE; the last room is held for six" % linger.group(1))
+# HOME ONCE (the two-hundred-and-seventh pass, from the note of 2026-11-10: "it teleports me twice"): Leave to the lobby
+# during an ending took you home, and the finished run, still waiting on that ending, took you home again.
+for needle, why in (
+    ("local finished = levelInstance\n", "a finished run does not remember which level it finished"),
+    ("return player.Parent ~= Players or not HubService.isInRun(player) or levelInstance ~= finished",
+     "a runner who left during an ending is taken to the lobby a second time when it would have ended"),
+    ('while sceneState[player] == "began" and waited < SCENE_WAIT and not homeAlready() do',
+     "an ending already left is still waited out"),
+):
+    if needle not in BOOT:
+        fail(why)
 # AND NOT BEFORE THE ENDING HAS BEEN WATCHED: the return waits for the scene's "done" (Cinema), and the
 # banner waits for it too.
 for needle, why in (
@@ -403,10 +418,24 @@ if (SRC / "Client" / "Services" / "PromptStyleService.lua").exists() or '"Prompt
 for needle, why in (
     ('if view == "third" and was == "first" then\n\t\tsettleThird()', "coming back from first person leaves the camera "
                                                                      "inside your head until you scroll out"),
-    ("player.CameraMinZoomDistance = LOBBY_NEAR", "a scroll in the lobby slips you into first person"),
 ):
     if needle not in VIEW:
         fail("ViewModeService: " + why)
+# THE CAMERA HELD AT ONE DISTANCE EVERYWHERE (the hundred-and-sixty-sixth pass, from your note of 2026-11-03: "the fixed
+# camera angle should also apply everywhere, not just in levels"). Every zoom ViewModeService sets is first person's or
+# THIRD_DISTANCE (so the lobby neither zooms nor slips into first person on a scroll), third person is held there with
+# no other case for the lobby, and nothing else in the game sets a zoom of its own.
+zooms = re.findall(r"player\.Camera(?:Min|Max)ZoomDistance = ([\w.]+)", VIEW)
+if not zooms or any(z not in ("0.5", "THIRD_DISTANCE") for z in zooms):
+    fail("ViewModeService: the camera is not held at one distance everywhere (a zoom of %s)"
+         % ", ".join(sorted(set(z for z in zooms if z not in ("0.5", "THIRD_DISTANCE")))))
+if ("\telse\n\t\tplayer.CameraMode = Enum.CameraMode.Classic\n\t\tplayer.CameraMaxZoomDistance = THIRD_DISTANCE\n"
+        "\t\tplayer.CameraMinZoomDistance = THIRD_DISTANCE\n\tend") not in VIEW or "inRun()" in VIEW:
+    fail("ViewModeService: third person is held at its distance in a run only, not everywhere")
+for path in sorted(SRC.rglob("*.lua")):
+    if path.name != "ViewModeService.lua" and re.search(r"Camera(?:Min|Max)ZoomDistance\s*=",
+                                                         path.read_text(encoding="utf-8")):
+        fail("%s sets the camera's zoom itself, so it is not one distance everywhere" % path.name)
 # THE SKY POOLS' PEOPLE EACH HAVE A HABIT (twentieth pass), and it leaves their hands alone while they talk.
 for name in ("Dev", "Okafor", "Rudy"):
     if "function HABITS.%s(" % name not in TOWNS:
@@ -491,9 +520,12 @@ for needle, why in (
         fail(why)
 # THINGS TO READ on every level, and one with the reader's own name on it.
 note_levels = dict((int(k), v) for k, v in re.findall(r"\[(\d)\] = \{(.*?)\n\t\},", notes_block, re.S))
+# The green envelopes (171) are his and checked as his, below: the level's own things to read are counted without them.
+own_notes = dict((level, re.sub(r'\{ title = "A green envelope, \d of 5".*?" \},', "", text, flags=re.S))
+                 for level, text in note_levels.items())
 for level in (1, 2, 3, 4, 5):
     # Four since the sixteenth pass: one of them the Hold's own (LORE.md). Hill House's since the hundred-and-eleventh.
-    if len(re.findall(r"title = ", note_levels.get(level, ""))) < 4:
+    if len(re.findall(r"title = ", own_notes.get(level, ""))) < 4:
         fail("level %d has fewer than four things to read" % level)
 if "%s" not in note_levels.get(4, ""):
     fail("nothing in the baths has the reader's own name on it (a %s in a level 4 note)")
@@ -502,7 +534,7 @@ for needle, why in (
     ("pcall(note, folder, cap, entry)", "a note with no nook to go in is never put out"),
     ('Interactables.take(player, entry, paper, "note")', "a notice is never taken into the journal"),
     ("pcall(nookKeepsake, folder, nook, material)", "no keepsake is ever left in a nook"),
-    ("pcall(venn, folder, first)", "Mrs Venn is never stood at the baths"),
+    ("pcall(venn, folder, first, along)", "Mrs Venn is never stood at the baths"),
     ("pcall(tobi, folder, mid)", "Tobi is never stood at the baths"),
     ("pcall(barlow, folder)", "Mr Barlow is never stood at the flume"),
 ):
@@ -633,7 +665,7 @@ for needle, why in (
     if needle not in STORY:
         fail(why)
 for level in (1, 2, 3, 4):
-    if "lying = true" not in note_levels.get(level, ""):
+    if "lying = true" not in own_notes.get(level, ""):
         fail("level %d has no letter lying on the ground" % level)
 for needle, why in (
     ('kind == "moment"', "StoryClient never plays a secret's scene"),
@@ -727,11 +759,18 @@ for needle, why in (
     ('embers.Name = "Embers"', "the lava throws off no embers"),
     ('smoke.Name = "HeatSmoke"', "no heat rises off the lava"),
     ("lavaLife.bubble(platform, at)", "the lava never bubbles"),
-    ("lavaLife.flare(tile, 1)", "the lava does not flare when it bursts"),
-    ("lavaLife.flare(tile, 0.35)", "the lava does not flare where it is stood on"),
     ("fountain:Emit(36)", "the lava bursts without a fountain"),
 ):
     if needle not in RENDERER:
+        fail(why)
+# The flares in the lava's own effect: the keys over lava flare it with the same call (the hundred-and-fifty-sixth pass).
+LAVA_EFFECT = RENDERER[RENDERER.find("Effects.Lava = function(ctx: Ctx)"):]
+LAVA_EFFECT = LAVA_EFFECT[:LAVA_EFFECT.find("\nend\n")]
+for needle, why in (
+    ("lavaLife.flare(tile, 1)", "the lava does not flare when it bursts"),
+    ("lavaLife.flare(tile, 0.35)", "the lava does not flare where it is stood on"),
+):
+    if needle not in LAVA_EFFECT:
         fail(why)
 if not re.search(r"^lavaLife\.start\(\)$", RENDERER, re.M):
     fail("nothing ever starts the lava's life (glow, embers, bubbles)")
@@ -916,14 +955,14 @@ for needle, why in (
 # the camera is; a thought is written out over a head. Cleared away with the scene.
 impact_fn = CINEMA[CINEMA.find("function Cinema.impact("):CINEMA.find("function Cinema.think(")]
 for needle, why in (
-    ("effect.Saturation = -1", "an impact frame is not black and white"),
+    ("effect.Saturation = if dark then -0.6 else -1", "an impact frame is not black and white"),
     ("current.kick = math.max(current.kick, 9 * s)", "an impact frame does not punch in"),
     ("current.burst = math.max(current.burst, math.min(1, 0.9 * s))", "an impact frame has no speed lines"),
 ):
     if needle not in impact_fn:
         fail("Cinema: " + why)
-flash = re.search(r"current\.flash\.BackgroundTransparency = ([\d.]+)", impact_fn)
-if not flash or float(flash.group(1)) < 0.4:
+flash = re.search(r"current\.flash\.BackgroundTransparency = if dark then ([\d.]+) else ([\d.]+)", impact_fn)
+if not flash or min(float(flash.group(1)), float(flash.group(2))) < 0.4:
     fail("Cinema: an impact frame's flash is too near full white (a strobe, not a beat)")
 for needle, why in (
     ("\tdrawLines(current, dt)\n", "the speed lines are never drawn"),
@@ -1019,7 +1058,8 @@ for needle, why, where in (
     ('model:SetAttribute("Caught", true)', "his catch is never told to the screens", ROOMS_SV),
     ('model:SetAttribute("Paused", true)', "he walks on while he has you", ROOMS_SV),
     ('if real:GetAttribute("Caught") == true then', "he never takes hold of you", STALK),
-    ('drive(one, "Shoulder" .. side, CFrame.Angles(1.65 * g, 0, -0.32 * sign * g))', "his arms never come round you", STALK),
+    # (In HOLD's shape since the hundred-and-sixty-seventh pass: check_backrooms.py works out where it puts his hands.)
+    ('drive(one, "Shoulder" .. side, CFrame.Angles(HOLD.shoulder * g, -HOLD.shoulderYaw * sign * g,', "his arms never come round you", STALK),
 ):
     if needle not in where:
         fail(why)
@@ -1075,7 +1115,8 @@ if "Cinema.cut()\n\t\tCinema.impact(1.6)" in (SHORE or ""):
 # 0.3 it read as a glass case, the water through its edges and a yellow block standing inside; the butter shows where
 # the wrapper cracks.
 BUILDER = (ROOT / "src" / "Server" / "ChunkBuilder.server.lua").read_text(encoding="utf-8").replace("\r\n", "\n")
-for name in ("ButterWax", "ButterStick"):
+# (The butter sticks are bare since the hundred-and-fifty-third pass: check_feel.py holds that they stay so.)
+for name in ("ButterWax",):
     finish = re.search(r"^\t%s = \{ whiten = ([\d.]+), transparency = ([\d.]+), reflectance = ([\d.]+) \}," % name, BUILDER, re.M)
     if not finish:
         fail("ChunkBuilder: %s's wrapper has no finish of its own" % name)
@@ -1143,10 +1184,14 @@ for needle in ("fromLobby(swell, 60, 320)", "fromLobby(wind, 60, 320)", "fromLob
     if needle not in HUB_SRC:
         fail("HubService: a stand-in for the lobby's sound is heard everywhere at once, as loud far off as near")
 UI_SERVICE = read("Client", "Services", "UIService.lua") or ""
+# The fold and the opening, each in its own handler (any other line beside it there: the press, the hundred-and-forty-ninth
+# pass).
+for handler, state, why in (("timerFold", "true", "the hardcore clock cannot be folded away"),
+                            ("timerPill", "false", "the folded clock cannot be opened again")):
+    if not re.search(r"%s\.Activated:Connect\(function\(\)\n(?:\t[^\n]*\n)*?\ttimerFolded = %s\n" % (handler, state), UI_SERVICE):
+        fail("UIService: " + why)
 for needle, why in (
     ("if not hardcore then\n\t\tUIService.setTimerVisible(false)", "the hardcore clock stays up in Chill"),
-    ("timerFold.Activated:Connect(function()\n\ttimerFolded = true", "the hardcore clock cannot be folded away"),
-    ("timerPill.Activated:Connect(function()\n\ttimerFolded = false", "the folded clock cannot be opened again"),
     ("timerPanel.Visible = timerShown and not timerFolded", "the clock shows folded and open at once"),
 ):
     if needle not in UI_SERVICE:
@@ -1215,7 +1260,8 @@ else:
 # that says what you are seeing, his head round (it was two flat slabs), his own head put out of the way while the face
 # is in its place, and his model kept until the black.
 for needle, why in (
-    ("local from = mid + across * (8 - 1.5 * k) - toward * 1 + Vector3.new(0, 1.8, 0)", "the catch does not show you and him, side on"),
+    # (From the side with the more room since the hundred-and-sixty-seventh pass, and never past a wall.)
+    ("local want = mid + side * (8 - 1.5 * k) - toward * 1 + Vector3.new(0, 1.8, 0)", "the catch does not show you and him, side on"),
     ('Cinema.think(character, "What IS that?!", 1.2)', "the catch never says what you see"),
     ("round.MeshType = Enum.MeshType.Sphere", "his head is flat slabs"),
     ("item.LocalTransparencyModifier = 1\n\t\t\t\t\t\ttable.insert(current.hidden, item)", "his own head shows through the face"),
@@ -1501,12 +1547,13 @@ if not _press or not _rise or float(_press.group(1)) >= float(_rise.group(1)):
     fail("DeformationRenderer: a step sinks a butter stick deeper than it stands over its grooves (it caves in below them)")
 if "BUTTER_STICK.RIPPLE = nil" not in _butter:
     fail("DeformationRenderer: a step on the butter sticks sends dips across the whole chunk again (they read as other steps)")
-if "BUTTER_STICK.SHELL = true" not in _butter:
-    fail("DeformationRenderer: the butter sticks' wrapper is not driven, so it stays up as a flat lid over every dent")
-_soft = RENDERER[RENDERER.find("local function softBedEffect("):RENDERER.find("-- MOLTEN KEYS")]
+# (Their wrapper went in the hundred-and-fifty-third pass: the sticks are bare, held by check_feel.py.)
+_soft = RENDERER[RENDERER.find("local function softBedEffect("):RENDERER.find("-- ===== THE KEYBOARDS, KEY BY KEY")]
+if not _soft:
+    fail("DeformationRenderer: the soft bed's driver cannot be found (its neighbours have moved under this check)")
 for _needle, _why in (
-    ("driveShell(tile, down, -profile.PRESS, false)", "the wrapper does not go down with the butter"),
-    ("driveShell(tile, keep, -profile.PRESS * profile.RESIDUAL_FRACTION, false)", "the wrapper does not hold the butter's dent"),
+    ("driveShell(tile, down, -profile.PRESS, profile.CRACK == true)", "the wrapper does not go down with the butter"),
+    ("driveShell(tile, keep, -profile.PRESS * profile.RESIDUAL_FRACTION, profile.CRACK == true)", "the wrapper does not hold the butter's dent"),
     ("driveShell(tile, back, 0, false)", "the wrapper never comes back up with the butter"),
     ("if bone and onSlab and profile.RIPPLE then", "a bed with no wave still sends one"),
 ):
@@ -1697,6 +1744,69 @@ else:
     ):
         if needle not in TALK_CLIENT:
             fail("TalkClient: " + why)
+    # UNDER YOU, WHO THEY ARE, WIDE BUBBLES AND A THOUGHT (the two-hundredth pass, from your note of 2026-11-05: "the UI
+    # of the characters talking, the speech boxes and interactions"): the choices low on the screen, under your own
+    # character; their face in the disc; a long line laid at a bubble's whole width; three dots while they think.
+    def between_(text, start, end):
+        at = text.find(start)
+        if at < 0:
+            return ""
+        stop = text.find(end, at + len(start))
+        return text[at:stop if stop >= 0 else len(text)]
+
+    dock = re.search(r"^local DOCK = \{ low = (\d+), touch = (\d+), away = (\d+) \}", TALK_CLIENT, re.M)
+    if not dock or int(dock.group(1)) > 40 or not 80 <= int(dock.group(2)) <= 140:
+        fail("TalkClient: the choices stand up the screen across your own character again (DOCK)")
+    for needle, why in (
+        ("holder.Position = UDim2.new(0.5, 0, 1, -DOCK.low)", "the choices are not built under you"),
+        ("{ Position = UDim2.new(0.5, 0, 1, -ui.low) }", "the choices do not come up to under you"),
+        ("{ Position = UDim2.new(0.5, 0, 1, -ui.low + DOCK.away) }", "the choices do not go down from under you"),
+        ("then DOCK.touch else DOCK.low", "on a touch screen the choices sit under the thumbs"),
+        ("local function likeness(disc: Frame, head: BasePart): boolean", "who you talk to has no face in the disc"),
+        ('item:IsA("LuaSourceContainer") or item:IsA("Sound") or item:IsA("ProximityPrompt") or item:IsA("LayerCollector")',
+         "the likeness keeps their scripts, sounds, prompts or bubbles"),
+        ("face.Position + face.LookVector * LIKENESS.back", "the likeness does not look them in the face"),
+        ("ui.initial.Visible = not (drawn and seen)", "the initial shows over their face, or not at all when there is none"),
+        ('CollectionService:GetInstanceAddedSignal("ThinkingBubble"):Connect(thinkOut)', "nobody's dots come up while they think"),
+    ):
+        if needle not in TALK_CLIENT:
+            fail("TalkClient: " + why)
+    if re.search(r"UDim2\.new\(0\.5, 0, 1, -1[35]0\)", TALK_CLIENT):
+        fail("TalkClient: the choices are back a hundred and fifty pixels up, across your character")
+    wrap = re.search(r"^local WRAP_AT = (\d+)", TOWNS, re.M)
+    laid = between_(TOWNS, "local function laidOut(label: TextLabel, text: string)", "\nend\n")
+    if not wrap or not 20 <= int(wrap.group(1)) <= 40:
+        fail("Townsfolk: a long line is not laid at the bubble's whole width (WRAP_AT)")
+    for needle, why in (
+        ("label.Size = if long then UDim2.fromOffset(SPEECH_WIDE, 0) else UDim2.new()", "a long line is a narrow column again"),
+        ("label.AutomaticSize = if long then Enum.AutomaticSize.Y else Enum.AutomaticSize.XY", "a bubble does not fit its words"),
+    ):
+        if needle not in laid:
+            fail("Townsfolk: " + why)
+    if between_(TOWNS, "function Townsfolk.say(", "\nend\n").count("laidOut(label, text)") != 1 \
+            or between_(TOWNS, "function Townsfolk.speakAs(", "\nend\n").count("laidOut(label, text)") != 1:
+        fail("Townsfolk: their bubble or yours is still a narrow column")
+    side = re.search(r"^local BUBBLE_SIDE = (\d+)", TOWNS, re.M)
+    if not side or int(side.group(1)) < 14 or "UDim.new(0, BUBBLE_SIDE), UDim.new(0, BUBBLE_SIDE)" not in TOWNS:
+        fail("Townsfolk: a full line's first letter touches the bubble's rim")
+    think = re.search(r"^local THINK = \{ before = ([\d.]+), hold = ([\d.]+) \}", TOWNS, re.M)
+    if not think or abs(float(think.group(1)) + float(think.group(2)) - 1.4) > 0.05:
+        fail("Townsfolk: the wait between your line and their answer is not the 1.4 seconds it was")
+    elif float(think.group(2)) < 0.4:
+        fail("Townsfolk: their dots are gone before anyone sees them")
+    answer = between_(TOWNS, "function Townsfolk.answer(player: Player, name: string, id: string)", "\nend\n")
+    if "task.wait(THINK.before)\n\tif npc.model.Parent and not npc.busy then\n\t\tTownsfolk.think(npc)\n\tend\n" \
+            "\ttask.wait(THINK.hold)" not in answer:
+        fail("Townsfolk: they answer without thinking")
+    thought = between_(TOWNS, "function Townsfolk.think(npc: Person)", "\nend\n")
+    for needle, why in (
+        ('CollectionService:AddTag(gui, "ThinkingBubble")', "nobody's screen brings their dots up"),
+        ("npc.bubble = gui", "their dots stay up when they speak"),
+        ("task.delay(THINK.before + THINK.hold + 3, function()", "their dots can outlast an answer that never comes"),
+        ("asBubble(gui, label, Style.BUBBLE.rim)", "their thought is not in the one bubble"),
+    ):
+        if needle not in thought:
+            fail("Townsfolk: " + why)
     for needle, why in (
         ('for _, tag in ipairs({ "Townsperson", "Teller" }) do', "a player's line is never told with their body"),
         ("if by or not own then\n\t\t\t\t\tPoses.drive(joint, by or CFrame.identity)",
@@ -1725,18 +1835,109 @@ else:
     ):
         if needle not in LIFE_SRC:
             fail("PlayerLife: " + why)
-    fidgets = re.findall(r'\{ pose = "(\w+)", seconds = [\d.]+ \}', LIFE_SRC)
+    # (Each has how often it suits since the hundred-and-fifty-seventh pass.)
+    fidgets = re.findall(r'\{ pose = "(\w+)", seconds = [\d.]+(?:, often = [\d.]+)? \}', LIFE_SRC)
     if len(fidgets) < 3:
         fail("PlayerLife: fewer than three ways of standing about")
+    # The shop's emotes by their poses as EmoteService plays them (keyed since the hundred-and-fifty-eighth pass).
+    shop_poses = set(re.findall(r'^\t\w+ = \{ pose = "(\w+)", seconds = ', EMOTE_SRC, re.M))
+    if len(shop_poses) < 4:
+        fail("EmoteService: the emotes' poses cannot be read (the table's shape has changed under this check)")
     for pose in fidgets:
         if "function Poses.%s(" % pose not in POSES_SRC:
             fail("PlayerLife stands people about with %s, which Poses does not make" % pose)
-        if pose in ("wave", "stretch", "spin", "sitSquish"):
+        # (The hand-made wave was the shop's Wave before the keyed one; the true ending still waves it.)
+        if pose == "wave" or pose in shop_poses:
             fail("PlayerLife gives away the shop's %s emote as a fidget" % pose)
     if "function EmoteService.isPlaying(player: Player): boolean" not in EMOTE_SRC:
         fail("EmoteService cannot say who is in an emote, so a fidget plays over one")
     if '"LobbyLife", "PlayerLife"' not in CLIENT_BOOT_SRC or '"PlayerLife",' not in BOOT:
         fail("PlayerLife is never started, or not in the paste check")
+
+# ===================================================================== a more interesting story (171, 172)
+# From your note of 2026-11-03: "make the story more interesting".
+# THE GREEN ENVELOPES (171): his own 14 August, 1979, a letter lying on each level, numbered in the order the story
+# plays them (Hill House first, the baths last), signed E. M. until the last, which is signed Dad; the last one says to
+# clock in and come back up, as Mr Barlow does. In LORE.
+STORY_ORDER = (5, 1, 2, 3, 4)
+for place, level in enumerate(STORY_ORDER, 1):
+    letter = re.search(r'\{ title = "A green envelope, %d of 5", lying = true, body = "14 August 1979\. (.*?)" \},'
+                       % place, note_levels.get(level, ""), re.S)
+    if not letter:
+        fail("level %d has no green envelope %d of 5 lying on the ground" % (level, place))
+        continue
+    body = letter.group(1)
+    sign = "Dad" if place == 5 else "E. M."
+    if not body.endswith("\\n\\n%s" % sign):
+        fail("the green envelope %d of 5 is not signed %s" % (place, sign))
+    if place == 5 and not all(word in body for word in ("clocked", "Sign it.", "Then come back up.")):
+        fail("the last green envelope does not tell you to clock in and come back up")
+LORE = (ROOT / "LORE.md").read_text(encoding="utf-8")
+if "green envelope" not in LORE:
+    fail("LORE.md does not have the green envelopes in it")
+# HIS LETTERS IN ORDER (175): from the first one found, the journal keeps the five together at the top of the notes,
+# one to five, whatever order they were found in; one not found yet says only which level it lies on, as NOTES has it.
+letter_at = re.search(r"local LETTER_AT = \{ (.*?) \}", JOURNAL)
+places = re.findall(r'"([^"]+)"', letter_at.group(1)) if letter_at else []
+LEVEL_NAMES = {1: "City Shore", 2: "Sky Pools", 3: "Sunken City", 4: "Flooded Halls", 5: "Hill House"}
+if len(places) != 5:
+    fail("JournalService: LETTER_AT does not say where each of the five green envelopes lies")
+else:
+    for place, level in enumerate(STORY_ORDER, 1):
+        if not places[place - 1].endswith(LEVEL_NAMES[level]):
+            fail("JournalService: says the green envelope %d of 5 lies %s, and it lies on %s"
+                 % (place, places[place - 1], LEVEL_NAMES[level]))
+for needle, why in (
+    ('local LETTER_TITLE = "^A green envelope, (%d) of 5$"', "cannot tell a green envelope from another note"),
+    ('if shownKind == "note" then\n\t\tfor _, entry in ipairs(entries) do', "the envelopes are not gathered in the notes"),
+    ("for number, where in ipairs(LETTER_AT) do", "the envelopes are not shown one to five"),
+    ('addRow(nil, ("A green envelope, %d of %d"):format(number, #LETTER_AT), "Still to find, " .. where)',
+     "an envelope not found yet is not shown, or says more than where it lies"),
+    ("if entry.kind == shownKind and not isLetter[entry.id] then", "an envelope is shown twice, in order and again"),
+    ("if entry then\n\t\t\trow.Activated:Connect(function()", "an envelope not found yet opens a page"),
+    ("row.Selectable = entry ~= nil", "a controller stops on an envelope not found yet"),
+):
+    if needle not in JOURNAL:
+        fail("JournalService: " + why)
+# HE COMES NEARER (172): the faceless Watcher on the way ahead in every level, twice, nearer the end the second time,
+# facing back down the route at you, never in your way, and gone before you reach him; never there after the true
+# ending.
+for needle, why in (
+    ("local WATCHER_AT = { 0.34, 0.72 }", "the Watcher does not stand ahead of you twice a level"),
+    ('local npc = Townsfolk.spawn(parent, "Watcher", facing, "stand",', "the Watcher ahead is not the faceless Watcher"),
+    ('npc.model:SetAttribute("Ahead", true)', "no screen is told the Watcher is ahead of you"),
+    ("CFrame.lookAt(spot.Position, Vector3.new(behind.X, spot.Position.Y, behind.Z))", "he does not face back down the "
+                                                                                      "route at you"),
+    ("pcall(watcherAhead, folder, cap, chunks[index - 1])", "the Watcher is never stood ahead of you"),
+):
+    if needle not in STORY:
+        fail("StoryService: " + why)
+ahead_at = STORY.find("\t\tfor _, fraction in ipairs(WATCHER_AT) do")
+last_end = max((m.start() for m in re.finditer(r"^\t\tend\n", STORY[:max(ahead_at, 0)], re.M)), default=-1)
+last_if = max((m.start() for m in re.finditer(r"^\t\t(?:else)?if level\.backdrop ==", STORY[:max(ahead_at, 0)], re.M)),
+              default=-1)
+if ahead_at < 0 or last_if > last_end:
+    fail("StoryService: the Watcher stands ahead of you on one level only, not on every one")
+watcher_fn = STORY[STORY.find("local function watcherAhead("):STORY.find("-- ===== THE TIME CLOCK")]
+if "}, true, 240)" not in watcher_fn:
+    fail("StoryService: the Watcher ahead has a face, or does not turn his head after you")
+for needle, why in (
+    ("local AHEAD = { near = 34, fade = 0.7 }", "the Watcher ahead is never gone"),
+    ("or (root.Position - his.Position).Magnitude > AHEAD.near then", "the Watcher ahead is gone at any distance"),
+    ("item.LocalTransparencyModifier = math.max(item.LocalTransparencyModifier, k)", "the Watcher ahead does not fade"),
+    ("\t\t\tstoppedWaiting(model)\n\t\t\taheadGone(model)", "the Watcher ahead is never watched for, or shows after "
+                                                            "the true ending"),
+    ('waiting = model:GetAttributeChangedSignal("Ahead"):Connect(function()', "a Watcher told he is ahead a moment late "
+                                                                            "is never gone"),
+):
+    if needle not in STORY_CLIENT:
+        fail("StoryClient: " + why)
+near = re.search(r"local AHEAD = \{ near = (\d+)", STORY_CLIENT)
+if near and not 20 <= int(near.group(1)) <= 60:
+    fail("StoryClient: the Watcher ahead is gone %s studs off: too near to see him go, or too far to see him at all"
+         % near.group(1))
+if "Watcher ahead" not in LORE and "on the way ahead" not in LORE:
+    fail("LORE.md does not say the Watcher stands on the way ahead of you")
 
 if problems:
     for problem in problems:

@@ -35,9 +35,9 @@ MUTATIONS = [
     ("left frozen", BOOT, CHECK, "\tfor _, root in ipairs(held) do\n\t\troot.Anchored = false\n\tend\n", ""),
     ("a leaver kept", BOOT, CHECK, "\tstoryLeave(player)\n\tstoryMoving[player] = nil\n", "\tstoryLeave(player)\n"),
     ("the dive's blackout back", BOOT, CHECK,
-     "\t\t\t\t\t\t-- the move between its levels (storyNext).\n\t\t\t\t\t\tif finishRunFor then\n",
-     "\t\t\t\t\t\t-- the move between its levels (storyNext).\n\t\t\t\t\t\tScreenFade:FireClient(player, { black = true })\n"
-     "\t\t\t\t\t\tif finishRunFor then\n"),
+     "\t\t\t\t\t-- the move between its levels (storyNext).\n\t\t\t\t\tfinishFrom(levelInstance)\n",
+     "\t\t\t\t\t-- the move between its levels (storyNext).\n\t\t\t\t\tfinishFrom(levelInstance, function(player)\n"
+     "\t\t\t\t\t\tScreenFade:FireClient(player, { black = true })\n\t\t\t\t\tend)\n"),
     ("a name never declared", BOOT, PARSE, "\t\t\tstoryMoving[player] = true\n", "\t\t\tstoryMovng[player] = true\n"),
 ]
 

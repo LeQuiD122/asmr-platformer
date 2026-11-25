@@ -237,6 +237,46 @@ LightingService.palettes = {
 		saturation = -0.08,
 		contrast = 0.08,
 	},
+	-- ===== THE FLOODED HALLS: the Corporation Baths at four minutes to midnight (the hundred-and-sixty-eighth pass) =====
+	--
+	-- Indoors, under the pumping station, from your note of 2026-11-03: "fix the lighting in level 4 flooded halls, it's
+	-- too bright in there". There was no palette here, so the halls ran under the default's outdoor afternoon: the halls
+	-- set their own light as they were built, and this service put the default over it a moment later (see Bootstrap).
+	-- These are the halls' own numbers, brought here so they last, a step lighter than the halls had them only where the
+	-- pools would have gone black. What the halls had learned about their light, the hard way:
+	--   AMBIENT IS NOT BOUNCE. Ambient is a flat floor under every surface at once: raising it deletes the shadows.
+	--   COUNT EVERY SOURCE. The windows, the haze and the caustics' lights are all light, each reasonable alone.
+	--   HAZE IS LIGHT, not darkness: over this many sources it is a second ambient. Kept low.
+	--   ONE TIGHT BLOOM. A wide one at a low threshold turned the pools of light on the walls into flat white patches;
+	--   only the windows should pass it.
+	--   GREEN DISTANCE. The far air decays to the water's green, so a corridor recedes into the pools, not into grey.
+	-- The two to nudge, a little at a time: `brightness` (the light through the openings) and `outdoor` (the sky's fill in
+	-- the open bays).
+	floodedHalls = {
+		sky = Color3.fromRGB(234, 228, 202),
+		horizon = Color3.fromRGB(74, 104, 98),
+		-- THICKER AIR (the two-hundred-and-eighth pass, from your note of 2026-11-12: "add more atmosphere to the level 4,
+		-- like fog"): density 0.28 -> 0.36, so a hall's far end is taken by the green a third sooner. Haze only a step
+		-- (0.45 -> 0.55): haze is light, and the baths were too bright once already. The mist on the water is
+		-- FloodedHallsService's.
+		density = 0.36,
+		haze = 0.55,
+		offset = 0.1,
+		glare = 0.14,
+		clock = 14.5,
+		brightness = 0.8,
+		exposure = -0.15,
+		ambient = Color3.fromRGB(32, 34, 33),
+		outdoor = Color3.fromRGB(58, 62, 58),
+		diffuse = 0.35,
+		specular = 0.7,
+		bloom = 0.4,
+		bloomThreshold = 2.2,
+		rays = 0.02,
+		tint = Color3.fromRGB(252, 248, 238),
+		saturation = 0.06,
+		contrast = 0.11,
+	},
 	-- ===== THE LOBBY, and these numbers are HubService's =====
 	--
 	-- The room sets its own atmosphere while it builds, and says there why: the levels are meant
@@ -392,5 +432,5 @@ function LightingService.apply(region: string?)
 	-- to deliver a reminder. It stays documented in the header instead.
 end
 
-LightingService.STAMP = "e8009ba0"
+LightingService.STAMP = "6c4e1c71"
 return LightingService

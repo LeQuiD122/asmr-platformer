@@ -144,6 +144,15 @@ end
 -- single near-white concrete serves all six palette entries.
 local CONCRETE_VARIANT = "ConcreteBackdrop"
 
+-- WINDOWS ON THE TOWERS (the two-hundred-and-fourth pass, from your note of 2026-11-06 about the City Shore's backdrop).
+-- The towers were painted boxes with three stripes down them, and close in, where the level stands among them, a box
+-- with no windows is a model of a building rather than a building. This is a face of four floors of four windows
+-- (framed, sills, the glass a little sky-lit, some curtained, a few with blinds) at forty studs a floor, the towers'
+-- scale rather than a person's, so that two thousand studs off a window is still a window and not grey. Near-white where
+-- it is wall, so each tower's pastel is still its colour. Made by hand like the others: a MaterialVariant with this name
+-- under MaterialService (Concrete, 160 studs a tile, rbxassetid 133793974664020 and its normal 107451978045661).
+local WINDOWS_VARIANT = "BackdropWindows"
+
 -- Glazed mosaic, for the aquapark structures. Same manual story as the concrete one: make a
 -- MaterialVariant with this name under MaterialService and paste the PoolTile_* ids in.
 --
@@ -162,7 +171,7 @@ local function useVariant(part: BasePart, name: string)
 	if not concreteChecked then
 		concreteChecked = true
 		local service = game:GetService("MaterialService")
-		for _, wanted in ipairs({ CONCRETE_VARIANT, POOLTILE_VARIANT }) do
+		for _, wanted in ipairs({ CONCRETE_VARIANT, POOLTILE_VARIANT, WINDOWS_VARIANT }) do
 			if not service:FindFirstChild(wanted) then
 				warn(
 					("[server] No MaterialVariant named '%s' under MaterialService; that part "
@@ -574,6 +583,40 @@ local function quays(parent: Instance)
 	end
 end
 
+-- THE HILLS AT THE CITY'S BACK (the two-hundred-and-fourth pass, from your note of 2026-11-06 about the City Shore's
+-- backdrop). The land ended at LAND_FAR and nothing stood past it, so between its far edge and the horizon the bare sky
+-- showed under the skyline: a flat pink band with a hard top edge, a wall round the world, and exactly the set piece
+-- hanging in the sky that no view may show. A coast city has hills behind it. Two ridges along the far edge of the land,
+-- rounded, high enough to reach over the horizon as it is seen from the level (700 up), the nearer one greener and the
+-- further one bluer, so the haze takes them back ridge by ridge.
+local RIDGES = {
+	{ from = LAND_FAR - 700, rise = { 760, 1000 }, wide = { 1300, 1900 }, colour = Color3.fromRGB(146, 172, 150) },
+	{ from = LAND_FAR + 100, rise = { 880, 1010 }, wide = { 1500, 2040 }, colour = Color3.fromRGB(158, 176, 190) },
+}
+local function hills(parent: Instance)
+	for _, ridge in ipairs(RIDGES) do
+		local offset = -CITY_HALF - math.rad(4)
+		while offset <= CITY_HALF + math.rad(4) do
+			local wide = rng:NextNumber(ridge.wide[1], ridge.wide[2])
+			local rise = rng:NextNumber(ridge.rise[1], ridge.rise[2])
+			local radius = ridge.from + rng:NextNumber(-180, 180)
+			local angle = cityBearing + offset
+			-- An ellipsoid with its middle sunk into the ground, so only its rounded top stands up: twice its rise tall,
+			-- and no part may pass 2048 a side, so no rise passes 1024.
+			local tall = math.min(rise * 2, 2048)
+			local at = Vector3.new(math.cos(angle) * radius, LAND_TOP - 30 + rise - tall / 2, math.sin(angle) * radius)
+			local hill = piece(parent, Vector3.new(math.min(wide, 2048), tall, math.min(wide * 0.7, 2048)),
+				CFrame.lookAt(at, Vector3.new(0, at.Y, 0)), ridge.colour, Enum.Material.SmoothPlastic)
+			hill.Name = "Hill"
+			local mesh = Instance.new("SpecialMesh")
+			mesh.MeshType = Enum.MeshType.Sphere
+			mesh.Parent = hill
+			-- Overlapping their neighbours by half, so the ridge is one line with no sky through it.
+			offset += wide * 0.5 / radius
+		end
+	end
+end
+
 -- A DECO HOTEL on the promenade: a pastel block, white eyebrow ledges over every floor band, and
 -- a fin rising out of the middle of its front with a mast on top. The beachfront is the row that
 -- tells you this is a shore, and it is the one row of buildings near enough to have any detail.
@@ -755,9 +798,10 @@ local TOWER_STYLES = { "setback", "prism", "setback", "prism", "slab" }
 -- What makes a box read as a building at four thousand studs is not detail, it is
 -- SILHOUETTE and RIBBING. Setbacks and a crown give a profile no natural object has, and
 -- vertical mullions give the face a scale -- without them a tower is a monolith, and the
--- eye has nothing to measure it against. Windows are pointless here; at this range a
--- window grid averages out to flat grey, which is exactly what the old plain columns
--- looked like.
+-- eye has nothing to measure it against. And WINDOWS, at the towers' own scale: a grid of
+-- person-sized windows averages out to flat grey at this range, which is what the old plain
+-- columns looked like, but forty-stud floors (WINDOWS_VARIANT) still read as windows from
+-- the level, and they are what the nearer towers were missing.
 local function tower(parent: Instance, at: CFrame, style: string, width: number, depth: number, height: number)
 	-- CONTRAST HAS TO BE OVERBUILT AT THIS RANGE.
 	--
@@ -782,7 +826,7 @@ local function tower(parent: Instance, at: CFrame, style: string, width: number,
 		if glassy then
 			stage.Reflectance = 0.3
 		else
-			useVariant(stage, CONCRETE_VARIANT)
+			useVariant(stage, WINDOWS_VARIANT)
 		end
 
 		-- Ribs on the bottom stage only, and each rib spans the FULL DEPTH of the tower so
@@ -882,7 +926,9 @@ local function facade(parent: Instance, at: CFrame, width: number, height: numbe
 	for c = 1, cols do
 		for r = 1, rows do
 			-- Some windows missing, some lit. An unbroken grid reads as a texture; the
-			-- gaps are what make it a building with rooms in it.
+			-- gaps are what make it a building with rooms in it. LIT IS A PALE WARM PANE, not a
+			-- glowing one (the two-hundred-and-fourth pass): these were Neon, white squares
+			-- burning in a daylit city, and nothing in the game is Neon.
 			local roll = rng:NextNumber()
 			if roll > 0.22 then
 				local lit = roll > 0.93
@@ -890,8 +936,8 @@ local function facade(parent: Instance, at: CFrame, width: number, height: numbe
 					parent,
 					Vector3.new(width / cols * 0.5, height / rows * 0.42, 8),
 					at * CFrame.new(-width / 2 + (c - 0.5) * (width / cols), LAND_TOP + (r - 0.35) * (height / rows), -24),
-					if lit then Color3.fromRGB(248, 244, 214) else panel,
-					if lit then Enum.Material.Neon else Enum.Material.Glass
+					if lit then Color3.fromRGB(240, 226, 190) else panel,
+					if lit then Enum.Material.SmoothPlastic else Enum.Material.Glass
 				)
 			end
 		end
@@ -1188,13 +1234,16 @@ local function sea(parent: Instance, reach: number, tile: number, waveMesh: Base
 		local spread = rng:NextNumber(-0.30, 0.30) * (1 - out / reach * 0.65)
 		local angle = bearing + spread
 		local size = rng:NextNumber(60, 300)
+		-- A BRIGHT, GLOSSY FLECK, not a glowing one (the two-hundred-and-fourth pass: these were Neon, and nothing in
+		-- the game is): white, and mirroring the bright sky it lies under, which is where the glitter comes from.
 		local speck = piece(
 			parent,
 			Vector3.new(size, 4, size * rng:NextNumber(0.25, 0.7)),
 			onWave(math.cos(angle) * out, math.sin(angle) * out, rng:NextNumber(0, math.pi * 2), 3),
 			glint,
-			Enum.Material.Neon
+			Enum.Material.SmoothPlastic
 		)
+		speck.Reflectance = 0.5
 		speck.Transparency = rng:NextNumber(0.45, 0.8)
 		-- Fast and twitchy, unlike the swell. Glitter is the surface catching the light for
 		-- an instant, so it wants a short period and a big transparency swing.
@@ -1322,6 +1371,25 @@ local function prop(parent: Instance, name: string, at: CFrame, scale: number, c
 	return true
 end
 
+-- THE DETAILED MODEL FIRST, everywhere (the two-hundred-and-thirty-ninth pass, from your note of 2026-11-21 with a
+-- screenshot from the high dive: "city shore has some low quality models in the background"). Most props come twice:
+-- a plain untextured mesh and a modelled, textured "_Detail" one. Only the near band of open-sea objects asked for the
+-- detailed one, so everything further out, the sandbars' furniture and the floating rings were the plain ones: a bin for
+-- the slime jar, a pillar for the statue, a flat disc for the umbrella. The plain mesh is now only what stands in when
+-- a prop has no detailed version.
+-- (The TEXTURED one where only one of the two is: the palm's plain mesh is the green textured palm, and its "_Detail" a
+-- bare grey frond.)
+local function propBest(parent: Instance, name: string, at: CFrame, scale: number, colour: Color3?): boolean
+	local function textured(template: BasePart?): boolean
+		return template ~= nil and template:IsA("MeshPart") and template.TextureID ~= ""
+	end
+	local detail, plain = propTemplate(name .. "_Detail"), propTemplate(name)
+	if plain and textured(plain) and not textured(detail) then
+		return prop(parent, name, at, scale, colour)
+	end
+	return prop(parent, name .. "_Detail", at, scale, colour) or prop(parent, name, at, scale, colour)
+end
+
 -- The plan size and height of a prop, before scaling. Zero when it is not imported.
 local function propSpan(name: string): (number, number)
 	local template = propTemplate(name)
@@ -1397,6 +1465,7 @@ local function build(): Model
 	-- === The land, the beach and promenade along its edge, and the harbour walls at its ends ===
 	land(model)
 	quays(model)
+	hills(model)
 
 	-- Parks first, so the towers leave room for them: green in among the pastel, which is most of
 	-- what makes a skyline read as a place people live rather than a stack of blocks.
@@ -1523,7 +1592,7 @@ local function build(): Model
 			local scale = rng:NextNumber(spec.low, spec.high)
 			local x, z = waterSpot(spec.near, spec.far, spec.width * scale * 0.5, 30)
 			if x and z then
-				prop(model, spec.mesh, onWave(x, z, rng:NextNumber(0, math.pi * 2), clearance(spec.width * scale)),
+				propBest(model, spec.mesh, onWave(x, z, rng:NextNumber(0, math.pi * 2), clearance(spec.width * scale)),
 					scale, pick())
 			end
 		end
@@ -1538,19 +1607,17 @@ local function build(): Model
 	-- and a gap is better than a placeholder.
 	local HONEY = Color3.fromRGB(236, 190, 104)
 	local SLIME = Color3.fromRGB(166, 214, 158)
-	local SOAP = Color3.fromRGB(214, 226, 220)
 	local KEYCAP = Color3.fromRGB(206, 210, 224)
 	local METAL = Color3.fromRGB(150, 154, 164)
 	local WAX = Color3.fromRGB(240, 232, 212)
-	local FOAM = Color3.fromRGB(158, 190, 176)
 	local objects = {
 		{ mesh = "Backdrop_Keyboard", tint = KEYCAP },
 		{ mesh = "Backdrop_Microphone", tint = METAL },
 		{ mesh = "Backdrop_HoneyDipper", tint = HONEY },
-		{ mesh = "Backdrop_Soap", tint = SOAP },
+		-- (No soap bar and no foam since the two-hundred-and-thirty-ninth pass: neither has a modelled version, and the
+		-- plain ones were the stacked pale blocks and the dome in your screenshot.)
 		{ mesh = "Backdrop_SlimeJar", tint = SLIME },
 		{ mesh = "Backdrop_Candle", tint = WAX },
-		{ mesh = "Backdrop_Foam", tint = FOAM },
 		{ mesh = "Backdrop_Island", lift = 320 },
 		{ mesh = "Backdrop_Statue" },
 		{ mesh = "Backdrop_Umbrella" },
@@ -1579,9 +1646,7 @@ local function build(): Model
 						placed = afloat(spun, rng:NextNumber(6, 26) * scale / 7)
 					end
 					local tint = entry.tint or pick()
-					if (band.detail and prop(model, entry.mesh .. "_Detail", placed, scale, tint))
-						or prop(model, entry.mesh, placed, scale, tint)
-					then
+					if propBest(model, entry.mesh, placed, scale, tint) then
 						occupy(ox, oz, radius)
 					end
 				end
@@ -1635,7 +1700,7 @@ local function build(): Model
 					CFrame.new(x, 0, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
 					rng:NextNumber(2, 12)
 				)
-			prop(model, name, pose, scale, pick())
+			propBest(model, name, pose, scale, pick())
 		end
 	end
 
@@ -1683,7 +1748,7 @@ end
 -- Stamping the model and comparing on build turns "delete workspace.Backdrop by hand and
 -- remember to do it every time" into something that happens on its own. Same trap as
 -- ServerStorage.ChunkTemplates, and the same fix.
-local BACKDROP_VERSION = 5
+local BACKDROP_VERSION = 6
 
 -- Built once per server, AFTER the level exists so its centre can be measured. Safe to call
 -- more than once: a second call with a matching version is a no-op rather than a second
@@ -1768,4 +1833,5 @@ function BackdropService.waterLevelAt(x: number, z: number): number?
 	return pivot.Y + height
 end
 
+BackdropService.STAMP = "74db258b"
 return BackdropService

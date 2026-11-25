@@ -1,49 +1,67 @@
-# ASMR Platformer (Roblox)
+<p align="center"><img src="media/icon.png" width="160" alt="ASMR Squish Obby icon"></p>
 
-A 3D platformer where every platform is a different tactile material. Each one reacts
-to the player in its own way: honey dents and slowly recovers, soap crumbles under your
-feet, wax cracks and lets you sink into the butter underneath, bubble wrap pops, lava
-bubbles and spits before it bursts.
+# ASMR Squish Obby (Roblox)
+
+A 3D obby where every platform is a different tactile material. Each one reacts to the player in
+its own way: honey dents and slowly recovers, soap crumbles under your feet, a wax shell cracks
+over the butter underneath, bubble wrap pops, keys over lava wear out and sink, snow and memory
+foam keep your prints.
 
 Under the platforming there is a story. Every level is Harrow Bay on 14 August, the day the
 sea came in, a little later each time, and the pumping station's key holder never came to work.
 The people there live it as an ordinary day. At the end the time card on the wall has your name
 on it.
 
-**Status:** in development, not yet published. 28 materials across 68 chunk templates, 4 levels
-and a Sandbox chosen from a lobby, 11 people with lines, 27 keepsakes, 5 secrets, an ending
-for every level shot as a scene with its own sounds, and a shop: tokens earned by finishing levels,
-cosmetics, passes and token packs. Every material has a sound (generated
-stand-ins where there is no recording yet). See [Status](#status) for what has been tested, what
-is waiting for a test, and what is not built yet.
+**Status:** in development, not yet public (the store page is set up: name, icon, four
+thumbnails, description). 28 materials across 68 chunk templates, 5 levels and a Sandbox chosen
+from a lobby, a squish room with every material side by side, 11 people with lines, 27 keepsakes,
+5 secrets, an ending for every level shot as a scene with its own sounds, and a shop: tokens,
+cosmetics, pals, trails, VIP, passes and token packs. Every material has a sound. See
+[Recent improvements](#recent-improvements) for the latest work and [Status](#status) for what has
+been tested.
+
+## Store page
+
+| Icon | Thumbnails |
+|---|---|
+| <img src="media/icon.png" width="150" alt="Icon"> | <img src="media/thumbnails/thumbnail-1-squish.jpg" width="320" alt="Thumbnail: squish"> <img src="media/thumbnails/thumbnail-2-dive.jpg" width="320" alt="Thumbnail: the dive"> <img src="media/thumbnails/thumbnail-3-worlds.jpg" width="320" alt="Thumbnail: the worlds"> <img src="media/thumbnails/thumbnail-4-serpent.jpg" width="320" alt="Thumbnail: the serpent"> |
 
 ## Screenshots
 
+All taken in Studio on 2026-11-24, with the on-screen buttons hidden.
+
 | | |
 |---|---|
-| ![Lobby](screenshots/lobby.jpg) | ![Flooded Halls corridor](screenshots/flooded-halls.jpg) |
-| **The lobby**, where players vote on level, mode and run length | **The Flooded Halls**, a bathhouse level built along the platform route |
-| ![Flume chamber](screenshots/flume-chamber.jpg) | ![Soap crumbling](screenshots/soap.jpg) |
-| **The final chamber**, where the run ends on a water slide | **Soap** breaking into cubes under the player |
-| ![Kinetic sand](screenshots/kinetic-sand.jpg) | ![Butter-wax](screenshots/butter-wax.jpg) |
-| **Kinetic sand** holding footprints and shedding clumps | **Butter-wax** coating cracking into shards |
+| ![The lobby plaza](screenshots/lobby-plaza.jpg) | ![The level arches](screenshots/lobby-levels.jpg) |
+| **The lobby**: the plaza and fountain, the shop stall, the fingerpost to everything | **The level deck**: an arch for every level and the Sandbox, voted on by standing on its pad |
+| ![City Shore](screenshots/city-shore.jpg) | ![Sky Pools](screenshots/sky-pools.jpg) |
+| **1 City Shore**: the route spirals up over a pastel beach city round a bay | **2 Sky Pools**: pool terraces over a cloud sea |
+| ![The Sunken City](screenshots/sunken-city.jpg) | ![Flooded Halls](screenshots/flooded-halls.jpg) |
+| **3 The Sunken City**: a ring just above the drowned rooftops | **4 Flooded Halls**: the Corporation Baths, tiled corridors, a clock stopped at four to midnight |
+| ![Hill House](screenshots/hill-house.jpg) | ![The Maw opening](screenshots/maw-opens.jpg) |
+| **5 Hill House**: the last stretch, the house on its crag above the morning mist | **The Maw**: what waits at the bottom of the Flooded Halls' flume, the moment it opens |
+| ![The squish room](screenshots/squish-room.jpg) | ![Butter sticks](screenshots/butter-sticks.jpg) |
+| **The squish room**: every material side by side, to try without a run | **Butter sticks**: a wax shell that cracks, and your paw prints painted on it |
+| ![Keys over lava](screenshots/lava-keys.jpg) | ![Snow](screenshots/snow.jpg) |
+| **Keys over lava**: each key cracks a little more every step, then sinks | **Snow**: the print you leave is the one you chose in the shop |
+| ![Creamy keyboard](screenshots/creamy-keyboard.jpg) | |
+| **The creamy keyboard**: every key you stand on is typed onto a strip of tape | |
 
-### Materials in motion
+### In motion
 
-| Soap | Butter-wax | Kinetic sand |
+| The Maw | Bubble wrap | Honey |
 |---|---|---|
-| ![Soap crumbling](screenshots/soap-crumble.gif) | ![Butter-wax cracking](screenshots/butter-wax-crack.gif) | ![Kinetic sand](screenshots/kinetic-sand.gif) |
-| Cubes break off and fall as debris, opening a hole you drop through | The wax coating cracks into shards and the butter keeps the dent | Footprints stay, and the surface sheds clumps from the rim |
+| ![The Maw](screenshots/maw.gif) | ![Bubble wrap](screenshots/bubble-wrap.gif) | ![Honey](screenshots/honey.gif) |
+| It lunges up out of the dark, unhinges, and you see your own face as you fall in | Every bubble pops under you | Prints sink in and slowly flow closed |
 
-| Jello | Lego | Lava |
-|---|---|---|
-| ![Jello wobbling](screenshots/jello-wobble.gif) | ![Lego brick](screenshots/lego.gif) | ![Lava cracking](screenshots/lava.gif) |
-| Wobbles and ripples outward from each step | Studs press down under your feet | Crust cracks open to glowing lava beneath (the screenshot is from before the embers and bubbles) |
-
-| Honey | Memory foam |
+| Slime | Toy bricks |
 |---|---|
-| ![Honey footprints](screenshots/honey-prints.gif) | ![Memory foam](screenshots/memory-foam.gif) |
-| Footprints sink in and slowly flow closed | Presses in and holds the dent |
+| ![Slime](screenshots/slime.gif) | ![Toy bricks](screenshots/lego.gif) |
+| Sags and jiggles under each step | Bricks give way and drop out under you |
+
+On a controller or a phone every material is felt as well as seen and heard, each in a way of its own: bubble wrap ticks,
+honey swells and lets go, the keys knock, sand and soap are gritty, ice cracks, foam is barely there. And a creamy
+keyboard types: every key you stand on prints its letter on a strip of tape.
 
 ## The game as it stands
 
@@ -66,7 +84,7 @@ pops), gulls wheel round the promenade and fireflies blink over the garden:
 
 ### The levels
 
-They are numbered in the order they happen on 14 August.
+They are numbered as the lobby lists them. In the story's clock Hill House comes first, at eight in the morning.
 
 | # | Level | When | The route | The ending |
 |---|---|---|---|---|
@@ -74,6 +92,7 @@ They are numbered in the order they happen on 14 August.
 | 2 | Sky Pools | three in the afternoon | a meander going down past pool terraces over a drifting cloud sea, round a fountain tower | a sled down the slide, through the clouds, skipping across the final pool |
 | 3 | The Sunken City | eight minutes to midnight | a ring just above a drowned city, with something enormous under it, an aquarium and a dry flat off the checkpoints | a whirlpool at the end of the pier pulls you down the harbour drain and along Outfall 3 to the pumping station, where the time card has your name |
 | 4 | Flooded Halls | four minutes to midnight | the Corporation Baths, their tiled corridors built along the platform route | a flume into the dark, a mouth at the bottom of the fall, then the Gate Chamber, where you open Outfall 3 with the key that was in your pocket all along |
+| 5 | Hill House | eight in the morning, before any of it (first in the story's clock) | a spiral of a house and garden's things climbing out of the morning mist over the town | a footbridge to a crag of real ground, the key holder's house behind a picket fence, and "Go in" at his green front door |
 
 Every level has its own light, its own ambience bed, its own completion banner drawn in its own
 motif, and six seconds to look round after LEVEL COMPLETE before the lobby.
@@ -171,12 +190,56 @@ and solid), cloud, snow, a creamy keyboard, lava keys and a butter stick. Cracks
 charcoal grow outward from the footstep that caused them, every collapse drops the player at once,
 and every hole fills itself back in within 30 seconds.
 
+## Recent improvements
+
+The work since the store page went up (passes 199 to 252, 2026-11-06 to 2026-11-24), newest first. Every pass is
+written up in `HANDOFF.md`.
+
+- **The Maw, the right way round (252).** The four Maw meshes import running back down the throat, not out of the
+  mouth, so every time the mouth "opened" the two jaws passed through each other: fangs stuck out of the other jaw's
+  outside, and the new inner fangs and the tongue stood in the air. Measured in Studio by casting rays at each mesh,
+  and fixed by turning them half round as they are placed. The tongue is one flat blade now.
+- **A more dramatic fall into the Maw (251).** It lunges up past where it stops and settles, heaves while you hang over
+  it and weaves its head after you. Its jaws spring past open and judder, quiver, then gape wider with a roar before
+  they creak shut and slam. Your heartbeat quickens a beat at a time up to the bite, the light flares once as it shuts,
+  its throat churns faster and its tongue reaches for you. New: a raked inner row of fangs in both jaws, a uvula and
+  more saliva.
+- **The Maw's model (250).** The upper jaw is unwrapped and textured to match the lower. Down its throat there are
+  rings of gum lined with fangs, which grind against each other and squeeze in a wave, like a lamprey's. It drools
+  while it breathes.
+- **Materials, look and feel (243 to 249).** Butter sticks under a wax shell that cracks. Clay, ice, snow, memory foam,
+  chocolate and solid chocolate tuned, and the floors kept where they belong. Toy bricks in their own colours. Sand
+  trickles off your shoes. The stress ball goes paler the harder it is squeezed. Keys over lava wear out: one glowing
+  crack per step, charred, and they sink on the fourth. The prints you leave are the paw or footprint you picked in
+  the shop.
+- **Polish (240 to 242).** The jitter with the mouse locked (Ctrl) on the speed buttons is fixed. There's a friend
+  poster, and the captioned store thumbnails are live. The VIP crown sits on your hair and hides in first person.
+- **The back rooms (225 to 239).** The rooms are bigger, with a way out. The monster has a mouth of its own that opens
+  when it screams. Impacts are dark, not white. Its eyes open when it spots you, and its face shot finds room. Marsh is
+  dressed as an office man.
+- **Ground marks (230 to 233).** Prints and cracks are painted onto the surface, never raised. The squish room has a
+  shared easel for drawing together, and step cosmetics.
+- **The sea monsters (199 to 204, 229).** A new lobby leviathan. The Sunken City serpent with a hide, a head and jaws
+  that open. Rock islands, Sky Pools ribbon falls, City Shore hills and palms.
+- **Earning (213 to 216).** VIP perks and crown, a run boost, a boutique and banner, ad billboards, limited items
+  until 2027-02-12, and six pals to walk with you.
+- **The store page (237).** Name, serpent icon, four captioned thumbnails and a description. The game stays private
+  until you choose to publish.
+
 ## Status
 
-Last updated: 2026-10-23. **Everything up to and including the ninety-second pass has been played in Studio (you) and
+Last updated: 2026-11-24 (see [Recent improvements](#recent-improvements) for passes 199 to 252; the note below is from 2026-11-04). **Everything up to and including the ninety-second pass has been played in Studio (you) and
 works;** 93 to 129 have been played too (your tests of 2026-10-21 to 2026-10-23, pasted and marked), and what those
-tests found is answered by the passes after them. Seven passes (130 to 136) wait for a test (below); they answer your
-test of 2026-10-23, 123 to 129 your test of 2026-10-22, and 117 to 122 your test of 2026-10-21. `ROADMAP.md` has the detail on everything not built yet and the order it
+tests found is answered by the passes after them. You walked the squish room after pasting 143 to 149 (your video of
+2026-10-31), and 150 to 158 answer it. Forty-seven passes (130 to 176) wait for a full test (below): 173 to 176 are
+Harrow Bay's surfaces reaching the Sky Pools, the Sunken City, Hill House and the squish room, and his letters kept in
+order in the journal (your note of 2026-11-04), 166 to 172 the camera held everywhere, his hands in the back rooms,
+the Flooded Halls lit as their own, Harrow Bay's surfaces on the lobby and the levels, and the story's green envelopes
+and the Watcher ahead (your note of 2026-11-03), 164 and 165 the
+game felt in your hands and the keyboard that types (your note of 2026-11-02, again), 159 to 163 what good Roblox games
+do (your note of 2026-11-02), 150 to 158 the chunks, the keys and the bodies (your video and notes of
+2026-10-31), 143 to 149 the second polish round, 137 to 142 the first, 130 to 136 answer your test of 2026-10-23,
+123 to 129 your test of 2026-10-22, and 117 to 122 your test of 2026-10-21. `ROADMAP.md` has the detail on everything not built yet and the order it
 comes in, and `HANDOFF.md` on everything built, pass by pass.
 
 ### Tested in Studio and working (through the ninety-second pass)
@@ -358,7 +421,100 @@ comes in, and `HANDOFF.md` on everything built, pass by pass.
 - **Hundred-and-thirty-fourth pass (2026-10-23):** the Flooded Halls' galleries, enamel signs, lifebuoys and hanging lamps.
 - **Hundred-and-thirty-fifth pass (2026-10-23):** the shop's sunbursts, sheens and breathing prices.
 - **Hundred-and-thirty-sixth pass (2026-10-23):** the lobby's level windows painted as postcards of their places.
-- `HANDOFF.md` has the checklists for passes 93 to 136 (130 to 136 the ones to test next).
+- **Hundred-and-thirty-seventh pass (2026-10-30), polishing the game:** into and out of every run under a dip, the level
+  streamed in on the black with its name on it; a Chill fall a cut, not a jump; a fall counted once (the back rooms
+  came after two or three falls, and a Hardcore fall could take the second chance off its own card).
+- **Hundred-and-thirty-eighth pass (2026-10-30):** a checkpoint reached, felt: a ring of light across the slab and two
+  low marimba notes, the first time you get that far in a run.
+- **Hundred-and-thirty-ninth pass (2026-10-30):** the screen put right: the best times cleared (they piled up) and kept
+  to their panel, the run's panels on a level only, the folded clock off a phone's thumb, the pause card saying where you
+  are, the vote card's words, the death card coming up, a run's tokens told after its ending instead of under it.
+- **Hundred-and-fortieth pass (2026-10-30):** a scene always lets go: a time limit, a new character, Reset held back,
+  what is open put away as one starts, the lens marks and the run's panels off its picture.
+- **Hundred-and-forty-first pass (2026-10-30):** every sound fetched as you join; a Reset in a run is a fall (Chill: your
+  checkpoint; Hardcore: the card); back on your feet in a second and a half.
+- **Hundred-and-forty-second pass (2026-10-30):** the vote card's notices one at a time, never under a scene.
+- **Hundred-and-forty-third pass (2026-10-30), polishing the game again:** what is open (the shop, the post box, the
+  journal, the menu) put away for every move, so a run started with you in the shop no longer carries it onto the level;
+  nothing drawn over the black.
+- **Hundred-and-forty-fourth pass (2026-10-30):** one soft sound for every press in every menu (a felt tap; two notes as a
+  card opens and goes; a bubble for something good; two knocks for a no), where it was the engine's ping an octave up.
+- **Hundred-and-forty-fifth pass (2026-10-30):** a long server stays quick: a level's platforms let go of as it is taken
+  down (the server walked every one it had ever built, every frame), and your screen's tiles with them.
+- **Hundred-and-forty-sixth pass (2026-10-30):** the Sunken City's rain and bell, Outfall 3's key and the chamber's two
+  splashes given sounds of their own; nothing in the game played pitched up.
+- **Hundred-and-forty-seventh pass (2026-10-30):** the keys named only to a keyboard (a controller and a phone told their
+  own); the emotes' hint, the lobby's signs in dots.
+- **Hundred-and-forty-eighth pass (2026-10-30):** the story kept to its days (a calendar showed the sixteenth, a day the Hold
+  never reaches; Wick's year on the key holders' list was not the one he tells), and one name for each material (the squish
+  room's signs called four of them something else).
+- **Hundred-and-forty-ninth pass (2026-10-30):** the run screen's own presses (the clock folding, the best times put away)
+  heard, the last ones in silence.
+- **Hundred-and-fiftieth pass (2026-10-31), from your video and notes of 2026-10-31:** the error in your Output fixed
+  (Cinema reached for a LocalPlayer as it loaded, and the server loads it in Studio to check the Sunken City's client), and
+  no trade marks anywhere a player reads: toy bricks, the stress ball, sculpting sand, jelly.
+- **Hundred-and-fifty-first pass (2026-10-31):** every chunk that can drop you gives way a moment after your foot touches it,
+  whether you have walked on or not (with a shake first), so the floor goes behind you and stopping drops you; its holes fill
+  back in after six seconds.
+- **Hundred-and-fifty-second pass (2026-10-31):** your footing: ice, soap, waxed butter and warm chocolate really slide you
+  now, and your shoes carry what you walked on for a few seconds (wet off a cloud, sticky off honey, greasy off butter,
+  gritty off sand), with prints and drips; lamb's ear wipes them clean.
+- **Hundred-and-fifty-third pass (2026-10-31):** the butter sticks bare: their wrapper had been sat inside them, its corners
+  coming through as white shards; now soft butter that turns up curls under your feet.
+- **Hundred-and-fifty-fourth pass (2026-10-31):** bubble wrap pops instead of bouncing you: a step pops what is under it, a
+  landing pops a ring, a spot popped twice gives way.
+- **Hundred-and-fifty-fifth pass (2026-10-31):** the keyboards rebuilt key by key: a sculpted keycap (one mesh to import) in
+  every cell, the gaps a hairline, ten colourways (a different one for each board as it is placed), and a press that holds
+  while you stand on it and springs back as you step off.
+- **Hundred-and-fifty-sixth pass (2026-10-31):** the keys over lava float on real lava now, bobbing, and sink while you stand
+  on one, glowing hotter, until it is under and you with it.
+- **Hundred-and-fifty-seventh pass (2026-10-31):** ten ways of standing about, keyed with the whole body, four of them with
+  aura (the arms crossed and the chin up, a hand through the hair in the breeze, the hands in the pockets, a brush off the
+  chest).
+- **Hundred-and-fifty-eighth pass (2026-10-31):** the four emotes remade and six more for the shop: Cheer, Bow, Shrug, Flex,
+  Groove and the Aura, which comes with a warm glow.
+- **Hundred-and-fifty-ninth pass (2026-11-02):** you join on the game's own black with the bay's name and a gold line
+  drawing itself as the place loads (a new LocalScript in ReplicatedFirst), then a fade onto a lobby that is all there.
+- **Hundred-and-sixtieth pass (2026-11-02):** every Robux price shown is the one Roblox charges you (its own regional
+  prices), nothing off sale is offered, and in Studio every id you set is checked with Roblox.
+- **Hundred-and-sixty-first pass (2026-11-02):** chat in the game's look: the story's cream bubble over every head, the chat
+  window and the bar you type in the game's dark panel.
+- **Hundred-and-sixty-second pass (2026-11-02):** Roblox's Reduce Motion kept by every shake, lens punch, flash and launch.
+- **Hundred-and-sixty-third pass (2026-11-02):** a funnel for each level on the Creator Dashboard, showing where in a run
+  players stop.
+- **Hundred-and-sixty-fourth pass (2026-11-02):** felt in your hands: on a controller or a phone every material underfoot
+  has a feel of its own, and so do a checkpoint, the slime's fling, a hard landing, a scene's jolts and every press in the
+  menus (a new ModuleScript, Haptics).
+- **Hundred-and-sixty-fifth pass (2026-11-02):** the creamy keyboard types: every key you stand on prints its letter on a
+  strip of tape after the teleprinter's last message, KEY HOLDER PLEASE CONFIRM, and YES answers it, CONFIRMED, the first
+  time with 75 tokens (a new ModuleScript, Teleprinter). And an R6 body stands on its legs: the teleprinter, the footing
+  and the trails all read HipHeight alone, which is 0 on R6.
+- **Hundred-and-sixty-sixth pass (2026-11-03):** the camera held behind you at one distance everywhere, the lobby too.
+- **Hundred-and-sixty-seventh pass (2026-11-03):** caught in the back rooms, you are held in his hands: squared up to
+  you, his hold worked out from his own joints, the shots of it kept out of the walls.
+- **Hundred-and-sixty-eighth pass (2026-11-03):** the Flooded Halls lit as their own: their light had been overwritten
+  by the outdoor default since September; now a darker palette of their own.
+- **Hundred-and-sixty-ninth pass (2026-11-03):** Harrow Bay's surfaces: nine textures made for the game (deck boards,
+  timber, flagstones, coursed stone, render, marble, cast stone, canvas, painted iron), on every part of the lobby by
+  its material; the decks paved.
+- **Hundred-and-seventieth pass (2026-11-03):** the levels' buildings in the same stone, wood, render and marble, and the
+  slab, backdrop concrete and pool tile maps made again at twice the size; the slab variants named at last.
+- **Hundred-and-seventy-first pass (2026-11-03):** five green envelopes, his own 14 August 1979, one on each level.
+- **Hundred-and-seventy-second pass (2026-11-03):** the faceless Watcher stands on the way ahead of you on every level,
+  and is gone before you reach him.
+- **Hundred-and-seventy-third pass (2026-11-04):** the levels' worlds dressed where they are put: the Sky Pools, the
+  Sunken City and Hill House are built into the Levels folder, which nothing watched, so none of them had been dressed.
+- **Hundred-and-seventy-fourth pass (2026-11-04):** the Sunken City's buildings and the Sky Pools' roof built of what
+  they are (render, cast stone, slate, coursed stone, brick, marble, timber) instead of plain plastic, which no surface
+  reaches.
+- **Hundred-and-seventy-fifth pass (2026-11-04):** the green envelopes kept together in your journal, one to five, with
+  where each not found yet lies.
+- **Hundred-and-seventy-sixth pass (2026-11-04):** the squish room boarded, rendered and painted, and dressed like the
+  lobby; no dressing ever reaches a chunk's own part.
+- **Hundred-and-seventy-seventh pass (2026-11-04):** the slabs wear the three slab variants you made in Studio long ago
+  (`ConcreteMeshTile`, `PlasterMeshTile`, `SlateMeshTile`), whose names had never reached the code.
+- `HANDOFF.md` has the checklists for passes 93 to 177 (130 to 177 the ones to test next; `CHANGES_SINCE_PASS_163.txt`
+  lists the 28 files your place still needs after pass 163).
 
 ### Pass by pass, newest first
 
@@ -684,14 +840,20 @@ Content and setup:
 - **Python + Blender** scripts in `blender/` that generate every rigged mesh (the materials, the
   sea life, the serpent, the Ferris wheel, the boats, the landmarks, the mouth), validate the
   geometry before export, and render previews
-- **Python checkers** in `blender/` (seventeen: `check_luau_syntax.py`, `check_lua.py`, `check_story.py`,
+- **Python checkers** in `blender/` (twenty-four: `check_luau_syntax.py`, `check_lua.py`, `check_story.py`,
   `check_hub.py`, `check_chunk_forms.py`, `check_plan_shapes.py`, `check_halls.py`, `check_skypools.py`,
   `check_sunkencity.py`, `check_shop.py`, `check_devices.py`, `check_squishroom.py`, `check_stamps.py`,
   `check_backrooms.py`, `check_shots.py`, which plays every scripted camera shot frame by frame and with
   `--boards` draws a storyboard of each level's, `check_audio.py`, which holds every sound file to the house
-  rules, and `check_style.py`, which holds every screen to one look) that catch layout and code bugs without
-  opening Roblox Studio, all run by `blender/check_all.py`, with mutation suites in `blender/mutations/`
-  (passes 8 to 100) that prove
+  rules, `check_style.py`, which holds every screen to one look, `check_hillhouse.py`, `check_trueending.py`, and
+  `check_polish.py`, which holds the polish passes, `check_feel.py`, which holds the chunks' feel and every keyed
+  pose to a body that never passes through itself, `check_standards.py`, which holds what good Roblox games do: the
+  arrival, the real price, the chat's look, less motion when asked and the runs' funnels, and `check_touch.py`, which
+  holds what the surfaces do to the touch: every material felt in a shape of its own, and the keyboard that types, and
+  `check_surfaces.py`, which holds Harrow Bay's surfaces: every map tiling, light and true, each texture on the
+  material its variant is made for, on every level's world wherever it is put, and never on a chunk) that
+  catch layout and code bugs without opening Roblox Studio, all run by `blender/check_all.py`, with mutation suites in
+  `blender/mutations/` (passes 8 to 176) that prove
   the checkers catch what they claim to, and `tools/paste_list.py` to list what changed since the
   last paste (`--mark` after pasting, `--since <commit>`), grouped by where it goes in Studio, sounds and
   deletions included. `check_lua.py` counts the locals live at once in every function the way Luau's
@@ -700,7 +862,11 @@ Content and setup:
 - **Python + NumPy/SciPy** in `audio/`, which synthesises the game's sound instead of using stock
   audio, from sound models of the real thing in `sfx_kit.py` (bubbles, modes, a felt piano, rooms): the story
   (`gen_story_sfx.py`), the endings (`gen_ending_sfx.py`), the levels' beds (`gen_ambience_sfx.py`), the lobby
-  (`gen_lobby_sfx.py`), the keypad (`gen_keypad_sfx.py`), and the materials (`gen_chunk_sfx.py`, `gen_sheet_sfx.py`)
+  (`gen_lobby_sfx.py`), the keypad (`gen_keypad_sfx.py`), the materials (`gen_chunk_sfx.py`, `gen_sheet_sfx.py`), and
+  every press in the menus (`gen_ui_sfx.py`)
+- **Python** in `blender/` for the bodies: `gen_poses.py` writes every idle and emote into `Poses.lua` as keys, solving
+  where a hand and an elbow go onto R15's own arm, and `pose_keys.py` plays them back on an R15 body (and draws them,
+  `--draw`), so a pose is seen and checked before Studio sees it; `gen_keycap.py` builds the keyboards' sculpted keycap
 
 ## Repo layout
 
@@ -712,6 +878,9 @@ textures/   generated PBR texture maps
 audio/      sound generators and their WAV output: buttons/, materials/, story/, ambience/, endings/
 story/      the story as a screenplay (HARROW_BAY.fountain)
 docs/       design specs and plans, and Studio helper scripts
+media/      the store page's icon and thumbnails
+screenshots/ the screenshots and GIFs in this README
+release/    the store page's sources: shots, drafts and the scripts that compose them
 ```
 
 See `DEVELOPMENT.md` for Studio setup and run steps, `HANDOFF.md` for detailed design notes on

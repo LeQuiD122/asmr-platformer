@@ -47,7 +47,7 @@ MUTATIONS = [
     ('feet silent', STALK, ROOMSCHECK, '\t\tthud(one.at.Position, math.clamp(pace, 0.4, 1.2))\n', ''),
     ('not tipping his head as he stops', STALK, ROOMSCHECK, 'one.tilt += ((if paused then 0.7 else 0) - one.tilt)', 'one.tilt += (0 - one.tilt)'),
     ('his breath twice', STALK, ROOMSCHECK, '\t\tif item:IsA("Sound") then\n\t\t\titem:Destroy()\n\t\telseif', '\t\tif false then\n\t\t\titem:Destroy()\n\t\telseif'),
-    ('never started', CBOOT, ROOMSCHECK, '"PlayerLife", "StalkerClient" }) do', '"PlayerLife" }) do'),
+    ('never started', CBOOT, ROOMSCHECK, '"RunFeel", "StalkerClient" }) do', '"RunFeel" }) do'),
     ('a name never declared', STALK, PARSE, 'local pace = math.clamp(one.speed / PACE, 0, 1.8)', 'local pace = math.clamp(one.speed / PACES, 0, 1.8)'),
 ]
 

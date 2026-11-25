@@ -62,7 +62,10 @@ end
 -- jump clears roughly 6.4 studs of rise while covering 8.2 of distance, and it has to clear
 -- CHUNK_GAP as well, so past +4 it stops being reliably jumpable. A zero is left in so the
 -- climb has landings rather than being an unbroken staircase.
-local STEP_CHOICES = { 3, 4, 3, 0, 4, 3, 2 }
+-- HIGHER (the two-hundred-and-fifth pass, from your note of 2026-11-07: "make the levels themselves harder by making it
+-- more difficult to move from chunk to chunk"): averaging about +3.1 now, and the flat landing a step of one, so the
+-- climb is steadier and every landing is a jump up. Still never past +4, the ceiling above.
+local STEP_CHOICES = { 3, 4, 4, 1, 4, 3, 3 }
 
 -- EVERY chunk gains height, not just the stable landings.
 --
@@ -70,7 +73,7 @@ local STEP_CHOICES = { 3, 4, 3, 0, 4, 3, 2 }
 -- level climbed on six of them and the other fourteen were level. Pace and risk chunks take
 -- a smaller step now, which is what turns a series of flat runs joined by steps into a route
 -- that is going somewhere.
-local PACE_STEP_CHOICES = { 2, 3, 0, 2, 3, 1, 2 }
+local PACE_STEP_CHOICES = { 2, 3, 1, 3, 3, 2, 2 }
 
 -- === The route is a HELIX ===
 --
@@ -92,10 +95,14 @@ local SPIRAL_RADIUS = 90
 
 
 -- Chunks are islands, not a continuous walkway. Every chunk boundary is a jump.
--- 5 studs against an 8.2-stud reach leaves margin for a mistimed or slowed
+-- 5 studs against an 8.2-stud reach left margin for a mistimed or slowed
 -- takeoff, which matters because honey halves WalkSpeed and butter-wax
--- overshoots.
-local CHUNK_GAP = 5
+-- overshoots. SIX NOW (the two-hundred-and-fifth pass, from your note of
+-- 2026-11-07: harder to move from chunk to chunk): a real jump at every boundary,
+-- taken from the edge, and still a stud clear of the reach at a full +4 climb
+-- (about 7.2 there). CORNER_BAR came down by the same stud, so a corner is the
+-- jump it always was.
+local CHUNK_GAP = 6
 
 -- How finely the meander is walked. Two studs is far under the shortest chunk and well under the
 -- scale of its bends, so the route's length is right to a fraction of a stud.
@@ -121,10 +128,10 @@ local junctionWarned = false
 --   included, or the chunk laid across reaches back into the one before it.
 --   CHUNK_GAP + CORNER_BAR minus half the narrowest entry must be under a jump.
 --
--- At 9 that is 14 against a reach of 13.4 and an 8-stud jump onto the narrowest entry. It
--- works, narrowly, and that is why it is only the fallback: landing on a shaped chunk's SIDE
--- is not something any of the shapes were ever checked for.
-local CORNER_BAR = 9
+-- At 8 (with the six-stud gap) that is 14 against a reach of 13.4 and an 8-stud jump onto the
+-- narrowest entry. It works, narrowly, and that is why it is only the fallback: landing on a
+-- shaped chunk's SIDE is not something any of the shapes were ever checked for.
+local CORNER_BAR = 8
 
 -- Slot token -> required chunk category. W1/O1-style tokens (specific-material
 -- risk slots used in the GDD's per-template tables for readability) collapse
@@ -152,7 +159,7 @@ local function chunkMaterialsAreWhitelisted(chunkDef, allowedMaterials: { string
 	return true
 end
 
-local function pickChunkForSlot(token: string, level, rng: Random, recent: { string }): string?
+local function pickChunkForSlot(token: string, level, rng: Random, recent: { string }, want: string?): string?
 	local category = categoryForSlot(token)
 	local candidates = {}
 	for _, chunkId in ipairs(level.allowedChunkIds) do
@@ -181,7 +188,58 @@ local function pickChunkForSlot(token: string, level, rng: Random, recent: { str
 			candidates = fresh
 		end
 	end
-	return candidates[rng:NextInteger(1, #candidates)]
+	-- A MATERIAL FIRST, THEN ONE OF ITS CHUNKS (the two-hundred-and-forty-first pass, from "polish the game
+	-- more": a Sunken City run came out with twelve Needoh chunks in thirty-five). The draw was over chunks,
+	-- so a material with four chunk variants won four times as often as one with a single chunk, and "not
+	-- one of the last few" let the four Needohs follow each other. Now each material in the slot is as likely
+	-- as any other, and one used in the last few chunks is passed over while another is on offer.
+	local function materialOf(chunkId: string): string
+		local names = {}
+		for name in pairs(ChunkDefinitions[chunkId].materials) do
+			table.insert(names, name)
+		end
+		table.sort(names)
+		return table.concat(names, "+")
+	end
+	local byMaterial: { [string]: { string } } = {}
+	local materials: { string } = {}
+	for _, chunkId in ipairs(candidates) do
+		local key = materialOf(chunkId)
+		if not byMaterial[key] then
+			byMaterial[key] = {}
+			table.insert(materials, key)
+		end
+		table.insert(byMaterial[key], chunkId)
+	end
+	if (level.avoidRecent or 0) > 0 and #recent > 0 and #materials > 1 then
+		local usedLately: { [string]: boolean } = {}
+		for _, chunkId in ipairs(recent) do
+			if ChunkDefinitions[chunkId] then
+				usedLately[materialOf(chunkId)] = true
+			end
+		end
+		local freshMaterials = {}
+		for _, key in ipairs(materials) do
+			if not usedLately[key] then
+				table.insert(freshMaterials, key)
+			end
+		end
+		if #freshMaterials > 0 then
+			materials = freshMaterials
+		end
+	end
+	-- THE LEVEL'S OWN MATERIAL AT LEAST ONCE (same pass): with the draw fair, a Sunken City run could go by with no
+	-- oobleck in it, the material it is about. Until one of `want` has been laid, a slot that offers it lays it.
+	if want then
+		for key in pairs(byMaterial) do
+			if table.find(string.split(key, "+"), want) then
+				materials = { key }
+				break
+			end
+		end
+	end
+	local pool = byMaterial[materials[rng:NextInteger(1, #materials)]]
+	return pool[rng:NextInteger(1, #pool)]
 end
 
 -- ===== A RING, FOR A LEVEL THAT ASKS FOR ONE =====
@@ -349,12 +407,19 @@ function LevelService.startLevel(level, players: { Player }, origin: Vector3?)
 	local placedChunks = {}
 	-- The last few chunks picked, oldest first, for levels that declare avoidRecent.
 	local recentIds: { string } = {}
+	local headlineLaid = false
 
 	for slotIndex, token in ipairs(template) do
 		-- With a fixed sequence the entries ARE chunk ids, not slot tokens.
-		local chunkId = if fixedSequence then token else pickChunkForSlot(token, level, rng, recentIds)
+		-- (Its headline material is asked for from the fourth slot until one is laid: see pickChunkForSlot.)
+		local want = if not headlineLaid and slotIndex > 3 then level.headlineMaterial else nil
+		local chunkId = if fixedSequence then token else pickChunkForSlot(token, level, rng, recentIds, want)
 		if not chunkId then
 			continue
+		end
+		local laidDef = ChunkDefinitions[chunkId]
+		if laidDef and level.headlineMaterial and laidDef.materials[level.headlineMaterial] then
+			headlineLaid = true
 		end
 		if (level.avoidRecent or 0) > 0 then
 			table.insert(recentIds, chunkId)
@@ -730,4 +795,5 @@ function LevelService.endLevel()
 	ChunkService.clearLevel()
 end
 
+LevelService.STAMP = "47bc8749"
 return LevelService

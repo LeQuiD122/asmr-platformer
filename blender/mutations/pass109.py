@@ -54,7 +54,7 @@ MUTATIONS = [
     ('blown for nobody', LIFE, HUB, '(camera.CFrame.Position - fountain).Magnitude < BUBBLE_NEAR', '(camera.CFrame.Position - fountain).Magnitude < 1e9'),
     ("in the game's rays", LIFE, HUB, '\tball.Reflectance = 0.3\n', '\tball.Reflectance = 0.3\n\tball.CanQuery = true\n'),
     ('too many', LIFE, HUB, 'local BUBBLES_MAX = 14', 'local BUBBLES_MAX = 60'),
-    ('never started', CBOOT, HUB, '"TalkClient", "LobbyLife", "PlayerLife", "StalkerClient" }) do', '"TalkClient", "PlayerLife", "StalkerClient" }) do'),
+    ('never started', CBOOT, HUB, '"TalkClient", "LobbyLife", "PlayerLife", "Haptics"', '"TalkClient", "PlayerLife", "Haptics"'),
     ('a name never declared', LIFE, PARSE, 'local at = b.from + WIND * age', 'local at = b.from + WINDS * age'),
 ]
 

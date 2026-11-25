@@ -59,6 +59,62 @@ local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Sty
 -- now, every animal is built from parts, and Output, the report and the Studio panel all say so.
 -- And an OLD copy of it, missing something this file calls as it loads, would stop it just the same
 -- with an error; so what it has is checked, and anything short of the whole of it is set aside.
+-- ITS JAW, ITS OWN (the two-hundred-and-twenty-ninth pass, "now do the serpent and leviathan mouths"): the made head cut
+-- at the gap of its jaws (MarshMouth, beside this), so its lower jaw works as it swims.
+-- (One local for all of it: this file is at Luau's limit of locals in one function.)
+local SerpentJaw: any = {
+	mouth = (function()
+		local found = script.Parent and script.Parent:FindFirstChild("MarshMouth")
+		local ok, loaded = pcall(function()
+			return if found and found:IsA("ModuleScript") then require(found) else nil
+		end)
+		return if ok then loaded else nil
+	end)(),
+	pieces = nil,
+	asked = false,
+}
+
+-- The made head `head` drawn in its two pieces, the jaw working: slow breaths, wider the nearer it is to you, and a
+-- snap shut every few seconds. Nothing when the head cannot be cut (it is drawn whole, as made).
+function SerpentJaw.work(head: BasePart, near: number)
+	local MarshMouth = SerpentJaw.mouth
+	if not MarshMouth then
+		return
+	end
+	local jaw = SerpentJaw.pieces
+	if not (jaw and jaw.skull.Parent == head.Parent) then
+		local cut = MarshMouth.jawIfReady("Sea_Head")
+		if not cut then
+			if not SerpentJaw.asked then
+				SerpentJaw.asked = true
+				task.spawn(MarshMouth.jaw, "Sea_Head")
+			end
+			return
+		end
+		local function piece(from: BasePart): BasePart
+			local part = from:Clone()
+			part.Size = from.Size * (head.Size / cut.meshSize)
+			part.Parent = head.Parent
+			return part
+		end
+		local throat = MarshMouth.throat(cut, head.Size)
+		throat.Parent = head.Parent
+		jaw = { skull = piece(cut.skull), jaw = piece(cut.jaw), throat = throat, cut = cut }
+		SerpentJaw.pieces = jaw
+		head.Transparency = 1
+	end
+	local now = os.clock()
+	local turn = -0.05 + 0.07 * math.sin(now * 0.9) + 0.3 * near
+	local snap = now % 5.5
+	if snap < 0.35 then
+		turn -= 0.24 * math.sin(snap / 0.35 * math.pi)
+	end
+	jaw.skull.CFrame = MarshMouth.jawFrame(jaw.cut, head.CFrame, head.Size, 0)
+	turn = math.max(turn, -0.18)
+	jaw.jaw.CFrame = MarshMouth.jawFrame(jaw.cut, head.CFrame, head.Size, turn)
+	jaw.throat.CFrame = MarshMouth.throatFrame(jaw.cut, head.CFrame, head.Size, turn)
+end
+
 local SeaRig: any = (function()
 	local found = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("SeaRig", 15)
 	local why = "there is no ReplicatedStorage.Shared.SeaRig"
@@ -134,7 +190,7 @@ end)()
 local SunkenCityClient = {}
 -- WHICH CODE IS RUNNING, said in Output as it starts, in the report and on the Studio panel: the
 -- first question whenever something that should be there is not.
-SunkenCityClient.VERSION = "ninety-fifth pass, 2026-10-18"
+SunkenCityClient.VERSION = "two-hundred-and-fifth pass, 2026-11-07"
 
 local SEGMENTS = SunkenPath.SEGMENTS
 local SPACING = SunkenPath.SPACING
@@ -156,9 +212,28 @@ local segments: { BasePart } = {}
 -- THE SERPENT (blender/gen_serpent.py, Sea_Serpent), when it is imported: one body bent through the
 -- same nineteen points the part-built one is laid on, its eyes still pale parts carried on its head.
 type ThingMesh = { rig: Rig, chain: Chain, eyes: { BasePart }, eyeRest: { CFrame },
-	headRest: CFrame, posed: { CFrame }, joints: { Vector3 } }
+	headRest: CFrame, posed: { CFrame }, joints: { Vector3 }, across: { Vector3 } }
 local thingMesh: ThingMesh? = nil
 local thingPoints: { Vector3 } = {}
+-- The street's across at each joint in a turn (SunkenPath.across), for the body to roll toward (the two-hundred-and-first pass).
+local thingAcross: { Vector3 } = {}
+-- THE SERPENT, DRESSED (the hundred-and-ninety-fourth pass). Two things made in Studio's generators,
+-- each used only where it has been made: its hide (the MaterialVariant SerpentHide, in MaterialService)
+-- over the bent body, and Sea_Head (ReplicatedStorage/Assets/Props), an old sea serpent's head, scaled
+-- and spined, jaws half open, with its own eyes, carried on the first segment where the pale eyes were,
+-- four fifths of the body's width so it is a head on a neck and not a mask over it. Without them it is
+-- drawn as before.
+local SERPENT = { hide = "SerpentHide", tint = Color3.fromRGB(150, 160, 170), head = "Sea_Head",
+	width = 0.8, forward = 6 }
+local thingDressed = ""
+
+local function madeSea(name: string): MeshPart?
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local props = assets and assets:FindFirstChild("Props")
+	local model = props and props:FindFirstChild(name)
+	local mesh = model and model:FindFirstChild("Mesh")
+	return if mesh and mesh:IsA("MeshPart") then mesh else nil
+end
 -- WHAT IS WORTH MOVING. Everything here moves on the clock, so anything far from the camera can be
 -- left where it is: it is exactly where it should be the moment it comes near again. Under the water
 -- past `water` nothing can be made out through the surface; the harbour's whirlpool and buoys, the
@@ -254,20 +329,45 @@ local function buildThing(b: SunkenPath.Brief)
 	local chain = rig and SeaRig.chain(rig, SeaRig.BONES.Sea_Serpent)
 	if rig and chain then
 		rig.part.Reflectance = 0.04
+		thingDressed = ""
+		local hide = game:GetService("MaterialService"):FindFirstChild(SERPENT.hide, true)
+		if hide and hide:IsA("MaterialVariant") then
+			rig.part.Material = hide.BaseMaterial
+			rig.part.MaterialVariant = hide.Name
+			rig.part.Color = SERPENT.tint
+			thingDressed ..= ", in its made hide"
+		end
 		-- The eyes, where the part-built body has them: on the first segment, halfway between the
 		-- first two joints, a little forward and up, looking the way the head looks.
 		local head = girthAt(b, 0)
 		local centre = (chain.heads[1] + chain.heads[2]) / 2
 		local segment = CFrame.lookAt(centre, centre + (chain.heads[1] - chain.heads[2]))
 		local eyes, eyeRest = {}, {}
-		for _, side in ipairs({ -1, 1 }) do
+		local made = madeSea(SERPENT.head)
+		if made then
+			-- The made head instead, as wide as the body and a little forward of the first segment,
+			-- carried just as the eyes are: its own eyes look out of it.
+			local piece = made:Clone()
+			piece.Name = "Head"
+			piece.Size = made.Size * (rig.part.Size.X * SERPENT.width / made.Size.X)
+			piece.Anchored = true
+			piece.CanCollide = false
+			piece.CanTouch = false
+			piece.CanQuery = false
+			piece.CastShadow = false
+			piece.Parent = holder
+			table.insert(eyes, piece)
+			table.insert(eyeRest, segment * CFrame.new(0, 0, -SERPENT.forward))
+			thingDressed ..= ", with its made head"
+		end
+		for _, side in ipairs(if made then {} else { -1, 1 }) do
 			local eye = localPart(holder, "Eye", Vector3.new(1.4, 1.1, 1.8), EYE, true)
 			eye.Transparency = 0.2
 			table.insert(eyes, eye)
 			table.insert(eyeRest, segment * CFrame.new(side * head * 0.72, head * 0.3, -SPACING * 0.45))
 		end
 		thingMesh = { rig = rig, chain = chain, eyes = eyes, eyeRest = eyeRest,
-			headRest = rig.rest[chain.bones[1]], posed = {}, joints = {} }
+			headRest = rig.rest[chain.bones[1]], posed = {}, joints = {}, across = {} }
 		return
 	elseif rig then
 		rig.model:Destroy()
@@ -319,18 +419,25 @@ local function moveThing(b: SunkenPath.Brief, t: number, from: Vector3?): number
 			else CFrame.new(middle) * part.CFrame.Rotation
 		part.CFrame = frame
 		local joints = mesh.joints
+		local acrossWorld = SunkenPath.across(b, t, -0.5 * SPACING, SPACING, SEGMENTS + 1, thingAcross)
 		for index, point in ipairs(points) do
 			joints[index] = frame:PointToObjectSpace(point)
+			mesh.across[index] = frame:VectorToObjectSpace(acrossWorld[index])
 			if from and index % 3 == 1 then
 				nearest = math.min(nearest, Vector3.new(point.X - from.X, 0, point.Z - from.Z).Magnitude)
 			end
 		end
 		-- LEVEL: it doubles back at each end of its patrol, and the shortest turn there would roll
-		-- it onto its back.
-		SeaRig.follow(mesh.chain, mesh.rig.rest, joints, true, mesh.posed)
+		-- it onto its back. ROLLED (the two-hundred-and-first pass): through each turn over and under
+		-- itself it rolls onto its side and back, toward the street's across, rather than having its
+		-- heading flip half over between two bones where it points straight down (a flat web of skin).
+		SeaRig.follow(mesh.chain, mesh.rig.rest, joints, true, mesh.posed, mesh.across)
 		local head = frame * mesh.posed[1] * mesh.headRest:Inverse()
 		for index, eye in ipairs(mesh.eyes) do
 			eye.CFrame = head * mesh.eyeRest[index]
+			if eye.Name == "Head" then
+				SerpentJaw.work(eye, nearness)
+			end
 		end
 		return nearest
 	end
@@ -976,6 +1083,8 @@ local function drainStarted(vortex: Vector3, from: Vector3, funnelY: number, bot
 	end
 	guard("the ride's camera", cutscene.start)
 	if Cinema and drain then
+		-- THE SCORE (the two-hundred-and-eleventh pass): uneasy, growing as the water takes you round.
+		Cinema.score("Sunken")
 		drain.roar = Cinema.sound("WhirlRoar", 0.7, { looped = true, fadeIn = 1.5, fallback = "rbxasset://sounds/action_falling.mp3", speed = 0.45 })
 	end
 end
@@ -1166,6 +1275,75 @@ local function submerge(on: boolean)
 	end
 end
 
+-- THE AQUARIUM'S MURK (the two-hundred-and-fifth pass, from your note of 2026-11-07: "I want some sort of underwater fog
+-- so that I can't see everything that is underwater to create a scarier atmosphere"). From the tower, the tunnel and the
+-- gallery the whole drowned city could be seen through the glass, clear to the far end. While you are in one of the rooms
+-- the server marks murky (CameraRoom, Murk), on your screen the sea outside thickens to a dark green-blue that swallows
+-- anything past a few dozen studs (the tunnel's own lights still reach the water round it), eased in and out, and given
+-- back as it was found: only if nothing else has changed the air since, so a level torn down under it is not undone.
+-- What looks in at the gallery's window comes up out of that dark now.
+local aquarium = { rooms = {} :: { BasePart }, look = nil :: any,
+	MURK = { density = 0.52, colour = Color3.fromRGB(18, 56, 64), decay = Color3.fromRGB(6, 24, 32), haze = 1.5,
+		tint = Color3.fromRGB(186, 222, 222), into = 1.2, out = 1.2 } }
+
+function aquarium.set(on: boolean)
+	if on == (aquarium.look ~= nil) then
+		return
+	end
+	local MURK = aquarium.MURK
+	if on then
+		local found = Lighting:FindFirstChildOfClass("Atmosphere")
+		local atmosphere = found or Instance.new("Atmosphere")
+		if not found then
+			atmosphere.Density = 0
+			atmosphere.Parent = Lighting
+		end
+		local grade = Instance.new("ColorCorrectionEffect")
+		grade.Name = "AquariumMurk"
+		grade.Parent = Lighting
+		aquarium.look = { atmosphere = atmosphere, made = found == nil, grade = grade, density = atmosphere.Density,
+			offset = atmosphere.Offset, colour = atmosphere.Color, decay = atmosphere.Decay, haze = atmosphere.Haze,
+			glare = atmosphere.Glare }
+		local ease = TweenInfo.new(MURK.into, Enum.EasingStyle.Sine)
+		TweenService:Create(atmosphere, ease, { Density = MURK.density, Offset = 0, Color = MURK.colour, Decay = MURK.decay,
+			Haze = MURK.haze, Glare = 0 }):Play()
+		TweenService:Create(grade, ease, { TintColor = MURK.tint, Saturation = -0.1, Contrast = 0.06, Brightness = -0.03 }):Play()
+		return
+	end
+	local was = aquarium.look
+	aquarium.look = nil
+	local ease = TweenInfo.new(MURK.out, Enum.EasingStyle.Sine)
+	TweenService:Create(was.grade, ease, { TintColor = Color3.new(1, 1, 1), Saturation = 0, Contrast = 0, Brightness = 0 }):Play()
+	game:GetService("Debris"):AddItem(was.grade, MURK.out + 0.2)
+	local atmosphere = was.atmosphere
+	-- Only if the air is still the murk (nothing has set it since): a level torn down under it gets its own air.
+	if atmosphere.Parent and math.abs(atmosphere.Density - MURK.density) < 0.05 then
+		TweenService:Create(atmosphere, ease, { Density = was.density, Offset = was.offset, Color = was.colour,
+			Decay = was.decay, Haze = was.haze, Glare = was.glare }):Play()
+		if was.made then
+			game:GetService("Debris"):AddItem(atmosphere, MURK.out + 0.2)
+		end
+	end
+end
+
+-- In the murk while you are in one of its rooms, and never while the drain has you (that is the sea itself).
+function aquarium.step(at: Vector3?)
+	local inside = false
+	if at and under == nil then
+		for _, room in ipairs(aquarium.rooms) do
+			if room.Parent then
+				local here = room.CFrame:PointToObjectSpace(at)
+				local half = room.Size / 2
+				if math.abs(here.X) <= half.X and math.abs(here.Y) <= half.Y + 2 and math.abs(here.Z) <= half.Z then
+					inside = true
+					break
+				end
+			end
+		end
+	end
+	aquarium.set(inside)
+end
+
 -- THE WATER, ANSWERING (the hundred-and-thirty-first pass, from your test: "I want the water animation and reactiveness
 -- to improve on impact"): a burst of white water at `at` (spray thrown up and out, droplets, a sheet of foam spreading
 -- on the surface at `surfaceY` if there is one), on this screen, gone in a few seconds.
@@ -1269,7 +1447,8 @@ local function moveRider(serverNow: number)
 	rider.AssemblyLinearVelocity = Vector3.zero
 	rider.AssemblyAngularVelocity = Vector3.zero
 	if t < current.seconds then
-		local u = math.max(0, t / current.seconds)
+		-- Quicker through the funnel than down the shaft (SunkenPath.FUNNEL_TIME).
+		local u = SunkenPath.drainShare(t, current.seconds)
 		local frame = SunkenPath.drainFrame(current.spec, u) * SunkenPath.tumble(u, clock)
 		rider.CFrame = frame
 		-- UNDER THE WATER from the bottom of the funnel down (above): never sky round the whirlpool.
@@ -1301,6 +1480,7 @@ local function moveRider(serverNow: number)
 		if Cinema and not current.dropped and frame.Position.Y < current.spec.funnelY - 8 then
 			current.dropped = true
 			Cinema.sound("DrainFall", 0.9, { keep = true })
+			Cinema.climax(0.84)
 		end
 		cutscene.drainShot(current.spec, u, frame.Position, clock)
 		return
@@ -1380,8 +1560,8 @@ end
 -- long way down, the lobby's ping pitched down until it rings like a bell, and two of the material
 -- takes, which a long way down are masonry letting go and something large breathing out.
 local PING_SOUND = "rbxasset://sounds/electronicpingshort.wav"
--- The engine's own falling-wind loop, a little faster, is a wash of noise: close enough to rain on
--- water that the ear takes it as rain once the streaks are falling.
+-- The engine's own falling-wind loop, a wash of noise, stands in for the rain until StorySounds.HarbourRain is imported
+-- (the hundred-and-forty-sixth pass; it was played faster, which is a pitched-up sound).
 local RAIN_SOUND = "rbxasset://sounds/action_falling.mp3"
 local CRUMBLE_SOUND = "rbxassetid://135061782882830"
 local BUBBLES_SOUND = "rbxassetid://132175495859275"
@@ -2249,12 +2429,27 @@ local function stepBell(t: number)
 			continue
 		end
 		if toll then
-			-- The strike, and the note after it, ringing on across the water.
-			longSound(part, THUD_SOUND, 0.3, 1, 700)
-			local note = longSound(part, PING_SOUND, 0.26, 1.1, 900)
-			local echo = Instance.new("ReverbSoundEffect")
-			echo.DecayTime = 8
-			echo.Parent = note
+			-- THE BELL'S OWN TOLL (the hundred-and-forty-sixth pass, StorySounds.HarbourBell): a cast bell struck by its
+			-- clapper and ringing on across the water. It was the engine's electronic ping slowed down, over a landing
+			-- thud, the one ping left in the levels; until the bell is imported they stand in.
+			local folder = SoundService:FindFirstChild("StorySounds")
+			local own = folder and folder:FindFirstChild("HarbourBell")
+			if own and own:IsA("Sound") then
+				local rung = own:Clone()
+				rung.Volume = 1
+				rung.RollOffMode = Enum.RollOffMode.InverseTapered
+				rung.RollOffMinDistance = 90
+				rung.RollOffMaxDistance = 900
+				rung.Parent = part
+				rung:Play()
+				game:GetService("Debris"):AddItem(rung, 12)
+			else
+				longSound(part, THUD_SOUND, 0.3, 1, 700)
+				local note = longSound(part, PING_SOUND, 0.26, 1.1, 900)
+				local echo = Instance.new("ReverbSoundEffect")
+				echo.DecayTime = 8
+				echo.Parent = note
+			end
 		end
 		local swing = if since < 9 then math.sin(since * 2.4) * 0.35 * (1 - since / 9) else 0
 		part.CFrame = bell.hang * CFrame.Angles(swing, 0, 0) * bell.hang:Inverse() * bell.rest
@@ -2352,10 +2547,22 @@ local function stepRain(t: number, dt: number, clock: number, at: Vector3?)
 		drops.Rate = 0
 		drops.Parent = host
 		rainHost = host
-		local hiss = Instance.new("Sound")
-		hiss.SoundId = RAIN_SOUND
+		-- THE RAIN'S OWN SOUND (the hundred-and-forty-sixth pass, StorySounds.HarbourRain): rain on the harbour at night,
+		-- soft and even. It was the engine's falling wind played half as fast again, the one pitched-up sound left in
+		-- the levels; until the rain is imported that wind stands in, at its own pitch. Its loudness rides on the sound
+		-- (Gain), as the two are not equally loud.
+		local folder = SoundService:FindFirstChild("StorySounds")
+		local own = folder and folder:FindFirstChild("HarbourRain")
+		local hiss: Sound
+		if own and own:IsA("Sound") then
+			hiss = own:Clone()
+			hiss:SetAttribute("Gain", 0.4)
+		else
+			hiss = Instance.new("Sound")
+			hiss.SoundId = RAIN_SOUND
+			hiss:SetAttribute("Gain", 0.22)
+		end
 		hiss.Looped = true
-		hiss.PlaybackSpeed = 1.4
 		hiss.Volume = 0
 		hiss.Parent = SoundService
 		hiss:Play()
@@ -2371,7 +2578,8 @@ local function stepRain(t: number, dt: number, clock: number, at: Vector3?)
 		drops.Rate = 700 * rain
 	end
 	if rainSound then
-		rainSound.Volume = if Players.LocalPlayer:GetAttribute("Hushed") then 0 else 0.22 * rain
+		rainSound.Volume = if Players.LocalPlayer:GetAttribute("Hushed") then 0
+			else (tonumber(rainSound:GetAttribute("Gain")) or 0.22) * rain
 	end
 	-- Rings on the water round you, a few at a time.
 	local b = brief
@@ -2806,6 +3014,110 @@ local function thingFrame(b: SunkenPath.Brief, now: number, at: Vector3?, dt: nu
 	applyMood()
 end
 
+-- ===== UNDER THE SEA, DARK (the two-hundred-and-thirty-seventh pass) =====
+--
+-- From your note of 2026-11-21 with a screenshot of the serpent in the streets: "its missing dark scary underwater
+-- atmos". The sea here is parts, not terrain water, so a camera under its surface saw nothing of water at all: the
+-- drowned streets in clear air with a blue cast, every tower sharp to the far end, the serpent lit like a toy. Now, the
+-- moment your view goes under the surface (and neither the aquarium's murk nor the drain's own water has it), the sea
+-- closes in: a thick black-green that swallows everything past a few dozen studs, so the streets end in dark and the
+-- thing comes out of it; the picture darker, greyer and harder, a little soft; and silt hanging in the water round you.
+-- All on your screen, eased in and out as you go under and come up, and what it found put back as it was.
+-- (On `aquarium`, not a local of its own: this file is at Luau's two hundred locals.)
+aquarium.sea = {
+	look = nil :: { atmosphere: Atmosphere, made: boolean, grade: ColorCorrectionEffect, blur: BlurEffect,
+		silt: BasePart, density: number, offset: number, colour: Color3, decay: Color3, haze: number, glare: number }?,
+	-- (First tried at 0.78 and -0.14: the serpent came out of black, but the drowned streets were gone with it.)
+	DEEP = { density = 0.7, colour = Color3.fromRGB(12, 38, 44), decay = Color3.fromRGB(4, 16, 22), haze = 2,
+		tint = Color3.fromRGB(150, 196, 200), brightness = -0.09, contrast = 0.2, saturation = -0.32, blur = 2,
+		into = 0.6, out = 0.8 },
+}
+
+function aquarium.sea.set(on: boolean)
+	if on == (aquarium.sea.look ~= nil) then
+		return
+	end
+	local DEEP = aquarium.sea.DEEP
+	if on then
+		local found = Lighting:FindFirstChildOfClass("Atmosphere")
+		local atmosphere = found or Instance.new("Atmosphere")
+		if not found then
+			atmosphere.Density = 0
+			atmosphere.Parent = Lighting
+		end
+		local grade = Instance.new("ColorCorrectionEffect")
+		grade.Name = "SeaDark"
+		grade.Parent = Lighting
+		local blur = Instance.new("BlurEffect")
+		blur.Name = "SeaDarkBlur"
+		blur.Size = 0
+		blur.Parent = Lighting
+		-- THE SILT: pale specks drifting in the dark round your view, slow, few, catching no light of their own.
+		local silt = Instance.new("Part")
+		silt.Name = "SeaDarkSilt"
+		silt.Anchored = true
+		silt.CanCollide = false
+		silt.CanTouch = false
+		silt.CanQuery = false
+		silt.Transparency = 1
+		silt.Size = Vector3.new(30, 18, 30)
+		silt.Parent = workspace.CurrentCamera
+		local specks = Instance.new("ParticleEmitter")
+		specks.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		specks.Color = ColorSequence.new(Color3.fromRGB(150, 176, 170))
+		specks.LightEmission = 0
+		specks.Size = NumberSequence.new(0.08)
+		specks.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, 0.55),
+			NumberSequenceKeypoint.new(0.7, 0.6), NumberSequenceKeypoint.new(1, 1) })
+		specks.Lifetime = NumberRange.new(5, 8)
+		specks.Rate = 24
+		specks.Speed = NumberRange.new(0.2, 0.6)
+		specks.SpreadAngle = Vector2.new(180, 180)
+		specks.Shape = Enum.ParticleEmitterShape.Box
+		specks.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+		specks.Parent = silt
+		aquarium.sea.look = { atmosphere = atmosphere, made = found == nil, grade = grade, blur = blur, silt = silt,
+			density = atmosphere.Density, offset = atmosphere.Offset, colour = atmosphere.Color, decay = atmosphere.Decay,
+			haze = atmosphere.Haze, glare = atmosphere.Glare }
+		local ease = TweenInfo.new(DEEP.into, Enum.EasingStyle.Sine)
+		TweenService:Create(atmosphere, ease, { Density = DEEP.density, Offset = 0, Color = DEEP.colour, Decay = DEEP.decay,
+			Haze = DEEP.haze, Glare = 0 }):Play()
+		TweenService:Create(grade, ease, { TintColor = DEEP.tint, Brightness = DEEP.brightness, Contrast = DEEP.contrast,
+			Saturation = DEEP.saturation }):Play()
+		TweenService:Create(blur, ease, { Size = DEEP.blur }):Play()
+		return
+	end
+	local was = aquarium.sea.look :: any
+	aquarium.sea.look = nil
+	local ease = TweenInfo.new(DEEP.out, Enum.EasingStyle.Sine)
+	TweenService:Create(was.grade, ease, { TintColor = Color3.new(1, 1, 1), Brightness = 0, Contrast = 0, Saturation = 0 }):Play()
+	TweenService:Create(was.blur, ease, { Size = 0 }):Play()
+	game:GetService("Debris"):AddItem(was.grade, DEEP.out + 0.1)
+	game:GetService("Debris"):AddItem(was.blur, DEEP.out + 0.1)
+	was.silt:Destroy()
+	-- Only if the air is still this (nothing has set it since): a level torn down under it gets its own air.
+	local atmosphere = was.atmosphere
+	if atmosphere.Parent and math.abs(atmosphere.Density - DEEP.density) < 0.05 then
+		TweenService:Create(atmosphere, ease, { Density = was.density, Offset = was.offset, Color = was.colour,
+			Decay = was.decay, Haze = was.haze, Glare = was.glare }):Play()
+		if was.made then
+			game:GetService("Debris"):AddItem(atmosphere, DEEP.out + 0.1)
+		end
+	end
+end
+
+-- Every frame: under the surface (a little under, so the waves' troughs do not flicker it), and nothing else's water.
+function aquarium.sea.step(b: any)
+	local camera = workspace.CurrentCamera
+	local deep = b ~= nil and camera ~= nil and typeof(b.waterY) == "number" and eyeAt.Y < b.waterY - 0.8
+		and aquarium.look == nil and under == nil
+	aquarium.sea.set(deep)
+	local look = aquarium.sea.look
+	if look and camera then
+		look.silt.CFrame = CFrame.new(camera.CFrame.Position)
+	end
+end
+
 local function step(dt: number)
 	local camera = workspace.CurrentCamera
 	if camera then
@@ -2831,6 +3143,8 @@ local function step(dt: number)
 	guard("the water's surface", moveSurface, clock)
 	guard("the lights", moveLights, clock)
 	guard("the flood", stepFlood, clock, dt)
+	guard("the aquarium's murk", aquarium.step, at)
+	guard("the dark under the sea", aquarium.sea.step, b)
 	if b then
 		local t = now - b.epoch
 		guard("the bell", stepBell, t)
@@ -2902,7 +3216,7 @@ function panel.lines(): string
 			if nearest < math.huge then ("a %s, %d studs away"):format(kind, math.floor(nearest)) else "none on this client"),
 		("shoals %d, kelp %d, gulls %d, Ferris pieces turning %d, whirlpool rings %d"):format(countOf(shoals),
 			countOf(kelps), countOf(gulls), countOf(ferris), countOf(rings)),
-		"the thing under the route: " .. (if thingMesh then "the serpent mesh" elseif #segments > 0 then #segments .. " pieces" else "not here"),
+		"the thing under the route: " .. (if thingMesh then "the serpent mesh" .. thingDressed elseif #segments > 0 then #segments .. " pieces" else "not here"),
 		"under terrain water: " .. (if FLOOD.under then "yes, and the sound is muffled" else "no"),
 		"the drain: " .. (if drain then "riding it now" else "not riding"),
 		if #broken == 0 then "nothing has failed" else "FAILED: " .. table.concat(broken, ", "),
@@ -2996,7 +3310,7 @@ local function reportLater(model: Instance)
 		print(("SunkenCityClient: drawing the thing (%s), %d swimmers, %d shoals, %d strands of kelp, %d gulls, "
 			.. "%d whirlpool rings, %d turning pieces of the Ferris wheel; %s; %s; running the "
 			.. SunkenCityClient.VERSION):format(
-			if thingMesh then "the serpent mesh" else #segments .. " pieces", count(swimmers),
+			if thingMesh then "the serpent mesh" .. thingDressed else #segments .. " pieces", count(swimmers),
 			count(shoals), count(kelps), count(gulls), count(rings), count(ferris),
 			if #broken == 0 then "nothing has failed" else "FAILED: " .. table.concat(broken, ", "), SeaRig.summary()))
 	end)
@@ -3268,6 +3582,16 @@ function SunkenCityClient.start()
 	end, function(item)
 		ferris[item] = nil
 	end)
+	track("CameraRoom", function(item)
+		if item:IsA("BasePart") and item:GetAttribute("Murk") == true then
+			table.insert(aquarium.rooms, item)
+		end
+	end, function(item)
+		local index = table.find(aquarium.rooms, item :: any)
+		if index then
+			table.remove(aquarium.rooms, index)
+		end
+	end)
 	track("SunkenFloodVolume", function(item)
 		if item:IsA("BasePart") then
 			table.insert(floodVolumes, item)
@@ -3461,5 +3785,5 @@ if (script :: any):IsA("LocalScript") then
 	task.spawn(SunkenCityClient.start)
 end
 
-SunkenCityClient.STAMP = "655616d7"
+SunkenCityClient.STAMP = "a76f5f25"
 return SunkenCityClient

@@ -51,6 +51,23 @@ SunkenPath.CREST = 7
 SunkenPath.CREST_REACH = 40 -- how far along its body from the spot the heave reaches
 SunkenPath.QUIET_MARGIN = 12 -- and how much further than that it keeps from a road sign
 
+-- OVER AND UNDER ITSELF AT EACH END (the hundred-and-ninety-seventh pass). It used to turn back on the
+-- very line it came up, so for as long as its body took to come round -- two hundred studs of it, two
+-- thirds of every patrol -- the half going back lay in the half still coming, its head halfway along
+-- its own length and its tail out past its nose. The street gives it no room to turn wide (a couple of
+-- studs either side of the aquarium's tower and the dry flat), but the water under it is deep: so it
+-- goes up the street at its depth and comes back down it DIVE deeper, turning over and under itself at
+-- each end, and leans TURN_SIDE to one side as it goes round, so it rolls through the turn rather than
+-- flipping over at the bottom of it.
+-- FORTY-EIGHT, NOT TWENTY-FOUR (the hundred-and-ninety-ninth pass, seen in play): a turn twelve studs round
+-- is no wider than the body is thick (nine to eleven studs from its middle to its skin), so the inside of
+-- the bend had nowhere to go. Twenty-four studs round leaves the inside of the bend thirteen, and lays the
+-- turn over seven joints, not three. The floor allows fifty-five. (The flat striped web seen across the
+-- loop was not this but the bones' own turn flipping half over at the bottom: SeaRig.follow's `across`,
+-- the two-hundred-and-first pass.)
+SunkenPath.DIVE = 48
+SunkenPath.TURN_SIDE = 1
+
 export type Brief = {
 	-- The route's line in plan, and how long it is. Everything else is measured along it.
 	points: { Vector3 },
@@ -156,14 +173,25 @@ function SunkenPath.walk(b: Brief, s: number): (Vector3, Vector3)
 end
 
 -- How far along the line a point `behind` studs back from the head is, `t` seconds after it set
--- off: up the line and back down it, for ever. The body folds round the turn, which is what a long
--- animal doubling back actually does.
-function SunkenPath.along(b: Brief, t: number, behind: number): number
+-- off, how much deeper than its depth it is there, and how far it leans to one side: up the line,
+-- over and down at the far end, back down the line DIVE deeper, and up and over at the near end, for
+-- ever. Each turn is half a circle DIVE across, so no part of it is ever where another part is.
+function SunkenPath.along(b: Brief, t: number, behind: number): (number, number, number)
 	local span = math.max(60, b.total - b.keep)
-	local travelled = b.speed * t - behind
-	local cycle = 2 * span
-	local within = travelled % cycle
-	return if within <= span then within else cycle - within
+	local r = SunkenPath.DIVE / 2
+	local run = span - 2 * r -- each straight, between the middles of the two turns
+	local turn = math.pi * r
+	local within = (b.speed * t - behind) % (2 * run + 2 * turn)
+	if within < run then
+		return r + within, 0, 0
+	elseif within < run + turn then
+		local a = (within - run) / r
+		return span - r + r * math.sin(a), r - r * math.cos(a), SunkenPath.TURN_SIDE * math.sin(a)
+	elseif within < 2 * run + turn then
+		return span - r - (within - run - turn), 2 * r, 0
+	end
+	local a = (within - 2 * run - turn) / r
+	return r - r * math.sin(a), r + r * math.cos(a), SunkenPath.TURN_SIDE * math.sin(a)
 end
 
 -- The surfacing under way at time `t`, if any: how far into it (negative while the warning runs)
@@ -206,22 +234,25 @@ end
 -- A point on its body `behind` studs back from the head, at time `t` since it set off, given the
 -- surfacing under way at `t` (`into` and `spot`, nil when there is none).
 local function placed(b: Brief, t: number, behind: number, into: number?, spot: Vector3?): Vector3
-	local s = SunkenPath.along(b, t, behind)
+	local s, drop, lean = SunkenPath.along(b, t, behind)
 	local at, dir = SunkenPath.walk(b, s)
 	-- Off the line: a slow wander that depends on where it is rather than when, so the whole body
-	-- follows the same curve, plus the sway travelling down it.
+	-- follows the same curve, plus the sway travelling down it, plus its lean through a turn.
 	local side = Vector3.new(-dir.Z, 0, dir.X)
 	local wander = b.swing * math.sin(2 * math.pi * s / b.swingWave)
 	local sway = SunkenPath.SWAY * math.sin(2 * math.pi * (behind / SunkenPath.SWAY_WAVE - t / SunkenPath.SWAY_PERIOD))
-	local y = b.waterY - b.depth + b.bob * math.sin(2 * math.pi * (t - behind / b.speed) / b.bobPeriod)
-	local here = at + side * (wander + sway)
+	local y = b.waterY - b.depth - drop + b.bob * math.sin(2 * math.pi * (t - behind / b.speed) / b.bobPeriod)
+	local here = at + side * (wander + sway + lean)
 	here = Vector3.new(here.X, y, here.Z)
-	-- THE HEAVE: near the spot, while it is surfacing, the body rises toward the crest.
+	-- THE HEAVE: near the spot, while it is surfacing, the body rises toward the crest. From the deeper
+	-- way back it has further to come, so the heave reaches as much further along it: the same rise
+	-- over each stud of its length either way, a back arching up and not a spike.
 	if into and spot then
 		local lift = SunkenPath.heave(into)
 		if lift > 0 then
 			local near = Vector3.new(here.X - spot.X, 0, here.Z - spot.Z).Magnitude
-			local reach = math.max(0, 1 - near / SunkenPath.CREST_REACH)
+			local deeper = 1 + drop / math.max(1, b.depth - SunkenPath.CREST)
+			local reach = math.max(0, 1 - near / (SunkenPath.CREST_REACH * deeper))
 			local crest = b.waterY - SunkenPath.CREST
 			here = Vector3.new(here.X, y + (crest - y) * lift * reach, here.Z)
 		end
@@ -246,6 +277,26 @@ function SunkenPath.body(b: Brief, t: number, first: number, spacing: number, co
 	return out
 end
 
+-- WHICH WAY IS ACROSS, AT EACH JOINT IN A TURN (the two-hundred-and-first pass, seen in play): for the same `count`
+-- joints as `body`, the street's own across (its side, as `placed` leans toward it) where that joint is in a turn, and
+-- nothing where it is on a straight; written into `out` and returned. The client rolls the body toward it through
+-- each turn (SeaRig.follow), so it comes round on its side and back upright, and is never flipped half over between
+-- one bone and the next. In a world direction that is the street's, never the direction of travel, so it does not
+-- change as the serpent comes back.
+function SunkenPath.across(b: Brief, t: number, first: number, spacing: number, count: number,
+	out: { Vector3 }): { Vector3 }
+	for index = 1, count do
+		local s, _, lean = SunkenPath.along(b, t, first + (index - 1) * spacing)
+		if lean ~= 0 then
+			local _, dir = SunkenPath.walk(b, s)
+			out[index] = Vector3.new(-dir.Z, 0, dir.X)
+		else
+			out[index] = Vector3.zero
+		end
+	end
+	return out
+end
+
 -- ===== THE DRAIN'S RIDE =====
 --
 -- Where a rider is at `u` of the way down: round and in, down the funnel, then straight down the
@@ -253,8 +304,27 @@ end
 -- for the reason Sky Pools' slide is drawn there -- a character moved from the server sixty times a
 -- second stutters, and the one client that owns that character can move it for nothing. The server
 -- still keeps the clock and still says where you land.
--- Twice what it first was, so the ride can be watched and its captions read.
-SunkenPath.DRAIN_SECONDS = 13
+-- Twice what it first was, so the ride can be watched and its captions read. (A second less since the
+-- two-hundred-and-fifth pass, taken off the funnel: see FUNNEL_TIME.)
+SunkenPath.DRAIN_SECONDS = 12
+
+-- THE PULL IS QUICK (the two-hundred-and-fifth pass, from your note of 2026-11-07: "the whirlpool should suck me down
+-- in the first animation a bit faster"). The ride's first half, round and in down the funnel, took half its time: six
+-- and a half seconds of going round before it took you under. It takes FUNNEL_TIME of the ride's time now (under five
+-- seconds) and the shaft the rest, so the drop down the shaft is as long as it was. Every shot, pose and sound is
+-- placed by `u`, the share of the ride's SHAPE, so they all keep their places in it; only the clock runs faster
+-- through the funnel.
+SunkenPath.FUNNEL_TIME = 0.4
+
+-- `u` (the share of the ride's shape, which drainFrame and tumble take) `t` seconds into a ride of `seconds`.
+function SunkenPath.drainShare(t: number, seconds: number): number
+	local w = math.clamp(t / seconds, 0, 1)
+	local split = SunkenPath.FUNNEL_TIME
+	if w < split then
+		return 0.5 * w / split
+	end
+	return 0.5 + 0.5 * (w - split) / (1 - split)
+end
 
 export type Drain = {
 	vortex: Vector3,
@@ -355,5 +425,5 @@ function SunkenPath.outfallFrame(o: Outfall, v: number, t: number): CFrame
 		* CFrame.Angles(math.rad(78) * lift, 0, math.sin(t * 1.4) * 0.3 * lift)
 end
 
-SunkenPath.STAMP = "938bcf38"
+SunkenPath.STAMP = "4fb174ad"
 return SunkenPath

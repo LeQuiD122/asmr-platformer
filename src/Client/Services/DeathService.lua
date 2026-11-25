@@ -48,10 +48,40 @@ local ShopCatalog: any = (function()
 	return nil
 end)()
 
+-- THE PRICE ROBLOX GIVES YOU (the hundred-and-sixtieth pass): the second chance at Roblox's own price for you
+-- (ShopCatalog.robuxFor), and not offered for Robux if Roblox has it off sale (ShopCatalog.onSale).
+local function chancePrice(item: any): number
+	if ShopCatalog and type(ShopCatalog.robuxFor) == "function" then
+		return ShopCatalog.robuxFor(item) or 0
+	end
+	return item.robux or 0
+end
+local function chanceOnSale(item: any): boolean
+	if ShopCatalog and type(ShopCatalog.onSale) == "function" then
+		return ShopCatalog.onSale(item)
+	end
+	return true
+end
+
+-- REWARDED VIDEO ADS (AdOffers, the two-hundred-and-thirteenth pass): a second chance for watching one.
+local AdOffers: any = (function(): any
+	local found = script.Parent and script.Parent:FindFirstChild("AdOffers")
+	if found and found:IsA("ModuleScript") then
+		local ok, loaded = pcall(require, found)
+		if ok and type(loaded) == "table" then
+			return loaded
+		end
+	end
+	return nil
+end)()
+
 local TITLE = Style.FONT.heading
 local BODY = Style.FONT.body
 local FALLEN = Style.COLOUR.danger
 local WAIT_SECONDS = 3
+-- COMING UP, NOT SWITCHED ON (the hundred-and-thirty-ninth pass): the card was there at once, half-way through a breath;
+-- it fades up from nothing to its breathing over ARRIVE seconds.
+local ARRIVE = 0.35
 
 local screen: ScreenGui? = nil
 local wash: Frame? = nil
@@ -62,10 +92,39 @@ local choices: Frame? = nil
 local firstChoice: TextButton? = nil
 -- The second chance: its button, whether this fall has one to offer, how many are owned, and the remote.
 local chance = { button = nil :: TextButton?, offered = false, owned = 0, remote = nil :: RemoteEvent?,
-	state = nil :: RemoteFunction?, buying = false }
+	state = nil :: RemoteFunction?, buying = false, watch = nil :: TextButton?, watching = false }
+
+-- The card's buttons share its row evenly, however many of them are showing (three, or four with an ad's).
+local function relayout()
+	local row = choices
+	if not row then
+		return
+	end
+	local shown = {}
+	for _, child in ipairs(row:GetChildren()) do
+		if child:IsA("TextButton") and child.Visible then
+			table.insert(shown, child)
+		end
+	end
+	for _, b in ipairs(shown) do
+		b.Size = UDim2.new(1 / math.max(1, #shown), -8, 1, 0)
+	end
+end
 local pulsing = false
 local leaveRemote: RemoteEvent? = nil
 local retryRemote: RemoteEvent? = nil
+
+-- A PRESS, HEARD (the hundred-and-forty-fourth pass): AudioService.press, the one soft sound every menu in the game makes
+-- (a felt tap, two notes up as a card opens and down as it goes). Its choices made none.
+local function pressSound(kind: string)
+	local found = script.Parent and script.Parent:FindFirstChild("AudioService")
+	if found and found:IsA("ModuleScript") then
+		local ok, audio = pcall(require, found)
+		if ok and type(audio) == "table" and type(audio.press) == "function" then
+			audio.press(kind)
+		end
+	end
+end
 
 local function build()
 	if screen then
@@ -170,10 +229,27 @@ local function build()
 	local second = button("Second chance", 2, Style.COLOUR.good, true)
 	second.Visible = false
 	chance.button = second
-	local out = button("Leave to the lobby", 3, Style.COLOUR.panelRaised, false)
+	local out = button("Leave to the lobby", 4, Style.COLOUR.panelRaised, false)
+	-- A SECOND CHANCE FOR WATCHING AN AD (the two-hundred-and-thirteenth pass, AdOffers): shown beside the bought one
+	-- only when Roblox has an ad for you and you have one left today, the reward said on it. Watched to the end, the
+	-- chance lands and is used at once, as a bought one is.
+	local watch = button("Second chance: watch an ad", 3, Style.COLOUR.good, true)
+	watch.Visible = false
+	chance.watch = watch
+	watch.Activated:Connect(function()
+		pressSound("tap")
+		if not (AdOffers and chance.offered) or chance.watching then
+			return
+		end
+		chance.watching = true
+		watch.Visible = false
+		relayout()
+		AdOffers.watch("chance")
+	end)
 
 	-- THE SECOND CHANCE: used if one is owned; else bought (Roblox's own window) and used once it lands.
 	second.Activated:Connect(function()
+		pressSound("tap")
 		if chance.owned > 0 then
 			DeathService.hide()
 			if chance.remote then
@@ -183,19 +259,21 @@ local function build()
 		end
 		local item = ShopCatalog and ShopCatalog.get("SecondChance")
 		local productId = item and item.productId or 0
-		if productId ~= 0 and not chance.buying then
+		if productId ~= 0 and chanceOnSale(item) and not chance.buying then
 			chance.buying = true
 			MarketplaceService:PromptProductPurchase(Players.LocalPlayer, productId)
 		end
 	end)
 
 	again.Activated:Connect(function()
+		pressSound("tap")
 		DeathService.hide()
 		if retryRemote then
 			retryRemote:FireServer()
 		end
 	end)
 	out.Activated:Connect(function()
+		pressSound("tap")
 		DeathService.hide()
 		if leaveRemote then
 			leaveRemote:FireServer()
@@ -234,17 +312,27 @@ local function readChances()
 	if not b then
 		return
 	end
+	local w = chance.watch
+	if w then
+		w.Visible = false
+		if chance.offered and chance.owned == 0 and not chance.watching and AdOffers and type(data) == "table"
+			and type(data.adsLeft) == "table" and (tonumber(data.adsLeft.chance) or 0) > 0 and AdOffers.ready() then
+			w.Visible = chance.offered
+			AdOffers.register(w)
+		end
+	end
 	if not chance.offered then
 		b.Visible = false
 	elseif chance.owned > 0 then
 		b.Text = ("Second chance (%d)"):format(chance.owned)
 		b.Visible = true
-	elseif productId ~= 0 and item then
-		b.Text = ("Second chance  R$ %d"):format(item.robux or 0)
+	elseif productId ~= 0 and item and chanceOnSale(item) then
+		b.Text = ("Second chance  R$ %d"):format(chancePrice(item))
 		b.Visible = true
 	else
 		b.Visible = false -- not on sale yet, and none owned
 	end
+	relayout()
 end
 
 function DeathService.show(offer: boolean?)
@@ -256,6 +344,7 @@ function DeathService.show(offer: boolean?)
 	if not (gui and tint and title and sub and row) then
 		return
 	end
+	title.TextTransparency, sub.TextTransparency, tint.BackgroundTransparency = 1, 1, 1
 	gui.Enabled = true
 	row.Visible = false
 	pulsing = true
@@ -266,11 +355,12 @@ function DeathService.show(offer: boolean?)
 	task.spawn(function()
 		local started = os.clock()
 		while pulsing and gui.Enabled do
-			local phase = (os.clock() - started) * 1.6
-			local breath = (math.sin(phase) + 1) / 2
-			title.TextTransparency = 0.15 + breath * 0.45
-			sub.TextTransparency = 0.35 + breath * 0.35
-			tint.BackgroundTransparency = 0.72 + breath * 0.14
+			local since = os.clock() - started
+			local come = math.clamp(since / ARRIVE, 0, 1)
+			local breath = (math.sin(since * 1.6) + 1) / 2
+			title.TextTransparency = 1 - (0.85 - breath * 0.45) * come
+			sub.TextTransparency = 1 - (0.65 - breath * 0.35) * come
+			tint.BackgroundTransparency = 1 - (0.28 - breath * 0.14) * come
 			RunService.Heartbeat:Wait()
 		end
 	end)
@@ -299,6 +389,10 @@ end
 
 task.spawn(function()
 	build()
+	-- (Asked once for the whole screen, whichever asks first: the shop or this.)
+	if ShopCatalog and type(ShopCatalog.askPrices) == "function" then
+		ShopCatalog.askPrices()
+	end
 	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents", 20)
 	if not remotes then
 		return
@@ -315,6 +409,30 @@ task.spawn(function()
 	local stateRemote = functions and functions:WaitForChild("ShopState", 10)
 	if stateRemote and stateRemote:IsA("RemoteFunction") then
 		chance.state = stateRemote
+	end
+	-- WATCHED FOR ON THE CARD: once the ad is done, the chance (given by the server as a purchase is) is used at once.
+	if AdOffers then
+		AdOffers.finished(function(what: string, ok: boolean, _outcome: string)
+			if what ~= "chance" then
+				return
+			end
+			chance.watching = false
+			if not (ok and chance.offered) then
+				task.spawn(readChances)
+				return
+			end
+			for _ = 1, 20 do
+				readChances()
+				if chance.owned > 0 then
+					DeathService.hide()
+					if chance.remote then
+						chance.remote:FireServer()
+					end
+					return
+				end
+				task.wait(0.5)
+			end
+		end)
 	end
 	-- BOUGHT FROM THE CARD: the purchase lands on the server (EconomyService), and once it shows up here
 	-- it is used at once, which is why it was bought.
@@ -352,5 +470,5 @@ task.spawn(function()
 	end
 end)
 
-DeathService.STAMP = "88f12ebc"
+DeathService.STAMP = "fd20a739"
 return DeathService

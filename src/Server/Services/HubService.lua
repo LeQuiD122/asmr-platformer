@@ -428,7 +428,7 @@ end
 -- 9-stud sign on each one overlapped its neighbours on both sides and the row turned into a
 -- wall of text.
 local function makeSign(parent: BasePart, title: string, subtitle: string, lift: number?,
-	width: number?)
+	width: number?, behind: boolean?)
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "Sign"
 	gui.Size = UDim2.new(width or 9, 0, (width or 9) * 0.29, 0)
@@ -440,7 +440,10 @@ local function makeSign(parent: BasePart, title: string, subtitle: string, lift:
 	--
 	-- It is safe here only because MaxDistance is short: drawing through walls matters when
 	-- there are walls between you and the label, and at 60 studs there are not.
-	gui.AlwaysOnTop = true
+	-- BEHIND THINGS IN THE WORKSHOP (`behind`, the two-hundred-and-eighteenth pass, from your screenshots of 2026-11-16):
+	-- there the keys stand by the workshop's board and the squish room's lift, and a label drawn through them sat on
+	-- the board and over the lift's sign. Those are high enough over their keys for nothing low to hide them.
+	gui.AlwaysOnTop = behind ~= true
 	gui.StudsOffsetWorldSpace = Vector3.new(0, lift or SIGN_HEIGHT, 0)
 	-- Fades out well before the far side of the room, so standing at one end does not stack
 	-- every sign in the lobby on top of each other.
@@ -600,8 +603,8 @@ local function setHighlight(pad: BasePart, on: boolean)
 		beam.Name = "HaloBeam"
 		beam.Face = Enum.NormalId.Left
 		beam.Color = made.Color
-		beam.Range = 14
-		beam.Brightness = 1.2
+		beam.Range = 10
+		beam.Brightness = 0.5
 		beam.Angle = 120
 		beam.Shadows = false
 		beam.Enabled = false
@@ -615,7 +618,10 @@ local function setHighlight(pad: BasePart, on: boolean)
 	local shade = if hot then Color3.fromRGB(244, 96, 84) else Color3.fromRGB(255, 236, 168)
 	local part = halo :: BasePart
 	part.Color = shade
-	part.Transparency = if on then 0.1 else 1
+	-- SOFTER (the hundred-and-eighty-second pass, from your test of 2026-11-04: "the lighting on the platforms of selection
+	-- and start is too bright"): a ring of glass-thin light round the chosen key, not a white-hot disc, and a lamp that
+	-- warms the floor round it rather than whiting it out.
+	part.Transparency = if on then 0.55 else 1
 	local glow = part:FindFirstChild("HaloGlow")
 	if glow and glow:IsA("PointLight") then
 		glow.Color = shade
@@ -624,8 +630,8 @@ local function setHighlight(pad: BasePart, on: boolean)
 		-- reads as chosen from anywhere in it. A selection that is only visible when you are
 		-- standing on it is not telling you what is selected, it is confirming what you just
 		-- did -- and those are different jobs.
-		glow.Brightness = 1.6
-		glow.Range = 18
+		glow.Brightness = 0.75
+		glow.Range = 12
 	end
 	local surface = part:FindFirstChild("HaloBeam")
 	if surface and surface:IsA("SurfaceLight") then
@@ -715,7 +721,8 @@ function HubService.refreshOptionPads()
 	if not folder then
 		return
 	end
-	local leading = HubService.resolveVote()
+	-- The keys show the workshop's choice, which only a run started from the workshop takes (DEFAULT_RUN).
+	local leading = HubService.workshopChoice()
 	for _, child in ipairs(folder:GetChildren()) do
 		local field = child:GetAttribute("OptionField")
 		if child:IsA("BasePart") and field then
@@ -1017,9 +1024,10 @@ local function makeLevelPad(level, index: number, parent: Folder): BasePart
 	end
 
 	local par = level.parTime or 0
-	-- NUMBERED, in the order they happen on 14 August, with the time each one is set at.
+	-- NUMBERED, in the order they happen on 14 August, with the time each one is set at. Its three facts apart with the
+	-- vote card's dots (the hundred-and-forty-seventh pass: they were bars, the one sign in the lobby with them).
 	makeSign(pad, LevelDefinitions.titleOf(level),
-		("%spar %d:%02d  |  %s"):format(if level.storyTime and level.storyTime ~= "" then level.storyTime .. "  |  " else "", math.floor(par / 60),
+		("%spar %d:%02d  ·  %s"):format(if level.storyTime and level.storyTime ~= "" then level.storyTime .. "  ·  " else "", math.floor(par / 60),
 			par % 60, look.label), 14)
 
 	-- SELECTION IS A TOUCH, not a prompt. Touched fires many times per second while a player
@@ -1118,7 +1126,8 @@ local function makeOptionPads(row, parent: Folder)
 		inlay.Size = Vector3.new(0.35, 4.3, 4.3)
 		inlay.CFrame = CFrame.new(pad.Position + Vector3.new(0, 0.7, 0))
 			* CFrame.Angles(0, 0, math.rad(90))
-		inlay.Material = Enum.Material.Neon
+		-- (Painted, not Neon, since the two-hundred-and-fifth pass: nothing in the game glows by being Neon.)
+		inlay.Material = Enum.Material.SmoothPlastic
 		inlay.Color = row.colour
 		inlay.Transparency = 0.6
 		inlay.Parent = pad
@@ -1139,7 +1148,7 @@ local function makeOptionPads(row, parent: Folder)
 		-- separation is the only thing keeping them apart -- and at 4.4 against 1.3 they still
 		-- crossed on screen from a standing camera, because perspective compresses vertical
 		-- gaps far more than it compresses the plates themselves.
-		makeSign(pad, row.labels[value], row.field, 5.4, 6.4)
+		makeSign(pad, row.labels[value], row.field, 5.4, 6.4, true)
 
 		pad.Touched:Connect(function(hit: BasePart)
 			local character = hit.Parent
@@ -1396,7 +1405,16 @@ local tellState: () -> ()
 -- arbitrary: for mode that is chill, and a room that cannot agree should get the gentler run
 -- rather than a coin toss that sends half of it somewhere it did not ask to go.
 local MODE_ORDER = { "chill", "hardcore" }
-local LENGTH_ORDER = { "short", "medium", "long" }
+-- LONG FIRST (the two-hundred-and-fifth pass, from your note of 2026-11-07: "by default the lengths of the level should be
+-- all long"). The default ballot and the tie-break both come from this order, so an untouched ballot is a long run.
+local LENGTH_ORDER = { "long", "medium", "short" }
+
+-- RUNS ARE LONG AND CHILL UNLESS STARTED FROM THE WORKSHOP (the same note: "and then in a specifically dedicated area for
+-- customisation like a sandbox, there they could choose options and the difficulty"). The mode and length keys stand in
+-- the workshop now, the garden's west wing by the squish room's lift (LobbyLayout.AT), with a start of its own: a run
+-- started there is the room's choice of mode and length; one started at the gates' start is DEFAULT_RUN.
+local DEFAULT_RUN = { mode = "chill", length = "long" }
+local fromWorkshop = false
 
 local function ballotFor(player: Player): Ballot
 	local existing = ballots[player]
@@ -1511,9 +1529,14 @@ function HubService.resolveVote(): RunRequest
 	end
 	return {
 		levelId = winner("level", levelOrder) :: number,
-		mode = winner("mode", MODE_ORDER) :: string,
-		length = winner("length", LENGTH_ORDER) :: string,
+		mode = if fromWorkshop then winner("mode", MODE_ORDER) :: string else DEFAULT_RUN.mode,
+		length = if fromWorkshop then winner("length", LENGTH_ORDER) :: string else DEFAULT_RUN.length,
 	}
+end
+
+-- What the workshop's keys stand at: the room's choice of mode and length there, whichever start is pressed next.
+function HubService.workshopChoice(): { mode: string, length: string }
+	return { mode = winner("mode", MODE_ORDER) :: string, length = winner("length", LENGTH_ORDER) :: string }
 end
 
 function HubService.clearBallot(player: Player)
@@ -1595,8 +1618,10 @@ function HubService.markBallot(player: Player)
 				-- the thing you are standing on -- and the sign belongs above it. Both moved,
 				-- because moving only one of them just makes a smaller collision.
 				made.Size = UDim2.new(2.8, 0, 0.85, 0)
-				made.StudsOffsetWorldSpace = Vector3.new(0, 0.4, 0)
-				made.AlwaysOnTop = true
+				-- (Over the key's top, and behind things: the two-hundred-and-eighteenth pass. Drawn through them, the chips
+				-- floated over the squish room's lift sign.)
+				made.StudsOffsetWorldSpace = Vector3.new(0, 1.3, 0)
+				made.AlwaysOnTop = false
 				made.MaxDistance = 70
 				made.Parent = marks
 
@@ -1631,6 +1656,7 @@ end
 -- much less fun: the last five seconds of an open ballot is where a room actually talks to
 -- itself, and someone switching their pick at four seconds is the whole appeal.
 local COUNTDOWN_SECONDS = 10
+local SOLO_COUNTDOWN_SECONDS = 3
 local ANNOUNCE_SECONDS = 3
 
 local countdown: number? = nil
@@ -1729,7 +1755,7 @@ end
 -- ModuleScripts in the place and the second one wants deleting.
 print("HubService: module loaded (this line should appear exactly once per server)")
 
-function HubService.callVote()
+function HubService.callVote(workshop: boolean?)
 	if countdown ~= nil then
 		return
 	end
@@ -1737,8 +1763,13 @@ function HubService.callVote()
 	if HubService.runOn() then
 		return
 	end
-	countdown = COUNTDOWN_SECONDS
-	countdownEndsAt = workspace:GetServerTimeNow() + COUNTDOWN_SECONDS
+	-- From the workshop's start, the room's mode and length; from the gates', a long Chill run (DEFAULT_RUN).
+	fromWorkshop = workshop == true
+	-- ALONE IN THE LOBBY, A SHORT COUNT (the two-hundred-and-thirty-eighth pass): the ten seconds are for the room to vote
+	-- and climb aboard, and with nobody else in it they were ten seconds of looking at a number before the first squish.
+	local seconds = if #HubService.hubPlayers() <= 1 then SOLO_COUNTDOWN_SECONDS else COUNTDOWN_SECONDS
+	countdown = seconds
+	countdownEndsAt = workspace:GetServerTimeNow() + seconds
 	task.spawn(function()
 		-- AGAINST A DEADLINE, not by adding up waits.
 		--
@@ -1780,6 +1811,8 @@ function HubService.callVote()
 		end
 
 		local decision = HubService.resolveVote()
+		-- Taken: the next vote is the gates' again unless the workshop calls it.
+		fromWorkshop = false
 		HubService.setLevel(decision.levelId)
 		HubService.setMode(decision.mode)
 		HubService.setLength(decision.length)
@@ -1974,6 +2007,16 @@ local function backdropProp(name: string): BasePart?
 	warnOnce("nobackdrop_" .. name, "HubService: " .. name .. " is not in "
 		.. "ReplicatedStorage/Assets/Backdrop, so the lobby falls back to a plain slab.")
 	return nil
+end
+
+-- A MADE MODEL (the hundred-and-eighty-third pass onward): ReplicatedStorage/Assets/Props holds models generated in
+-- Studio for the lobby and the levels, each its parts laid out about its own feet at the origin, its front -Z. Nil when
+-- it is not there, and whatever asked builds its own of parts instead.
+local function madeProp(name: string): Model?
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local folder = assets and assets:FindFirstChild("Props")
+	local found = folder and folder:FindFirstChild(name)
+	return if found and found:IsA("Model") then found else nil
 end
 
 -- One mesh, placed. Returns nil rather than throwing when the asset is not imported, so a
@@ -3665,6 +3708,7 @@ local PALETTE = {
 	warm = Color3.fromRGB(246, 206, 148),
 	water = Color3.fromRGB(126, 186, 214),
 	leaf = Color3.fromRGB(150, 196, 154),
+	brass = Color3.fromRGB(184, 146, 82),
 }
 
 local function decorPart(name: string, size: Vector3, position: Vector3, parent: Folder): BasePart
@@ -3728,10 +3772,172 @@ local function buildColumn(at: Vector3, parent: Folder)
 	light.Parent = pool
 end
 
+-- ===== THE PLAZA, A LITTLE MORE (the two-hundred-and-fifteenth pass, from your note of 2026-11-14: "improve the lobby
+-- a little") =====
+--
+-- A FINGERPOST by where you arrive: an oak post on a stone foot, four arms pointing down the four walks (the levels, the
+-- shop, the Hall of Fame and its VIP lounge, the garden and its squish room), their names on both faces, a brass cap.
+-- And FLOWER TROUGHS just inside the plaza's railings, between its walks: oak troughs on little feet, leaves and flowers
+-- in them, so the edge of the plaza is soft and coloured rather than bare navy rail.
+local FINGERS = {
+	{ words = "LEVELS", dir = Vector3.new(0, 0, -1), colour = Color3.fromRGB(88, 124, 122) },
+	{ words = "SHOP", dir = Vector3.new(-1, 0, 0), colour = Color3.fromRGB(176, 92, 140) },
+	{ words = "VIP LOUNGE", dir = Vector3.new(1, 0, 0), colour = Color3.fromRGB(110, 90, 40) },
+	{ words = "SQUISH ROOM", dir = Vector3.new(0, 0, 1), colour = Color3.fromRGB(80, 120, 70) },
+}
+
+local function buildFingerpost(at: Vector3, parent: Instance)
+	local model = Instance.new("Model")
+	model.Name = "Fingerpost"
+	local oak = Color3.fromRGB(150, 104, 62)
+	local base = at + Vector3.new(0, 0.325, 0) -- on the inlay
+	local function piece(name: string, size: Vector3, cf: CFrame, colour: Color3, material: Enum.Material, solid: boolean?): Part
+		local made = Instance.new("Part")
+		made.Name = name
+		made.Anchored = true
+		made.CanCollide = solid == true
+		made.CanQuery = solid == true
+		made.CanTouch = false
+		made.Size = size
+		made.CFrame = cf
+		made.Color = colour
+		made.Material = material
+		made.TopSurface = Enum.SurfaceType.Smooth
+		made.BottomSurface = Enum.SurfaceType.Smooth
+		made.Parent = model
+		return made
+	end
+	piece("PostFoot", Vector3.new(1.6, 0.8, 1.6), CFrame.new(base + Vector3.new(0, 0.4, 0)), Color3.fromRGB(196, 186, 168),
+		Enum.Material.Limestone, true)
+	piece("Post", Vector3.new(0.6, 9, 0.6), CFrame.new(base + Vector3.new(0, 0.8 + 4.5, 0)), oak, Enum.Material.Wood, true)
+	piece("PostCap", Vector3.new(0.9, 0.35, 0.9), CFrame.new(base + Vector3.new(0, 9.98, 0)), Color3.fromRGB(214, 170, 80),
+		Enum.Material.Metal)
+	for k, finger in ipairs(FINGERS) do
+		local y = 8.9 - (k - 1) * 1.15
+		local out = finger.dir
+		local length = 4.2
+		local mid = base + Vector3.new(0, y, 0) + out * (0.3 + length / 2)
+		-- The arm: a board along its way (its X), a point at its end.
+		local arm = CFrame.fromMatrix(mid, out, Vector3.yAxis)
+		local board = piece("FingerBoard", Vector3.new(length, 0.9, 0.18), arm, finger.colour, Enum.Material.Wood)
+		-- Its point: a square turned 45 degrees on the board's end, half of it out past it.
+		piece("FingerTip", Vector3.new(0.9 / math.sqrt(2), 0.9 / math.sqrt(2), 0.17),
+			arm * CFrame.new(length / 2, 0, 0) * CFrame.Angles(0, 0, math.pi / 4), finger.colour, Enum.Material.Wood)
+		for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
+			local gui = Instance.new("SurfaceGui")
+			gui.Face = face
+			gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+			gui.PixelsPerStud = 60
+			gui.LightInfluence = 0.6
+			gui.Parent = board
+			local words = Instance.new("TextLabel")
+			words.Size = UDim2.fromScale(1, 1)
+			words.BackgroundTransparency = 1
+			words.TextScaled = true
+			words.FontFace = Style.WORLD.sign
+			words.TextColor3 = Color3.fromRGB(255, 250, 236)
+			words.Text = finger.words
+			words.Parent = gui
+			local pad = Instance.new("UIPadding")
+			pad.PaddingTop = UDim.new(0.16, 0)
+			pad.PaddingBottom = UDim.new(0.16, 0)
+			pad.PaddingLeft = UDim.new(0.05, 0)
+			pad.PaddingRight = UDim.new(0.05, 0)
+			pad.Parent = words
+		end
+	end
+	model.Parent = parent
+end
+
+local TROUGH_FLOWERS = { Color3.fromRGB(244, 150, 180), Color3.fromRGB(255, 236, 160), Color3.fromRGB(196, 168, 236),
+	Color3.fromRGB(255, 255, 250), Color3.fromRGB(236, 110, 96) }
+
+local function buildTrough(at: Vector3, along: Vector3, length: number, parent: Instance, seed: number)
+	local model = Instance.new("Model")
+	model.Name = "FlowerTrough"
+	local base = at + Vector3.new(0, 0.325, 0)
+	local frame = CFrame.fromMatrix(base, along, Vector3.yAxis)
+	local oak = Color3.fromRGB(150, 104, 62)
+	local function piece(name: string, size: Vector3, offset: CFrame, colour: Color3, material: Enum.Material, solid: boolean?): Part
+		local made = Instance.new("Part")
+		made.Name = name
+		made.Anchored = true
+		made.CanCollide = solid == true
+		made.CanQuery = solid == true
+		made.CanTouch = false
+		made.CastShadow = name ~= "TroughFlower"
+		made.Size = size
+		made.CFrame = frame * offset
+		made.Color = colour
+		made.Material = material
+		made.TopSurface = Enum.SurfaceType.Smooth
+		made.BottomSurface = Enum.SurfaceType.Smooth
+		made.Parent = model
+		return made
+	end
+	for _, x in ipairs({ -length / 2 + 0.4, length / 2 - 0.4 }) do
+		piece("TroughFoot", Vector3.new(0.5, 0.4, 1.3), CFrame.new(x, 0.2, 0), oak:Lerp(Color3.new(), 0.25), Enum.Material.Wood)
+	end
+	piece("Trough", Vector3.new(length, 1.1, 1.3), CFrame.new(0, 0.95, 0), oak, Enum.Material.WoodPlanks, true)
+	piece("TroughSoil", Vector3.new(length - 0.3, 0.12, 1.0), CFrame.new(0, 1.5, 0), Color3.fromRGB(70, 52, 40), Enum.Material.Ground)
+	local leaf = piece("TroughLeaves", Vector3.new(length - 0.4, 0.5, 0.95), CFrame.new(0, 1.75, 0), Color3.fromRGB(92, 140, 80),
+		Enum.Material.Grass)
+	leaf.CastShadow = false
+	local rng = Random.new(seed)
+	local count = math.floor(length * 1.6)
+	for k = 1, count do
+		local x = -length / 2 + 0.4 + (k - 0.5) / count * (length - 0.8)
+		local flower = piece("TroughFlower", Vector3.new(0.45, 0.45, 0.45),
+			CFrame.new(x, 2.05 + rng:NextNumber(0, 0.15), rng:NextNumber(-0.3, 0.3)),
+			TROUGH_FLOWERS[rng:NextInteger(1, #TROUGH_FLOWERS)], Enum.Material.SmoothPlastic)
+		flower.Shape = Enum.PartType.Ball
+	end
+	model.Parent = parent
+end
+
+local function buildPlazaTroughs(parent: Instance)
+	local plaza = LobbyLayout.DECKS.plaza
+	-- Against the inlay's edge (MARGIN in), behind the corner urns, between them and the columns at the quarter points.
+	local inset = plaza.w / 2 - LobbyLayout.MARGIN - 1
+	local centre = HUB_ORIGIN + LobbyLayout.centre("plaza")
+	local k = 0
+	-- Two troughs on each side, one either side of its walk, from the quarter column (19.75 along) to the corner urn (32).
+	for _, side in ipairs({
+		{ normal = Vector3.new(0, 0, -1), along = Vector3.new(1, 0, 0) },
+		{ normal = Vector3.new(0, 0, 1), along = Vector3.new(1, 0, 0) },
+		{ normal = Vector3.new(-1, 0, 0), along = Vector3.new(0, 0, 1) },
+		{ normal = Vector3.new(1, 0, 0), along = Vector3.new(0, 0, 1) },
+	}) do
+		for _, sign in ipairs({ -1, 1 }) do
+			k += 1
+			local at = centre + Vector3.new(0, 1, 0) + side.normal * inset + side.along * (sign * 26.5)
+			buildTrough(at, side.along, 7, parent, 215 + k)
+		end
+	end
+end
+
 -- A planter with a soft canopy. The shapes are deliberately round and slightly irregular:
 -- this is a game about materials that give, and a lobby full of hard boxes says the opposite.
 local function buildPlanter(at: Vector3, seed: number, parent: Folder)
 	local rng = Random.new(seed)
+	-- A CARVED STONE URN WITH ITS CLIPPED BOX BALL (the hundred-and-eighty-ninth pass, from your note of 2026-11-05: "improve
+	-- the lobby existing models"), made in Studio's mesh generator (Assets/Props, Lobby_Urn): pale stone, like the
+	-- marble round it, six studs tall on the deck, turned its own way in each place. The bowl, soil and plant below
+	-- without it.
+	local made = madeProp("Lobby_Urn")
+	local urnLook = made and made:FindFirstChildWhichIsA("BasePart")
+	if urnLook then
+		local urn = urnLook:Clone()
+		urn.Name = "Urn"
+		urn.Size = urnLook.Size * (6 / urnLook.Size.Y)
+		urn.CFrame = CFrame.new(at) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0) * CFrame.new(0, urn.Size.Y / 2, 0)
+		urn.Anchored = true
+		urn.CanCollide = false
+		urn.CanTouch = false
+		urn.CanQuery = false
+		urn.Parent = parent
+		return
+	end
 	-- THESE HEIGHTS ARE MEASURED, NOT CHOSEN. The soil floated a clear half-stud above the
 	-- rim on the first attempt because the offsets were guesses.
 	--
@@ -4014,16 +4220,36 @@ local function buildBench(at: Vector3, facing: number, parent: Folder)
 	-- points the sitter away from the rail, which is the only arrangement a bench has.
 	seat.CFrame = turn * CFrame.new(0, 2.2, 0) * CFrame.Angles(0, math.pi, 0)
 
-	local backRail = decorPart("BenchBack", Vector3.new(9, 2.2, 0.4), at, parent)
-	backRail.Material = Enum.Material.WoodPlanks
-	backRail.Color = Color3.fromRGB(146, 118, 92)
-	backRail.CFrame = turn * CFrame.new(0, 3.4, -1.1)
+	-- A PROMENADE BENCH (the hundred-and-eighty-ninth pass, from your note of 2026-11-05: "improve the lobby existing models"):
+	-- slatted oak on scrolled cream cast-iron ends, made in Studio's mesh generator (Assets/Props, Lobby_Bench), as long as
+	-- the seat. Its front is its -Z, so it is turned to face out of the rail as the seat does; the seat stays, unseen, at
+	-- the height of its slats, and is what you sit on. Four plain parts without it.
+	local made = madeProp("Lobby_Bench")
+	local look = made and made:FindFirstChildWhichIsA("BasePart")
+	if look then
+		local bench = look:Clone()
+		bench.Name = "Bench"
+		bench.Size = look.Size * (9 / look.Size.X)
+		bench.CFrame = turn * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, bench.Size.Y / 2, 0)
+		bench.Anchored = true
+		bench.CanCollide = false
+		bench.CanTouch = false
+		bench.CanQuery = false
+		bench.Parent = parent
+		seat.Transparency = 1
+		seat.CFrame = turn * CFrame.new(0, bench.Size.Y * 0.36, 0) * CFrame.Angles(0, math.pi, 0)
+	else
+		local backRail = decorPart("BenchBack", Vector3.new(9, 2.2, 0.4), at, parent)
+		backRail.Material = Enum.Material.WoodPlanks
+		backRail.Color = Color3.fromRGB(146, 118, 92)
+		backRail.CFrame = turn * CFrame.new(0, 3.4, -1.1)
 
-	for _, side in ipairs({ -3.4, 3.4 }) do
-		local leg = decorPart("BenchLeg", Vector3.new(0.7, 2.2, 2.2), at, parent)
-		leg.Material = Enum.Material.Metal
-		leg.Color = PALETTE.deck
-		leg.CFrame = turn * CFrame.new(side, 1.1, 0)
+		for _, side in ipairs({ -3.4, 3.4 }) do
+			local leg = decorPart("BenchLeg", Vector3.new(0.7, 2.2, 2.2), at, parent)
+			leg.Material = Enum.Material.Metal
+			leg.Color = PALETTE.deck
+			leg.CFrame = turn * CFrame.new(side, 1.1, 0)
+		end
 	end
 
 	-- HOLD E, WITH THE RING THAT FILLS.
@@ -4343,6 +4569,353 @@ end
 -- THE DAILY CHEST: a wooden chest banded in brass, standing in the arcade facing its middle, opened once a day with
 -- Roblox's own prompt (what that does is Bootstrap's: setDailyChest). Each player's own screen says whether it opens
 -- today and lifts the lid for them alone (HubVoteService), so the chest itself never changes for anyone else.
+-- ===== THE VIP LOUNGE (the two-hundred-and-thirteenth pass, from your note of 2026-11-13: VIP should be worth having) =====
+--
+-- The Hall of Fame's south half, behind a red velvet rope on brass posts: a navy rug bordered in gold, two plum velvet
+-- armchairs each with a lamp on a little marble table, a low table between them with a stack of the game's tokens on it,
+-- and at the back, on a marble pedestal, the VIP crate (a VIP's free background crate, once a day: ShopService.vipCrate).
+-- Its way in faces the hall, under a brass arch with VIP LOUNGE on it. The rope stops everyone; the gateway stops all
+-- but VIPs (their bodies are in the VipGuests group, which the gateway's VipGate group lets through: EconomyService);
+-- anyone else who asks at it is offered VIP in Roblox's own window. Everything stands on the deck or on what is on it.
+local LOUNGE_COLOURS = {
+	brass = Color3.fromRGB(214, 170, 80),
+	velvet = Color3.fromRGB(150, 22, 44),
+	navy = Color3.fromRGB(34, 30, 76),
+	gold = Color3.fromRGB(232, 190, 96),
+	plum = Color3.fromRGB(110, 40, 92),
+	marble = Color3.fromRGB(240, 234, 226),
+	wood = Color3.fromRGB(96, 58, 30),
+	shade = Color3.fromRGB(246, 230, 196),
+	lamp = Color3.fromRGB(255, 214, 160),
+}
+
+local function buildVipLounge(at: Vector3, parent: Instance)
+	local C = LOUNGE_COLOURS
+	local size = LobbyLayout.LOUNGE
+	local hx, hz, gate = size.w / 2, size.d / 2, size.gate / 2
+	local model = Instance.new("Model")
+	model.Name = "VipLounge"
+	-- The lounge's own frame: its middle on the deck's inlay (buildSurroundings: its top 1.325 over the origin, the
+	-- floor's 1, so the rug was under it), -Z its way in (toward the hall's middle).
+	local frame = CFrame.new(at + Vector3.new(0, 0.325, 0))
+	local function piece(name: string, dims: Vector3, offset: CFrame, colour: Color3, material: Enum.Material,
+		solid: boolean?): Part
+		local made = Instance.new("Part")
+		made.Name = name
+		made.Anchored = true
+		made.CanCollide = solid == true
+		made.CanQuery = solid == true
+		made.CanTouch = false
+		made.Size = dims
+		made.CFrame = frame * offset
+		made.Color = colour
+		made.Material = material
+		made.TopSurface = Enum.SurfaceType.Smooth
+		made.BottomSurface = Enum.SurfaceType.Smooth
+		made.Parent = model
+		return made
+	end
+	local function round(name: string, length: number, across: number, offset: CFrame, colour: Color3,
+		material: Enum.Material, solid: boolean?): Part
+		local made = piece(name, Vector3.new(length, across, across), offset * CFrame.Angles(0, 0, math.pi / 2), colour,
+			material, solid)
+		made.Shape = Enum.PartType.Cylinder
+		return made
+	end
+	local function ball(name: string, across: number, offset: CFrame, colour: Color3, material: Enum.Material): Part
+		local made = piece(name, Vector3.new(across, across, across), offset, colour, material)
+		made.Shape = Enum.PartType.Ball
+		return made
+	end
+
+	-- THE FLOOR: the navy rug and its gold border, lying on the deck.
+	piece("LoungeRug", Vector3.new(size.w - 3, 0.06, size.d - 3), CFrame.new(0, 0.03, 0), C.navy, Enum.Material.Fabric)
+	for _, z in ipairs({ -(hz - 1.7), hz - 1.7 }) do
+		piece("LoungeRugBorder", Vector3.new(size.w - 3, 0.07, 0.4), CFrame.new(0, 0.035, z), C.gold, Enum.Material.Fabric)
+	end
+	for _, side in ipairs({ -1, 1 }) do
+		piece("LoungeRugBorder", Vector3.new(0.4, 0.07, size.d - 3), CFrame.new(side * (hx - 1.7), 0.035, 0), C.gold,
+			Enum.Material.Fabric)
+	end
+
+	-- THE ROPE: brass posts round three sides and the front either side of the way in, the velvet sagging between.
+	local corners = { Vector3.new(gate, 0, -hz), Vector3.new(hx, 0, -hz), Vector3.new(hx, 0, hz), Vector3.new(-hx, 0, hz),
+		Vector3.new(-hx, 0, -hz), Vector3.new(-gate, 0, -hz) }
+	local posts: { Vector3 } = {}
+	for k = 1, #corners - 1 do
+		local a, b = corners[k], corners[k + 1]
+		local steps = math.max(1, math.ceil((b - a).Magnitude / 3.8))
+		for s = 0, steps - 1 do
+			table.insert(posts, a:Lerp(b, s / steps))
+		end
+	end
+	table.insert(posts, corners[#corners])
+	local TOP = 2.9
+	local SAG, BITS = 0.45, 4
+	for index, post in ipairs(posts) do
+		local foot = CFrame.new(post)
+		local tall = index == 1 or index == #posts -- the gateway's two, which carry the arch
+		round("LoungePostFoot", 0.2, 1.1, foot * CFrame.new(0, 0.1, 0), C.brass, Enum.Material.Metal, true)
+		if tall then
+			round("LoungeGatePost", 6, 0.36, foot * CFrame.new(0, 3.2, 0), C.brass, Enum.Material.Metal, true)
+			ball("LoungeGateFinial", 0.55, foot * CFrame.new(0, 6.45, 0), C.gold, Enum.Material.Metal)
+		else
+			round("LoungePost", TOP, 0.22, foot * CFrame.new(0, 0.2 + TOP / 2, 0), C.brass, Enum.Material.Metal, true)
+			ball("LoungePostTop", 0.42, foot * CFrame.new(0, 0.2 + TOP + 0.15, 0), C.gold, Enum.Material.Metal)
+		end
+		local nextPost = posts[index + 1]
+		if nextPost then
+			-- Four straight lengths along a gentle sag, hook to hook.
+			local hookA = post + Vector3.new(0, TOP, 0)
+			local hookB = nextPost + Vector3.new(0, TOP, 0)
+			local function along(f: number): Vector3
+				return hookA:Lerp(hookB, f) - Vector3.new(0, SAG * 4 * f * (1 - f), 0)
+			end
+			for s = 0, BITS - 1 do
+				local p0, p1 = along(s / BITS), along((s + 1) / BITS)
+				local rope = piece("LoungeRope", Vector3.new(0.2, 0.2, (p1 - p0).Magnitude + 0.06),
+					CFrame.lookAt((p0 + p1) / 2, p1), C.velvet, Enum.Material.Fabric)
+				rope.CastShadow = false
+			end
+		end
+	end
+	-- What really stops you: a clear wall along each roped side (camera rays pass it), and the gateway's own.
+	local function wall(name: string, from: Vector3, to: Vector3): Part
+		local mid = (from + to) / 2 + Vector3.new(0, 3, 0)
+		local made = piece(name, Vector3.new(0.6, 6, (to - from).Magnitude), CFrame.lookAt(mid, mid + (to - from)),
+			C.navy, Enum.Material.SmoothPlastic, true)
+		made.Transparency = 1
+		made.CanQuery = false
+		made.CastShadow = false
+		return made
+	end
+	for k = 1, #corners - 1 do
+		wall("LoungeRail", corners[k], corners[k + 1])
+	end
+	local gateway = wall("LoungeGateway", Vector3.new(-gate, 0, -hz), Vector3.new(gate, 0, -hz))
+	gateway.CollisionGroup = "VipGate"
+	local ask = Instance.new("ProximityPrompt")
+	ask.Name = "VipGatePrompt"
+	ask.ActionText = "Enter"
+	ask.ObjectText = "VIP lounge"
+	ask.HoldDuration = 0
+	ask.MaxActivationDistance = 8
+	ask.RequiresLineOfSight = false
+	ask.Parent = gateway
+	ask.Triggered:Connect(function(player: Player)
+		if player:GetAttribute("VIP") == true then
+			return
+		end
+		local ok, catalog = pcall(function(): any
+			return require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShopCatalog")) :: any
+		end)
+		local vip = if ok then catalog.get("VIP") else nil
+		if vip and (vip.passId or 0) > 0 then
+			pcall(function()
+				game:GetService("MarketplaceService"):PromptGamePassPurchase(player, vip.passId)
+			end)
+		end
+	end)
+	-- THE ARCH over the way in, on the two gateway posts: a navy board in a brass frame, VIP LOUNGE in gold both ways.
+	local board = piece("LoungeSign", Vector3.new(size.gate + 1.2, 1.1, 0.2), CFrame.new(0, 5.6, -hz), C.navy,
+		Enum.Material.SmoothPlastic)
+	for _, y in ipairs({ 5.0, 6.2 }) do
+		piece("LoungeSignFrame", Vector3.new(size.gate + 1.5, 0.16, 0.26), CFrame.new(0, y, -hz), C.brass, Enum.Material.Metal)
+	end
+	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = face
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 60
+		gui.LightInfluence = 0.6
+		gui.Parent = board
+		local words = Instance.new("TextLabel")
+		words.Size = UDim2.fromScale(1, 1)
+		words.BackgroundTransparency = 1
+		words.TextScaled = true
+		words.FontFace = Style.WORLD.sign
+		words.TextColor3 = C.gold
+		words.Text = "VIP LOUNGE"
+		words.Parent = gui
+		local pad = Instance.new("UIPadding")
+		pad.PaddingTop = UDim.new(0.16, 0)
+		pad.PaddingBottom = UDim.new(0.16, 0)
+		pad.PaddingLeft = UDim.new(0.06, 0)
+		pad.PaddingRight = UDim.new(0.06, 0)
+		pad.Parent = words
+	end
+
+	-- THE CHAIRS, plum velvet on brass feet, facing the way in, each with a lamp on a marble table at its elbow.
+	for _, side in ipairs({ -1, 1 }) do
+		local chair = CFrame.new(side * 5.5, 0, 1.5)
+		for _, x in ipairs({ -1.1, 1.1 }) do
+			for _, z in ipairs({ -0.9, 0.9 }) do
+				round("LoungeChairFoot", 0.5, 0.3, chair * CFrame.new(x, 0.25, z), C.brass, Enum.Material.Metal)
+			end
+		end
+		piece("LoungeChairSeat", Vector3.new(2.8, 0.8, 2.4), chair * CFrame.new(0, 0.9, 0), C.plum, Enum.Material.Fabric, true)
+		piece("LoungeChairCushion", Vector3.new(2.1, 0.35, 1.9), chair * CFrame.new(0, 1.47, -0.15), C.plum,
+			Enum.Material.Fabric)
+		piece("LoungeChairBack", Vector3.new(2.8, 2.8, 0.6), chair * CFrame.new(0, 2.7, 0.9), C.plum, Enum.Material.Fabric, true)
+		for _, x in ipairs({ -1.15, 1.15 }) do
+			piece("LoungeChairArm", Vector3.new(0.5, 0.9, 2.4), chair * CFrame.new(x, 1.75, 0), C.plum, Enum.Material.Fabric)
+			ball("LoungeChairStud", 0.18, chair * CFrame.new(x, 2.22, -1.1), C.gold, Enum.Material.Metal)
+		end
+		local tableAt = CFrame.new(side * 8.4, 0, 1.5)
+		round("LoungeTableFoot", 0.15, 1, tableAt * CFrame.new(0, 0.075, 0), C.brass, Enum.Material.Metal)
+		round("LoungeTableLeg", 1.85, 0.22, tableAt * CFrame.new(0, 1.075, 0), C.brass, Enum.Material.Metal)
+		round("LoungeTableTop", 0.16, 1.5, tableAt * CFrame.new(0, 2.08, 0), C.marble, Enum.Material.Marble, true)
+		round("LoungeLampStem", 1.1, 0.14, tableAt * CFrame.new(0, 2.71, 0), C.brass, Enum.Material.Metal)
+		local shade = round("LoungeLampShade", 0.75, 1.1, tableAt * CFrame.new(0, 3.6, 0), C.shade, Enum.Material.Fabric)
+		local light = Instance.new("PointLight")
+		light.Color = C.lamp
+		light.Brightness = 0.6
+		light.Range = 12
+		light.Shadows = false
+		light.Parent = shade
+	end
+	-- THE LOW TABLE between them, and a stack of tokens on it.
+	local low = CFrame.new(0, 0, -1.5)
+	for _, x in ipairs({ -1.2, 1.2 }) do
+		for _, z in ipairs({ -0.6, 0.6 }) do
+			round("LoungeLowLeg", 1.1, 0.16, low * CFrame.new(x, 0.55, z), C.brass, Enum.Material.Metal)
+		end
+	end
+	piece("LoungeLowTop", Vector3.new(3, 0.18, 1.6), low * CFrame.new(0, 1.19, 0), C.marble, Enum.Material.Marble, true)
+	for k = 0, 5 do
+		round("LoungeToken", 0.14, 0.7, low * CFrame.new(0.45 + 0.03 * math.sin(k * 2), 1.35 + k * 0.14, 0.1), C.gold,
+			Enum.Material.Metal)
+	end
+	round("LoungeToken", 0.14, 0.7, low * CFrame.new(-0.6, 1.35, -0.2), C.gold, Enum.Material.Metal)
+
+	-- THE VIP CRATE at the back, on its marble pedestal: dark wood banded in gold, a gold plate on its front.
+	local stand = CFrame.new(0, 0, hz - 3.4)
+	piece("LoungePedestal", Vector3.new(3, 1.4, 2.6), stand * CFrame.new(0, 0.7, 0), C.marble, Enum.Material.Marble, true)
+	piece("LoungePedestalCap", Vector3.new(3.3, 0.2, 2.9), stand * CFrame.new(0, 1.5, 0), C.gold, Enum.Material.Metal, true)
+	local crate = piece("VipCrate", Vector3.new(2.4, 1.5, 1.9), stand * CFrame.new(0, 2.35, 0), C.wood, Enum.Material.Wood, true)
+	for _, y in ipairs({ -0.45, 0.45 }) do
+		piece("VipCrateBand", Vector3.new(2.44, 0.16, 1.94), stand * CFrame.new(0, 2.35 + y, 0), C.gold, Enum.Material.Metal)
+	end
+	piece("VipCrateLidRim", Vector3.new(2.6, 0.1, 2.1), stand * CFrame.new(0, 3.15, 0), C.gold, Enum.Material.Metal)
+	piece("VipCrateLid", Vector3.new(2.55, 0.35, 2.05), stand * CFrame.new(0, 3.375, 0), C.wood, Enum.Material.Wood)
+	local plate = piece("VipCratePlate", Vector3.new(1, 0.5, 0.06), stand * CFrame.new(0, 2.35, -0.98), C.gold, Enum.Material.Metal)
+	local plateGui = Instance.new("SurfaceGui")
+	plateGui.Face = Enum.NormalId.Front
+	plateGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	plateGui.PixelsPerStud = 80
+	plateGui.Parent = plate
+	local plateWords = Instance.new("TextLabel")
+	plateWords.Size = UDim2.fromScale(1, 1)
+	plateWords.BackgroundTransparency = 1
+	plateWords.TextScaled = true
+	plateWords.FontFace = Style.WORLD.sign
+	plateWords.TextColor3 = C.navy
+	plateWords.Text = "VIP"
+	plateWords.Parent = plateGui
+	local open = Instance.new("ProximityPrompt")
+	open.Name = "VipCratePrompt"
+	open.ActionText = "Open"
+	open.ObjectText = "Today's VIP crate"
+	open.HoldDuration = 0.3
+	open.MaxActivationDistance = 8
+	open.RequiresLineOfSight = false
+	open.Parent = crate
+
+	model.Parent = parent
+end
+
+-- ===== THE BILLBOARDS (the two-hundred-and-fourteenth pass, from your note of 2026-11-14: Roblox's immersive ads) =====
+--
+-- Two old seaside hoardings on the Level Gates deck, facing the plaza where everyone arrives: a board 16 studs by 9 (the
+-- size Roblox serves ads into: 8 by 4.5 to 32 by 18) in a cream moulded frame, carried on two navy cast-iron posts on
+-- stone plinths, under a cornice with a lamp on a goose-neck arm at each end lighting it. On the board an AdGui: Roblox
+-- puts an image or a video ad there for whoever can be shown one, and the game earns for each one seen. Anyone who
+-- cannot be shown one (Roblox's own rules) sees the bay's own poster instead (its FallbackImage), not Roblox's logo.
+-- Nothing else is on the board's face (an AdGui must have it to itself). Everything stands on the deck or on its posts.
+-- (Its foot 11.5 up: the level pads' tall pictures stood in front of it at 3.6, and an ad half hidden is not counted.)
+local AD_BOARD = { w = 16, h = 9, foot = 11.5, post = 0.7 }
+local AD_COLOURS = {
+	iron = Color3.fromRGB(34, 40, 64),
+	cream = Color3.fromRGB(242, 232, 212),
+	stone = Color3.fromRGB(196, 186, 168),
+	brass = Color3.fromRGB(214, 170, 80),
+	lamp = Color3.fromRGB(255, 226, 180),
+}
+
+local function buildAdBoard(at: Vector3, facing: Vector3, name: string, fallback: string, parent: Instance)
+	local C = AD_COLOURS
+	local model = Instance.new("Model")
+	model.Name = name
+	-- On the deck's inlay (buildSurroundings: 0.325 over the floor), facing the way people look at it from.
+	local base = at + Vector3.new(0, 0.325, 0)
+	local frame = CFrame.lookAt(base, base + Vector3.new(facing.X, 0, facing.Z))
+	local function piece(partName: string, size: Vector3, offset: CFrame, colour: Color3, material: Enum.Material,
+		solid: boolean?): Part
+		local made = Instance.new("Part")
+		made.Name = partName
+		made.Anchored = true
+		made.CanCollide = solid == true
+		made.CanQuery = solid == true
+		made.CanTouch = false
+		made.Size = size
+		made.CFrame = frame * offset
+		made.Color = colour
+		made.Material = material
+		made.TopSurface = Enum.SurfaceType.Smooth
+		made.BottomSurface = Enum.SurfaceType.Smooth
+		made.Parent = model
+		return made
+	end
+	local w, h, foot = AD_BOARD.w, AD_BOARD.h, AD_BOARD.foot
+	local mid = foot + h / 2
+	-- THE POSTS on their plinths, just outside the frame.
+	local postX = w / 2 + 1.2
+	for _, side in ipairs({ -1, 1 }) do
+		piece("AdPlinth", Vector3.new(1.6, 1, 1.6), CFrame.new(side * postX, 0.5, 0.3), C.stone, Enum.Material.Limestone, true)
+		piece("AdPost", Vector3.new(AD_BOARD.post, foot + h + 1.6, AD_BOARD.post),
+			CFrame.new(side * postX, 1 + (foot + h + 1.6) / 2, 0.3), C.iron, Enum.Material.Metal, true)
+		piece("AdPostCap", Vector3.new(1, 0.4, 1), CFrame.new(side * postX, 1 + foot + h + 1.8, 0.3), C.brass, Enum.Material.Metal)
+		-- The frame's arms out to the post, top and bottom.
+		for _, y in ipairs({ foot + 0.6, foot + h - 0.6 }) do
+			piece("AdArm", Vector3.new(1.4, 0.3, 0.3), CFrame.new(side * (w / 2 + 0.5), 1 + y, 0.3), C.iron, Enum.Material.Metal)
+		end
+	end
+	-- THE BOARD (the ad's own part, its face to the plaza), and the frame round it.
+	local board = piece("AdBoard", Vector3.new(w, h, 0.4), CFrame.new(0, 1 + mid, 0.3), C.cream, Enum.Material.SmoothPlastic, true)
+	piece("AdBack", Vector3.new(w + 0.8, h + 0.8, 0.3), CFrame.new(0, 1 + mid, 0.62), C.iron, Enum.Material.Metal)
+	for _, y in ipairs({ -1, 1 }) do
+		piece("AdFrame", Vector3.new(w + 0.8, 0.4, 0.5), CFrame.new(0, 1 + mid + y * (h / 2 + 0.2), 0.25), C.cream, Enum.Material.Wood)
+	end
+	for _, x in ipairs({ -1, 1 }) do
+		piece("AdFrame", Vector3.new(0.4, h + 0.8, 0.5), CFrame.new(x * (w / 2 + 0.2), 1 + mid, 0.25), C.cream, Enum.Material.Wood)
+	end
+	-- THE CORNICE over it, on the posts' caps, and a lamp on an arm at each end, lighting the board.
+	local top = 1 + foot + h + 2
+	piece("AdCornice", Vector3.new(w + 4.2, 0.5, 1.6), CFrame.new(0, top + 0.25, 0.2), C.iron, Enum.Material.Metal)
+	for _, side in ipairs({ -1, 1 }) do
+		local x = side * (w / 2 - 2)
+		piece("AdLampArm", Vector3.new(0.2, 0.2, 1.6), CFrame.new(x, top - 0.1, -0.6), C.iron, Enum.Material.Metal)
+		local hood = piece("AdLampHood", Vector3.new(0.8, 0.4, 0.6), CFrame.new(x, top - 0.35, -1.35) * CFrame.Angles(math.rad(-25), 0, 0),
+			C.iron, Enum.Material.Metal)
+		local light = Instance.new("SpotLight")
+		light.Face = Enum.NormalId.Bottom
+		light.Color = C.lamp
+		light.Brightness = 1.2
+		light.Range = 14
+		light.Angle = 70
+		light.Shadows = false
+		light.Parent = hood
+	end
+	-- THE AD (Roblox's), and the bay's own poster for anyone who is not shown one.
+	local ad = Instance.new("AdGui")
+	ad.Name = "ImmersiveAd"
+	ad.Face = Enum.NormalId.Front
+	ad.EnableVideoAds = true
+	ad.FallbackImage = fallback
+	ad.Parent = board
+	model.Parent = parent
+end
+
 local function buildDailyChest(at: Vector3, parent: Folder)
 	local model = Instance.new("Model")
 	model.Name = "DailyChest"
@@ -4362,13 +4935,34 @@ local function buildDailyChest(at: Vector3, parent: Folder)
 		made.Parent = model
 		return made
 	end
-	-- On the deck (its bottom at `at`), the lid resting on it, the bands and the lock plate on its faces.
-	local body = piece("Body", Vector3.new(3.2, 1.8, 2), CFrame.new(0, 0.9, 0), wood, Enum.Material.Wood, true)
-	piece("Lid", Vector3.new(3.2, 0.5, 2), CFrame.new(0, 2.05, 0), wood, Enum.Material.Wood, false)
-	for _, x in ipairs({ -1.05, 1.05 }) do
-		piece("Band", Vector3.new(0.3, 1.82, 2.04), CFrame.new(x, 0.91, 0), brass, Enum.Material.Metal, false)
+	-- THE CHEST MADE FOR IT (the hundred-and-eighty-third pass, from your note of 2026-11-04: "improve this chest"): oak
+	-- planks bound in brass, a barrel lid, corner caps, a ring at each end and the lock on its front, made in Studio's
+	-- mesh generator and kept in Assets/Props. Its Body and its Lid laid on the deck as made, the lock to the arcade's
+	-- middle; its lid lifts on its own hinge (the Lid's Hinge attribute: HubVoteService). Five plain parts without it.
+	local made = madeProp("DailyChest")
+	local body: BasePart? = nil
+	if made then
+		for _, part in ipairs(made:GetChildren()) do
+			if part:IsA("BasePart") then
+				local copy = part:Clone()
+				copy.CFrame = face * part.CFrame
+				copy.Anchored = true
+				copy.Parent = model
+			end
+		end
+		local found = model:FindFirstChild("Body")
+		body = if found and found:IsA("BasePart") then found else nil
 	end
-	piece("Lock", Vector3.new(0.6, 0.6, 0.1), CFrame.new(0, 1.45, -1.05), brass, Enum.Material.Metal, false)
+	if not body then
+		model:ClearAllChildren()
+		-- On the deck (its bottom at `at`), the lid resting on it, the bands and the lock plate on its faces.
+		body = piece("Body", Vector3.new(3.2, 1.8, 2), CFrame.new(0, 0.9, 0), wood, Enum.Material.Wood, true)
+		piece("Lid", Vector3.new(3.2, 0.5, 2), CFrame.new(0, 2.05, 0), wood, Enum.Material.Wood, false)
+		for _, x in ipairs({ -1.05, 1.05 }) do
+			piece("Band", Vector3.new(0.3, 1.82, 2.04), CFrame.new(x, 0.91, 0), brass, Enum.Material.Metal, false)
+		end
+		piece("Lock", Vector3.new(0.6, 0.6, 0.1), CFrame.new(0, 1.45, -1.05), brass, Enum.Material.Metal, false)
+	end
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "DailyPrompt"
 	prompt.ActionText = "Open"
@@ -4389,6 +4983,10 @@ local function buildDailyChest(at: Vector3, parent: Folder)
 	model.Parent = parent
 end
 
+-- The made stall (buildKiosk): how long it stands along the room (studs; the blocks were 7.6), and how far from the
+-- kiosk's middle toward the room its middle is.
+local KIOSK_STALL = { long = 8.4, x = 0.6 }
+
 function HubService.buildKiosk(folder: Folder)
 	local base = HUB_ORIGIN + AT.kiosk
 	local pink = Color3.fromRGB(244, 192, 209)
@@ -4406,33 +5004,77 @@ function HubService.buildKiosk(folder: Folder)
 		end
 		return part
 	end
-	-- The counter, facing the room (+X), and its top.
-	local counter = piece("KioskCounter", Vector3.new(2.4, 3.4, 7), Vector3.new(1.4, 1.7, 0), cream, true)
-	piece("KioskCounterTop", Vector3.new(3, 0.4, 7.6), Vector3.new(1.4, 3.6, 0), teal, true)
-	for k = -1, 1 do
-		piece("KioskStripe", Vector3.new(0.1, 3.4, 1.2), Vector3.new(2.65, 1.7, k * 2.3), pink)
-	end
-	-- The back shelf, standing on the floor between the back posts.
-	piece("KioskShelf", Vector3.new(0.6, 6.4, 6.6), Vector3.new(-1.2, 3.2, 0), cream, true)
-	piece("KioskShelfBoard", Vector3.new(1.2, 0.25, 6.6), Vector3.new(-0.7, 4.6, 0), teal)
-	-- Four posts, floor to awning.
-	for _, x in ipairs({ -1.6, 2.7 }) do
-		for _, z in ipairs({ -3.6, 3.6 }) do
-			piece("KioskPost", Vector3.new(0.5, 9, 0.5), Vector3.new(x, 4.5, z), teal, true)
+	-- Where the sign stands and the lamp hangs: on the awning and under it, made or built.
+	local signAt, lampAt = Vector3.new(2.6, 10.25, 0), Vector3.new(0.6, 8.85, 0)
+	local counter: BasePart
+	-- THE MADE STALL (the two-hundred-and-first pass, from your note of 2026-11-05: "continue improving the textures and
+	-- models of all the levels, and the shop!"). The kiosk was two dozen plain plastic blocks and balls. Where Studio's mesh
+	-- generator's sweet-shop stall is made (Assets/Props, Shop_Stall: a wooden counter with cakes and jars of sweets on it,
+	-- turned posts, a pink and cream awning with a scalloped edge), it stands where the kiosk stood, KIOSK_STALL.long studs
+	-- along the room with its counter to it; the counter's block is kept, unseen, to hold the prompt and to stand against,
+	-- and the sign stands on its awning's ridge. Without it, the blocks as before.
+	local stallMade = madeProp("Shop_Stall")
+	local stallMesh = stallMade and stallMade:FindFirstChildWhichIsA("BasePart")
+	if stallMesh then
+		local stall = stallMesh:Clone()
+		stall.Name = "KioskStall"
+		stall.Anchored = true
+		stall.CanCollide = false
+		stall.CanTouch = false
+		stall.CanQuery = false
+		stall.Size = stallMesh.Size * (KIOSK_STALL.long / stallMesh.Size.X)
+		-- Its front is its -Z, the way it was made: a quarter turn the other way puts its counter to the room (+X). A made
+		-- stall whose front is elsewhere says so (its FrontYaw attribute, radians about Y: the two-hundred-and-eleventh
+		-- pass's stall, made facing +Z, has pi), so the room never gets its back.
+		local yaw = stallMesh:GetAttribute("FrontYaw")
+		stall.CFrame = CFrame.new(base + Vector3.new(KIOSK_STALL.x, stall.Size.Y / 2, 0))
+			* CFrame.Angles(0, -math.pi / 2 + (if typeof(yaw) == "number" then yaw else 0), 0)
+		stall.Parent = kiosk
+		counter = piece("KioskCounter", Vector3.new(stall.Size.Z * 0.8, 3.4, stall.Size.X * 0.92),
+			Vector3.new(KIOSK_STALL.x, 1.7, 0), cream, true)
+		counter.Transparency = 1
+		signAt = Vector3.new(KIOSK_STALL.x, stall.Size.Y + 0.9, 0)
+		lampAt = Vector3.new(KIOSK_STALL.x, stall.Size.Y * 0.62, 0)
+	else
+		-- The counter, facing the room (+X), and its top.
+		counter = piece("KioskCounter", Vector3.new(2.4, 3.4, 7), Vector3.new(1.4, 1.7, 0), cream, true)
+		piece("KioskCounterTop", Vector3.new(3, 0.4, 7.6), Vector3.new(1.4, 3.6, 0), teal, true)
+		for k = -1, 1 do
+			piece("KioskStripe", Vector3.new(0.1, 3.4, 1.2), Vector3.new(2.65, 1.7, k * 2.3), pink)
+		end
+		-- The back shelf, standing on the floor between the back posts.
+		piece("KioskShelf", Vector3.new(0.6, 6.4, 6.6), Vector3.new(-1.2, 3.2, 0), cream, true)
+		piece("KioskShelfBoard", Vector3.new(1.2, 0.25, 6.6), Vector3.new(-0.7, 4.6, 0), teal)
+		-- Four posts, floor to awning.
+		for _, x in ipairs({ -1.6, 2.7 }) do
+			for _, z in ipairs({ -3.6, 3.6 }) do
+				piece("KioskPost", Vector3.new(0.5, 9, 0.5), Vector3.new(x, 4.5, z), teal, true)
+			end
+		end
+		-- The awning: stripes resting on the posts, a scalloped edge along the front.
+		for k = 0, 5 do
+			piece("KioskAwning", Vector3.new(5.4, 0.35, 1.32), Vector3.new(0.55, 9.17, -3.3 + k * 1.32),
+				if k % 2 == 0 then pink else cream)
+		end
+		for k = 0, 6 do
+			local bead = piece("KioskScallop", Vector3.new(0.9, 0.9, 0.9), Vector3.new(3.1, 8.9, -3.3 + k * 1.1),
+				if k % 2 == 0 then cream else pink)
+			bead.Shape = Enum.PartType.Ball
+		end
+		-- A jar of tokens on the counter.
+		local jar = piece("KioskJar", Vector3.new(1.3, 1.1, 1.1), Vector3.new(1.4, 4.45, 2.2), Color3.fromRGB(214, 236, 246))
+		jar.Shape = Enum.PartType.Cylinder
+		jar.CFrame = CFrame.new(jar.Position) * CFrame.Angles(0, 0, math.rad(90))
+		jar.Transparency = 0.45
+		for k = 0, 2 do
+			local token = piece("KioskToken", Vector3.new(0.18, 0.7, 0.7), Vector3.new(1.4, 4.0 + k * 0.2, 2.2),
+				Color3.fromRGB(239, 159, 39))
+			token.Shape = Enum.PartType.Cylinder
+			token.CFrame = CFrame.new(token.Position) * CFrame.Angles(0, 0, math.rad(90))
 		end
 	end
-	-- The awning: stripes resting on the posts, a scalloped edge along the front.
-	for k = 0, 5 do
-		piece("KioskAwning", Vector3.new(5.4, 0.35, 1.32), Vector3.new(0.55, 9.17, -3.3 + k * 1.32),
-			if k % 2 == 0 then pink else cream)
-	end
-	for k = 0, 6 do
-		local bead = piece("KioskScallop", Vector3.new(0.9, 0.9, 0.9), Vector3.new(3.1, 8.9, -3.3 + k * 1.1),
-			if k % 2 == 0 then cream else pink)
-		bead.Shape = Enum.PartType.Ball
-	end
 	-- The sign, standing on the awning.
-	local sign = piece("KioskSign", Vector3.new(0.3, 1.8, 5), Vector3.new(2.6, 10.25, 0), pink)
+	local sign = piece("KioskSign", Vector3.new(0.3, 1.8, 5), signAt, pink)
 	local face = Instance.new("SurfaceGui")
 	face.Face = Enum.NormalId.Right
 	face.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
@@ -4447,22 +5089,12 @@ function HubService.buildKiosk(folder: Folder)
 	words.TextColor3 = Color3.fromRGB(114, 36, 62)
 	words.Text = "SHOP"
 	words.Parent = face
-	-- A jar of tokens on the counter.
-	local jar = piece("KioskJar", Vector3.new(1.3, 1.1, 1.1), Vector3.new(1.4, 4.45, 2.2), Color3.fromRGB(214, 236, 246))
-	jar.Shape = Enum.PartType.Cylinder
-	jar.CFrame = CFrame.new(jar.Position) * CFrame.Angles(0, 0, math.rad(90))
-	jar.Transparency = 0.45
-	for k = 0, 2 do
-		local token = piece("KioskToken", Vector3.new(0.18, 0.7, 0.7), Vector3.new(1.4, 4.0 + k * 0.2, 2.2), Color3.fromRGB(239, 159, 39))
-		token.Shape = Enum.PartType.Cylinder
-		token.CFrame = CFrame.new(token.Position) * CFrame.Angles(0, 0, math.rad(90))
-	end
 	-- Warm light under the awning: a real lamp, modest.
 	local lamp = Instance.new("PointLight")
 	lamp.Color = Color3.fromRGB(255, 220, 180)
 	lamp.Brightness = 0.9
 	lamp.Range = 12
-	lamp.Parent = piece("KioskLampHousing", Vector3.new(0.6, 0.3, 0.6), Vector3.new(0.6, 8.85, 0), teal)
+	lamp.Parent = piece("KioskLampHousing", Vector3.new(0.6, 0.3, 0.6), lampAt, teal)
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "ShopPrompt"
 	prompt.ActionText = "Shop"
@@ -4479,6 +5111,246 @@ function HubService.buildKiosk(folder: Folder)
 		end)
 	end)
 end
+
+-- ===== A DROWNED BATTLEFIELD ROUND THE ROOM (the hundred-and-eighty-fourth pass) =====
+--
+-- From your note of 2026-11-05: "improve the lobby background by adding more stuff like swords but more weapons and maybe
+-- armor and signs of war, big scale". The seven blades were the only things standing in the sea. Now the war they came
+-- from lies all round them: a gauntlet reaching up out of the water, great helms and breastplates half under, shields
+-- fallen on their rims, axes and spears driven in at a slant, two volleys of arrows standing where they came down, banners
+-- still on their poles, two wrecked guns on their carriages, and smoke going up from a wreck and the far side. All made in Studio's
+-- mesh generator (Assets/Props, War_*). Placed by the blades' rules: far out (WAR.near to WAR.far from the room's middle),
+-- never within WAR.clear of a blade or of each other, a share of each under the water, nothing colliding, nothing casting
+-- a shadow across the deck from three hundred studs off. Whatever is not in Assets/Props is left out, and nothing else is.
+local WAR = { near = 250, far = 640, clear = 70, seaY = -190, seed = 1979 }
+local WAR_PIECES = {
+	-- name, how many, scale range, share under the water, lean from upright in degrees
+	{ name = "War_Gauntlet", count = 1, scale = { 13, 13 }, under = 0.25, lean = { 4, 8 } },
+	{ name = "War_Helm", count = 2, scale = { 12, 15 }, under = 0.35, lean = { 10, 24 } },
+	{ name = "War_Breastplate", count = 2, scale = { 12, 14 }, under = 0.4, lean = { 48, 66 } },
+	{ name = "War_Shield", count = 4, scale = { 16, 21 }, under = 0.35, lean = { 55, 72 } },
+	{ name = "War_Axe", count = 2, scale = { 10, 13 }, under = 0.3, lean = { 18, 34 } },
+	{ name = "War_Spear", count = 5, scale = { 9, 12 }, under = 0.3, lean = { 12, 28 } },
+	{ name = "War_Banner", count = 3, scale = { 9, 11 }, under = 0.15, lean = { 3, 9 } },
+	{ name = "War_Cannon", count = 2, scale = { 10, 12 }, under = 0.25, lean = { 3, 9 } },
+	-- THE SIEGE AND THE SHIPS (the hundred-and-ninety-eighth pass, from your note of 2026-11-05: "continue adding more stuff
+	-- to the lobby's background"): two siege towers come down on their sides, war hammers driven in head first, a ballista
+	-- with its bow snapped, and the masts of ships that went down here.
+	-- (Made smaller than asked, eight studs or so tall: drawn sixteen times over, each stands as high as the others.)
+	{ name = "War_SiegeTower", count = 2, scale = { 14, 17 }, under = 0.3, lean = { 12, 24 } },
+	{ name = "War_Hammer", count = 2, scale = { 14, 17 }, under = 0.3, lean = { 16, 30 } },
+	{ name = "War_Ballista", count = 1, scale = { 15, 18 }, under = 0.3, lean = { 3, 8 } },
+	{ name = "War_Mast", count = 2, scale = { 15, 18 }, under = 0.25, lean = { 6, 14 } },
+}
+-- WHERE THEY FELL TOGETHER (the same pass): the first shield is a shield wall, three more fallen beside it, and the first
+-- spear a thicket of four more round it; each laid within `radius` of the first, its own way, leaning its own lean.
+local WAR_CLUSTERS = { War_Shield = { extra = 3, radius = 34 }, War_Spear = { extra = 4, radius = 26 } }
+local function warField(folder: Folder, blades: { Vector3 })
+	local rng = Random.new(WAR.seed)
+	local taken: { Vector3 } = table.clone(blades)
+	local function free(at: Vector3): boolean
+		for _, other in ipairs(taken) do
+			if Vector2.new(at.X - other.X, at.Z - other.Z).Magnitude < WAR.clear then
+				return false
+			end
+		end
+		return true
+	end
+	-- A place on the sea, out of everyone's way: tried a few times, and given up on rather than crowded.
+	local function spot(): Vector3?
+		for _ = 1, 40 do
+			local angle = rng:NextNumber(0, math.pi * 2)
+			local far = rng:NextNumber(WAR.near, WAR.far)
+			local at = HUB_ORIGIN + Vector3.new(math.cos(angle) * far, WAR.seaY, math.sin(angle) * far)
+			if free(at) then
+				table.insert(taken, at)
+				return at
+			end
+		end
+		return nil
+	end
+	-- One piece standing in the sea at `at`: turned `yaw`, leaned `lean` over, `under` of its height below the water.
+	local function stand(template: BasePart, at: Vector3, scale: number, yaw: number, lean: number, under: number): BasePart
+		local piece = template:Clone()
+		-- Named for what it is (it was "Mesh", every one of them): War_Shield, War_Arrow and the rest.
+		piece.Name = if template.Parent then template.Parent.Name else template.Name
+		piece.Anchored = true
+		piece.CanCollide = false
+		piece.CanTouch = false
+		piece.CanQuery = false
+		piece.CastShadow = false
+		piece.Size = template.Size * scale
+		local turned = CFrame.new(at) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(math.rad(lean), 0, 0)
+		piece.CFrame = turned * CFrame.new(0, piece.Size.Y * (0.5 - under), 0)
+		piece.Parent = folder
+		return piece
+	end
+	local missing = {}
+	local wreck: Vector3? = nil
+	for _, kind in ipairs(WAR_PIECES) do
+		local made = madeProp(kind.name)
+		local template = made and made:FindFirstChildWhichIsA("BasePart")
+		if not template then
+			table.insert(missing, kind.name)
+			continue
+		end
+		for count = 1, kind.count do
+			local at = spot()
+			if at then
+				stand(template, at, rng:NextNumber(kind.scale[1], kind.scale[2]), rng:NextNumber(0, math.pi * 2),
+					rng:NextNumber(kind.lean[1], kind.lean[2]), kind.under)
+				if kind.name == "War_Cannon" and not wreck then
+					wreck = at
+				end
+				local cluster = WAR_CLUSTERS[kind.name]
+				if cluster and count == 1 then
+					for _ = 1, cluster.extra do
+						local turn = rng:NextNumber(0, math.pi * 2)
+						local off = Vector3.new(math.cos(turn), 0, math.sin(turn)) * rng:NextNumber(cluster.radius * 0.45, cluster.radius)
+						stand(template, at + off, rng:NextNumber(kind.scale[1], kind.scale[2]) * 0.85, rng:NextNumber(0, math.pi * 2),
+							rng:NextNumber(kind.lean[1], kind.lean[2]), kind.under)
+					end
+				end
+			end
+		end
+	end
+	-- THE VOLLEYS: seven arrows each, all leaning the same way, as they came down together.
+	local arrowMade = madeProp("War_Arrow")
+	local arrow = arrowMade and arrowMade:FindFirstChildWhichIsA("BasePart")
+	if arrow then
+		for _ = 1, 2 do
+			local middle = spot()
+			if middle then
+				local yaw = rng:NextNumber(0, math.pi * 2)
+				local lean = rng:NextNumber(22, 30)
+				for _ = 1, 7 do
+					local off = Vector3.new(rng:NextNumber(-22, 22), 0, rng:NextNumber(-22, 22))
+					stand(arrow, middle + off, rng:NextNumber(9, 11), yaw + rng:NextNumber(-0.08, 0.08), lean + rng:NextNumber(-3, 3), 0.3)
+				end
+			end
+		end
+	else
+		table.insert(missing, "War_Arrow")
+	end
+	-- SMOKE, the one thing here that moves: slow dark columns off the wreck and two far points, thinning as they rise.
+	local smokes = { wreck }
+	for _ = 1, 2 do
+		table.insert(smokes, spot())
+	end
+	for _, at in ipairs(smokes) do
+		local host = decorPart("WarSmoke", Vector3.new(4, 4, 4), at + Vector3.new(0, 6, 0), folder)
+		host.Transparency = 1
+		local smoke = Instance.new("ParticleEmitter")
+		smoke.Name = "Smoke"
+		smoke.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		smoke.Color = ColorSequence.new(Color3.fromRGB(62, 60, 64), Color3.fromRGB(120, 118, 122))
+		smoke.LightEmission = 0
+		smoke.LightInfluence = 1
+		smoke.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 18), NumberSequenceKeypoint.new(1, 70) })
+		smoke.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.15, 0.55),
+			NumberSequenceKeypoint.new(1, 1) })
+		smoke.Lifetime = NumberRange.new(14, 20)
+		smoke.Speed = NumberRange.new(6, 10)
+		smoke.Rate = 1.6
+		smoke.Rotation = NumberRange.new(0, 360)
+		smoke.RotSpeed = NumberRange.new(-6, 6)
+		smoke.SpreadAngle = Vector2.new(8, 8)
+		smoke.Acceleration = Vector3.new(1.5, 0.4, 0.6)
+		smoke.EmissionDirection = Enum.NormalId.Top
+		smoke.Parent = host
+	end
+	if #missing > 0 then
+		warnOnce("warfield", "HubService: the battlefield round the lobby is without " .. table.concat(missing, ", ")
+			.. " (not in ReplicatedStorage/Assets/Props).")
+	end
+end
+
+-- ===== THE LEVIATHAN, MADE AGAIN (the hundred-and-ninety-ninth pass) =====
+--
+-- From your screenshot of 2026-11-05: "either make a new leviathan or make him look way better because rn it doesnt fit in
+-- here and looks kinda dumb". It was one hand-made mesh lying flat on the sea, a crest and spikes of paper, the one thing out
+-- there not made the way the war round it is. Now it is the sea-chart serpent, cut by the water: a head surfacing with its
+-- jaws open, half turned to the lobby; two humps of its back arching out of the sea behind, a row of spines along each; and
+-- last the tail, coming up and curling over. Each piece is made in Studio's mesh generator (Assets/Props, Sea_Leviathan*),
+-- and the sea is where they join: whatever is under the water is hidden by it, so there is no seam to see. The humps and
+-- the tail wear the Sunken City serpent's hide (MaterialService, SerpentHide), darker, so the body is one skin; the head
+-- keeps its own made skin, which is where its eyes and teeth are.
+-- Head first, then down the body: what, how far along it (studs), how big along which of its own sides, how much under the sea.
+local LEVIATHAN_BODY = {
+	{ name = "Sea_LeviathanHead", along = -10, size = 175, side = "Z", under = 0.2 },
+	{ name = "Sea_LeviathanHump", along = 175, size = 170, side = "X", under = 0.34 },
+	{ name = "Sea_LeviathanHump", along = 345, size = 135, side = "X", under = 0.44, flip = true },
+	{ name = "Sea_LeviathanTail", along = 480, size = 150, side = "Y", under = 0.28 },
+}
+-- The head looks part of the way round at the lobby (`look`, against straight on down the body) and rears up `rear`
+-- degrees, so its jaws are out of the water. Its snout is its own +Z, the way the made head came.
+local LEVIATHAN_HEAD = { look = 0.95, rear = 30 }
+local LEVIATHAN_HIDE = { name = "SerpentHide", tint = Color3.fromRGB(78, 90, 100) }
+-- From the body's middle back to where its head is (the pieces run about 490 studs, head to tail).
+local LEVIATHAN_HALF = 240
+
+local function sideOf(size: Vector3, side: string): number
+	return if side == "X" then size.X elseif side == "Y" then size.Y else size.Z
+end
+
+-- The made leviathan, its middle at `at` on the sea, side-on to the lobby. False when its head is not made, and the old
+-- one is laid instead.
+local function madeLeviathan(at: Vector3, folder: Folder): boolean
+	local headMade = madeProp("Sea_LeviathanHead")
+	if not (headMade and headMade:FindFirstChildWhichIsA("BasePart")) then
+		return false
+	end
+	local toHub = ((HUB_ORIGIN - at) * Vector3.new(1, 0, 1)).Unit
+	local along = Vector3.new(-toHub.Z, 0, toHub.X)
+	local first = at - along * LEVIATHAN_HALF
+	local hide = game:GetService("MaterialService"):FindFirstChild(LEVIATHAN_HIDE.name, true)
+	local missing = {}
+	for _, piece in ipairs(LEVIATHAN_BODY) do
+		local made = madeProp(piece.name)
+		local template = made and made:FindFirstChildWhichIsA("BasePart")
+		if not template then
+			table.insert(missing, piece.name)
+			continue
+		end
+		local part = template:Clone()
+		part.Name = piece.name
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanTouch = false
+		part.CanQuery = false
+		part.CastShadow = false
+		part.Size = template.Size * (piece.size / sideOf(template.Size, piece.side))
+		local spot = first + along * piece.along
+		local frame: CFrame
+		if piece.name == "Sea_LeviathanHead" then
+			local facing = (-along + toHub * LEVIATHAN_HEAD.look).Unit
+			frame = CFrame.new(spot) * CFrame.Angles(0, math.atan2(facing.X, facing.Z), 0)
+				* CFrame.Angles(-math.rad(LEVIATHAN_HEAD.rear), 0, 0)
+		else
+			frame = CFrame.new(spot) * CFrame.Angles(0, math.atan2(-along.Z, along.X) + (if piece.flip then math.pi else 0), 0)
+			if hide and hide:IsA("MaterialVariant") then
+				if part:IsA("MeshPart") then
+					part.TextureID = ""
+				end
+				part.Material = hide.BaseMaterial
+				part.MaterialVariant = hide.Name
+				part.Color = LEVIATHAN_HIDE.tint
+			end
+		end
+		part.CFrame = frame * CFrame.new(0, part.Size.Y * (0.5 - piece.under), 0)
+		part.Parent = folder
+	end
+	if #missing > 0 then
+		warnOnce("leviathan", "HubService: the leviathan is without " .. table.concat(missing, ", ")
+			.. " (not in ReplicatedStorage/Assets/Props).")
+	end
+	return true
+end
+
+-- ROCK, NOT BOXES (the hundred-and-ninety-ninth pass): the far islands were each a box of Rock with a slab of Grass on it,
+-- and among the war they read as crates. Now each is a made sea stack (Assets/Props, Sea_Rock and Sea_RockPair, by turns),
+-- `tall` to `tall` + 2 * `step` + 10 studs out of the water, `under` of it below; the boxes only when those are not made.
+local ISLANDS = { tall = 72, step = 20, under = 0.16 }
 
 local function buildSurroundings(folder: Folder)
 	-- EVERY DECK IN THREE LAYERS rather than one slab (its floor is buildPromenade's): a border, an inlay and a band
@@ -4759,43 +5631,49 @@ local function buildSurroundings(folder: Folder)
 		math.cos(LEVIATHAN_ANGLE) * LEVIATHAN_FAR,
 		LEVIATHAN_Y,
 		math.sin(LEVIATHAN_ANGLE) * LEVIATHAN_FAR)
-	-- The shared frame both pieces are placed in. Built after the first piece exists, because
-	-- the lift is a fraction of that piece's height and there is no honest way to know the
-	-- height before the part is there to measure.
-	local leviathanFrame = CFrame.new(leviathanAt) * CFrame.Angles(0, LEVIATHAN_FACING, 0)
-	for _, piece in ipairs({ "Hub_Leviathan_Body", "Hub_Leviathan_Head" }) do
-		local part = propAt(piece, leviathanAt, folder, LEVIATHAN_FACING)
-		if part then
-			-- Same size, same frame, both pieces. They share a bounding box, so this is all
-			-- the assembly there is.
-			part.Size = part.Size * LEVIATHAN_SCALE
-			-- Lifted out of the water by a fraction of its own height. Both pieces get the
-			-- identical treatment because they are the identical box, so raising them cannot
-			-- pull them apart.
-			part.CFrame = leviathanFrame + Vector3.new(0,
-				(LEVIATHAN_WATERLINE + LEVIATHAN_LIFT) * part.Size.Y, 0)
-			-- Dark and wet, and barely reflective. A shine on something this size reads as
-			-- plastic; what sells wet hide at distance is that it is DARKER than the water
-			-- behind it, not shinier.
-			part.Color = Color3.fromRGB(38, 48, 52)
-			part.Material = Enum.Material.Slate
-			part.Reflectance = 0.05
-			-- Never in the way. It is scenery three field-lengths out, and a player who
-			-- somehow reached it should pass through rather than stand on its back.
-			part.CastShadow = false
-			-- THE FRILL IS A FILM. Skin stretched between two spines has no thickness -- at
-			-- this size it should not have any -- but a zero-thickness sheet only renders
-			-- from the side its faces point at, so half the crest would disappear depending
-			-- on where you stood in the lobby. This is the property that exists for that, and
-			-- it costs no geometry.
-			part.DoubleSided = true
+	-- THE MADE ONE FIRST (the hundred-and-ninety-ninth pass; madeLeviathan, above buildSurroundings). What follows is the
+	-- old one, laid only when the made head is not in Assets/Props.
+	if not madeLeviathan(leviathanAt, folder) then
+		-- The shared frame both pieces are placed in. Built after the first piece exists, because
+		-- the lift is a fraction of that piece's height and there is no honest way to know the
+		-- height before the part is there to measure.
+		local leviathanFrame = CFrame.new(leviathanAt) * CFrame.Angles(0, LEVIATHAN_FACING, 0)
+		for _, piece in ipairs({ "Hub_Leviathan_Body", "Hub_Leviathan_Head" }) do
+			local part = propAt(piece, leviathanAt, folder, LEVIATHAN_FACING)
+			if part then
+				-- Same size, same frame, both pieces. They share a bounding box, so this is all
+				-- the assembly there is.
+				part.Size = part.Size * LEVIATHAN_SCALE
+				-- Lifted out of the water by a fraction of its own height. Both pieces get the
+				-- identical treatment because they are the identical box, so raising them cannot
+				-- pull them apart.
+				part.CFrame = leviathanFrame + Vector3.new(0,
+					(LEVIATHAN_WATERLINE + LEVIATHAN_LIFT) * part.Size.Y, 0)
+				-- Dark and wet, and barely reflective. A shine on something this size reads as
+				-- plastic; what sells wet hide at distance is that it is DARKER than the water
+				-- behind it, not shinier.
+				part.Color = Color3.fromRGB(38, 48, 52)
+				part.Material = Enum.Material.Slate
+				part.Reflectance = 0.05
+				-- Never in the way. It is scenery three field-lengths out, and a player who
+				-- somehow reached it should pass through rather than stand on its back.
+				part.CastShadow = false
+				-- THE FRILL IS A FILM. Skin stretched between two spines has no thickness -- at
+				-- this size it should not have any -- but a zero-thickness sheet only renders
+				-- from the side its faces point at, so half the crest would disappear depending
+				-- on where you stood in the lobby. This is the property that exists for that, and
+				-- it costs no geometry.
+				part.DoubleSided = true
+			end
 		end
 	end
 
 	local BLADE_Y = -190
+	local bladeAt: { Vector3 } = {}
 	for index = 1, 7 do
 		local angle = (index / 7) * math.pi * 2 + 0.7
 		local far = 300 + (index % 4) * 70
+		table.insert(bladeAt, HUB_ORIGIN + Vector3.new(math.cos(angle) * far, 0, math.sin(angle) * far))
 		local scale = 2.4 + (index % 3) * 1.1
 		-- LESS SUNK. At up to 64 studs under, the shortest blades showed barely more than a
 		-- point and read as debris. Half that leaves the crossguard clear of the water on
@@ -4841,6 +5719,8 @@ local function buildSurroundings(folder: Folder)
 			blade.Size = blade.Size * scale
 		end
 	end
+	-- AND THE WAR THEY CAME FROM, round them (warField).
+	warField(folder, bladeAt)
 
 	-- AN OCEAN UNDER THE WHOLE THING, which is what the islands were missing.
 	--
@@ -4918,6 +5798,25 @@ local function buildSurroundings(folder: Folder)
 		-- 400 to 540 now, and turned so that none stands on a blade.
 		local angle = (index / 9) * math.pi * 2 + 0.2
 		local far = 400 + (index % 3) * 70
+		-- A MADE SEA STACK where there is one (the hundred-and-ninety-ninth pass; ISLANDS, above buildSurroundings),
+		-- standing on the sea and turned its own way.
+		local stackMade = madeProp(if index % 2 == 1 then "Sea_Rock" else "Sea_RockPair")
+		local stackRock = stackMade and stackMade:FindFirstChildWhichIsA("BasePart")
+		if stackRock then
+			local stack = stackRock:Clone()
+			stack.Name = "FarIsland_" .. index
+			stack.Anchored = true
+			stack.CanCollide = false
+			stack.CanTouch = false
+			stack.CanQuery = false
+			stack.CastShadow = false
+			local tall = ISLANDS.tall + (index % 3) * ISLANDS.step + (index % 2) * 10
+			stack.Size = stackRock.Size * (tall / stackRock.Size.Y)
+			stack.CFrame = CFrame.new(HUB_ORIGIN + Vector3.new(math.cos(angle) * far, SEA_Y, math.sin(angle) * far))
+				* CFrame.Angles(0, angle * 1.7, 0) * CFrame.new(0, stack.Size.Y * (0.5 - ISLANDS.under), 0)
+			stack.Parent = folder
+			continue
+		end
 		-- Dropped to meet the water at -170 rather than hanging in mid-air: an island with its
 		-- feet in the sea is an island, and one without is a rock someone forgot to delete.
 		-- Follows the water down, so the islands still stand in it.
@@ -4938,22 +5837,20 @@ local function buildSurroundings(folder: Folder)
 		cap.CFrame = CFrame.new(cap.Position) * CFrame.Angles(0, angle, 0)
 	end
 
-	-- Cloud banks at deck height, so the room reads as being AT altitude rather than merely
-	-- drawn high up. Wide, thin and very transparent: a cloud you can make out the edges of
-	-- is a slab.
-	for index = 1, 7 do
-		local angle = (index / 7) * math.pi * 2
-		local far = 240 + (index % 3) * 50 -- past the promenade's edges (the hundredth pass)
-		-- The clouds go down too, for the same reason: at 12 studs below the deck they were
-		-- level with the top of the spiral and a run flew through them.
-		local cloud = decorPart("FarCloud_" .. index,
-			Vector3.new(96 + (index % 3) * 30, 5, 54),
-			HUB_ORIGIN + Vector3.new(math.cos(angle) * far, -34 - (index % 3) * 26,
-				math.sin(angle) * far), folder)
-		cloud.Material = Enum.Material.SmoothPlastic
-		cloud.Color = Color3.fromRGB(226, 224, 244)
-		cloud.Transparency = 0.62
-		cloud.CFrame = CFrame.new(cloud.Position) * CFrame.Angles(0, angle, 0)
+	-- CLOUDS IN THE SKY, NOT BY THE DECK (the hundred-and-ninety-eighth pass). Seven banks hung just under the deck
+	-- and out round it, so the room would read as being at altitude. As wide flat slabs, see-through, each read as a
+	-- sheet of glass laid on the air; made of the backdrop's cloud mesh instead they were white boulders hanging
+	-- between the deck and the battlefield. The levels learned this first (BackdropService: height reads from seeing
+	-- the water far below clearly, not from things in the way of it), and so the banks are gone: what you see under
+	-- the deck now is the sea and the war in it. The sky has its own clouds, Roblox's, over the whole of it, as every
+	-- level has them, made here when no level has made them yet (until a first run the lobby's sky was bare).
+	local terrain = workspace:FindFirstChildOfClass("Terrain")
+	if terrain and not terrain:FindFirstChildOfClass("Clouds") then
+		local sky = Instance.new("Clouds")
+		sky.Cover = 0.62
+		sky.Density = 0.55
+		sky.Color = Color3.fromRGB(248, 246, 246)
+		sky.Parent = terrain
 	end
 
 	-- FOUR WAVING ARMS AND A LANTERN RING.
@@ -5035,6 +5932,12 @@ local function buildSurroundings(folder: Folder)
 	-- THE ARCADE'S STALLS (LobbyLayout.AT), each facing its middle, and the house in its corner.
 	buildBackDoor(HUB_ORIGIN + AT.backDoor, folder)
 	buildDailyChest(HUB_ORIGIN + AT.chest, folder)
+	-- THE VIP LOUNGE, on the Hall of Fame's deck (the two-hundred-and-thirteenth pass).
+	buildVipLounge(HUB_ORIGIN + AT.vipLounge, folder)
+	-- THE BILLBOARDS on the Level Gates deck, facing the plaza (the two-hundred-and-fourteenth pass): Roblox's ads, or
+	-- the bay's own posters (AdPoster_SquishRoom, AdPoster_Boutique: blender/gen_ad_posters.py).
+	buildAdBoard(HUB_ORIGIN + AT.adBoardWest, Vector3.new(0, 0, 1), "AdBoardWest", "rbxassetid://90231143689689", folder)
+	buildAdBoard(HUB_ORIGIN + AT.adBoardEast, Vector3.new(0, 0, 1), "AdBoardEast", "rbxassetid://93563061893497", folder)
 	buildChallengeBoard(HUB_ORIGIN + AT.challenges, folder)
 	buildChallengeBoard(HUB_ORIGIN + AT.materials, folder, "MaterialsBoard")
 	buildPostBox(HUB_ORIGIN + AT.postBox, folder)
@@ -5046,6 +5949,9 @@ local function buildSurroundings(folder: Folder)
 	for _, seat in ipairs(LobbyLayout.BENCHES) do
 		buildBench(HUB_ORIGIN + Vector3.new(seat.x, 1, seat.z), seat.facing, folder)
 	end
+	-- THE FINGERPOST by where you arrive, and the plaza's FLOWER TROUGHS (the two-hundred-and-fifteenth pass).
+	buildFingerpost(HUB_ORIGIN + AT.fingerpost, folder)
+	buildPlazaTroughs(folder)
 
 	-- A LIT PATH FROM THE SPAWN TO THE START PAD, which is the one piece of scenery here that
 	-- is also instruction. You arrive facing a room full of things to press; a line of light
@@ -5077,26 +5983,36 @@ local function buildSurroundings(folder: Folder)
 	-- planks.
 	local SPREAD, DEPTH = 3.4, 2.4
 	local gatesWalk = LobbyLayout.walk("gates")
-	for _, run in ipairs({ { z = AT.spawn.Z - 8, y = 1.3 }, { z = gatesWalk.Z + 8, y = 1.04 } }) do
-		for index = 1, 5 do
+	-- ON WHAT THEY LIE ON (the hundred-and-eighty-second pass, from your screenshot of 2026-11-04: "an arrow that is
+	-- misaligned in the lobby"): the walk's five lie just on its planks (1.0), where they were a hair inside them.
+	-- NONE ON THE PLAZA ANY MORE (the hundred-and-ninety-ninth pass). Its three lay 7.6 to 12.4 studs ahead of the spawn,
+	-- and from the camera behind you that is just where your hips are: eight and a half studs wide, they stuck out either
+	-- side of you, the pale wings again, in brass this time. The walk's five start where the plaza ends and point the same way.
+	for _, run in ipairs({ { z = gatesWalk.Z + 8, y = 1.09, count = 5 } }) do
+		for index = 1, run.count do
 			-- ONE SHAPE WITH A NOTCH IN IT, which is what makes an arrow an arrow: Hub_Chevron is a single solid
 			-- outline. The pair of bars below is the fallback for an unimported mesh.
+			-- LET INTO THE FLOOR, NOT LIT (the hundred-and-ninety-sixth pass). They were Neon, half see-through: from
+			-- behind you, standing at the spawn, the first of them lay just ahead under your feet and glowed out either
+			-- side of you, a pair of pale wings, and a lit floor is the one thing this lobby has no lamp for. Now each
+			-- is a brass inlay in the stone, solid and unlit, catching the light as metal does.
 			local tip = HUB_ORIGIN + Vector3.new(0, run.y, run.z - (index - 1) * 2.4)
 			local chevron = propAt("Hub_Chevron", tip, folder, math.pi)
 			if chevron then
-				chevron.Material = Enum.Material.Neon
-				chevron.Color = PALETTE.warm
-				chevron.Transparency = 0.78 - index * 0.08
+				chevron.Material = Enum.Material.Metal
+				chevron.Color = PALETTE.brass
+				chevron.Reflectance = 0.08
+				chevron.Transparency = 0
 				continue
 			end
 			for _, side in ipairs({ -1, 1 }) do
 				local tail = tip + Vector3.new(side * SPREAD, 0, DEPTH)
 				local bar = decorPart("PathChevronFallback",
 					Vector3.new(1.1, 0.12, (tip - tail).Magnitude), (tip + tail) / 2, folder)
-				bar.Material = Enum.Material.Neon
-				bar.Color = PALETTE.warm
+				bar.Material = Enum.Material.Metal
+				bar.Color = PALETTE.brass
+				bar.Reflectance = 0.08
 				bar.CFrame = CFrame.lookAt((tip + tail) / 2, tip)
-				bar.Transparency = 0.82 - index * 0.07
 			end
 		end
 	end
@@ -5371,7 +6287,9 @@ local function buildPromenade(folder: Folder)
 		part.Parent = folder
 	end
 	for name, deck in pairs(LobbyLayout.DECKS) do
-		floor("HubFloor", Vector3.new(deck.w, 2, deck.d), Vector3.new(deck.x, 0, deck.z), Enum.Material.SmoothPlastic,
+		-- PAVED (the hundred-and-sixty-ninth pass): plain plastic before, so no texture could reach it; slate now, and
+		-- Harrow Bay's flagstones on it (MaterialAppearance.dress), in the same dark colour.
+		floor("HubFloor", Vector3.new(deck.w, 2, deck.d), Vector3.new(deck.x, 0, deck.z), Enum.Material.Slate,
 			Color3.fromRGB(58, 54, 68))
 		railDeck(folder, name)
 		pierGrid(folder, deck.x, deck.z, deck.w, deck.d)
@@ -5497,6 +6415,110 @@ end
 
 -- Idempotent: calling it twice returns the room that already exists rather than a second
 -- one, because Bootstrap runs it at server start and nothing should be able to stack it.
+-- ===== THE WORKSHOP =====
+--
+-- (The two-hundred-and-fifth pass, from your note of 2026-11-07: "by default the lengths of the level should be all long,
+-- and then in a specifically dedicated area for customisation like a sandbox, there they could choose options and the
+-- difficulty".) The garden's west wing, by the squish room's lift (LobbyLayout.AT): the mode and length keys stand here
+-- now (makeOptionPads puts them at AT.modeRow and AT.lengthRow), a signboard on legs at the wing's far end says what the
+-- corner is for, and a start of its own begins a run in the mode and length the room chose here. The gates' start begins
+-- a long Chill run whatever the keys say (DEFAULT_RUN).
+local function buildWorkshop(folder: Folder)
+	local wood = Color3.fromRGB(150, 112, 78)
+	local pad = Instance.new("Part")
+	pad.Name = "WorkshopStart"
+	pad.Anchored = true
+	pad.CanCollide = true
+	pad.CanTouch = true
+	pad.Size = Vector3.new(14, 1.6, 8)
+	pad.Material = Enum.Material.SmoothPlastic
+	pad.Color = Color3.fromRGB(120, 108, 150)
+	pad.Position = HUB_ORIGIN + AT.workshopStart
+	pad.Parent = folder
+	local inlay = decorPart("WorkshopStartInlay", Vector3.new(11.6, 0.2, 5.6), pad.Position + Vector3.new(0, 0.75, 0), folder)
+	inlay.Material = Enum.Material.SmoothPlastic
+	inlay.Color = Color3.fromRGB(196, 186, 236)
+	inlay.Transparency = 0.3
+	local glow = Instance.new("PointLight")
+	glow.Name = "WorkshopGlow"
+	glow.Color = inlay.Color
+	glow.Brightness = 0.6
+	glow.Range = 12
+	glow.Shadows = false
+	glow.Parent = inlay
+	makeSign(pad, "START YOUR WAY", "in the mode and length you chose", nil, nil, true)
+	local starting = false
+	pad.Touched:Connect(function(hit: BasePart)
+		local character = hit.Parent
+		if starting or not (character and character:FindFirstChildWhichIsA("Humanoid")) then
+			return
+		end
+		if HubService.runOn() then
+			local stepped = Players:GetPlayerFromCharacter(character)
+			if stepped then
+				HubService.tellBusy(stepped)
+			end
+			return
+		end
+		starting = true
+		HubService.callVote(true)
+		task.delay(2, function()
+			starting = false
+		end)
+	end)
+	-- The signboard at the wing's far end, on two legs, facing into the workshop.
+	local at = HUB_ORIGIN + AT.workshopBoard
+	local board = decorPart("WorkshopBoard", Vector3.new(0.6, 4.4, 11), at + Vector3.new(0, 5.2, 0), folder)
+	board.Material = Enum.Material.WoodPlanks
+	board.Color = wood
+	board.CanCollide = true
+	-- THE LEGS BEHIND IT (the two-hundred-and-eighteenth pass, from your screenshot of 2026-11-16): they were the board's
+	-- own thickness and in its plane, so their faces and its faces were one surface in two woods, flickering. Now they
+	-- stand against its back (west), thinner, and stop short of its top.
+	for _, z in ipairs({ -4.6, 4.6 }) do
+		local leg = decorPart("WorkshopBoardLeg", Vector3.new(0.5, 7.1, 0.5), at + Vector3.new(-0.55, 3.55, z), folder)
+		leg.Material = Enum.Material.Wood
+		leg.Color = wood:Lerp(Color3.new(0, 0, 0), 0.25)
+		leg.CanCollide = true
+	end
+	-- ITS WORDS ON IT (the two-hundred-and-eighteenth pass): painted on the face that looks into the workshop (+X), where
+	-- they floated over it.
+	local painted = Instance.new("SurfaceGui")
+	painted.Name = "Painted"
+	painted.Face = Enum.NormalId.Right
+	painted.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	painted.PixelsPerStud = 50
+	painted.LightInfluence = 0.7
+	painted.Parent = board
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.BackgroundTransparency = 1
+	title.Position = UDim2.fromScale(0.05, 0.08)
+	title.Size = UDim2.fromScale(0.9, 0.46)
+	title.TextScaled = true
+	title.FontFace = Style.WORLD.sign
+	title.TextColor3 = Color3.fromRGB(255, 246, 226)
+	title.Text = "THE WORKSHOP"
+	title.Parent = painted
+	local line = Instance.new("TextLabel")
+	line.Name = "Line"
+	line.BackgroundTransparency = 1
+	line.Position = UDim2.fromScale(0.04, 0.58)
+	line.Size = UDim2.fromScale(0.92, 0.32)
+	line.TextWrapped = true
+	line.TextScaled = true
+	line.FontFace = Style.FONT.body
+	line.TextColor3 = Color3.fromRGB(250, 232, 200)
+	line.Text = "choose your mode and length, then start your way"
+	line.Parent = painted
+	for _, label in ipairs({ title, line }) do
+		local edge = Instance.new("UIStroke")
+		edge.Color = Color3.fromRGB(60, 36, 18)
+		edge.Thickness = 2
+		edge.Parent = label
+	end
+end
+
 function HubService.build(): { spawnPosition: Vector3 }
 	-- The stashed room counts as existing. This looked only in the workspace, and the room now
 	-- spends every run in ServerStorage -- so a build() during a run would have found nothing
@@ -5622,10 +6644,26 @@ function HubService.build(): { spawnPosition: Vector3 }
 	startPad.CanCollide = true
 	startPad.CanTouch = true
 	startPad.Size = Vector3.new(14, 1.6, 8)
-	startPad.Material = Enum.Material.Neon
-	startPad.Color = Color3.fromRGB(120, 220, 140)
+	-- NOT A SLAB OF LIGHT (the hundred-and-eighty-second pass, from your test of 2026-11-04: "the lighting on the platforms
+	-- of selection and start is too bright"). It was solid Neon, the brightest thing in the lobby by far and blooming white
+	-- from across the room. Now it is a green pad like the keys round it, with its light let into its top as theirs is, and
+	-- a low lamp under that.
+	startPad.Material = Enum.Material.SmoothPlastic
+	startPad.Color = Color3.fromRGB(88, 158, 112)
 	startPad.Position = HUB_ORIGIN + AT.start
 	startPad.Parent = folder
+	local startInlay = decorPart("StartInlay", Vector3.new(11.6, 0.2, 5.6), startPad.Position + Vector3.new(0, 0.75, 0), folder)
+	-- Painted and lit by its lamp, not Neon (the two-hundred-and-fifth pass).
+	startInlay.Material = Enum.Material.SmoothPlastic
+	startInlay.Color = Color3.fromRGB(150, 226, 168)
+	startInlay.Transparency = 0.62
+	local startLamp = Instance.new("PointLight")
+	startLamp.Name = "StartGlow"
+	startLamp.Color = startInlay.Color
+	startLamp.Brightness = 0.6
+	startLamp.Range = 12
+	startLamp.Shadows = false
+	startLamp.Parent = startInlay
 	makeSign(startPad, "START", "step on to begin")
 
 	-- DEBOUNCED, unlike the selection pads. Those are idempotent, so a repeated Touched costs
@@ -5647,11 +6685,169 @@ function HubService.build(): { spawnPosition: Vector3 }
 		starting = true
 		-- CALLS THE VOTE rather than starting the run. Everything about which run it is now
 		-- gets decided in the ten seconds after this, by the room.
-		HubService.callVote()
+		HubService.callVote(false)
 		task.delay(2, function()
 			starting = false
 		end)
 	end)
+	-- BRING A FRIEND (the two-hundred-and-thirty-seventh pass, from your note of 2026-11-21 with the reel on how Roblox
+	-- recommends games: playing with friends is one of the things it counts). The invite was only in the pause menu,
+	-- where nobody looks for it. Now a signboard stands by the start, on the open deck between it and the walk you come
+	-- up, facing you as you arrive: what a friend in your run is worth, and Roblox's own prompt to invite one
+	-- (PauseMenuService's invite, on your screen). On two legs on the deck, as every sign here stands.
+	-- A POSTER, NOT A NOTICE (the two-hundred-and-fortieth pass, from your screenshot of 2026-11-21: "improve this
+	-- poster"). The first board was two lines of type on a pale card, the title clipped at both ends and Roblox's prompt
+	-- sat over the middle of it. Now: a framed board under a little roof, both on the legs, which run up to the roof;
+	-- a plum banner for the title, YOU and A FRIEND side by side (your own face, put in by PauseMenuService on your
+	-- screen), a gold token saying +20%, and a line under it. The prompt hangs below the board, between the legs.
+	do
+		local deckTop = startPad.Position.Y - startPad.Size.Y / 2
+		local at = startPad.Position + Vector3.new(16, 0, 14)
+		local turn = CFrame.Angles(0, math.pi, 0) -- its Front face toward the walk (+Z)
+		local WOOD = Color3.fromRGB(110, 68, 38)
+		local WOOD_DARK = Color3.fromRGB(84, 50, 28)
+		local W, H = 7, 4.6
+		local centreY = deckTop + 5.2
+		local roofY = centreY + H / 2 + 0.55
+		local function wood(name: string, size: Vector3, position: Vector3, colour: Color3?): BasePart
+			local piece = decorPart(name, size, position, folder)
+			piece.Material = Enum.Material.Wood
+			piece.Color = colour or WOOD
+			return piece
+		end
+		-- The legs run from the deck to the roof, just behind the board: they carry both.
+		for _, side in ipairs({ -1, 1 }) do
+			local top = roofY - 0.1
+			wood("InviteBoardLeg", Vector3.new(0.42, top - deckTop, 0.42),
+				Vector3.new(at.X + side * (W / 2 + 0.05), deckTop + (top - deckTop) / 2, at.Z - 0.3), WOOD_DARK)
+		end
+		local board = decorPart("InviteBoard", Vector3.new(W, H, 0.3), Vector3.new(at.X, centreY, at.Z), folder)
+		board.CFrame = CFrame.new(board.Position) * turn
+		board.Material = Enum.Material.SmoothPlastic
+		board.Color = Color3.fromRGB(246, 230, 242)
+		board.CanQuery = true
+		-- The frame round it, a little proud of the face.
+		wood("InviteBoardFrame", Vector3.new(W + 0.5, 0.3, 0.5), Vector3.new(at.X, centreY + H / 2 + 0.1, at.Z + 0.05))
+		wood("InviteBoardFrame", Vector3.new(W + 0.5, 0.3, 0.5), Vector3.new(at.X, centreY - H / 2 - 0.1, at.Z + 0.05))
+		for _, side in ipairs({ -1, 1 }) do
+			wood("InviteBoardFrame", Vector3.new(0.3, H + 0.2, 0.5), Vector3.new(at.X + side * (W / 2 + 0.1), centreY, at.Z + 0.05))
+		end
+		-- And the roof: two boards meeting over it, resting on the legs' tops.
+		for _, side in ipairs({ -1, 1 }) do
+			local slope = decorPart("InviteBoardRoof", Vector3.new(W + 1.2, 0.18, 0.75), Vector3.zero, folder)
+			slope.Material = Enum.Material.WoodPlanks
+			slope.Color = Color3.fromRGB(150, 62, 80)
+			slope.CFrame = CFrame.new(at.X, roofY + 0.12, at.Z - 0.3 + side * 0.33) * CFrame.Angles(side * math.rad(28), 0, 0)
+		end
+		wood("InviteBoardRidge", Vector3.new(W + 1.3, 0.2, 0.2), Vector3.new(at.X, roofY + 0.32, at.Z - 0.3), WOOD_DARK)
+
+		local gui = Instance.new("SurfaceGui")
+		gui.Name = "Poster"
+		gui.Face = Enum.NormalId.Front
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 100
+		gui.LightInfluence = 0.6
+		gui.Parent = board
+		local PLUM = Color3.fromRGB(110, 34, 64)
+		local INK = Color3.fromRGB(72, 40, 88)
+		local back = Instance.new("Frame")
+		back.Size = UDim2.fromScale(1, 1)
+		back.BorderSizePixel = 0
+		back.BackgroundColor3 = Color3.new(1, 1, 1)
+		back.Parent = gui
+		local wash = Instance.new("UIGradient")
+		wash.Color = ColorSequence.new(Color3.fromRGB(255, 228, 238), Color3.fromRGB(222, 212, 252))
+		wash.Rotation = 90
+		wash.Parent = back
+		local function round(item: GuiObject, scale: number)
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(scale, 0)
+			corner.Parent = item
+		end
+		local function stroke(item: GuiObject, colour: Color3, thickness: number)
+			local line = Instance.new("UIStroke")
+			line.Color = colour
+			line.Thickness = thickness
+			line.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			line.Parent = item
+		end
+		-- Text kept inside its box with room to spare (a clipped title was the first complaint).
+		local function words(parent: GuiObject, text: string, x: number, y: number, w: number, h: number, font: Font,
+			colour: Color3, name: string?): TextLabel
+			local label = Instance.new("TextLabel")
+			label.Name = name or "Words"
+			label.BackgroundTransparency = 1
+			label.Position = UDim2.fromScale(x, y)
+			label.Size = UDim2.fromScale(w, h)
+			label.TextScaled = true
+			label.FontFace = font
+			label.TextColor3 = colour
+			label.Text = text
+			label.Parent = parent
+			return label
+		end
+		local banner = Instance.new("Frame")
+		banner.BackgroundColor3 = PLUM
+		banner.Position = UDim2.fromScale(0.06, 0.06)
+		banner.Size = UDim2.fromScale(0.88, 0.25)
+		banner.Parent = back
+		round(banner, 0.35)
+		stroke(banner, Color3.fromRGB(255, 244, 250), 5)
+		words(banner, "BRING A FRIEND", 0.08, 0.14, 0.84, 0.72, Style.FONT.display, Color3.fromRGB(255, 246, 250))
+
+		-- You, plus a friend.
+		local function face(name: string, x: number, fill: Color3, ring: Color3, mark: string, caption: string)
+			local disc = Instance.new("ImageLabel")
+			disc.Name = name
+			disc.BackgroundColor3 = fill
+			disc.Position = UDim2.fromScale(x, 0.38)
+			disc.Size = UDim2.fromScale(0.17, 0.26)
+			disc.ScaleType = Enum.ScaleType.Crop
+			disc.Parent = back
+			round(disc, 0.5)
+			stroke(disc, ring, 5)
+			words(disc, mark, 0.2, 0.2, 0.6, 0.6, Style.FONT.display, Color3.new(1, 1, 1), "Mark")
+			words(back, caption, x - 0.03, 0.665, 0.23, 0.08, Style.FONT.heading, INK)
+		end
+		face("YouFace", 0.08, Color3.fromRGB(244, 170, 120), Color3.fromRGB(255, 196, 70), "YOU", "you")
+		words(back, "+", 0.255, 0.4, 0.08, 0.2, Style.FONT.display, PLUM)
+		face("FriendFace", 0.335, Color3.fromRGB(150, 170, 236), Color3.fromRGB(255, 255, 255), "?", "a friend")
+
+		-- The token.
+		local coin = Instance.new("Frame")
+		coin.BackgroundColor3 = Color3.fromRGB(255, 204, 72)
+		coin.Position = UDim2.fromScale(0.6, 0.35)
+		coin.Size = UDim2.fromScale(0.32, 0.42)
+		coin.Parent = back
+		round(coin, 0.5)
+		stroke(coin, Color3.fromRGB(206, 128, 34), 6)
+		local shine = Instance.new("UIGradient")
+		shine.Color = ColorSequence.new(Color3.fromRGB(255, 240, 180), Color3.fromRGB(255, 190, 60))
+		shine.Rotation = 90
+		shine.Parent = coin
+		words(coin, "+20%", 0.12, 0.14, 0.76, 0.48, Style.FONT.display, PLUM)
+		words(coin, "TOKENS", 0.2, 0.6, 0.6, 0.22, Style.FONT.heading, Color3.fromRGB(150, 78, 30))
+
+		words(back, "Every run together pays a fifth more", 0.08, 0.83, 0.84, 0.11, Style.FONT.heading, INK)
+
+		-- The prompt below the board, so it is never over it.
+		local spot = Instance.new("Attachment")
+		spot.Name = "InviteSpot"
+		spot.Position = Vector3.new(0, -H / 2 - 1.1, -0.6) -- the Front face is -Z here
+		spot.Parent = board
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.Name = "InvitePrompt"
+		prompt.ActionText = "Invite friends"
+		prompt.ObjectText = "Bring a friend"
+		prompt.HoldDuration = 0
+		prompt.MaxActivationDistance = 10
+		prompt.RequiresLineOfSight = false
+		prompt.Parent = spot
+		CollectionService:AddTag(board, "InviteBoard")
+	end
+
+	-- AND THE WORKSHOP'S, with the mode and length keys round it (buildWorkshop).
+	buildWorkshop(folder)
 
 	local board = Instance.new("Part")
 	board.Name = "LeaderboardBoard"
@@ -5812,8 +7008,15 @@ function HubService.build(): { spawnPosition: Vector3 }
 	HubService.refreshPads()
 	HubService.refreshOptionPads()
 	HubService.refreshBoard()
+
+	-- HARROW BAY'S SURFACES (the hundred-and-sixty-ninth pass): every part of the room in the texture made for its
+	-- material, and everything built into it later too (MaterialAppearance.dress). Last, so the whole room is there.
+	local dressOk, dressErr = pcall(MaterialAppearance.dress, folder)
+	if not dressOk then
+		warn("HubService: the lobby's surfaces were not dressed, it still works: " .. tostring(dressErr))
+	end
 	return { spawnPosition = HubService.spawnPosition() }
 end
 
-HubService.STAMP = "f3c4e0b7"
+HubService.STAMP = "5f04e3a1"
 return HubService

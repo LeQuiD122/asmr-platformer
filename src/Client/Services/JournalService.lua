@@ -61,6 +61,11 @@ local KINDS = {
 	{ key = "material", name = "Materials", empty = "Nothing yet. Every material you stand on in a level is kept here." },
 }
 
+-- THE GREEN ENVELOPES (StoryService's NOTES, the hundred-and-seventy-first pass): five, by their titles, and where
+-- each lies, in the order the story plays them (refreshList keeps them together and in order).
+local LETTER_TITLE = "^A green envelope, (%d) of 5$"
+local LETTER_AT = { "at Hill House", "on City Shore", "in the Sky Pools", "in the Sunken City", "in the Flooded Halls" }
+
 local keepsakeTotal = (function(): number
 	local shared = ReplicatedStorage:FindFirstChild("Shared")
 	local module = shared and shared:FindFirstChild("Keepsakes")
@@ -159,6 +164,18 @@ local function chime()
 	s.Parent = SoundService
 	s:Play()
 	game:GetService("Debris"):AddItem(s, 3)
+end
+
+-- A PRESS, HEARD (the hundred-and-forty-fourth pass): AudioService.press, the one soft sound every menu in the game makes
+-- (a felt tap, two notes up as a card opens and down as it goes). Its tabs, its pages and its closing made none.
+local function pressSound(kind: string)
+	local found = script.Parent and script.Parent:FindFirstChild("AudioService")
+	if found and found:IsA("ModuleScript") then
+		local ok, audio = pcall(require, found)
+		if ok and type(audio) == "table" and type(audio.press) == "function" then
+			audio.press(kind)
+		end
+	end
 end
 
 -- ===== THE THINGS YOU PICKED UP, GONE FROM YOUR SCREEN =====
@@ -289,46 +306,86 @@ refreshList = function()
 		end
 	end
 	local index = 0
-	for i = #entries, 1, -1 do
-		local entry = entries[i]
-		if entry.kind == shownKind then
-			index += 1
-			local row = Instance.new("TextButton")
-			row.Name = "Row"
-			row.AutoButtonColor = false
-			row.Text = ""
-			row.Size = UDim2.new(1, 0, 0, 58)
-			row.BackgroundColor3 = if entry.id == shownId then PAPER_DEEP else PAPER
-			row.BackgroundTransparency = if entry.id == shownId then 0 else 1
-			row.BorderSizePixel = 0
-			row.LayoutOrder = index
-			row.Parent = list
-			round(row, 8)
-			local dot = Instance.new("Frame")
-			dot.Name = "Unread"
-			dot.AnchorPoint = Vector2.new(0, 0.5)
-			dot.Position = UDim2.new(0, 8, 0.5, 0)
-			dot.Size = UDim2.fromOffset(8, 8)
-			dot.BackgroundColor3 = UNREAD
-			dot.BorderSizePixel = 0
-			dot.Visible = not entry.read
-			dot.Parent = row
-			round(dot, 4)
-			local name = text(row, "Name", entry.title, Style.FONT.paper, 20, INK)
-			name.Position = UDim2.fromOffset(24, 8)
-			name.Size = UDim2.new(1, -30, 0, 22)
-			name.AutomaticSize = Enum.AutomaticSize.None
-			name.TextTruncate = Enum.TextTruncate.AtEnd
-			name.TextWrapped = false
-			local sub = text(row, "Sub", entry.eyebrow, BODY, 13, INK_SOFT)
-			sub.Position = UDim2.fromOffset(24, 32)
-			sub.Size = UDim2.new(1, -30, 0, 18)
-			sub.AutomaticSize = Enum.AutomaticSize.None
-			sub.TextTruncate = Enum.TextTruncate.AtEnd
-			sub.TextWrapped = false
+	-- A row: its title, a line under it, and a dot while it is unread. One with no entry is a letter not found yet,
+	-- quieter, and nothing opens from it (nor does a controller stop on it).
+	local function addRow(entry: Entry?, title: string, line: string)
+		index += 1
+		local picked = entry ~= nil and entry.id == shownId
+		local row = Instance.new("TextButton")
+		row.Name = "Row"
+		row.AutoButtonColor = false
+		row.Text = ""
+		row.Size = UDim2.new(1, 0, 0, 58)
+		row.BackgroundColor3 = if picked then PAPER_DEEP else PAPER
+		row.BackgroundTransparency = if picked then 0 else 1
+		row.BorderSizePixel = 0
+		row.LayoutOrder = index
+		row.Selectable = entry ~= nil
+		row.Parent = list
+		round(row, 8)
+		local dot = Instance.new("Frame")
+		dot.Name = "Unread"
+		dot.AnchorPoint = Vector2.new(0, 0.5)
+		dot.Position = UDim2.new(0, 8, 0.5, 0)
+		dot.Size = UDim2.fromOffset(8, 8)
+		dot.BackgroundColor3 = UNREAD
+		dot.BorderSizePixel = 0
+		dot.Visible = entry ~= nil and not entry.read
+		dot.Parent = row
+		round(dot, 4)
+		local name = text(row, "Name", title, Style.FONT.paper, 20, if entry then INK else INK_SOFT)
+		name.Position = UDim2.fromOffset(24, 8)
+		name.Size = UDim2.new(1, -30, 0, 22)
+		name.AutomaticSize = Enum.AutomaticSize.None
+		name.TextTruncate = Enum.TextTruncate.AtEnd
+		name.TextWrapped = false
+		local sub = text(row, "Sub", line, BODY, 13, INK_SOFT)
+		sub.Position = UDim2.fromOffset(24, 32)
+		sub.Size = UDim2.new(1, -30, 0, 18)
+		sub.AutomaticSize = Enum.AutomaticSize.None
+		sub.TextTruncate = Enum.TextTruncate.AtEnd
+		sub.TextWrapped = false
+		if entry then
 			row.Activated:Connect(function()
+				pressSound("tap")
 				showEntry(entry)
 			end)
+		end
+	end
+	-- HIS LETTERS IN ORDER (the hundred-and-seventy-fifth pass): from the first green envelope found, the five are kept
+	-- together at the top of the notes, one to five, in the order the story plays them, whatever order they were found
+	-- in; one not found yet says which level it lies on, and nothing of what it says.
+	local letters: { [number]: Entry } = {}
+	local isLetter: { [string]: boolean } = {}
+	local found = 0
+	if shownKind == "note" then
+		for _, entry in ipairs(entries) do
+			local digit = if entry.kind == "note" then string.match(entry.title, LETTER_TITLE) else nil
+			local number = if digit then tonumber(digit) else nil
+			if number and LETTER_AT[number] and not letters[number] then
+				letters[number] = entry
+				isLetter[entry.id] = true
+				found += 1
+			end
+		end
+	end
+	if found > 0 then
+		index += 1
+		local heading = text(list, "Letters", ("GREEN ENVELOPES, %d OF %d"):format(found, #LETTER_AT), TITLE, 13, INK_SOFT)
+		heading.LayoutOrder = index
+		for number, where in ipairs(LETTER_AT) do
+			local letter = letters[number]
+			if letter then
+				addRow(letter, letter.title, "Found " .. where)
+			else
+				addRow(nil, ("A green envelope, %d of %d"):format(number, #LETTER_AT), "Still to find, " .. where)
+			end
+		end
+	end
+	for i = #entries, 1, -1 do
+		local entry = entries[i]
+		if entry.kind == shownKind and not isLetter[entry.id] then
+			addRow(entry, entry.title, entry.eyebrow)
 		end
 	end
 	if index == 0 and shownId == nil then
@@ -355,6 +412,17 @@ local function pickKind(key: string)
 	end
 end
 
+-- HOW TO CLOSE IT, ON THE DEVICE IN HAND (the hundred-and-forty-seventh pass): the foot of the page said "J or Esc to
+-- close" to a controller and a phone too. A controller's B; on a phone the X at its corner says it, so nothing.
+local function closeWords(): string
+	if UserInputService:GetLastInputType().Name:sub(1, 7) == "Gamepad" then
+		return "B to close"
+	elseif UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+		return ""
+	end
+	return "J or Esc to close"
+end
+
 local function setOpen(on: boolean)
 	if on == isOpen or not ui.book then
 		return
@@ -371,6 +439,9 @@ local function setOpen(on: boolean)
 			end
 		end
 		pickKind(shownKind)
+		if ui.foot then
+			ui.foot.Text = closeWords()
+		end
 		dim.Visible = true
 		book.Visible = true
 		book.Position = UDim2.new(0.5, 0, 0.54, 0)
@@ -392,6 +463,7 @@ local function setOpen(on: boolean)
 		end
 		chime()
 	else
+		pressSound("close")
 		ContextActionService:UnbindAction("JournalClose")
 		local selected = game:GetService("GuiService").SelectedObject
 		if selected and selected:IsDescendantOf(book) then
@@ -610,6 +682,7 @@ local function build()
 		button.Parent = tabsRow
 		round(button, 8)
 		button.Activated:Connect(function()
+			pressSound("tap")
 			pickKind(kind.key)
 		end)
 		ui.tabs[kind.key] = button
@@ -657,7 +730,8 @@ local function build()
 	pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	pageLayout.Parent = page
 	ui.page = page
-	local foot = text(right, "Foot", "J or Esc to close", BODY, 13, INK_SOFT)
+	local foot = text(right, "Foot", closeWords(), BODY, 13, INK_SOFT)
+	ui.foot = foot
 	foot.AnchorPoint = Vector2.new(1, 1)
 	foot.Position = UDim2.new(1, -18, 1, -10)
 	foot.Size = UDim2.new(1, -36, 0, 16)
@@ -1011,5 +1085,5 @@ function JournalService.start()
 	print("JournalService: running, " .. JournalService.VERSION)
 end
 
-JournalService.STAMP = "a9e90c21"
+JournalService.STAMP = "930eb700"
 return JournalService

@@ -27,6 +27,8 @@
 
 local ServerStorage = game:GetService("ServerStorage")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- (The rockers are tagged, so each screen can find every one of them: attachRocker.)
+local CollectionService = game:GetService("CollectionService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local SubRegionGrid = require(Shared:WaitForChild("SubRegionGrid"))
@@ -140,7 +142,8 @@ local MESH_FOLDER = "TileMeshes"
 -- Needoh joins these: a bag of dough sinks under you the whole time you stand on it, it
 -- does not give way in steps. The discrete materials are the ones that BREAK -- ice, butter
 -- wax, bubble wrap -- and nothing in a sealed toy breaks.
-local CONTINUOUS: { [string]: boolean } = { Honey = true, Slime = true, Soap = true, JelloSoda = true, Needoh = true, ButterStick = true, LavaKeys = true, Jellyfish = true }
+-- (Not the keys over lava, since the hundred-and-fifty-sixth pass: a key to a cell, each with its seam, floating apart.)
+local CONTINUOUS: { [string]: boolean } = { Honey = true, Slime = true, Soap = true, JelloSoda = true, Needoh = true, ButterStick = true, Jellyfish = true }
 
 -- Of those, the ones that hang something off the platform edge. Kept SEPARATE from
 -- CONTINUOUS because soap is edge-matched but solid: it wants the Interior/Edge/Corner
@@ -222,8 +225,9 @@ local SHELL_FINISH: { [string]: { whiten: number, transparency: number, reflecta
 	-- butter shows where the wrapper CRACKS, as it should; and whitened only half way, the
 	-- paper is the cream of a butter wrapper, not a white slab.
 	ButterWax = { whiten = 0.5, transparency = 0.06, reflectance = 0.12 },
-	-- The sticks' wrapper is the same paper, a touch creamier over their pale butter.
-	ButterStick = { whiten = 0.35, transparency = 0.06, reflectance = 0.12 },
+	-- THE STICKS' WAX (the two-hundred-and-forty-third pass): a little whiter than the block's, so the cracks, which
+	-- show the yellow butter under it, stand out on the narrow sticks.
+	ButterStick = { whiten = 0.55, transparency = 0.04, reflectance = 0.14 },
 	-- A frozen sheet with water under it. Clearer than the wax and far more reflective,
 	-- because ice reads by what it bounces back rather than by its own colour -- and the
 	-- player has to be able to see that there is no floor beneath it.
@@ -246,29 +250,21 @@ local WAX_SHELLS: { [string]: { WaxSpec } } = {
 		{ sizeX = 12, sizeZ = 10, surfaceOffset = 2.385, mesh = "Wax_Shell_12x10_A" },
 		{ sizeX = 12, sizeZ = 10, surfaceOffset = 2.385, mesh = "Wax_Shell_12x10_B" },
 	},
-	-- THE STICKS ARE WRAPPED, which they were not and should have been from the start: a
-	-- stick of butter that arrives bare is a stick somebody has already unwrapped.
-	--
-	-- A FLAT shell over a ridged surface is right rather than a compromise. One wrapper
-	-- spans all three sticks, the tops are flat and level end to end so the plates lie on
-	-- them exactly as they lie on a flat butter slab, and the two grooves are simply
-	-- bridged -- which is what a sheet of paper does over three bars.
-	-- DRAPED, NOT LAID FLAT. The first attempt reused the flat 16x12 plates on the grounds
-	-- that a wrapper spans three sticks, and in the game that was simply a white lid: a flat
-	-- sheet across three ridges bridges them completely and the chunk underneath disappeared.
-	--
-	-- These are the same shards, the same rig and the same cracking, generated with the stick
-	-- height field as a relief so every plate sits a constant thickness above the butter and
-	-- dips into both grooves. gen_wax_shell_sticks.py, and the offset below is measured off
-	-- the result rather than carried over from the flat one.
+	-- THE STICKS WAXED AGAIN (the two-hundred-and-forty-third pass, from your screenshot of 2026-11-22: "add a crackable
+	-- wax shell to this chunk"). The draped shells below were never wrong; what was wrong (next paragraph) was the
+	-- sticks standing 0.3 too HIGH under them, so the shell was inside the butter. The sticks now sit a shell's thickness
+	-- under the walkable plane (SURFACES.ButterStick, 3.99), as the waxed block's body does, and the shell's crests are
+	-- the floor. It cracks under a foot and goes down with the dent (DeformationRenderer, BUTTER_STICK.SHELL).
 	ButterStick = {
-		-- 2.385, not the 3.860 this briefly carried. That larger figure was measured off a
-		-- shell whose UNDERSIDE plate had also been draped -- the bug that hung a tangle of
-		-- shards below the butter. With the underside flat again the bounding box is back to
-		-- the same shape every other shell has, and so is the offset.
 		{ sizeX = 16, sizeZ = 12, surfaceOffset = 2.385, mesh = "Wax_Shell_Sticks_16x12_A" },
 		{ sizeX = 16, sizeZ = 12, surfaceOffset = 2.385, mesh = "Wax_Shell_Sticks_16x12_B" },
 	},
+	-- (Was: THE STICKS ARE BARE (the hundred-and-fifty-third pass, from your test of 2026-10-31: "can you see the problem with
+	-- Butter now?"). They wore a draped wrapper of shards here, and the sticks under it had been raised where they should
+	-- have been lowered (their surfaceOffset went DOWN by the shell's thickness, which lifts a mesh; the waxed butter's
+	-- went up, which drops one), so the wrapper sat inside the butter and only its corners came through: white triangles
+	-- standing out of the sticks, more of them the more you walked. Waxed butter is the wrapped one; these are butter,
+	-- unwrapped, soft, and greasy on your soles (RunFeel). Kept the Wax_Shell_Sticks meshes, used again since 243.)
 	-- ICE REUSES THE WAX PLATES, and that is the point rather than a shortcut.
 	--
 	-- gen_wax_shell.py cuts an irregular fractured coating with a bone per shard. That IS
@@ -356,6 +352,12 @@ local GRANULE_BUDGET = 600
 -- per cell, and losing one is losing a crumb. A lego cell is ONE brick, and losing it is
 -- losing the floor.
 local BRICKED: { [string]: boolean } = { Lego = true }
+-- A BAR OF CHOCOLATE (the two-hundred-and-tenth pass, from your note of 2026-11-13: "I don't like that solid chocolate
+-- deforms like a mesh, I want it to crumble"). It was the warm bar's skinned plate, and a skinned plate can only bend:
+-- under a foot the squares stretched like rubber. Now it is what a bar is, a square to a cell, each its own rigid
+-- block with a raised pillow on top and a groove all round it; it cracks under a foot (DeformationRenderer), and when
+-- it goes it breaks into lumps that fall, and comes back whole when the cell does.
+local CHUNKED: { [string]: boolean } = { ChocolateSolid = true }
 
 -- MATERIALS THAT SHED SOMETHING WHILE NOBODY IS TOUCHING THEM.
 --
@@ -683,6 +685,276 @@ local function attachCap(tile: BasePart, slab: BasePart, div: number, col: numbe
 	end
 end
 
+-- ===== KEYBOARDS: a key of its own in every cell (the hundred-and-fifty-fifth pass) =====
+--
+-- From your test of 2026-10-31: "the regular keys should have a better key movement animation and there could be more
+-- colour palettes and their models could look better and be less spread apart from key to key". The keys were one rigged
+-- field (gen_keyboard.py), a bone to a key: one mesh has one colour, so a key could never be its own, the letters were
+-- painted into a single texture, and the caps were square blocks tapered to three quarters of their foot on a pitch wider
+-- than the cell, so nearly a stud of case showed between their tops.
+--
+-- Now every cell carries a key of its own, cut from one sculpted cap (Keycap_Sculpted, gen_keycap.py: curved walls, a
+-- rounded rim, a dished top), filling the cell but for the tile's hairline seam, its top on the walkable plane, its letter
+-- printed on it, turned so the letter reads the way you walk. Its colours are a colourway's (MaterialAppearance.KEYCAPS),
+-- painted as the keyboard is built and again as each is placed in a level, so two in a row are seldom the same. The tile
+-- under it stays the collider, as the bricks' do; the renderer moves the key.
+local KEYED: { [string]: boolean } = { CreamyKeyboard = true, LavaKeys = true }
+local KEYCAP_MESH = "Keycap_Sculpted"
+-- The letters, a row of a board's left hand at a time, the row you meet first at the top; a wider board reads on.
+local KEY_ROWS = { "12345678", "QWERTYUI", "ASDFGHJK", "ZXCVBNM.", "!?#&*+=@" }
+-- FROM THE SECOND KEY OF EACH ROW (the hundred-and-sixty-fifth pass): a keyboard is five keys across, and from the first
+-- it read Q to T, with no Y on it, so nobody could ever answer the teleprinter YES (DeformationService's TELEPRINTER).
+-- From the second, W to Y over S to H over X to N: Y, E and S on every board.
+local KEY_FROM = 2
+local keycapWarned = false
+
+local function keycapTemplate(): BasePart?
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local folder = assets and assets:FindFirstChild("TileMeshes")
+	local found = folder and folder:FindFirstChild(KEYCAP_MESH)
+	if found and not found:IsA("BasePart") then
+		found = found:FindFirstChildWhichIsA("BasePart", true)
+	end
+	return if found and found:IsA("BasePart") then found else nil
+end
+
+local function attachKeycap(tile: BasePart, materialName: string, col: number, row: number, cols: number, rows: number)
+	local template = keycapTemplate()
+	local cap: BasePart
+	if template then
+		cap = template:Clone()
+	else
+		if not keycapWarned then
+			keycapWarned = true
+			warn("ChunkBuilder: no Keycap_Sculpted in ReplicatedStorage/Assets/TileMeshes, so the keyboards' keys are plain "
+				.. "blocks. Import meshes/Keycap_Sculpted.fbx there (a MeshPart named Keycap_Sculpted).")
+		end
+		local block = Instance.new("Part")
+		block.TopSurface = Enum.SurfaceType.Smooth
+		block.BottomSurface = Enum.SurfaceType.Smooth
+		cap = block
+	end
+	local lava = materialName == "LavaKeys"
+	cap.Name = "Keycap"
+	-- The cell less its seam, the tile's own height: its top is the walkable plane. TURNED ROUND, so a letter printed on its
+	-- top (whose up is the part's front) reads upright to someone walking the chunk's way, +Z.
+	cap.Size = tile.Size
+	cap.CFrame = tile.CFrame * CFrame.Angles(0, math.pi, 0)
+	cap.Anchored = true
+	cap.CanCollide = false
+	cap.CanTouch = false
+	cap.CanQuery = false
+	cap.CastShadow = true
+	cap.Material = if lava then Enum.Material.Basalt else Enum.Material.SmoothPlastic
+	cap.Reflectance = if lava then 0 else 0.05
+	local line = KEY_ROWS[((row - 1) % #KEY_ROWS) + 1]
+	local at = ((col - 2 + KEY_FROM) % #line) + 1
+	local letter = string.sub(line, at, at)
+	-- Its part in a colourway: the two corner keys where an Esc and an Enter would be, the number row, and the letters.
+	local role = "alpha"
+	if (col == 1 and row == 1) or (col == cols and row == rows) then
+		role = "accent"
+	elseif row == 1 then
+		role = "mod"
+	end
+	cap:SetAttribute("Role", role)
+	cap:SetAttribute("Legend", letter)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Legend"
+	gui.Face = Enum.NormalId.Top
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 60
+	-- Over lava the letters are the heat coming through, lit from inside; on a creamy board, printed.
+	gui.LightInfluence = if lava then 0 else 1
+	gui.Parent = cap
+	local label = Instance.new("TextLabel")
+	label.Name = "Letter"
+	label.BackgroundTransparency = 1
+	label.AnchorPoint = Vector2.new(0.5, 0.5)
+	label.Position = UDim2.fromScale(0.5, 0.5)
+	label.Size = UDim2.fromScale(0.46, 0.46)
+	label.TextScaled = true
+	label.FontFace = Style.WORLD.signHeavy
+	label.Text = letter
+	label.Parent = gui
+	cap.Parent = tile
+end
+
+-- ===== THE LIGHT SWITCHES ARE SOLID =====
+--
+-- (The two-hundred-and-fifth pass, from your note of 2026-11-07: "the light switch chunk should also be improved and I
+-- should physically be able to turn them on or off in a better fashion, as though they should be more 'solid'".) The
+-- switches were one skinned plate with a bone under each, and a bone on a skinned mesh drags every vertex within a cell
+-- and a quarter of it: pressing one switch bent the plate round it like rubber, the thing the lego learned before
+-- (attachBrick). Each switch is its own parts now, rigid: a wall plate filling its cell but for a hairline seam, its top
+-- the walkable plane, and in it a rocker paddle on a pivot across its middle, tipped one way or the other, with a pilot
+-- light let into its near end. The half of the paddle you step on goes down (DeformationRenderer, Effects.LightSwitch),
+-- as a real rocker does: press its raised half and it throws over with a clack; press the half that is already down and
+-- it stays. The tile under it stays the collider, as under a key or a brick.
+local ROCKED: { [string]: boolean } = { LightSwitch = true }
+-- WORKED BY THE FOOT (the two-hundred-and-eighth pass, from your note of 2026-11-10: "work further on the bubble wrap
+-- chunk, and the light switches"). The paddle was a picture of a rocker: you walked through it, and it threw over once
+-- as you came onto its cell, by where your foot happened to be at that moment. Now it is the thing under your foot. It
+-- collides, standing over a third of a stud proud at its raised end and flush at the other, so a raised half is felt
+-- and seen to be raised; and it throws when a foot comes down on that raised half, and not otherwise
+-- (DeformationRenderer's ROCKERS, which watches feet, not cells): walk on over one and it goes down under you with its
+-- clack as your weight reaches it, and stays. Thicker and tipped further than it was, so the travel reads; set in a
+-- dark well, so its edge does; two screws in every plate; and the gaps between plates dark (MaterialAppearance's
+-- baseColor), so each switch is a thing of its own on the wall it was taken from.
+local ROCKER = {
+	SEAM = 0.26, -- the gap between two plates
+	WIDE = 0.52, -- the paddle, as a share of the cell across
+	LONG = 0.66, -- and along
+	THICK = 0.5,
+	TILT = math.rad(11), -- how far it tips either way off level
+	SINK = 0.3, -- how far its middle sits into the plate: its low end comes out flush
+	WELL = 0.1, -- the dark well, this far out round the paddle
+	SCREW = 0.17, -- a screw head across
+}
+
+local function attachRocker(tile: BasePart, materialName: string)
+	local function fixed(name: string, size: Vector3, cf: CFrame): Part
+		local part = Instance.new("Part")
+		part.Name = name
+		part.Size = size
+		part.CFrame = cf
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanTouch = false
+		part.CanQuery = false
+		part.TopSurface = Enum.SurfaceType.Smooth
+		part.BottomSurface = Enum.SurfaceType.Smooth
+		return part
+	end
+	local plate = fixed("SwitchPlate", Vector3.new(tile.Size.X - ROCKER.SEAM, tile.Size.Y, tile.Size.Z - ROCKER.SEAM), tile.CFrame)
+	MaterialAppearance.apply(plate, materialName)
+	plate.Parent = tile
+	-- The pivot across the paddle's middle, on the plate's top: the client tips the paddle about it. At rest it is OFF,
+	-- its near half down (a switch pressed the way you walk in reads as the way you came).
+	local pivot = tile.CFrame * CFrame.new(0, tile.Size.Y / 2, 0)
+	local paddleSize = Vector3.new(tile.Size.X * ROCKER.WIDE, ROCKER.THICK, tile.Size.Z * ROCKER.LONG)
+	-- THE WELL it sits in: a dark margin round the paddle, a hair over the plate.
+	local well = fixed("SwitchWell", Vector3.new(paddleSize.X + ROCKER.WELL * 2, 0.05, paddleSize.Z + ROCKER.WELL * 2),
+		pivot * CFrame.new(0, 0.026, 0))
+	well.Material = Enum.Material.SmoothPlastic
+	well.Color = Color3.fromRGB(62, 58, 54)
+	well.CastShadow = false
+	well.Parent = tile
+	-- TWO SCREWS, in the plate's margins fore and aft of the well.
+	local screwAt = (tile.Size.Z - ROCKER.SEAM) / 2 - (((tile.Size.Z - ROCKER.SEAM) - (paddleSize.Z + ROCKER.WELL * 2)) / 4)
+	for _, side in ipairs({ -1, 1 }) do
+		local screw = fixed("SwitchScrew", Vector3.new(0.06, ROCKER.SCREW, ROCKER.SCREW),
+			pivot * CFrame.new(0, 0.03, side * screwAt) * CFrame.Angles(0, 0, math.pi / 2))
+		screw.Shape = Enum.PartType.Cylinder
+		screw.Material = Enum.Material.Metal
+		screw.Color = Color3.fromRGB(150, 142, 128)
+		screw.CastShadow = false
+		screw.Parent = tile
+	end
+	local paddle = fixed("Rocker", paddleSize,
+		pivot * CFrame.Angles(-ROCKER.TILT, 0, 0) * CFrame.new(0, ROCKER.THICK / 2 - ROCKER.SINK, 0))
+	MaterialAppearance.apply(paddle, materialName)
+	-- Glossier than its plate: a rocker is the polished part of a switch.
+	paddle.Reflectance = 0.12
+	-- IT IS UNDER YOUR FOOT: it collides (on each screen, where the renderer tips it), so its raised half is a step
+	-- up and the throw is a drop.
+	paddle.CanCollide = true
+	-- IN THE TILE'S OWN SPACE, not the world's. A chunk is built here, as a template, and stood somewhere else in a
+	-- level: the pivot was kept as where it was in the world when it was built, so a rocker in a level tipped about a
+	-- point back where its template had been, and was gone from under you the first time it was thrown.
+	paddle:SetAttribute("Pivot", tile.CFrame:ToObjectSpace(pivot))
+	paddle:SetAttribute("Tilt", ROCKER.TILT)
+	paddle:SetAttribute("Rise", ROCKER.THICK / 2 - ROCKER.SINK)
+	CollectionService:AddTag(paddle, "SwitchRocker")
+	paddle.Parent = tile
+	-- The pilot light in its near end: dark, and a warm glow when the switch is on (the renderer lights it).
+	-- Anchored like the paddle, so it does not follow it on its own: the renderer moves it by this, off the paddle.
+	local onPaddle = CFrame.new(0, ROCKER.THICK / 2 + 0.01, -paddle.Size.Z * 0.34)
+	-- (Wider and deeper than it was, the two-hundred-and-thirty-sixth pass: at a fifth of the paddle a switch thrown on
+	-- showed a sliver of yellow, and on and off were told apart by the tilt alone.)
+	local pilot = fixed("Pilot", Vector3.new(paddle.Size.X * 0.62, 0.06, paddle.Size.Z * 0.16), paddle.CFrame * onPaddle)
+	pilot:SetAttribute("Offset", onPaddle)
+	pilot.Material = Enum.Material.SmoothPlastic
+	pilot.Color = Color3.fromRGB(96, 84, 70)
+	pilot.Parent = paddle
+	-- I AND O ON THE PADDLE (the two-hundred-and-thirty-sixth pass, from your note of 2026-11-10, "work on the light
+	-- switches further"): the marks every rocker switch has, I on the half you press for on, O on the half for off, so a
+	-- glance tells you which way each one is thrown. Pressed into the paddle (dark, small), on its top face.
+	local marks = Instance.new("SurfaceGui")
+	marks.Name = "SwitchMarks"
+	marks.Face = Enum.NormalId.Top
+	marks.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	marks.PixelsPerStud = 60
+	marks.LightInfluence = 1
+	marks.Parent = paddle
+	-- (Along the paddle: the top face's across is the paddle's length, so each mark is placed along it and turned a
+	-- quarter, to read upright from the end you walk in at. O on the half with the pilot light in it.)
+	for _, mark in ipairs({ { "I", 0.25 }, { "O", 0.62 } }) do
+		local label = Instance.new("TextLabel")
+		label.Name = "Mark" .. mark[1]
+		label.BackgroundTransparency = 1
+		label.AnchorPoint = Vector2.new(0.5, 0.5)
+		label.Position = UDim2.fromScale(mark[2], 0.5)
+		label.Size = UDim2.fromScale(0.24, 0.5)
+		label.Rotation = 90
+		label.TextScaled = true
+		label.FontFace = Style.WORLD.signHeavy
+		label.TextColor3 = Color3.fromRGB(104, 94, 82)
+		label.Text = mark[1]
+		label.Parent = marks
+	end
+end
+
+-- KEYS OVER LAVA (the hundred-and-fifty-sixth pass, from your test of 2026-10-31: "keys over lava should have way more
+-- functionality and looks, I couldn't tell those are different apart from glowing maybe"). There was no lava: the keys
+-- stood where the slab had been, the same pink caps as the creamy board's (one mesh, one texture between them). Now the
+-- slab is a pool of lava, its surface LAVA_FLOAT under where you walk, and the keys float in it, their feet under the
+-- surface. A key you stand on sinks into it (the renderer, and DeformationService's clock: stand too long and it is under,
+-- and so are you); a key let go comes back up and cools. The pool is lit and alive on every client (lavaLife).
+local LAVA_FLOAT = 0.5
+local LAVA_SKIN = "rbxassetid://13076266447" -- the free model's lava, already in the place
+
+local function attachKeyboardBody(slab: BasePart, materialName: string)
+	if materialName ~= "LavaKeys" then
+		return
+	end
+	slab.Transparency = 1
+	for _, child in ipairs(slab:GetChildren()) do
+		if child:IsA("BasePart") and child.Name:match("^CornerBevel") then
+			child.Transparency = 1
+		end
+	end
+	local top = slab.Size.Y / 2 + TILE_THICKNESS - LAVA_FLOAT
+	local bottom = -slab.Size.Y / 2
+	local pool = Instance.new("Part")
+	pool.Name = "LavaPool"
+	pool.Size = Vector3.new(slab.Size.X, top - bottom, slab.Size.Z)
+	pool.CFrame = slab.CFrame * CFrame.new(0, (top + bottom) / 2, 0)
+	pool.Color = Color3.fromRGB(255, 96, 26)
+	pool.Material = Enum.Material.SmoothPlastic
+	pool.Reflectance = 0.04
+	pool.Anchored = true
+	-- Not a floor: a key gone under drops you through it, as the hole it is.
+	pool.CanCollide = false
+	pool.CanTouch = false
+	pool.CanQuery = false
+	pool.CastShadow = false
+	pool.TopSurface = Enum.SurfaceType.Smooth
+	pool.BottomSurface = Enum.SurfaceType.Smooth
+	for _, face in ipairs({ Enum.NormalId.Top, Enum.NormalId.Front, Enum.NormalId.Back, Enum.NormalId.Left,
+		Enum.NormalId.Right }) do
+		local skin = Instance.new("Texture")
+		skin.Name = "LavaSkin"
+		skin.Texture = LAVA_SKIN
+		skin.Face = face
+		skin.StudsPerTileU = 7
+		skin.StudsPerTileV = 7
+		skin.Color3 = if face == Enum.NormalId.Top then Color3.fromRGB(255, 214, 150) else Color3.fromRGB(190, 120, 90)
+		skin.Parent = pool
+	end
+	pool.Parent = slab
+end
+
 local BRICK_INSET = 0.05    -- the vertical seam between neighbouring cells
 
 -- COURSES, not one tall block. A cell spans the whole depth of the platform, which is over
@@ -723,6 +995,82 @@ local BRICK_STUD_H = 0.225  -- of the stud pitch
 -- brick and its studs together had them fall as separate loose bodies that happened to
 -- start in the same place. WeldConstraints are inert while everything is anchored and are
 -- what makes the stack come away as one piece.
+-- The groove between two squares, the pillow's height, and how far in from the square's edge it starts.
+local CHOC = {
+	GROOVE = 0.16,
+	PILLOW = 0.32,
+	INSET = 0.42,
+}
+local function attachChocSquare(tile: BasePart, slab: BasePart, materialName: string)
+	local localTile = slab.CFrame:ToObjectSpace(tile.CFrame)
+	local topLocal = localTile.Y + tile.Size.Y / 2
+	local bottomLocal = -slab.Size.Y / 2
+	local depth = topLocal - bottomLocal - CHOC.PILLOW
+	if depth <= 0 then
+		return
+	end
+	local width, length = tile.Size.X - CHOC.GROOVE, tile.Size.Z - CHOC.GROOVE
+	local square = Instance.new("Part")
+	square.Name = "ChocSquare"
+	square.Size = Vector3.new(width, depth, length)
+	square.CFrame = slab.CFrame * CFrame.new(localTile.X, bottomLocal + depth / 2, localTile.Z)
+	square.Anchored = true
+	square.CanCollide = false
+	square.CanTouch = false
+	square.CanQuery = false
+	MaterialAppearance.apply(square, materialName)
+	-- SATIN, NOT A MIRROR: the bar's own sheen was the sky's blue on every flat top (seen in the squish room, 2026-11-13).
+	square.Reflectance = 0.02
+	square.Parent = tile
+	-- The pillow: the square's top, raised, with a bevel down to the groove (two wedges a side would be a bevel; a
+	-- smaller block reads as one from any height the game is played at).
+	-- A MOULDED SQUARE (the two-hundred-and-forty-fifth pass, from your list of 2026-11-22: the bar read as plain brown
+	-- blocks). The pillow is a smaller flat top with a real bevel down all four sides, and a shallow diamond pressed into
+	-- it, the way a bar comes out of its mould; and no two squares are quite the same brown.
+	local hash = math.abs(math.floor(square.Position.X * 3 + square.Position.Z * 5)) % 7
+	square.Color = square.Color:Lerp(if hash % 2 == 0 then Color3.new(0, 0, 0) else Color3.new(1, 1, 1), 0.03 + hash * 0.006)
+	local function piece(kind: string, size: Vector3, at: CFrame, shade: number): BasePart
+		local part: BasePart = if kind == "Wedge" then Instance.new("WedgePart") else Instance.new("Part")
+		part.Name = if kind == "Wedge" then "ChocBevel" else kind
+		part.Size = size
+		part.CFrame = at
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanTouch = false
+		part.CanQuery = false
+		MaterialAppearance.apply(part, materialName)
+		part.Color = square.Color:Lerp(if shade < 0 then Color3.new(0, 0, 0) else Color3.new(1, 1, 1), math.abs(shade))
+		part.Reflectance = 0.04
+		part.Parent = square
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = square
+		weld.Part1 = part
+		weld.Parent = part
+		return part
+	end
+	local bevel = 0.34
+	local topW, topL = width - CHOC.INSET - 2 * bevel, length - CHOC.INSET - 2 * bevel
+	local lift = square.CFrame * CFrame.new(0, depth / 2 + CHOC.PILLOW / 2, 0)
+	local pillow = piece("ChocPillow", Vector3.new(topW, CHOC.PILLOW, topL), lift, 0.04)
+	-- The four bevels: a wedge's slope faces its front, so each is turned to look outward from the middle.
+	for _, side in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
+		local out = Vector3.new(side[1], 0, side[2])
+		-- (Only as long as the flat top: longer, the wedges crossed at the corners and stood up as little dark spikes.)
+		local along = if side[1] ~= 0 then topL else topW
+		local reach = if side[1] ~= 0 then topW / 2 + bevel / 2 else topL / 2 + bevel / 2
+		local at = lift * CFrame.new(out * reach)
+		local facing = CFrame.lookAt(at.Position, at.Position + lift:VectorToWorldSpace(out), lift.UpVector)
+		-- (Every bevel a shade DARKER than the top since the two-hundred-and-forty-eighth pass, and matte: the ones facing
+		-- the room's light went to pale streaks, a shade lighter and with a sheen.)
+		local bevelPart = piece("Wedge", Vector3.new(along, CHOC.PILLOW, bevel), facing, if side[2] == 1 or side[1] == 1 then -0.14 else -0.08)
+		bevelPart.Reflectance = 0
+	end
+	-- The mould's mark: a shallow diamond, a shade darker, just proud of the top.
+	local mark = math.min(topW, topL) * 0.42
+	piece("ChocMark", Vector3.new(mark, 0.03, mark),
+		pillow.CFrame * CFrame.new(0, CHOC.PILLOW / 2 + 0.01, 0) * CFrame.Angles(0, math.rad(45), 0), -0.12)
+end
+
 local function attachBrick(
 	tile: BasePart,
 	slab: BasePart,
@@ -754,6 +1102,14 @@ local function attachBrick(
 
 	local top: BasePart? = nil
 	local courseParts: { BasePart } = {}
+	-- TOY BRICKS COME IN COLOURS (the two-hundred-and-forty-fifth pass, from your list of 2026-11-22: every brick was the
+	-- same red). Each brick takes one of the classic five, by where it sits, so neighbours are rarely the same and the
+	-- same platform is always laid alike. Studs and courses wear their brick's colour.
+	local BRICK_COLOURS = { Color3.fromRGB(206, 62, 54), Color3.fromRGB(44, 110, 196), Color3.fromRGB(250, 200, 46),
+		Color3.fromRGB(64, 160, 84), Color3.fromRGB(240, 238, 232) }
+	-- (Scrambled, not a sum of col and row: a sum lays the colours in diagonal stripes.)
+	local mix = bit32.bxor(col * 73856093, row * 19349663, math.floor(math.abs(slab.Position.X + slab.Position.Z)) * 83492791)
+	local brickColour = BRICK_COLOURS[(mix % #BRICK_COLOURS) + 1]
 	local topHalf = 0
 	for index = 1, courses do
 		-- Counted from the top down, so index 1 is the course you walk on.
@@ -773,6 +1129,7 @@ local function attachBrick(
 		-- through apply() is what writes the variant, so every course is textured on all
 		-- six faces the moment LegoABS exists.
 		MaterialAppearance.apply(course, materialName)
+		course.Color = brickColour
 
 		table.insert(courseParts, course)
 		if index == 1 then
@@ -806,6 +1163,7 @@ local function attachBrick(
 		stud.CanQuery = false
 		stud.Parent = brick
 		MaterialAppearance.apply(stud, materialName)
+		stud.Color = brickColour
 
 		local weld = Instance.new("WeldConstraint")
 		weld.Part0 = host
@@ -1196,12 +1554,13 @@ local SKINNED_PLATFORMS: { [string]: { SkinnedSpec } } = {
 	-- Three sticks lengthwise, so the two grooves run WITH the route and are never something
 	-- to step over. No drops: the tops are flat and level end to end, which is what a cut
 	-- stick is, so every collider cell already sits on the surface under it.
-	-- DROPPED BY SHELL_THICKNESS, exactly as the butter and ice bodies are. The measured
-	-- walkable plane of this mesh is 3.69; the wrapper now occupies the top 0.3 of that, so
-	-- the butter itself is authored below it and the plate seams open onto something lower
-	-- than themselves rather than onto more of the same height.
+	-- THE MEASURED WALKABLE PLANE, 3.69, with nothing over the sticks now (the hundred-and-fifty-third pass): the tops are
+	-- the floor. It was 3.39, "dropped by the shell's thickness", and a smaller offset RAISES a mesh (its middle sits that
+	-- far under the plane), so the sticks stood 0.3 proud of where you walk and swallowed their own wrapper.
 	ButterStick = {
-		{ sizeX = 16, sizeZ = 12, meshHeight = 7.34, surfaceOffset = 3.39, mesh = "ButterSticks_Platform_Skinned" },
+		-- (3.99 since the two-hundred-and-forty-third pass: 3.69 put the tops on the plane, and under their wax again they
+		-- sit SHELL_THICKNESS lower; a larger offset lowers the mesh.)
+		{ sizeX = 16, sizeZ = 12, meshHeight = 7.34, surfaceOffset = 3.99, mesh = "ButterSticks_Platform_Skinned" },
 	},
 	-- The BUTTER BODY only. The wax shell on top is not a mesh at all -- it is the
 	-- irregular plates attachShell lays over this, and they are what crack. These
@@ -1275,9 +1634,8 @@ local SKINNED_PLATFORMS: { [string]: { SkinnedSpec } } = {
 	-- whose whole identity is that it is RIGID has no business being a deformable surface,
 	-- and every problem lego had came from being one.
 
-	LightSwitch = {
-		{ sizeX = 16, sizeZ = 12, meshHeight = 4.57, surfaceOffset = 2.30, mesh = "LightSwitch_Platform_16x12", drops = { -0.058, -0.083, -0.108, 0, -0.025, -0.074, -0.097, -0.121, -0.018, -0.042, -0.074, -0.097, -0.121, -0.018, -0.042, -0.058, -0.083, -0.108, 0, -0.025 } },
-	},
+	-- (No LightSwitch rig since the two-hundred-and-fifth pass: a skinned plate bent like rubber under each switch. Every
+	-- switch is its own rigid parts now, ROCKED, attachRocker. LightSwitch_Platform_16x12 can be deleted from Assets.)
 	Chocolate = {
 		{ sizeX = 16, sizeZ = 12, meshHeight = 4.45, surfaceOffset = 2.25, mesh = "Chocolate_Platform_16x12" },
 		-- Piped, like icing, and the middle of it is a blob for the same reason real
@@ -1288,9 +1646,7 @@ local SKINNED_PLATFORMS: { [string]: { SkinnedSpec } } = {
 	-- shared SurfaceAppearance, which is normally the thing to avoid -- but these two are
 	-- one substance at two temperatures and ought to be indistinguishable standing still.
 	-- No extra import, no second texture set.
-	ChocolateSolid = {
-		{ sizeX = 16, sizeZ = 12, meshHeight = 4.45, surfaceOffset = 2.25, mesh = "Chocolate_Platform_16x12" },
-	},
+	-- (No ChocolateSolid rig since the two-hundred-and-tenth pass: it is a bar of rigid squares, CHUNKED, attachChocSquare.)
 	-- The leaf bed. Both sizes are printed by gen_lambs_ear.py rather than typed: the
 	-- surface offset depends on how tall the tallest leaf came out, which changes every
 	-- time LEAF_RISE or LEAF_LIFT is touched, and a stale number here floats the bed off
@@ -1323,19 +1679,9 @@ local SKINNED_PLATFORMS: { [string]: { SkinnedSpec } } = {
 		-- Sculpted. One slab, untapered, so the shape cannot be cut in half at a join.
 		{ sizeX = 16, sizeZ = 16, meshHeight = 5.46, surfaceOffset = 2.17, mesh = "Sand_Turtle_16x16", form = "turtle" },
 	},
-	-- One bone per keycap, and the caps are RIGID: every vertex of a cap carries weight
-	-- 1.0 from its own bone, so a key travels without changing shape. Contrast the sheet
-	-- below, whose pockets are weighted by dome height because a bubble collapses.
-	CreamyKeyboard = {
-		{ sizeX = 16, sizeZ = 16, meshHeight = 0.90, surfaceOffset = 0.45, mesh = "Keyboard_Field_16x16" },
-	},
-	-- THE SAME RIG, A DIFFERENT MATERIAL. Nothing about the geometry of a keyboard changes
-	-- when the keys are molten, so this points at the identical mesh -- the difference is
-	-- entirely in how it behaves and what it does with light, which is where the difference
-	-- between two materials belongs.
-	LavaKeys = {
-		{ sizeX = 16, sizeZ = 16, meshHeight = 0.90, surfaceOffset = 0.45, mesh = "Keyboard_Field_16x16" },
-	},
+	-- THE KEYBOARDS ARE NOT HERE ANY MORE (the hundred-and-fifty-fifth pass), and the comment stays so nobody adds them
+	-- back: a rigged field has one colour, so its keys could never be their own. Every key is a part now, cut from one
+	-- sculpted cap (KEYED, attachKeycap). Keyboard_Field_16x16 can be deleted from Assets.
 	BubbleWrap = {
 		{ sizeX = 10, sizeZ = 8, meshHeight = 5.89, surfaceOffset = 2.90, meshPad = 2.10, mesh = "BubbleWrap_Sheet_10x8" },
 		{ sizeX = 12, sizeZ = 4, meshHeight = 5.89, surfaceOffset = 2.90, meshPad = 2.11, mesh = "BubbleWrap_Sheet_12x4" },
@@ -1559,7 +1905,9 @@ local function variantFor(col: number, row: number, cols: number, rows: number):
 end
 
 local function attachMeshVisual(tile: BasePart, materialName: string, col: number, row: number, cols: number, rows: number)
-	if MESHLESS[materialName] then
+	-- (A chunked material's squares are its look, attachChocSquare: no tile mesh to look for, and no warning that
+	-- there is none.)
+	if MESHLESS[materialName] or CHUNKED[materialName] then
 		return
 	end
 
@@ -2057,7 +2405,8 @@ local function buildSubRegions(slab: BasePart, materialName: string)
 			-- child here and nothing moves this tile, so it can safely be both the collider
 			-- and the sensor -- the oscillation the skinned path splits them to avoid comes
 			-- from MOVING a part that senses touch, and this one never moves.
-			if BRICKED[materialName] then
+			-- A KEYBOARD'S TILE TOO (the hundred-and-fifty-fifth pass): its key is the part you see, and the one that moves.
+			if BRICKED[materialName] or KEYED[materialName] or ROCKED[materialName] or CHUNKED[materialName] then
 				tile.Transparency = 1
 			end
 
@@ -2095,6 +2444,9 @@ local function buildSubRegions(slab: BasePart, materialName: string)
 			-- skinned platform never got its shell.
 			local inside = cellInside(col, row)
 
+			if CHUNKED[materialName] then
+				attachChocSquare(tile, slab, materialName)
+			end
 			if BRICKED[materialName] then
 				if inside then
 					attachBrick(tile, slab, materialName, col, row, grid.cols, grid.rows)
@@ -2121,12 +2473,21 @@ local function buildSubRegions(slab: BasePart, materialName: string)
 				attachCap(tile, slab, div, col, row, grid.cols)
 			end
 
+			if KEYED[materialName] then
+				attachKeycap(tile, materialName, col, row, grid.cols, grid.rows)
+			end
+
+			if ROCKED[materialName] then
+				attachRocker(tile, materialName)
+			end
+
 			if GRANULAR[materialName] then
 				-- Read off the SLAB, not off `spec`. `spec` here is the skinned-mesh spec,
 				-- which is nil for every granular material -- soap has no rig -- so
 				-- reaching for a field on it would throw on the one path that needs it.
 				attachGranules(tile, materialName, col, row, grid.cols, grid.rows, form)
-			elseif not skinned and not SHELLED[materialName] and not BRICKED[materialName] then
+			elseif not skinned and not SHELLED[materialName] and not BRICKED[materialName] and not KEYED[materialName]
+				and not ROCKED[materialName] then
 				-- BRICKED IS EXCLUDED, and it had to be added the moment lego stopped being
 				-- a skinned mesh. This branch is the per-tile fallback: a material with no
 				-- surface of its own gets one small mesh per cell, named <Material>_Tile.
@@ -2145,6 +2506,11 @@ local function buildSubRegions(slab: BasePart, materialName: string)
 	-- once and needs every cell to exist before it can hand shards out to them.
 	if SHELLED[materialName] then
 		attachShell(slab, materialName, grid, skinned)
+	end
+	-- A KEYBOARD'S BODY (the lava under the keys over lava) and its colours, once every key is in.
+	if KEYED[materialName] then
+		attachKeyboardBody(slab, materialName)
+		MaterialAppearance.paintKeys(slab, nil)
 	end
 
 	-- Per SLAB, not per cell: twenty emitters on one platform is twenty times the drips
@@ -2243,7 +2609,7 @@ local function makePlatform(
 	-- BRICKED joins GRANULAR here. Both build their whole visual out of parts, so the slab
 	-- is a carrier and its corner bevels are wedges shaped for a platform nobody can see --
 	-- which is what those stray triangles at the corners of the lego chunk were.
-	if materialName and (GRANULAR[materialName] or BRICKED[materialName]) then
+	if materialName and (GRANULAR[materialName] or BRICKED[materialName] or CHUNKED[materialName]) then
 		slab.Transparency = 1
 		for _, child in ipairs(slab:GetChildren()) do
 			if child:IsA("BasePart") and child.Name:match("^CornerBevel") then

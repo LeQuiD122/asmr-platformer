@@ -27,11 +27,11 @@ for checker in (ROOMSCHECK, STORY):
 MUTATIONS = [
     ('over in a flash', STORYC, STORY, 'local CAUGHT = { loom = 0.35, face = 1.9, black = 3.5 }', 'local CAUGHT = { loom = 0.35, face = 1.15, black = 2.15 }'),
     ('taken away before the black', ROOMS, STORY, 'task.delay(4.5, function()', 'task.delay(3, function()'),
-    ('never side on', STORYC, STORY, 'local from = mid + across * (8 - 1.5 * k) - toward * 1 + Vector3.new(0, 1.8, 0)', 'local from = me + across * (4.4 - 0.7 * k) - toward * 1.4 + Vector3.new(0, 0.3, 0)'),
+    ('never side on', STORYC, STORY, 'local want = mid + side * (8 - 1.5 * k) - toward * 1 + Vector3.new(0, 1.8, 0)', 'local want = me + side * (4.4 - 0.7 * k) - toward * 1.4 + Vector3.new(0, 0.3, 0)'),
     ('never saying what you see', STORYC, STORY, 'Cinema.think(character, "What IS that?!", 1.2)', 'local _ = character'),
     ('slabs again', STORYC, STORY, 'round.MeshType = Enum.MeshType.Sphere', 'round.MeshType = Enum.MeshType.Brick'),
     ('his head through the face', STORYC, STORY, '\t\t\t\t\t\titem.LocalTransparencyModifier = 1\n', '\t\t\t\t\t\titem.LocalTransparencyModifier = 0\n'),
-    ('his face not whole', STORYC, ROOMSCHECK, 'eye = CFrame.lookAt(his - toward * 5.6 + across * 1.7 + Vector3.new(0, 0.5, 0), his)', 'eye = CFrame.lookAt(his - toward * 1.6 + across * 0.7 + Vector3.new(0, 0.5, 0), his)'),
+    ('his face not whole', STORYC, ROOMSCHECK, 'eye = CFrame.lookAt(Cinema.clear(his - toward * 5.6 + across * 1.7 + Vector3.new(0, 0.5, 0), his, current.ignore),', 'eye = CFrame.lookAt(Cinema.clear(his - toward * 1.6 + across * 0.7 + Vector3.new(0, 0.5, 0), his, current.ignore),'),
     ('the server not waiting', BOOT, STORY, 'task.wait(3.9)', 'task.wait(2.4)'),
 ]
 

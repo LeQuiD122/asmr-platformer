@@ -141,6 +141,10 @@ local WATER_MATERIAL = Enum.Material.SmoothPlastic
 -- makes water look like water is what you can see THROUGH it, so the colour has to be light
 -- enough for the tile grid to survive the trip.
 local WATER_COLOUR = Color3.fromRGB(96, 198, 172)
+-- THE MIST ON IT (the two-hundred-and-eighth pass; see where the water is laid): its colour (the water's green, greyed
+-- and paled), how see-through each bank is at its thickest (0 solid, 1 nothing: kept thin, it is many banks deep), how
+-- many seconds a bank lasts, and how many are alive at once in the whole of the halls.
+local MIST = { colour = Color3.fromRGB(186, 204, 190), thin = 0.93, life = 11, live = 420 }
 
 -- ===== VARIATION, and how much of it =====
 --
@@ -3797,6 +3801,8 @@ function FloodedHallsService.build(origin: Vector3, level: any?): Model
 	-- carries its own deeper column of water instead.
 	plate(halls, hallFloorY + WATER_DEPTH / 2, x0, x1, z0, z1, WATER_DEPTH, sunken, "Water",
 		{ free = true }, WATER_TILE)
+	local waters: { BasePart } = {}
+	local waterArea = 0
 	for _, item in ipairs(halls:GetChildren()) do
 		if item:IsA("BasePart") and item.Name == "Water" then
 			item.CanCollide = false
@@ -3806,7 +3812,37 @@ function FloodedHallsService.build(origin: Vector3, level: any?): Model
 			item.Transparency = 0.46
 			item.Reflectance = 0.32
 			item.CastShadow = false
+			table.insert(waters, item)
+			waterArea += item.Size.X * item.Size.Z
 		end
+	end
+	-- MIST ON THE WATER (the two-hundred-and-eighth pass, from your note of 2026-11-12: "add more atmosphere to the level
+	-- 4, like fog"). The air of the halls was a number in a palette: distance going green, and nothing to see in the
+	-- room you stood in. Now the flood breathes: slow banks of mist lifting off every sheet of the water and lying a
+	-- few studs deep over it, lit by the lamps they drift under (LightInfluence 1, no glow of their own), thin enough
+	-- that the route and the far wall are always seen through them. MIST.live of them at most in the whole of the
+	-- halls, shared out by each sheet's size, so a long hall has no more to draw than a short one.
+	for _, water in ipairs(waters) do
+		local share = (water.Size.X * water.Size.Z) / math.max(waterArea, 1)
+		local mist = Instance.new("ParticleEmitter")
+		mist.Name = "HallMist"
+		mist.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		mist.Color = ColorSequence.new(MIST.colour)
+		mist.LightEmission = 0
+		mist.LightInfluence = 1
+		mist.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 7), NumberSequenceKeypoint.new(0.5, 12),
+			NumberSequenceKeypoint.new(1, 16) })
+		mist.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.25, MIST.thin),
+			NumberSequenceKeypoint.new(0.7, MIST.thin + 0.02), NumberSequenceKeypoint.new(1, 1) })
+		mist.Lifetime = NumberRange.new(MIST.life - 2, MIST.life + 3)
+		mist.Speed = NumberRange.new(0.2, 0.7)
+		mist.SpreadAngle = Vector2.new(75, 75)
+		mist.Drag = 0.4
+		mist.Rotation = NumberRange.new(0, 360)
+		mist.RotSpeed = NumberRange.new(-4, 4)
+		mist.EmissionDirection = Enum.NormalId.Top
+		mist.Rate = math.max(0.05, MIST.live / MIST.life * share)
+		mist.Parent = water
 	end
 
 	-- The basins, now the holes they sit in exist.
@@ -3839,22 +3875,45 @@ function FloodedHallsService.build(origin: Vector3, level: any?): Model
 	-- Ordinary debris, which does the opposite job: it makes the hand plausible. A single
 	-- anomaly in an empty room reads as placed by a designer; the same anomaly among floating
 	-- junk reads as something that happened.
-	for _ = 1, 8 do
+	-- WHAT FLOATS (the hundred-and-eighty-seventh pass, from your note of 2026-11-04: "use your new skills to generate
+	-- better looking ... models and stuff for the existing levels"): the baths' own things, made in Studio's mesh generator
+	-- and kept in Assets/Props: lifebuoys, a slatted poolside lounger, a duckboard, each at the halls' scale and floating
+	-- low. A plain board where none is there. The same draws in the same order either way, so nothing else here moves.
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local made = assets and assets:FindFirstChild("Props")
+	local floaters: { BasePart } = {}
+	for _, name in ipairs({ "Halls_Lifebuoy", "Halls_Lounger", "Halls_Lifebuoy", "Halls_Duckboard" }) do
+		local model = made and made:FindFirstChild(name)
+		local mesh = model and model:FindFirstChildWhichIsA("BasePart")
+		if mesh then
+			table.insert(floaters, mesh)
+		end
+	end
+	for index = 1, 8 do
 		local leg = legs[rng:NextInteger(1, #legs)]
 		local side = if rng:NextNumber() < 0.5 then 1 else -1
-		local junk = Instance.new("Part")
+		local size = Vector3.new(rng:NextNumber(1.2, 3.2), rng:NextNumber(0.4, 1.0), rng:NextNumber(1.2, 3.2)) * SCALE
+		local template = if #floaters > 0 then floaters[(index - 1) % #floaters + 1] else nil
+		local junk: BasePart
+		if template then
+			junk = template:Clone()
+			junk.Size = template.Size * SCALE
+		else
+			local board = Instance.new("Part")
+			board.Size = size
+			board.Material = Enum.Material.Wood
+			board.Color = Color3.fromRGB(96, 86, 70)
+			junk = board
+		end
 		junk.Name = "Debris"
-		junk.Size = Vector3.new(rng:NextNumber(1.2, 3.2), rng:NextNumber(0.4, 1.0),
-			rng:NextNumber(1.2, 3.2)) * SCALE
 		junk.CFrame = legFrame(leg, rng:NextNumber(0, leg.length),
 			side * rng:NextNumber(LANE_HALF + BAY * 0.2, HALL_HALF_WIDTH - BAY * 0.2),
 			WATER_DEPTH - junk.Size.Y * 0.35)
 			* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
 		junk.Anchored = true
 		junk.CanCollide = false
+		junk.CanQuery = false
 		junk.CastShadow = false
-		junk.Material = Enum.Material.Wood
-		junk.Color = Color3.fromRGB(96, 86, 70)
 		junk.Parent = halls
 	end
 
@@ -3956,6 +4015,12 @@ local drawing: { [Player]: boolean } = {}
 local listening = false
 
 function FloodedHallsService.ownsFall(player: Player): boolean
+	-- ONLY ON THIS LEVEL (the hundred-and-seventy-eighth pass): a ride left behind still counted as riding, or as just
+	-- arrived for a minute, so the next level's falls went uncaught -- you fell through the Sunken City's sea and nothing
+	-- put you back.
+	if player:GetAttribute("InLevel") ~= "floodedHalls" then
+		return false
+	end
 	if riding[player] then
 		return true
 	end
@@ -4078,6 +4143,17 @@ function FloodedHallsService.attachSlide(halls: Model, onArrive: ((Player) -> ()
 				if chamber then gates else 0, if chamber then GATES.MAW else 0)
 		end
 
+		-- STILL HERE (the hundred-and-seventy-eighth pass, from your test of 2026-11-04: "the player falls down into the
+		-- void when exiting the level while an animation is playing ... when you fall down the monster's throat"). This
+		-- ride keeps its own clock for a minute and more, and it went on after you left: once the Maw had you it put you
+		-- in the gate chamber -- in the empty air where the level had been -- and forty seconds later said you had arrived,
+		-- which finished whatever run you were on by then. Now it moves you, gives you the key and says you arrived only
+		-- while you are still on this level, in these halls, in the same body.
+		local function stillHere(): boolean
+			return player.Parent ~= nil and player.Character == character and character.Parent ~= nil
+				and halls.Parent ~= nil and player:GetAttribute("InLevel") == "floodedHalls"
+		end
+
 		task.spawn(function()
 			-- PLATFORMSTAND, not Anchored. Anchoring the root freezes the whole assembly and
 			-- the limbs stop moving with it, so the rider arrives as a statue. PlatformStand
@@ -4086,7 +4162,7 @@ function FloodedHallsService.attachSlide(halls: Model, onArrive: ((Player) -> ()
 			local started = os.clock()
 			while true do
 				local f = (os.clock() - started) / SLIDE_SECONDS
-				if f >= 1 or not root.Parent then
+				if f >= 1 or not root.Parent or not stillHere() then
 					break
 				end
 				-- THE RIDER'S OWN CLIENT DRAWS THE RIDE, once it says it has it (within a moment of the
@@ -4108,31 +4184,37 @@ function FloodedHallsService.attachSlide(halls: Model, onArrive: ((Player) -> ()
 				task.wait()
 			end
 			local arrive = chamber and chamber.Parent and chamber:GetAttribute("Arrive")
-			if root.Parent and typeof(arrive) == "CFrame" then
+			if root.Parent and stillHere() and typeof(arrive) == "CFrame" then
 				-- THE MOUTH FIRST: the rider's own client carries them on down into it and shuts it on
 				-- them (FloodedHallsClient, Maw). Nothing is moved here until it has.
 				task.wait(GATES.MAW)
 				-- INTO THE GATE CHAMBER, while the rider's screen is black: up out of the sump, to the
 				-- wheel, the key, the gates (the rider's own client plays it). The run is finished when
-				-- the scene is, whether or not a client is there to play it.
-				root.AssemblyLinearVelocity = Vector3.zero
-				root.CFrame = arrive
-				humanoid.PlatformStand = false
-				task.delay(GATES.KEY_AT, function()
-					if character.Parent and player.Character == character then
-						giveKey(character)
-					end
-				end)
-				task.wait(gates)
-			elseif root.Parent then
+				-- the scene is, whether or not a client is there to play it. Not if they left in the dark.
+				if stillHere() then
+					root.AssemblyLinearVelocity = Vector3.zero
+					root.CFrame = arrive
+					humanoid.PlatformStand = false
+					task.delay(GATES.KEY_AT, function()
+						if stillHere() then
+							giveKey(character)
+						end
+					end)
+					task.wait(gates)
+				end
+			elseif root.Parent and stillHere() then
 				root.CFrame = slideFrame * CFrame.new(slidePoint(1))
 			end
 			humanoid.PlatformStand = false
 			riding[player] = nil
 			drawing[player] = nil
-			arrivedAt[player] = os.clock()
-			if onArrive then
-				onArrive(player)
+			if stillHere() then
+				arrivedAt[player] = os.clock()
+				if onArrive then
+					onArrive(player)
+				end
+			else
+				arrivedAt[player] = nil
 			end
 		end)
 	end)
@@ -4525,187 +4607,29 @@ end
 
 -- ===== THE AIR, WHICH IS HALF OF IT =====
 --
--- Every reference image is HAZY. Not fogged in the sense of being hard to see through -- fogged
--- in the sense that a room forty studs away is paler and warmer than the one you are standing
--- in, so distance is visible. Without it a tiled corridor is uniformly lit to its far end and
--- reads as flat, which is exactly the failure mode a repeating material has.
+-- Every reference image is HAZY: a room forty studs away is paler and warmer than the one you are standing in, so
+-- distance is visible, and without it a tiled corridor is lit evenly to its far end and reads as flat.
 --
--- === On being told twice that it is too bright ===
+-- The halls' air, light, bloom and grade are LightingService's floodedHalls palette now (the hundred-and-sixty-eighth
+-- pass, from your note of 2026-11-03: "fix the lighting in level 4 flooded halls, it's too bright in there"). They were
+-- set here, and Bootstrap then applied the default palette over them as the level started, taking the bloom and the
+-- grade away as it went: since September the baths were lit as the beach is, and everything learned here about their
+-- light never reached the screen. What was learned is kept with the numbers, in the palette.
 --
--- The first pass reasoned that a room lit by bounce off a hundred white tiles wants a high
--- ambient. That is true of the BOUNCE and false of the setting: ambient in Roblox is a flat
--- floor under every surface at once, so raising it does not light the room, it deletes the
--- shadows. Everything went white.
---
--- The second pass cut ambient to a third and was still too bright, and the reason is that
--- ambient was never the largest term. There were four more, all additive, and each one looked
--- reasonable on its own:
---
---   A WINDOW IN EVERY BAY with a 160-stud range, so every point in the hall was lit by four of
---   them at once. That is not a row of windows, it is a lit ceiling.
---   HAZE, which is light. Atmosphere haze does not darken distance, it fills the volume with
---   a glow, and at 0.9 over this many sources it is a second ambient.
---   TEN CAUSTIC LIGHTS at 0.85 brightness and a 136-stud range, which is another 1360 stud-
---   lights of green fill nobody had counted as lighting because they were called an effect.
---   AND A BLOOM that then smeared all of it.
---
--- So this pass cuts every term rather than the obvious one: half as many windows at a third
--- the brightness and a seventh the volume, haze halved, caustics down to a third, exposure
--- down, contrast up. The references are a dim room with blinding windows -- almost all of
--- their range is dark, and the few bright things are bright BY COMPARISON. There is no setting
--- that produces that while every surface is independently lit.
---
--- Separate from build() because Lighting is global and a level has to be able to put it back.
+-- What stays here is the one thing a palette has no word for: the far end of a corridor going soft. FAR ONLY: blurring
+-- anything near the player is a headache.
 function FloodedHallsService.applyAtmosphere(): () -> ()
-	local lighting = game:GetService("Lighting")
-	local was = {
-		FogEnd = lighting.FogEnd,
-		FogStart = lighting.FogStart,
-		FogColor = lighting.FogColor,
-		Ambient = lighting.Ambient,
-		OutdoorAmbient = lighting.OutdoorAmbient,
-		Brightness = lighting.Brightness,
-		ExposureCompensation = lighting.ExposureCompensation,
-	}
-
-	-- AN ATMOSPHERE OBJECT, not just fog. FogStart/FogEnd is a linear fade to a flat colour and
-	-- it looks like one: everything past FogEnd is the same shade of nothing. Atmosphere is
-	-- scattering -- it tints by distance and hazes the light sources. Fog is kept as well
-	-- because Atmosphere alone does not reach far enough indoors.
-	local air = lighting:FindFirstChildOfClass("Atmosphere")
-	local madeAir = false
-	if not air then
-		air = Instance.new("Atmosphere")
-		air.Parent = lighting
-		madeAir = true
-	end
-	local airWas = {
-		Density = air.Density, Offset = air.Offset,
-		Color = air.Color, Decay = air.Decay,
-		Glare = air.Glare, Haze = air.Haze,
-	}
-	-- ===== THE AIR =====
-	--
-	-- The level was reading flat and monochrome: a single blue-grey wash over everything, near
-	-- and far alike. Three things were doing that and only one of them is obvious.
-	--
-	--   TOO MUCH DENSITY, so the near field was already hazed. Haze that starts at your feet
-	--   is not depth, it is a filter over the lens.
-	--   A NEUTRAL DECAY, so distance went grey. Grey is the one colour that cannot describe
-	--   anything, and it is what a room turns into when the far end has no hue of its own.
-	--   FOG THE COLOUR OF THE TILES, so the far end of a corridor was the same value as the
-	--   wall beside you and the space had no gradient at all.
-	--
-	-- Now the near air is clear and warm and the far air goes GREEN -- the colour of the water,
-	-- because that is what is in this building. Distance recedes into the pools instead of into
-	-- nothing, which ties the two halves of the palette together and is the whole reason the
-	-- references look wet rather than merely pale.
-	air.Density = 0.28
-	air.Offset = 0.1
-	air.Color = Color3.fromRGB(234, 228, 202)
-	air.Decay = Color3.fromRGB(74, 104, 98)
-	-- Glare is the bloom round the openings and Haze is how much of it fills the room. Haze is
-	-- LIGHT, not darkness: see the note above. Halved again.
-	air.Glare = 0.14
-	-- Haze is LIGHT, not darkness. It was cut hard when the level was washing out and put back
-	-- once the sources were where they belonged; pulled in again now, because with the density
-	-- down its job is the far half of the room rather than all of it.
-	air.Haze = 0.4
-
-	-- Scaled with the building, or a room four times the size is uniformly clear to its far
-	-- wall and the haze stops describing distance at all.
-	-- STARTS FURTHER OUT AND ENDS SOONER. A short, late fog is a gradient; a long, early one is
-	-- a tint. The near two hundred studs -- which is everything you are standing in -- are now
-	-- clear, and the fall-off happens across the length of a leg, where it describes the
-	-- receding colonnade instead of veiling the bay you are in.
-	lighting.FogStart = 55 * 4
-	lighting.FogEnd = 195 * 4
-	-- AND IT IS THE COLOUR OF THE WATER. Fog the colour of the tiles makes the far end of a
-	-- corridor the same value as the wall beside you, which is not depth, it is a veil. Green
-	-- fog puts the pools at the end of every view, so the room recedes into the thing that is
-	-- actually filling it.
-	lighting.FogColor = Color3.fromRGB(104, 138, 130)
-	-- ===== AND THEN IT WAS TOO DARK IN THE POOLS =====
-	--
-	-- Both corrections were right and they were corrections to different things.
-	--
-	-- The room was washing out because it had too many SOURCES: a window in every bay at a
-	-- 160-stud range, haze at 0.9, ten caustic lights nobody had counted as lighting. Cutting
-	-- those was correct and the hall is the right darkness now.
-	--
-	-- What went with them was the only light that ever reached the water, because every source
-	-- in the level was up at two thirds of the wall and the water is fifty-six studs below the
-	-- walkway. The answer is NOT to put the global levels back -- that returns the white-out
-	-- and leaves the pools relatively as dark as before. It is the low slots along the
-	-- waterline and the lamps in the basins, which are new, plus a modest lift here so the
-	-- shadows are dark rather than black.
-	lighting.Ambient = Color3.fromRGB(32, 34, 32)
-	lighting.OutdoorAmbient = Color3.fromRGB(42, 44, 40)
-	lighting.Brightness = 0.55
-	-- UNDER-EXPOSED. Over-exposure was the single biggest contributor to the white-out: it
-	-- lifts everything, and everything here is a pale tile.
-	lighting.ExposureCompensation = -0.2
-
-	-- ===== POST =====
-	--
-	-- The references are photographs, and photographs of bright interiors have three things a
-	-- raw render never does: the highlights bleed, the far distance goes soft, and the colour
-	-- is graded. All three are one instance each in Roblox.
-	local bloom = Instance.new("BloomEffect")
-	bloom.Name = "HallsBloom"
-	-- Only the windows should pass it. With the exposure down the tiles no longer come close,
-	-- so the threshold can come down too -- which is what keeps the windows blooming while
-	-- everything around them stays dark.
-	-- TIGHTER. A wide bloom at a low threshold is what turned the light pools on the walls into
-	-- flat white patches; a small one at a higher threshold keeps the bleed to the fittings
-	-- themselves, which is where a camera would actually put it.
-	bloom.Threshold = 2.2
-	bloom.Intensity = 0.4
-	bloom.Size = 18
-	bloom.Parent = lighting
-
 	local blur = Instance.new("DepthOfFieldEffect")
 	blur.Name = "HallsBlur"
-	-- FAR ONLY. Blurring anything near the player is a headache; the effect wanted is the far
-	-- end of a corridor going soft, which is the FarIntensity alone.
 	blur.NearIntensity = 0
 	blur.FarIntensity = 0.6
 	blur.FocusDistance = 42 * 4
 	blur.InFocusRadius = 60 * 4
-	blur.Parent = lighting
-
-	local grade = Instance.new("ColorCorrectionEffect")
-	grade.Name = "HallsGrade"
-	-- Down and with the contrast up. Lowering contrast was meant to read as washed-out film;
-	-- with everything already near-white it just removed the last of the separation.
-	-- CONTRAST EASED. A positive contrast pushes the darks down as hard as it lifts the
-	-- brights, and with every source in the room aimed at a wall the thing in the darks was
-	-- the platforms. The rooflight is the real fix; this stops the grade undoing it.
-	grade.Brightness = -0.02
-	grade.Contrast = 0.11
-	-- SATURATION UP, not down. The level has exactly two hues in it -- warm light and green
-	-- water -- and desaturating was throwing away the only colour contrast it has. This is the
-	-- difference between "pale and wet" and "grey".
-	grade.Saturation = 0.06
-	grade.TintColor = Color3.fromRGB(252, 248, 238)
-	grade.Parent = lighting
-
+	blur.Parent = game:GetService("Lighting")
 	return function()
-		for key, value in pairs(was) do
-			(lighting :: any)[key] = value
-		end
-		if madeAir then
-			air:Destroy()
-		else
-			for key, value in pairs(airWas) do
-				(air :: any)[key] = value
-			end
-		end
-		bloom:Destroy()
 		blur:Destroy()
-		grade:Destroy()
 	end
 end
 
-FloodedHallsService.STAMP = "facf4cb4"
+FloodedHallsService.STAMP = "8b707b0d"
 return FloodedHallsService

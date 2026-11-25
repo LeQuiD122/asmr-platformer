@@ -35,8 +35,11 @@ if not STYLE:
 # ONE PLACE FOR EVERY FACE.
 FONT_WORDS = re.compile(r"Enum\.Font\.\w+|Font\.new\(|Font\.fromEnum\(|Font\.fromName\(|\.Font = ")
 sources = {p: p.read_text(encoding="utf-8") for p in SRC.rglob("*.lua")}
+# What loads first (ReplicatedFirst, the hundred-and-fifty-ninth pass's Arrival) runs before Style has arrived, so it
+# writes Style's faces and colours out; it is held to them below instead.
+FIRST = SRC / "ReplicatedFirst"
 for path, text in sources.items():
-    if path == style_path:
+    if path == style_path or FIRST in path.parents:
         continue
     for m in FONT_WORDS.finditer(text):
         line = text.count("\n", 0, m.start()) + 1
@@ -77,7 +80,7 @@ for path, text in sources.items():
 
 # EVERY FILE THAT SETS TEXT TAKES ITS FACE FROM STYLE.
 for path, text in sources.items():
-    if path == style_path:
+    if path == style_path or FIRST in path.parents:
         continue
     # (Or through the shop's kit, whose faces are Style's: ShopService's CHUNKY and BODY.)
     own = [v for v in re.findall(r"FontFace = ([\w.]+)", text) if not v.startswith("kit.")]
@@ -111,6 +114,29 @@ for path, text in sources.items():
     for literal, name in (("Color3.fromRGB(20, 19, 27)", "the panel"), ("Color3.fromRGB(246, 206, 148)", "the accent")):
         if literal in text:
             fail("%s writes out %s's colour (%s) instead of Style's" % (path.relative_to(SRC), name, literal))
+
+# WHAT LOADS FIRST, IN STYLE'S OWN LOOK (the hundred-and-fifty-ninth pass): ReplicatedFirst cannot require Style (it runs
+# before Style is there), so what it writes out must be Style's: Nunito, each face one of Style.FONT's upright weights,
+# and every colour one of Style.COLOUR's.
+style_weights = set(re.findall(r"^\t\w+ = nunito\(Enum\.FontWeight\.(\w+)\),", font_block, re.M))
+colour_block = STYLE[STYLE.find("Style.COLOUR = {"):STYLE.find("}", STYLE.find("Style.COLOUR = {"))]
+style_colours = set(re.findall(r"rgb\((\d+, \d+, \d+)\)", colour_block))
+for path, text in sources.items():
+    if FIRST not in path.parents:
+        continue
+    rel = path.relative_to(SRC)
+    if 'local NUNITO = "rbxasset://fonts/families/Nunito.json"' not in text:
+        fail("%s: its faces are not Nunito's (Style's one family)" % rel)
+    for m in FONT_WORDS.finditer(text):
+        line = text.count("\n", 0, m.start()) + 1
+        rest = text[m.start():text.find("\n", m.start())]
+        weight = re.match(r"Font\.new\(NUNITO, Enum\.FontWeight\.(\w+), Enum\.FontStyle\.Normal\)", rest)
+        if not weight or weight.group(1) not in style_weights:
+            fail("%s:%d has a face that is not one of Style.FONT's (%s)" % (rel, line, rest.strip()))
+    for m in re.finditer(r"Color3\.fromRGB\((\d+, \d+, \d+)\)", text):
+        if m.group(1) not in style_colours:
+            line = text.count("\n", 0, m.start()) + 1
+            fail("%s:%d has a colour that is not one of Style.COLOUR's (%s)" % (rel, line, m.group()))
 
 if problems:
     for problem in problems:

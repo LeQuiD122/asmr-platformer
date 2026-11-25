@@ -260,8 +260,8 @@ def finale(radius, chunks, finish_y):
 
 
 def monster_span(route):
-    """How far along the route it patrols: up the line and back, turning MONSTER_KEEP short of the
-    harbour (SunkenPath.along)."""
+    """How far along the route it patrols: up the line and back, DIVE deeper on the way back, turning
+    MONSTER_KEEP short of the harbour (SunkenPath.along)."""
     return max(60.0, route["total"] - K["MONSTER_KEEP"])
 
 
@@ -292,5 +292,5 @@ def monster_reach():
 
 def monster_from_route():
     """And how far from the ROUTE's own line, which is what everything beside the street is measured
-    against: its wander off the line plus its body."""
-    return K["MONSTER_SWING"] + monster_reach()["side"]
+    against: its wander off the line, its lean through a turn (SunkenPath.TURN_SIDE) and its body."""
+    return K["MONSTER_SWING"] + P.get("TURN_SIDE", 0.0) + monster_reach()["side"]

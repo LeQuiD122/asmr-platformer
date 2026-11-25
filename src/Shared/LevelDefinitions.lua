@@ -184,7 +184,7 @@ LevelDefinitions.Level1 = {
 	name = "City Shore",
 	-- When on 14 August it happens (the story: Townsfolk). The levels are numbered in this order.
 	storyTime = "9:14 AM",
-	description = "The spiral over the city, beach and waterpark horizon. The only backdrop that exists so far.",
+	description = "The spiral over the city, the beach and the waterpark, and the high dive at its end.",
 	-- WHAT THE HUB PAD IS MADE OF. Not derived from allowedMaterials, because that list
 	-- starts with Honey for this level and for Level2 both, and two identical pads would
 	-- say the two levels are the same thing. Honey is this level's pacing spine.
@@ -279,9 +279,10 @@ LevelDefinitions.Level2 = {
 	-- entry face never turns more than the route's chunks can take (blender/check_skypools.py holds
 	-- that, the same way it held the ring's turn rate). `descend` takes every step down instead of
 	-- up and `stepScale` makes them bigger, because going down is what this level is about and the
-	-- climb's steps were sized for climbing.
+	-- climb's steps were sized for climbing. 1.4 since the climb's steps grew (the two-hundred-and-fifth pass), so the way
+	-- down is as deep as it was and the slide still drops through the clouds as it did; the gaps between chunks are wider.
 	layout = "meander",
-	meander = { amplitude = 0.7, wavelength = 900, descend = true, stepScale = 1.6 },
+	meander = { amplitude = 0.7, wavelength = 900, descend = true, stepScale = 1.4 },
 	-- The bubble wrap windows are what this level is FOR.
 	headlineMaterial = "BubbleWrap",
 	minChunks = 44,
@@ -754,5 +755,5 @@ LevelDefinitions.Story = {
 	LevelDefinitions.Level4,
 }
 
-LevelDefinitions.STAMP = "4fc9bd94"
+LevelDefinitions.STAMP = "bd7939e3"
 return LevelDefinitions

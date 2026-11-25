@@ -48,7 +48,7 @@ BUILDER = SRC / "Server" / "ChunkBuilder.server.lua"
 OUT = HERE / "halls_plan.png"
 
 # What LevelService puts between chunks, and how wide a chunk is.
-CHUNK_GAP = 5.0
+CHUNK_GAP = 6.0  # LevelService.CHUNK_GAP since the two-hundred-and-fifth pass
 CHUNK_WIDE = 20.0
 
 

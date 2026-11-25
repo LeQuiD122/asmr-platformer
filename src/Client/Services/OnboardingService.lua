@@ -2,7 +2,7 @@
 -- StarterPlayerScripts/Services/OnboardingService.lua
 -- THE FIRST FIVE MINUTES: what a new player needs to know, each thing once, and nothing over the level.
 --
---   THE WELCOME     on a first visit: three short pages in the shop's look. What the game is (every
+--   THE WELCOME     on a first visit: one short card in the shop's look (three pages until the 237th pass). What the game is (every
 --                   platform is something to squish), how to get to the end (with the controls for
 --                   the device you are on: keyboard, touch or controller), and what tokens are for.
 --                   It ends with a choice: "Show me how to start" or "I'll look around".
@@ -39,36 +39,37 @@ end
 OnboardingService.VERSION = "the first five minutes, 2026-10-04"
 
 -- WHAT EACH MATERIAL DOES, in one line, for its first time underfoot. Every material in MaterialConfig
--- has one (check_shop.py holds that).
+-- has one (check_shop.py holds that). In plain words, never a trade mark (the hundred-and-fiftieth pass): the bricks,
+-- the stress ball, the sculpting sand and the jelly.
 local HINTS: { [string]: string } = {
-	Honey = "Honey slows you down and keeps your footprints. Keep moving.",
-	ButterWax = "Butter under wax: the wax cracks and you sink in a little.",
-	KineticSand = "Kinetic sand gives way after three steps on the same spot.",
+	Honey = "Honey slows you down and sticks to your shoes for a while. Sticky shoes grip, even on ice.",
+	ButterWax = "Waxed butter: whole wax is slippery and fast. Cracked, it is soft and slow.",
+	KineticSand = "Sculpting sand pours away a moment after you step on it. Keep moving.",
 	Slime = "Slime is springy. It can launch you up.",
-	Soap = "Soap crumbles under your feet. Don't stand still.",
+	Soap = "Soap is slippery and crumbles under your feet. Don't stand still.",
 	Cookie = "A cookie cracks, then crumbles under you. Keep going, and mind the bite.",
-	CreamyKeyboard = "A creamy keyboard. Every key thocks as you step on it.",
+	CreamyKeyboard = "A creamy keyboard. A key you stand on goes down, types its letter, and springs back.",
 	Salt = "Salt crust. Stand still and the crust around you tilts and sinks.",
 	Lava = "Lava under a crust. Hot, and it bursts if you stay. Keep going.",
 	Oobleck = "Oobleck. Keep moving or you sink. A hard landing turns it solid.",
 	Buttons = "Arcade buttons: cyan for speed, violet stores a charge, pink to jump higher.",
-	Snow = "Snow packs down under you and gives way if you wait.",
-	Foam = "Memory foam. Soft, and it holds the dent.",
-	LightSwitch = "Light switches. Every step flips one.",
-	Lego = "Lego. Quick to cross, but bricks come loose under you.",
+	Snow = "Fresh snow is slow. Follow a trodden trail, packed snow is quicker.",
+	Foam = "Memory foam is soft and slow and never drops you. Jumps off it are soft.",
+	LightSwitch = "Light switches. Step on the raised half of a rocker to flip it.",
+	Lego = "Toy bricks. Firm underfoot, but each brick works loose a moment after you step on it.",
 	Charcoal = "Charcoal lights when you step on it. Burnt coal turns to ash and drops.",
-	Chocolate = "Chocolate melts if you stand on it too long.",
-	ChocolateSolid = "Solid chocolate snaps after a few steps.",
-	Clay = "Clay squeezes out to the edges, and an overloaded edge tears off. Stay central.",
-	Cloud = "Cloud holds you for a moment, then it's gone.",
-	LambsEar = "Lamb's ear. Soft and fuzzy, and safe to stand on.",
-	Ice = "Ice cracks under you. Don't wait around.",
-	JelloSoda = "Jello wobbles under you and slows you a little.",
-	Jellyfish = "A jellyfish bell. Bounce across it.",
-	LavaKeys = "Keys over lava. They sink as you press them, so keep going.",
-	ButterStick = "A stick of butter. You sink in a little with each step.",
-	Needoh = "Needoh: stand still to squeeze it, then jump for a much bigger jump.",
-	BubbleWrap = "Bubble wrap. Every pocket pops under your feet.",
+	Chocolate = "Melted chocolate holds your feet. It melts through if you stand still.",
+	ChocolateSolid = "Solid chocolate snaps a moment after you step on it.",
+	Clay = "Sticky clay squeezes out to the edges. Jumps off it are short. Stay central.",
+	Cloud = "Cloud wets your shoes, and it's gone a moment after you step on it.",
+	LambsEar = "Lamb's ear. Soft and fuzzy, safe to stand on, and it wipes your shoes clean.",
+	Ice = "Ice is slippery and cracks under you. Don't wait around.",
+	JelloSoda = "Jelly wobbles under you and slows you a little.",
+	Jellyfish = "A jellyfish bell. Bounce across it, and your shoes come off it wet.",
+	LavaKeys = "Keys on lava. Each sinks while you stand on it, and every step wears it down.",
+	ButterStick = "Soft butter. You sink in a little, and your shoes come away greasy.",
+	Needoh = "A stress ball: stand still to squeeze it, then jump for a much bigger jump.",
+	BubbleWrap = "Bubble wrap. Steps pop it, a jump pops a ring, and the popped wrap tears behind you.",
 }
 
 -- The journal's page for each material found says what it does in these same words (JournalService).
@@ -76,10 +77,10 @@ OnboardingService.HINTS = HINTS
 
 -- THE LOBBY GUIDE: what to step on, in order, and why.
 local GUIDE = {
-	{ pad = "LevelPad_1", tag = "City Shore", say = "Step on City Shore, the first level. Finishing it opens the next." },
-	{ pad = "OptionPad_mode_chill", tag = "Chill", say = "Now Chill: a fall takes you back to your last checkpoint." },
-	{ pad = "OptionPad_length_short", tag = "Short", say = "And Short, for a quick first run." },
-	{ pad = "StartPad", tag = "Start", say = "Step on Start. Your level loads when the countdown ends." },
+	-- STRAIGHT TO THE START (the two-hundred-and-thirty-seventh pass). City Shore is the only level open to someone new
+	-- and Chill is already chosen, and the mode and length keys moved to the workshop in the garden, so the old four steps
+	-- walked a new player down the whole garden and back before their first run.
+	{ pad = "StartPad", tag = "Start", say = "Step on Start for your first run, City Shore. Finishing it opens the next." },
 }
 
 local HINT_SECONDS = 5
@@ -168,8 +169,15 @@ local function line(text: string, seconds: number?)
 	local pill = ui.line
 	pill.Text = text
 	pill.Visible = true
+	-- CLEAR OF THE LEVEL'S OPENING WORDS (the two-hundred-and-forty-first pass: on the Flooded Halls the first
+	-- material's line and "14 August. Four minutes to midnight..." were printed over each other). StoryService
+	-- puts those words low in the middle for about fifteen seconds as a level starts; while they are up, the line
+	-- stands above them.
+	local opening = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	opening = opening and opening:FindFirstChild("StoryOpening")
+	local rest = if opening then UDim2.new(0.5, 0, 0.86, -150) else UDim2.new(0.5, 0, 1, -96)
 	TweenService:Create(pill, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-		{ Position = UDim2.new(0.5, 0, 1, -96) }):Play()
+		{ Position = rest }):Play()
 	local stamp = os.clock()
 	ui.lineAt = stamp
 	if seconds then
@@ -260,16 +268,14 @@ local function controlsText(): string
 	return "WASD to move, Space to jump, Ctrl to lock the camera to your mouse. J opens your journal, Esc the menu."
 end
 
+-- ONE CARD, NOT THREE (the two-hundred-and-thirty-seventh pass, from your note of 2026-11-21 with the reel on how Roblox
+-- recommends games: a player who leaves in the first minute or three counts against the game, so the fun has to start
+-- in the first seconds). Three pages to read stood between joining and playing; now one says what the game is and how
+-- to move, and "Let's go" sends you to the start.
 local PAGES = {
 	{ title = "Welcome to Harrow Bay",
-		body = "Every platform here is made of something soft, squishy or crunchy: honey, soap, bubble wrap, lava. Each one feels and sounds different, and some give way if you stand still.",
-		art = "materials" },
-	{ title = "Get to the end",
-		body = "Each level is a route of materials to its end, and finishing one opens the next. In Chill a fall takes you back to your last checkpoint; in Hardcore, back to the start, against the clock.",
+		body = "Every platform here is something soft, squishy or crunchy to run across: honey, soap, bubble wrap, lava. Each level is a route of materials to its end, and finishing one opens the next. Every finish earns tokens for the shop, more with a friend running with you.",
 		art = "controls" },
-	{ title = "Earn tokens",
-		body = "Finishing a level earns tokens: more for longer runs, Hardcore, a new best and a friend running with you. Spend them at the kiosk in the lobby on trails, auras and more.",
-		art = "tokens" },
 }
 
 local function freeze(on: boolean)
@@ -347,7 +353,7 @@ local function showPage(index: number)
 		dot.BackgroundColor3 = if k == index then kit.LOOK.edge else kit.LOOK.panel
 	end
 	local last = index == #PAGES
-	ui.primaryWords.Text = if last then (if inLobby() then "Show me how to start" else "Let's go") else "Next"
+	ui.primaryWords.Text = if last then "Let's go" else "Next"
 	ui.secondaryWords.Text = if last then "I'll look around" else "Skip"
 	ui.secondary.Parent.Visible = not (last and not inLobby())
 	if kit.usingPad() then
@@ -468,6 +474,8 @@ local function buildWelcome()
 	dotRow.Padding = UDim.new(0, 8)
 	dotRow.Parent = dots
 	ui.dots = {}
+	-- (No dots for a single card: one dot under it says nothing.)
+	dots.Visible = #PAGES > 1
 	for k = 1, #PAGES do
 		local dot = Instance.new("Frame")
 		dot.LayoutOrder = k
@@ -716,6 +724,21 @@ end
 
 -- ===== WHAT THE SERVER SAYS =====
 
+-- AFTER THE ARRIVAL (the hundred-and-fifty-ninth pass): the join card (ReplicatedFirst's Arrival, `Arriving` on you
+-- while it is up) gone first, for ARRIVAL_MOST seconds at the most, and then a moment to see the lobby.
+local ARRIVAL_MOST = 25
+local function afterArrival(fn: () -> ())
+	task.spawn(function()
+		local me = Players.LocalPlayer
+		local untilAt = os.clock() + ARRIVAL_MOST
+		while me:GetAttribute("Arriving") == true and os.clock() < untilAt do
+			task.wait(0.2)
+		end
+		task.wait(1.5)
+		fn()
+	end)
+end
+
 local function accept(data: any)
 	if type(data) ~= "table" or not data.ready then
 		return
@@ -745,8 +768,8 @@ local function accept(data: any)
 	end
 	state.data = data
 	if not data.welcomed and not state.welcomeShown then
-		-- A moment to see the lobby first.
-		task.delay(1.5, showWelcome)
+		-- A moment to see the lobby first, once it is there to be seen.
+		afterArrival(showWelcome)
 	elseif data.welcomed and not data.guided and not state.guiding and inLobby() then
 		-- Left halfway through the guide last time: pick it up again.
 		startGuide()
@@ -825,5 +848,5 @@ function OnboardingService.start()
 	print("OnboardingService: running, " .. OnboardingService.VERSION)
 end
 
-OnboardingService.STAMP = "5de561e4"
+OnboardingService.STAMP = "154bdcdc"
 return OnboardingService

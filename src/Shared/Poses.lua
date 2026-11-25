@@ -377,6 +377,89 @@ function Poses.pry(name: string, t: number, w: number, r6: boolean): CFrame?
 	return nil
 end
 
+-- ===== THE BAR AS A LEVER (the two-hundred-and-seventh pass, from your note of 2026-11-10: "improve the animation
+-- drastically for the level 2 chest that should be prised up with a bar") =====
+--
+-- The tin box in the Sky Pools' first pool was opened by the same three tugs as a locker, standing, the lid not moving
+-- until it flew open. A lid is levered: down on your haunches in front of it, the bar's claw set under the lid's front
+-- edge, and your weight borne DOWN on the handle, so the lid strains up. Twice it lifts and drops back, a little
+-- further the second time; the third heave is long, held and shaking, and then the clasp goes. LEVER is when each thing
+-- happens, seconds in (Interactables moves the lid by it, StoryClient the bar and the camera): the bar set, the three
+-- heaves beginning, and the lid giving.
+Poses.LEVER = { set = 0.6, heaves = { 1.0, 1.75, 2.6 }, gives = 3.4 }
+
+-- How hard the bar is being borne down on, `t` seconds in: 0 at rest, 1 the whole of your weight. The first two a quick
+-- shove and a slower let-up; the last built over a third of a second and held, shaking, until the lid gives.
+function Poses.leverPull(t: number): number
+	local timing = Poses.LEVER
+	local last = timing.heaves[3]
+	if t >= last then
+		local u = math.clamp((t - last) / 0.35, 0, 1)
+		local build = u * u * (3 - 2 * u)
+		local held = math.clamp((t - last - 0.35) / math.max(0.05, timing.gives - last - 0.35), 0, 1)
+		return build * (0.85 + 0.15 * held) + (if u >= 1 and t < timing.gives then 0.03 * math.sin(t * 38) else 0)
+	end
+	for index = 2, 1, -1 do
+		local at = timing.heaves[index]
+		if t >= at then
+			local since = t - at
+			local strength = if index == 1 then 0.55 else 0.75
+			if since < 0.16 then
+				local u = since / 0.16
+				return strength * (1 - (1 - u) * (1 - u))
+			end
+			local u = math.clamp((since - 0.16) / 0.42, 0, 1)
+			return strength * (1 - u * u * (3 - 2 * u))
+		end
+	end
+	return 0
+end
+
+-- DOWN ON YOUR HAUNCHES, bearing on the bar: the hips forward and the knees right back under you (the Root let down as
+-- far as that takes the body, so the feet stay where they are), the head down to the lid, and both hands brought
+-- together on the bar's handle out in front of your chest. Each heave drops you further and drives the hands down and
+-- in toward your belly, the elbows folding as your weight comes over them.
+--
+-- THE ARMS ARE FITTED, not guessed (measured on a wide R15 in Studio, 2026-11-11): at rest the hands a third of a stud
+-- apart, 1.5 studs ahead of the root and level with it; at the whole of your weight a tenth apart, 0.85 ahead and 0.7
+-- under it. Those two points are where a 2.8 stud bar's handle is with its claw under the lid of a box 3.75 studs
+-- ahead (StoryClient's LEVER.stand): at about 48 degrees with the lid shut, and about 15 with its front edge half a
+-- stud up. The first guess had the hands a stud and a quarter either side of the bar and a stud from its claw.
+function Poses.lever(name: string, t: number, w: number, r6: boolean): CFrame?
+	local pull = Poses.leverPull(t)
+	local into = math.clamp(t / Poses.LEVER.set, 0, 1)
+	local down = into * into * (3 - 2 * into) * w
+	if r6 then
+		if name == "Right Shoulder" then
+			return CFrame.Angles(0, 0, (1.15 - 0.45 * pull) * down)
+		elseif name == "Left Shoulder" then
+			return CFrame.Angles(0, 0, -(1.15 - 0.45 * pull) * down)
+		elseif name == "Neck" then
+			return CFrame.Angles(0.25 * down, 0, 0)
+		end
+		return nil
+	end
+	local squat = (0.95 + 0.18 * pull) * down
+	if name == "Root" then
+		return CFrame.new(0, -(0.62 + 0.23 * pull) * down, 0)
+	elseif name == "RightHip" or name == "LeftHip" then
+		return CFrame.Angles(squat, 0, 0)
+	elseif name == "RightKnee" or name == "LeftKnee" then
+		return CFrame.Angles(-2 * squat, 0, 0)
+	elseif name == "RightAnkle" or name == "LeftAnkle" then
+		return CFrame.Angles(squat * 0.9, 0, 0)
+	elseif name == "Neck" then
+		return CFrame.Angles(-(0.3 + 0.1 * pull) * down, 0, 0)
+	elseif name == "RightShoulder" then
+		return CFrame.Angles((1.2 - 0.9 * pull) * down, 0.6 * pull * down, -(0.9 + 0.4 * pull) * down)
+	elseif name == "LeftShoulder" then
+		return CFrame.Angles((1.2 - 0.9 * pull) * down, -0.6 * pull * down, (0.9 + 0.4 * pull) * down)
+	elseif name == "RightElbow" or name == "LeftElbow" then
+		return CFrame.Angles((0.3 + 1.0 * pull) * down, 0, 0)
+	end
+	return nil
+end
+
 -- THE BAR SWUNG INTO A WALL (the hundred-and-twenty-ninth pass, from your test: "I should actually hit the bricks"): three
 -- blows half a second apart, each drawn back over the right shoulder and brought down hard into the wall, the body
 -- turning into it, the left hand out to brace; the last held, leaning on it, as the bricks go. STRIKES is when each lands
@@ -620,12 +703,7 @@ function Poses.tell(gesture: string, name: string, t: number, w: number, hands: 
 	return nil
 end
 
--- ===== THE EMOTES (the shop's, played by EmoteService on every client) =====
-
-local function ease(u: number): number
-	u = math.clamp(u, 0, 1)
-	return u * u * (3 - 2 * u)
-end
+-- ===== THE WAVE (yours, back to Marsh at the end of the true ending; the shop's emotes are keyed, below) =====
 
 -- WAVE: the right arm up and waving from side to side, head turned a little towards whoever it is for.
 function Poses.wave(name: string, t: number, w: number, r6: boolean): CFrame?
@@ -646,134 +724,463 @@ function Poses.wave(name: string, t: number, w: number, r6: boolean): CFrame?
 	return nil
 end
 
--- STRETCH: both arms slowly up over the head, back arched and head back, then a lean to each side.
-function Poses.stretch(name: string, t: number, w: number, r6: boolean): CFrame?
-	local up = ease(t / 1.2)
-	local lean = if t > 1.4 then 0.18 * math.sin((t - 1.4) * 2.6) else 0
-	if r6 then
-		if name == "Right Shoulder" then
-			return CFrame.Angles(0, 0, 2.9 * up * w)
-		elseif name == "Left Shoulder" then
-			return CFrame.Angles(0, 0, -2.9 * up * w)
-		end
-		return nil
-	end
-	if name == "RightShoulder" then
-		return CFrame.Angles(0, 0, 2.95 * up * w)
-	elseif name == "LeftShoulder" then
-		return CFrame.Angles(0, 0, -2.95 * up * w)
-	elseif name == "RightElbow" or name == "LeftElbow" then
-		return CFrame.Angles(0.1 * w, 0, 0)
-	elseif name == "Waist" then
-		return CFrame.Angles(0.18 * up * w, 0, lean * w)
-	elseif name == "Neck" then
-		return CFrame.Angles(0.3 * up * w, 0, 0)
-	end
-	return nil
-end
-
--- SPIN: once round on the spot with the arms out, the whole body turning on its root joint (so every
--- client sees the same turn, and the character itself never moves). A full turn ends where it began.
-function Poses.spin(name: string, t: number, w: number, r6: boolean): CFrame?
-	local angle = 2 * math.pi * ease(t / 1.3)
-	if r6 then
-		if name == "RootJoint" then
-			return CFrame.Angles(0, 0, angle)
-		elseif name == "Right Shoulder" then
-			return CFrame.Angles(0, 0, 1.5 * w)
-		elseif name == "Left Shoulder" then
-			return CFrame.Angles(0, 0, -1.5 * w)
-		end
-		return nil
-	end
-	if name == "Root" then
-		return CFrame.Angles(0, angle, 0)
-	elseif name == "RightShoulder" then
-		return CFrame.Angles(0, 0, 1.5 * w)
-	elseif name == "LeftShoulder" then
-		return CFrame.Angles(0, 0, -1.5 * w)
-	end
-	return nil
-end
-
--- ===== STANDING ABOUT (the hundred-and-twentieth pass): what anyone stood still a while does now and then =====
--- (PlayerLife plays them over Roblox's own idle, on the joints each one names.)
+-- ===== KEYED POSES (the hundred-and-fifty-seventh and fifty-eighth passes) =====
 --
--- LOOKING ROUND: the head turning slowly one way and then the other, the body a little after it.
-function Poses.lookAround(name: string, t: number, w: number, r6: boolean): CFrame?
-	local turn = math.sin(t * 1.6) * 0.75
-	if r6 then
-		if name == "Neck" then
-			return CFrame.Angles(0, 0, turn * 0.8 * w)
+-- From your notes of 2026-10-31: "make more variations to the poses the player does by itself when standing afk, improve
+-- the quality of the existing ones and make sure they are very high quality overall, some might be like an aura-farming
+-- emote; and improve the existing emotes that can be bought, and add even more of them".
+--
+-- The poses above are a sine or two on a few joints. These are KEYS through time: each joint's turns at the moments that
+-- matter (where a move starts, the far end of a swing, a hold), and a smooth curve through them that eases into and out
+-- of every turn back, the way a body slows at the end of a reach, with the whole body in it (the weight in the hips and
+-- knees, the shoulders after the arms, the head after the eyes). Arms are written as where the hand and the elbow go and
+-- solved onto R15 (blender/gen_poses.py, which writes the table below), so a hand on a hip is on it and not in it.
+--
+-- Every keyed pose starts and ends at rest by its own first and last keys, so it is played as it is and never scaled by
+-- Poses.weight (a spin scaled down on its way out would turn back the way it came). A LOOP is played from its first moment
+-- to its last over and over while the pose lasts, and the keys after it are the way out, played once at the end.
+--
+-- On an R6 body, which has no elbows, waist or knees, the R15 turns are read as near as R6 has: the arms raised by how far
+-- they are lifted forward or out, the hips by how far forward, the head turned and tipped, the root's turn.
+export type Keyed = { seconds: number, loop: { number }?, keys: { [string]: { { number } } } }
+
+-- One value of a joint's curve at `t` (k: 2, 3, 4 its turns about X, Y and Z; 5, 6, 7 the root's move).
+local function curve(track: { { number } }, t: number, k: number): number
+	local n = #track
+	if t <= track[1][1] then
+		return track[1][k] or 0
+	end
+	if t >= track[n][1] then
+		return track[n][k] or 0
+	end
+	local i = 1
+	while i < n - 1 and track[i + 1][1] <= t do
+		i += 1
+	end
+	local a, b = track[i], track[i + 1]
+	local d = b[1] - a[1]
+	local u = (t - a[1]) / d
+	-- Still where a value turns back, and at either end; elsewhere the slope through the keys either side.
+	local function slope(j: number): number
+		if j <= 1 or j >= n then
+			return 0
 		end
-		return nil
-	end
-	if name == "Neck" then
-		return CFrame.Angles(0.05 * w, turn * w, 0)
-	elseif name == "Waist" then
-		return CFrame.Angles(0, turn * 0.3 * w, 0)
-	end
-	return nil
-end
-
--- A SHIFT OF WEIGHT: onto one hip, the shoulders rolling back once, the head tilted.
-function Poses.weightShift(name: string, t: number, w: number, r6: boolean): CFrame?
-	if r6 then
-		return nil
-	end
-	local roll = math.sin(math.clamp(t / 2.5, 0, 1) * math.pi)
-	if name == "Waist" then
-		return CFrame.Angles(0, 0.08 * w, 0.07 * w)
-	elseif name == "RightShoulder" then
-		return CFrame.Angles(-0.25 * roll * w, 0, 0.12 * roll * w)
-	elseif name == "LeftShoulder" then
-		return CFrame.Angles(-0.25 * roll * w, 0, -0.12 * roll * w)
-	elseif name == "Neck" then
-		return CFrame.Angles(0, 0, 0.12 * w)
-	elseif name == "RightHip" then
-		return CFrame.Angles(0, 0, 0.05 * w)
-	elseif name == "LeftKnee" then
-		return CFrame.Angles(-0.12 * w, 0, 0)
-	end
-	return nil
-end
-
--- SIT AND SQUISH: down on the floor cross-legged (the body lowered on its root joint, legs folded under),
--- hands together in front squeezing a little toy, head down to watch it. `squeeze` is 0 to 1, the toy's
--- own beat, so the hands close as it does.
-function Poses.sitSquish(name: string, t: number, w: number, r6: boolean): CFrame?
-	local squeeze = math.max(0, math.sin(t * 3.2)) ^ 2
-	if r6 then
-		if name == "Right Shoulder" then
-			return CFrame.Angles(0, 0, 1.2 * w)
-		elseif name == "Left Shoulder" then
-			return CFrame.Angles(0, 0, -1.2 * w)
-		elseif name == "Right Hip" then
-			return CFrame.Angles(0, 0, 1.4 * w)
-		elseif name == "Left Hip" then
-			return CFrame.Angles(0, 0, -1.4 * w)
+		local before, here, after = track[j - 1][k] or 0, track[j][k] or 0, track[j + 1][k] or 0
+		if (here - before) * (after - here) <= 0 then
+			return 0
 		end
+		return (after - before) / (track[j + 1][1] - track[j - 1][1])
+	end
+	local ma, mb = slope(i) * d, slope(i + 1) * d
+	local u2, u3 = u * u, u * u * u
+	return (2 * u3 - 3 * u2 + 1) * (a[k] or 0) + (u3 - 2 * u2 + u) * ma + (-2 * u3 + 3 * u2) * (b[k] or 0) + (u3 - u2) * mb
+end
+
+-- Where in its keys a pose is, `t` seconds in: round its loop while it lasts, then out.
+local function keyTime(spec: Keyed, t: number): number
+	local loop = spec.loop
+	if not loop or t <= loop[2] then
+		return t
+	end
+	local last = 0
+	for _, track in pairs(spec.keys) do
+		last = math.max(last, track[#track][1])
+	end
+	local tail = spec.seconds - t
+	if tail <= last - loop[2] then
+		return last - tail
+	end
+	return loop[1] + (t - loop[2]) % (loop[2] - loop[1])
+end
+
+local function turnOf(spec: Keyed, joint: string, t: number): CFrame?
+	local track = spec.keys[joint]
+	if not track then
 		return nil
 	end
-	if name == "Root" then
-		return CFrame.new(0, -1.75 * w, 0)
-	elseif name == "RightHip" then
-		return CFrame.Angles(1.45 * w, 0, 0.55 * w)
-	elseif name == "LeftHip" then
-		return CFrame.Angles(1.45 * w, 0, -0.55 * w)
-	elseif name == "RightKnee" or name == "LeftKnee" then
-		return CFrame.Angles(-1.9 * w, 0, 0)
-	elseif name == "RightShoulder" then
-		return CFrame.Angles((0.95 + 0.08 * squeeze) * w, 0, -0.25 * w)
-	elseif name == "LeftShoulder" then
-		return CFrame.Angles((0.95 + 0.08 * squeeze) * w, 0, 0.25 * w)
-	elseif name == "RightElbow" or name == "LeftElbow" then
-		return CFrame.Angles((0.95 + 0.2 * squeeze) * w, 0, 0)
-	elseif name == "Neck" then
-		return CFrame.Angles(-0.3 * w, 0, 0)
+	local angles = CFrame.Angles(curve(track, t, 2), curve(track, t, 3), curve(track, t, 4))
+	if joint == "Root" then
+		return CFrame.new(curve(track, t, 5), curve(track, t, 6), curve(track, t, 7)) * angles
+	end
+	return angles
+end
+
+-- R6's few joints, from the R15 turns of the same pose.
+local function r6Turn(spec: Keyed, name: string, t: number): CFrame?
+	local function value(joint: string, k: number): number
+		local track = spec.keys[joint]
+		return if track then curve(track, t, k) else 0
+	end
+	if name == "Right Shoulder" and spec.keys.RightShoulder then
+		return CFrame.Angles(0, 0, value("RightShoulder", 2) + 0.85 * value("RightShoulder", 4))
+	elseif name == "Left Shoulder" and spec.keys.LeftShoulder then
+		return CFrame.Angles(0, 0, -(value("LeftShoulder", 2) - 0.85 * value("LeftShoulder", 4)))
+	elseif name == "Right Hip" and spec.keys.RightHip then
+		return CFrame.Angles(0, 0, value("RightHip", 2))
+	elseif name == "Left Hip" and spec.keys.LeftHip then
+		return CFrame.Angles(0, 0, -value("LeftHip", 2))
+	elseif name == "Neck" and spec.keys.Neck then
+		return CFrame.Angles(-value("Neck", 2), 0, 0.9 * value("Neck", 3))
+	elseif name == "RootJoint" and spec.keys.Root then
+		return CFrame.Angles(0, 0, value("Root", 3))
 	end
 	return nil
 end
 
-Poses.STAMP = "f120320d"
+-- A keyed pose's turn for one joint, `t` seconds in.
+local function play(spec: Keyed, name: string, t: number, r6: boolean): CFrame?
+	local at = keyTime(spec, t)
+	if r6 then
+		return r6Turn(spec, name, at)
+	end
+	return turnOf(spec, name, at)
+end
+
+-- KEYED BEGIN (written by blender/gen_poses.py: edit the poses there, not here)
+-- spec ae067f148039
+local KEYED: { [string]: Keyed } = {
+	idleLook = { seconds = 4.8, keys = {
+		Waist = { { 0, 0, 0, 0 }, { 0.8, 0, 0.2, 0 }, { 1.7, 0, 0.22, 0 }, { 2.35, 0, 0, 0 }, { 2.9, 0, -0.18, 0 }, { 3.9, 0, -0.2, 0 }, { 4.7, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.55, 0.05, 0.7, -0.03 }, { 1.55, 0.07, 0.76, -0.04 }, { 2.15, -0.05, 0.02, 0 }, { 2.65, 0.04, -0.68, 0.04 }, { 3.7, 0.06, -0.72, 0.05 }, { 4.5, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.9, 0.06, 0, 0.03 }, { 2.3, 0, 0, 0 }, { 3, -0.05, 0, 0.02 }, { 4.7, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.9, -0.05, 0, -0.02 }, { 2.3, 0, 0, 0 }, { 3, 0.06, 0, -0.03 }, { 4.7, 0, 0, 0 } },
+	} },
+	idleShift = { seconds = 4.2, keys = {
+		Root = { { 0, 0, 0, 0 }, { 0.7, 0, 0.05, 0.05 }, { 3.4, 0, 0.05, 0.05 }, { 4.2, 0, 0, 0 } },
+		Waist = { { 0, 0, 0, 0 }, { 0.8, 0, -0.03, -0.07 }, { 3.3, 0, -0.03, -0.07 }, { 4.2, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.9, -0.04, 0.08, 0.1 }, { 3.2, -0.04, 0.08, 0.1 }, { 4.2, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 1.3, 0, 0, 0.04 }, { 1.8, -0.24, 0, 0.1 }, { 2.3, 0.06, 0, 0.04 }, { 2.8, 0, 0, 0.03 }, { 4.2, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 1.3, 0, 0, -0.04 }, { 1.8, -0.24, 0, -0.1 }, { 2.3, 0.06, 0, -0.04 }, { 2.8, 0, 0, -0.03 }, { 4.2, 0, 0, 0 } },
+		RightHip = { { 0, 0, 0, 0 }, { 0.7, 0.13, -0.1, 0.02 }, { 3.4, 0.13, -0.1, 0.02 }, { 4.2, 0, 0, 0 } },
+		RightKnee = { { 0, 0, 0, 0 }, { 0.7, -0.28, 0, 0 }, { 3.4, -0.28, 0, 0 }, { 4.2, 0, 0, 0 } },
+		RightAnkle = { { 0, 0, 0, 0 }, { 0.7, 0.14, 0, 0 }, { 3.4, 0.14, 0, 0 }, { 4.2, 0, 0, 0 } },
+		LeftHip = { { 0, 0, 0, 0 }, { 0.7, 0, 0, -0.04 }, { 3.4, 0, 0, -0.04 }, { 4.2, 0, 0, 0 } },
+	} },
+	idlePonder = { seconds = 4.6, keys = {
+		Waist = { { 0, 0, 0, 0 }, { 0.8, -0.08, 0.05, 0 }, { 3.7, -0.08, 0.05, 0 }, { 4.5, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.8, -0.12, 0.1, 0.12 }, { 2, -0.08, 0.24, -0.06 }, { 3.3, -0.12, 0.05, 0.14 }, { 4.4, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.65, 1.157, 0.818, -1.143 }, { 3.9, 1.157, 0.818, -1.143 }, { 4.6, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.65, 1.752, 0, 0 }, { 3.9, 1.752, 0, 0 }, { 4.6, 0, 0, 0 } },
+		RightWrist = { { 0, 0, 0, 0 }, { 0.7, 0.2, 0, 0 }, { 1.15, 0.42, 0, 0 }, { 1.45, 0.16, 0, 0 }, { 1.75, 0.42, 0, 0 }, { 2.05, 0.16, 0, 0 }, { 2.4, 0.36, 0, 0 }, { 3.9, 0.2, 0, 0 }, { 4.6, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.75, 1.181, -0.844, 1.113 }, { 3.8, 1.181, -0.844, 1.113 }, { 4.6, 0, 0, 0 } },
+		LeftElbow = { { 0, 0, 0, 0 }, { 0.75, 0.8, 0, 0 }, { 3.8, 0.8, 0, 0 }, { 4.6, 0, 0, 0 } },
+		LeftWrist = { { 0, 0, 0, 0 }, { 0.75, 0, 0, 0 }, { 3.8, 0, 0, 0 }, { 4.6, 0, 0, 0 } },
+	} },
+	idleYawn = { seconds = 4.6, keys = {
+		Waist = { { 0, 0, 0, 0 }, { 1, 0.14, 0, 0 }, { 1.8, 0.1, 0, 0.15 }, { 2.55, 0.1, 0, -0.13 }, { 3.3, 0, 0, 0 }, { 4.6, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 1, 0.34, 0, 0 }, { 1.8, 0.26, 0, 0.08 }, { 2.55, 0.26, 0, -0.08 }, { 3.3, -0.06, 0, 0 }, { 4.6, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.95, 0.2, 0, 2.75 }, { 1.7, 0.2, 0, 2.86 }, { 2.7, 0.2, 0, 2.8 }, { 3.5, 0, 0, 0.4 }, { 4, -0.2, 0, 0.1 }, { 4.6, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.95, 0.4, 0, 0 }, { 2.7, 0.3, 0, 0 }, { 3.5, 0.15, 0, 0 }, { 4.6, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.95, 0.2, 0, -2.75 }, { 1.7, 0.2, 0, -2.86 }, { 2.7, 0.2, 0, -2.8 }, { 3.5, 0, 0, -0.4 }, { 4, -0.2, 0, -0.1 }, { 4.6, 0, 0, 0 } },
+		LeftElbow = { { 0, 0, 0, 0 }, { 0.95, 0.4, 0, 0 }, { 2.7, 0.3, 0, 0 }, { 3.5, 0.15, 0, 0 }, { 4.6, 0, 0, 0 } },
+	} },
+	idleHand = { seconds = 3.8, keys = {
+		Waist = { { 0, 0, 0, 0 }, { 0.7, -0.04, -0.06, 0 }, { 2.7, -0.04, -0.06, 0 }, { 3.6, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.7, -0.28, -0.14, 0.06 }, { 2.6, -0.25, -0.1, 0.04 }, { 3.5, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.6, 0.716, 0.561, -0.596 }, { 1.6, 0.716, 0.561, -0.596 }, { 2, 0.752, 0.58, -0.613 }, { 2.15, 0.782, 0.596, -0.628 }, { 2.35, 0.746, 0.585, -0.611 }, { 2.8, 0.681, 0.589, -0.58 }, { 3.8, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.6, 1.635, 0, 0 }, { 1.6, 1.635, 0, 0 }, { 2, 1.761, 0, 0 }, { 2.15, 1.631, 0, 0 }, { 2.35, 1.716, 0, 0 }, { 2.8, 1.67, 0, 0 }, { 3.8, 0, 0, 0 } },
+		RightWrist = { { 0, 0, 0, 0 }, { 0.6, 0.1, 0.9, 0 }, { 1.6, 0.1, 0.9, 0 }, { 2, -0.3, 0.2, 0 }, { 2.15, 0.4, 0.2, 0 }, { 2.35, -0.1, 0.2, 0 }, { 2.8, 0, 0, 0 }, { 3.8, 0, 0, 0 } },
+	} },
+	idleTap = { seconds = 4.4, keys = {
+		Waist = { { 0, 0, 0, 0 }, { 0.7, 0.04, 0, 0.03 }, { 2.3, 0.08, 0, 0.03 }, { 2.6, 0.02, 0, 0.03 }, { 3.9, 0.04, 0, 0.03 }, { 4.4, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.7, 0.02, 0.1, 0.12 }, { 2.3, 0.08, 0.06, 0.1 }, { 2.55, -0.04, 0.06, 0.1 }, { 3.9, 0.02, 0.1, 0.12 }, { 4.4, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.55, -0.764, 0.611, 0.226 }, { 3.8, -0.764, 0.611, 0.226 }, { 4.4, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.55, 1.18, 0, 0 }, { 3.8, 1.18, 0, 0 }, { 4.4, 0, 0, 0 } },
+		RightWrist = { { 0, 0, 0, 0 }, { 0.55, 0, 0, 0 }, { 3.8, 0, 0, 0 }, { 4.4, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.6, -0.764, -0.611, -0.226 }, { 3.8, -0.764, -0.611, -0.226 }, { 4.4, 0, 0, 0 } },
+		LeftElbow = { { 0, 0, 0, 0 }, { 0.6, 1.179, 0, 0 }, { 3.8, 1.179, 0, 0 }, { 4.4, 0, 0, 0 } },
+		LeftWrist = { { 0, 0, 0, 0 }, { 0.6, 0, 0, 0 }, { 3.8, 0, 0, 0 }, { 4.4, 0, 0, 0 } },
+		RightKnee = { { 0, 0, 0, 0 }, { 0.7, -0.12, 0, 0 }, { 3.9, -0.12, 0, 0 }, { 4.4, 0, 0, 0 } },
+		RightAnkle = { { 0, 0, 0, 0 }, { 0.8, 0, 0, 0 }, { 1, 0.32, 0, 0 }, { 1.2, 0, 0, 0 }, { 1.45, 0.32, 0, 0 }, { 1.65, 0, 0, 0 }, { 1.9, 0.32, 0, 0 }, { 2.1, 0, 0, 0 }, { 2.9, 0, 0, 0 }, { 3.1, 0.3, 0, 0 }, { 3.3, 0, 0, 0 }, { 3.55, 0.3, 0, 0 }, { 3.75, 0, 0, 0 }, { 4.4, 0, 0, 0 } },
+	} },
+	idleAuraCrossed = { seconds = 6.4, keys = {
+		Root = { { 0, 0, 0, 0 }, { 1, 0, 0.06, 0.05 }, { 5.4, 0, 0.06, 0.05 }, { 6.3, 0, 0, 0 } },
+		Waist = { { 0, 0, 0, 0 }, { 1, 0.07, -0.12, -0.05 }, { 5.4, 0.07, -0.14, -0.05 }, { 6.3, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.9, 0.14, 0, 0 }, { 1.8, 0.16, -0.5, -0.04 }, { 3.9, 0.16, -0.55, -0.05 }, { 4.4, 0.06, -0.5, -0.04 }, { 4.75, 0.18, -0.45, -0.04 }, { 5.6, 0.12, 0, 0 }, { 6.3, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.7, 1.195, 1.221, -0.998 }, { 5.7, 1.195, 1.221, -0.998 }, { 6.4, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.7, 1.213, 0, 0 }, { 5.7, 1.213, 0, 0 }, { 6.4, 0, 0, 0 } },
+		RightWrist = { { 0, 0, 0, 0 }, { 0.7, 0, 0, 0 }, { 5.7, 0, 0, 0 }, { 6.4, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.8, 1.405, -1.171, 1.043 }, { 5.6, 1.405, -1.171, 1.043 }, { 6.4, 0, 0, 0 } },
+		LeftElbow = { { 0, 0, 0, 0 }, { 0.8, 1.14, 0, 0 }, { 5.6, 1.14, 0, 0 }, { 6.4, 0, 0, 0 } },
+		LeftWrist = { { 0, 0, 0, 0 }, { 0.8, 0, 0, 0 }, { 5.6, 0, 0, 0 }, { 6.4, 0, 0, 0 } },
+		RightHip = { { 0, 0, 0, 0 }, { 1, 0.1, -0.12, 0.03 }, { 5.4, 0.1, -0.12, 0.03 }, { 6.3, 0, 0, 0 } },
+		RightKnee = { { 0, 0, 0, 0 }, { 1, -0.22, 0, 0 }, { 5.4, -0.22, 0, 0 }, { 6.3, 0, 0, 0 } },
+		RightAnkle = { { 0, 0, 0, 0 }, { 1, 0.1, 0, 0 }, { 5.4, 0.1, 0, 0 }, { 6.3, 0, 0, 0 } },
+	} },
+	idleAuraBreeze = { seconds = 5.8, keys = {
+		Root = { { 0, 0, 0, 0 }, { 1, 0, 0, -0.03 }, { 5, 0, 0, -0.03 }, { 5.8, 0, 0, 0 } },
+		Waist = { { 0, 0, 0, 0 }, { 0.9, 0.05, 0.12, 0 }, { 4.9, 0.05, 0.14, 0 }, { 5.7, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.8, 0.16, 0.32, 0.02 }, { 2, 0.2, 0.36, -0.06 }, { 3, 0.2, 0.4, -0.08 }, { 4.8, 0.16, 0.34, 0 }, { 5.7, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 1.2, 0, 0, 0 }, { 1.75, 0.867, 0.713, 0.814 }, { 2.25, 1.439, 0.758, 1.085 }, { 2.7, 1.804, 0.758, 1.295 }, { 3.4, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 1.2, 0, 0, 0 }, { 1.75, 2.153, 0, 0 }, { 2.25, 1.793, 0, 0 }, { 2.7, 1.884, 0, 0 }, { 3.4, 0, 0, 0 } },
+		RightWrist = { { 0, 0, 0, 0 }, { 1.75, 0.3, 0, 0 }, { 2.25, -0.2, 0, 0 }, { 2.7, -0.3, 0, 0 }, { 3.4, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 1, -0.04, 0, -0.06 }, { 5, -0.04, 0, -0.06 }, { 5.8, 0, 0, 0 } },
+		LeftKnee = { { 0, 0, 0, 0 }, { 1, -0.14, 0, 0 }, { 5, -0.14, 0, 0 }, { 5.8, 0, 0, 0 } },
+	} },
+	idleAuraPockets = { seconds = 5.4, keys = {
+		Root = { { 0, 0, 0, 0 }, { 0.9, 0, 0.04, -0.04 }, { 4.6, 0, 0.04, -0.04 }, { 5.3, 0, 0, 0 } },
+		Waist = { { 0, 0, 0, 0 }, { 0.9, 0.08, 0.06, 0.04 }, { 4.6, 0.08, 0.06, 0.04 }, { 5.3, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 1, 0.04, -0.12, 0.12 }, { 2.2, 0.08, -0.14, 0.13 }, { 2.55, -0.06, -0.14, 0.13 }, { 2.9, 0.06, -0.14, 0.12 }, { 4.6, 0.04, -0.12, 0.12 }, { 5.3, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.7, 0.055, -0.03, -0.415 }, { 4.7, 0.055, -0.03, -0.415 }, { 5.4, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.7, 0.414, 0, 0 }, { 4.7, 0.414, 0, 0 }, { 5.4, 0, 0, 0 } },
+		RightWrist = { { 0, 0, 0, 0 }, { 0.7, 0, 0, 0 }, { 4.7, 0, 0, 0 }, { 5.4, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.75, 0.055, 0.031, 0.415 }, { 4.7, 0.055, 0.031, 0.415 }, { 5.4, 0, 0, 0 } },
+		LeftElbow = { { 0, 0, 0, 0 }, { 0.75, 0.414, 0, 0 }, { 4.7, 0.414, 0, 0 }, { 5.4, 0, 0, 0 } },
+		LeftWrist = { { 0, 0, 0, 0 }, { 0.75, 0, 0, 0 }, { 4.7, 0, 0, 0 }, { 5.4, 0, 0, 0 } },
+		LeftHip = { { 0, 0, 0, 0 }, { 0.9, 0.12, 0.1, -0.02 }, { 4.6, 0.12, 0.1, -0.02 }, { 5.3, 0, 0, 0 } },
+		LeftKnee = { { 0, 0, 0, 0 }, { 0.9, -0.24, 0, 0 }, { 4.6, -0.24, 0, 0 }, { 5.3, 0, 0, 0 } },
+		LeftAnkle = { { 0, 0, 0, 0 }, { 0.9, 0.11, 0, 0 }, { 4.6, 0.11, 0, 0 }, { 5.3, 0, 0, 0 } },
+	} },
+	idleAuraBrush = { seconds = 3.9, keys = {
+		Waist = { { 0, 0, 0, 0 }, { 0.6, 0, 0.1, 0 }, { 1.6, 0, 0.1, 0 }, { 2.1, 0.05, -0.08, 0 }, { 3.2, 0.05, -0.08, 0 }, { 3.9, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.5, -0.1, 0.22, 0.06 }, { 1.5, -0.1, 0.24, 0.06 }, { 2, 0.16, -0.28, -0.04 }, { 3.2, 0.16, -0.3, -0.04 }, { 3.8, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.55, 1.633, 1.051, -1.312 }, { 0.85, 0.573, 0.746, -0.588 }, { 1.15, 1.47, 1.004, -1.232 }, { 1.45, 0.565, 0.749, -0.579 }, { 2.2, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.55, 1.415, 0, 0 }, { 0.85, 1.917, 0, 0 }, { 1.15, 1.434, 0, 0 }, { 1.45, 1.92, 0, 0 }, { 2.2, 0, 0, 0 } },
+		RightWrist = { { 0, 0, 0, 0 }, { 0.55, 0.2, 0, 0 }, { 0.85, -0.3, 0, 0 }, { 1.15, 0.2, 0, 0 }, { 1.45, -0.3, 0, 0 }, { 2.2, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.5, 0, 0, -0.08 }, { 1.6, 0, 0, -0.08 }, { 2.2, 0, 0, 0 }, { 3.9, 0, 0, 0 } },
+	} },
+	emoteWave = { seconds = 2.9, keys = {
+		Waist = { { 0, 0, 0, 0 }, { 0.6, 0.03, 0.05, -0.06 }, { 2.1, 0.03, 0.05, -0.06 }, { 2.8, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.6, 0.06, 0.16, 0.12 }, { 2.1, 0.06, 0.16, 0.12 }, { 2.8, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.22, 0.205, -0.266, 0.049 }, { 0.6, 1.609, 0.706, 0.705 }, { 0.85, 1.898, 0.357, 0.76 }, { 1.1, 1.723, 0.696, 0.6 }, { 1.35, 1.982, 0.316, 0.702 }, { 1.6, 1.747, 0.689, 0.573 }, { 1.85, 2.003, 0.305, 0.688 }, { 2.1, 1.801, 0.503, 0.572 }, { 2.9, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.22, 0.025, 0, 0 }, { 0.6, 1.332, 0, 0 }, { 0.85, 0.656, 0, 0 }, { 1.1, 1.299, 0, 0 }, { 1.35, 0.653, 0, 0 }, { 1.6, 1.292, 0, 0 }, { 1.85, 0.652, 0, 0 }, { 2.1, 1.197, 0, 0 }, { 2.9, 0, 0, 0 } },
+		RightWrist = { { 0, 0, 0, 0 }, { 0.22, 0, 0, 0 }, { 0.6, 0, 0, 0 }, { 0.85, 0, 0, 0 }, { 1.1, 0, 0, 0 }, { 1.35, 0, 0, 0 }, { 1.6, 0, 0, 0 }, { 1.85, 0, 0, 0 }, { 2.1, 0, 0, 0 }, { 2.9, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.6, 0, 0, -0.08 }, { 2.1, 0, 0, -0.08 }, { 2.8, 0, 0, 0 } },
+	} },
+	emoteStretch = { seconds = 4, keys = {
+		Root = { { 0, 0, 0, 0, 0, 0, 0 }, { 0.8, 0, 0, 0, 0, 0.22, 0 }, { 1.4, 0, 0, 0, 0, 0.22, 0 }, { 1.8, 0, 0, 0, 0, 0, 0 }, { 4, 0, 0, 0, 0, 0, 0 } },
+		Waist = { { 0, 0, 0, 0 }, { 0.8, 0.14, 0, 0 }, { 1.5, 0.1, 0, 0 }, { 2, 0.08, 0, 0.24 }, { 2.6, 0.08, 0, -0.22 }, { 3.2, 0, 0, 0 }, { 4, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.8, 0.3, 0, 0 }, { 2, 0.2, 0, 0.1 }, { 2.6, 0.2, 0, -0.1 }, { 3.3, -0.1, 0.2, 0.12 }, { 3.7, -0.1, -0.2, -0.12 }, { 4, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.8, 0.15, 0, 2.9 }, { 2.7, 0.15, 0, 2.9 }, { 3.3, 0, 0, 0.5 }, { 4, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.8, 0.2, 0, 0 }, { 2.7, 0.2, 0, 0 }, { 3.3, 0.1, 0, 0 }, { 4, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.8, 0.15, 0, -2.9 }, { 2.7, 0.15, 0, -2.9 }, { 3.3, 0, 0, -0.5 }, { 4, 0, 0, 0 } },
+		LeftElbow = { { 0, 0, 0, 0 }, { 0.8, 0.2, 0, 0 }, { 2.7, 0.2, 0, 0 }, { 3.3, 0.1, 0, 0 }, { 4, 0, 0, 0 } },
+		RightAnkle = { { 0, 0, 0, 0 }, { 0.8, -0.34, 0, 0 }, { 1.4, -0.34, 0, 0 }, { 1.8, 0, 0, 0 }, { 4, 0, 0, 0 } },
+		LeftAnkle = { { 0, 0, 0, 0 }, { 0.8, -0.34, 0, 0 }, { 1.4, -0.34, 0, 0 }, { 1.8, 0, 0, 0 }, { 4, 0, 0, 0 } },
+	} },
+	emoteSpin = { seconds = 2.1, keys = {
+		Root = { { 0, 0, 0, 0, 0, 0, 0 }, { 0.22, 0, -0.35, 0, 0, -0.18, 0 }, { 0.75, 0, 3, 0, 0, 0.35, 0 }, { 1.25, 0, 6.283, 0, 0, 0, 0 }, { 2.1, 0, 6.283, 0, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.22, -0.12, 0, 0 }, { 0.75, 0.1, 0, 0 }, { 1.5, 0.16, 0, 0 }, { 2.1, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.22, 0.2, 0, 0.2 }, { 0.55, 0, 0, 1.5 }, { 1.15, 0, 0, 1.45 }, { 1.5, 0.1, 0, 2.3 }, { 1.85, 0.1, 0, 2.3 }, { 2.1, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.22, 0.2, 0, -0.2 }, { 0.55, 0, 0, -1.5 }, { 1.15, 0, 0, -1.45 }, { 1.5, 0.1, 0, -2.3 }, { 1.85, 0.1, 0, -2.3 }, { 2.1, 0, 0, 0 } },
+		RightHip = { { 0, 0, 0, 0 }, { 0.22, 0.22, 0, 0 }, { 0.6, 0.05, 0, 0 }, { 1.25, 0.15, 0, 0 }, { 1.5, 0, 0, 0 }, { 2.1, 0, 0, 0 } },
+		RightKnee = { { 0, 0, 0, 0 }, { 0.22, -0.45, 0, 0 }, { 0.6, -0.1, 0, 0 }, { 1.25, -0.3, 0, 0 }, { 1.5, 0, 0, 0 }, { 2.1, 0, 0, 0 } },
+		LeftHip = { { 0, 0, 0, 0 }, { 0.22, 0.22, 0, 0 }, { 0.6, 0.05, 0, 0 }, { 1.25, 0.15, 0, 0 }, { 1.5, 0, 0, 0 }, { 2.1, 0, 0, 0 } },
+		LeftKnee = { { 0, 0, 0, 0 }, { 0.22, -0.45, 0, 0 }, { 0.6, -0.1, 0, 0 }, { 1.25, -0.3, 0, 0 }, { 1.5, 0, 0, 0 }, { 2.1, 0, 0, 0 } },
+	} },
+	emoteSitSquish = { seconds = 20, loop = { 1, 2 }, keys = {
+		Root = { { 0, 0, 0, 0, 0, 0, 0 }, { 0.4, 0, 0, 0, 0, -0.75, 0 }, { 0.8, 0, 0, 0, 0, -1.85, 0 }, { 2, 0, 0, 0, 0, -1.85, 0 }, { 2.4, 0, 0, 0, 0, -0.75, 0 }, { 3, 0, 0, 0, 0, 0, 0 } },
+		Waist = { { 0, 0, 0, 0 }, { 1, -0.12, 0, 0 }, { 1.5, -0.18, 0, 0.03 }, { 2, -0.12, 0, 0 }, { 3, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 1, -0.32, 0.06, 0.06 }, { 1.5, -0.36, -0.04, -0.04 }, { 2, -0.32, 0.06, 0.06 }, { 3, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 1, 0.458, 0.063, -0.704 }, { 1.5, 0.454, 0.094, -0.745 }, { 2, 0.459, 0.077, -0.703 }, { 3, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 1, 0.331, 0, 0 }, { 1.5, 0.341, 0, 0 }, { 2, 0.339, 0, 0 }, { 3, 0, 0, 0 } },
+		RightWrist = { { 0, 0, 0, 0 }, { 1, 0, 0, 0 }, { 1.5, 0, 0, 0 }, { 2, 0, 0, 0 }, { 3, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 1, 0.458, -0.063, 0.704 }, { 1.5, 0.454, -0.094, 0.745 }, { 2, 0.459, -0.075, 0.703 }, { 3, 0, 0, 0 } },
+		LeftElbow = { { 0, 0, 0, 0 }, { 1, 0.331, 0, 0 }, { 1.5, 0.341, 0, 0 }, { 2, 0.338, 0, 0 }, { 3, 0, 0, 0 } },
+		LeftWrist = { { 0, 0, 0, 0 }, { 1, 0, 0, 0 }, { 1.5, 0, 0, 0 }, { 2, 0, 0, 0 }, { 3, 0, 0, 0 } },
+		RightHip = { { 0, 0, 0, 0 }, { 0.4, 0.95, 0, 0.3 }, { 0.8, 1.5, 0, 0.72 }, { 2, 1.5, 0, 0.72 }, { 2.4, 0.95, 0, 0.3 }, { 3, 0, 0, 0 } },
+		RightKnee = { { 0, 0, 0, 0 }, { 0.4, -1.9, 0, 0 }, { 0.8, -2.65, 0, 0 }, { 2, -2.65, 0, 0 }, { 2.4, -1.9, 0, 0 }, { 3, 0, 0, 0 } },
+		RightAnkle = { { 0, 0, 0, 0 }, { 0.4, 0.3, 0, 0 }, { 0.8, -1, 0, 0 }, { 2, -1, 0, 0 }, { 2.4, 0.3, 0, 0 }, { 3, 0, 0, 0 } },
+		LeftHip = { { 0, 0, 0, 0 }, { 0.4, 0.95, 0, -0.3 }, { 0.8, 1.5, 0, -0.72 }, { 2, 1.5, 0, -0.72 }, { 2.4, 0.95, 0, -0.3 }, { 3, 0, 0, 0 } },
+		LeftKnee = { { 0, 0, 0, 0 }, { 0.4, -1.9, 0, 0 }, { 0.8, -2.65, 0, 0 }, { 2, -2.65, 0, 0 }, { 2.4, -1.9, 0, 0 }, { 3, 0, 0, 0 } },
+		LeftAnkle = { { 0, 0, 0, 0 }, { 0.4, 0.3, 0, 0 }, { 0.8, -1, 0, 0 }, { 2, -1, 0, 0 }, { 2.4, 0.3, 0, 0 }, { 3, 0, 0, 0 } },
+	} },
+	emoteAura = { seconds = 10.8, loop = { 0.9, 3.9 }, keys = {
+		Root = { { 0, 0, 0, 0 }, { 0.9, 0, 0, 0.04 }, { 2.4, 0, 0.05, -0.04 }, { 3.9, 0, 0, 0.04 }, { 4.8, 0, 0, 0 } },
+		Waist = { { 0, 0, 0, 0 }, { 0.9, 0.05, -0.05, -0.05 }, { 2.4, 0.05, 0.1, 0.05 }, { 3.9, 0.05, -0.05, -0.05 }, { 4.8, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.9, 0.16, -0.25, -0.06 }, { 2.4, 0.12, 0.1, 0.06 }, { 3.9, 0.16, -0.25, -0.06 }, { 4.8, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.9, 0.994, -0.175, 0.853 }, { 1.65, 1.317, 0.02, 0.835 }, { 2.4, 1.004, 0.125, 0.213 }, { 3.15, 1.318, -0.018, 0.82 }, { 3.9, 1.135, -0.263, 0.853 }, { 4.8, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.9, 0.262, 0, 0 }, { 1.65, 0.537, 0, 0 }, { 2.4, 0.641, 0, 0 }, { 3.15, 0.612, 0, 0 }, { 3.9, 0.322, 0, 0 }, { 4.8, 0, 0, 0 } },
+		RightWrist = { { 0, 0, 0, 0 }, { 0.9, 0.2, 0, 0 }, { 1.65, -0.35, 0, 0 }, { 2.4, 0.3, 0, 0 }, { 3.15, -0.35, 0, 0 }, { 3.9, 0.2, 0, 0 }, { 4.8, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.7, -0.764, -0.611, -0.226 }, { 3.9, -0.764, -0.611, -0.226 }, { 4.8, 0, 0, 0 } },
+		LeftElbow = { { 0, 0, 0, 0 }, { 0.7, 1.179, 0, 0 }, { 3.9, 1.179, 0, 0 }, { 4.8, 0, 0, 0 } },
+		LeftWrist = { { 0, 0, 0, 0 }, { 0.7, 0, 0, 0 }, { 3.9, 0, 0, 0 }, { 4.8, 0, 0, 0 } },
+		RightKnee = { { 0, 0, 0, 0 }, { 0.9, -0.08, 0, 0 }, { 1.65, -0.26, 0, 0 }, { 2.4, -0.08, 0, 0 }, { 3.15, -0.26, 0, 0 }, { 3.9, -0.08, 0, 0 }, { 4.8, 0, 0, 0 } },
+		LeftKnee = { { 0, 0, 0, 0 }, { 0.9, -0.2, 0, 0 }, { 1.65, -0.06, 0, 0 }, { 2.4, -0.2, 0, 0 }, { 3.15, -0.06, 0, 0 }, { 3.9, -0.2, 0, 0 }, { 4.8, 0, 0, 0 } },
+	} },
+	emoteCheer = { seconds = 2.8, keys = {
+		Root = { { 0, 0, 0, 0, 0, 0, 0 }, { 0.35, 0, 0, 0, 0, 0.05, 0 }, { 0.65, 0, 0, 0, 0, -0.14, 0 }, { 0.95, 0, 0, 0, 0, 0.05, 0 }, { 1.25, 0, 0, 0, 0, -0.14, 0 }, { 1.55, 0, 0, 0, 0, 0.05, 0 }, { 2.8, 0, 0, 0, 0, 0, 0 } },
+		Waist = { { 0, 0, 0, 0 }, { 0.35, 0.1, 0, 0 }, { 2.1, 0.1, 0, 0 }, { 2.8, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.35, 0.3, 0, 0 }, { 1.55, 0.3, 0, 0 }, { 2.1, 0.22, 0, 0.08 }, { 2.8, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.35, 2.777, 0.466, -0.234 }, { 0.65, 1.889, 0.579, 0.316 }, { 0.95, 2.434, 0.875, 0.079 }, { 1.25, 1.769, 0.63, 0.436 }, { 1.55, 2.33, 0.955, 0.192 }, { 2.1, 2.552, 0.828, -0.022 }, { 2.8, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.35, 0.33, 0, 0 }, { 0.65, 1.179, 0, 0 }, { 0.95, 0.647, 0, 0 }, { 1.25, 1.243, 0, 0 }, { 1.55, 0.686, 0, 0 }, { 2.1, 0.544, 0, 0 }, { 2.8, 0, 0, 0 } },
+		RightWrist = { { 0, 0, 0, 0 }, { 0.35, 0, 0, 0 }, { 0.65, 0, 0, 0 }, { 0.95, 0, 0, 0 }, { 1.25, 0, 0, 0 }, { 1.55, 0, 0, 0 }, { 2.1, 0, 0, 0 }, { 2.8, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.35, 2.777, -0.465, 0.235 }, { 0.65, 1.891, -0.578, -0.315 }, { 0.95, 2.443, -0.867, -0.07 }, { 1.25, 1.771, -0.629, -0.434 }, { 1.55, 2.346, -0.943, -0.174 }, { 2.1, 2.56, -0.818, 0.031 }, { 2.8, 0, 0, 0 } },
+		LeftElbow = { { 0, 0, 0, 0 }, { 0.35, 0.329, 0, 0 }, { 0.65, 1.178, 0, 0 }, { 0.95, 0.643, 0, 0 }, { 1.25, 1.243, 0, 0 }, { 1.55, 0.681, 0, 0 }, { 2.1, 0.539, 0, 0 }, { 2.8, 0, 0, 0 } },
+		LeftWrist = { { 0, 0, 0, 0 }, { 0.35, 0, 0, 0 }, { 0.65, 0, 0, 0 }, { 0.95, 0, 0, 0 }, { 1.25, 0, 0, 0 }, { 1.55, 0, 0, 0 }, { 2.1, 0, 0, 0 }, { 2.8, 0, 0, 0 } },
+		RightHip = { { 0, 0, 0, 0 }, { 0.65, 0.16, 0, 0 }, { 0.95, 0.03, 0, 0 }, { 1.25, 0.16, 0, 0 }, { 1.55, 0.03, 0, 0 }, { 2.8, 0, 0, 0 } },
+		RightKnee = { { 0, 0, 0, 0 }, { 0.35, -0.05, 0, 0 }, { 0.65, -0.3, 0, 0 }, { 0.95, -0.05, 0, 0 }, { 1.25, -0.3, 0, 0 }, { 1.55, -0.05, 0, 0 }, { 2.8, 0, 0, 0 } },
+		LeftHip = { { 0, 0, 0, 0 }, { 0.65, 0.16, 0, 0 }, { 0.95, 0.03, 0, 0 }, { 1.25, 0.16, 0, 0 }, { 1.55, 0.03, 0, 0 }, { 2.8, 0, 0, 0 } },
+		LeftKnee = { { 0, 0, 0, 0 }, { 0.35, -0.05, 0, 0 }, { 0.65, -0.3, 0, 0 }, { 0.95, -0.05, 0, 0 }, { 1.25, -0.3, 0, 0 }, { 1.55, -0.05, 0, 0 }, { 2.8, 0, 0, 0 } },
+	} },
+	emoteBow = { seconds = 2.8, keys = {
+		Waist = { { 0, 0, 0, 0 }, { 0.55, 0, 0, 0 }, { 1.1, -0.62, 0, 0 }, { 1.6, -0.6, 0, 0 }, { 2.15, 0, 0, 0 }, { 2.8, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.6, 0, 0, 0 }, { 1.15, -0.28, 0, 0 }, { 1.6, -0.25, 0, 0 }, { 2.15, 0.04, 0, 0 }, { 2.8, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.5, 0.472, 1.394, -0.371 }, { 2.2, 0.47, 1.394, -0.369 }, { 2.8, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.5, 1.912, 0, 0 }, { 2.2, 1.912, 0, 0 }, { 2.8, 0, 0, 0 } },
+		RightWrist = { { 0, 0, 0, 0 }, { 0.5, 0, 0, 0 }, { 2.2, 0, 0, 0 }, { 2.8, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.5, -0.812, -1.384, 0.328 }, { 2.2, -0.813, -1.384, 0.327 }, { 2.8, 0, 0, 0 } },
+		LeftElbow = { { 0, 0, 0, 0 }, { 0.5, 1.125, 0, 0 }, { 2.2, 1.126, 0, 0 }, { 2.8, 0, 0, 0 } },
+		LeftWrist = { { 0, 0, 0, 0 }, { 0.5, 0, 0, 0 }, { 2.2, 0, 0, 0 }, { 2.8, 0, 0, 0 } },
+		RightHip = { { 0, 0, 0, 0 }, { 1.1, 0.12, 0, 0 }, { 1.6, 0.12, 0, 0 }, { 2.15, 0, 0, 0 } },
+		LeftHip = { { 0, 0, 0, 0 }, { 1.1, 0.12, 0, 0 }, { 1.6, 0.12, 0, 0 }, { 2.15, 0, 0, 0 } },
+	} },
+	emoteRoyalWave = { seconds = 3.8, keys = {
+		Waist = { { 0, 0, 0, 0 }, { 0.55, 0.06, 0, 0 }, { 1.3, 0.06, 0.08, 0 }, { 2.4, 0.06, -0.08, 0 }, { 3.1, 0.05, 0, 0 }, { 3.8, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.55, 0.12, 0, 0 }, { 1.3, 0.12, 0.28, 0 }, { 2.4, 0.12, -0.28, 0 }, { 3.1, 0.1, 0, 0 }, { 3.8, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.55, 0.461, 0.5, 0.216 }, { 0.95, 0.461, 0.5, 0.216 }, { 1.4, 0.461, 0.5, 0.216 }, { 1.85, 0.461, 0.5, 0.216 }, { 2.3, 0.461, 0.5, 0.216 }, { 2.75, 0.461, 0.5, 0.216 }, { 3.1, 0.461, 0.5, 0.216 }, { 3.8, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.55, 2.5, 0, 0 }, { 0.95, 2.5, 0, 0 }, { 1.4, 2.5, 0, 0 }, { 1.85, 2.5, 0, 0 }, { 2.3, 2.5, 0, 0 }, { 2.75, 2.5, 0, 0 }, { 3.1, 2.5, 0, 0 }, { 3.8, 0, 0, 0 } },
+		RightWrist = { { 0, 0, 0, 0 }, { 0.55, 0, 0, 0 }, { 0.95, 0, 0.55, 0 }, { 1.4, 0, -0.4, 0 }, { 1.85, 0, 0.55, 0 }, { 2.3, 0, -0.4, 0 }, { 2.75, 0, 0.3, 0 }, { 3.1, 0, 0, 0 }, { 3.8, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.5, -1.06, -1.267, 0.265 }, { 3.1, -1.057, -1.266, 0.268 }, { 3.8, 0, 0, 0 } },
+		LeftElbow = { { 0, 0, 0, 0 }, { 0.5, 1.028, 0, 0 }, { 3.1, 1.027, 0, 0 }, { 3.8, 0, 0, 0 } },
+		LeftWrist = { { 0, 0, 0, 0 }, { 0.5, 0, 0, 0 }, { 3.1, 0, 0, 0 }, { 3.8, 0, 0, 0 } },
+	} },
+	emoteGroove = { seconds = 8.9, loop = { 0.4, 2.4 }, keys = {
+		Root = { { 0, 0, 0, 0, 0, 0, 0 }, { 0.4, 0, 0.1, 0.05, 0, -0.1, 0 }, { 0.9, 0, 0, 0, 0, 0, 0 }, { 1.4, 0, -0.1, -0.05, 0, -0.1, 0 }, { 1.9, 0, 0, 0, 0, 0, 0 }, { 2.4, 0, 0.1, 0.05, 0, -0.1, 0 }, { 2.9, 0, 0, 0, 0, 0, 0 } },
+		Waist = { { 0, 0, 0, 0 }, { 0.4, 0.04, -0.16, -0.06 }, { 0.9, 0, 0, 0 }, { 1.4, 0.04, 0.16, 0.06 }, { 1.9, 0, 0, 0 }, { 2.4, 0.04, -0.16, -0.06 }, { 2.9, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.4, 0.04, 0, 0.06 }, { 0.65, -0.1, 0, 0.06 }, { 0.9, 0.04, 0, -0.06 }, { 1.15, -0.1, 0, -0.06 }, { 1.4, 0.04, 0, 0.06 }, { 1.65, -0.1, 0, 0.06 }, { 1.9, 0.04, 0, -0.06 }, { 2.15, -0.1, 0, -0.06 }, { 2.4, 0.04, 0, 0.06 }, { 2.9, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.4, 0.55, 0, 0.25 }, { 0.9, 0.1, 0, 0.3 }, { 1.4, -0.3, 0, 0.25 }, { 1.9, 0.1, 0, 0.3 }, { 2.4, 0.55, 0, 0.25 }, { 2.9, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.4, 1.3, 0, 0 }, { 0.9, 1.1, 0, 0 }, { 1.4, 1.3, 0, 0 }, { 1.9, 1.1, 0, 0 }, { 2.4, 1.3, 0, 0 }, { 2.9, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.4, -0.3, 0, -0.25 }, { 0.9, 0.1, 0, -0.3 }, { 1.4, 0.55, 0, -0.25 }, { 1.9, 0.1, 0, -0.3 }, { 2.4, -0.3, 0, -0.25 }, { 2.9, 0, 0, 0 } },
+		LeftElbow = { { 0, 0, 0, 0 }, { 0.4, 1.3, 0, 0 }, { 0.9, 1.1, 0, 0 }, { 1.4, 1.3, 0, 0 }, { 1.9, 1.1, 0, 0 }, { 2.4, 1.3, 0, 0 }, { 2.9, 0, 0, 0 } },
+		RightHip = { { 0, 0, 0, 0 }, { 0.4, 0.18, 0, 0 }, { 0.9, 0.03, 0, 0 }, { 1.4, 0.06, 0, 0 }, { 1.9, 0.03, 0, 0 }, { 2.4, 0.18, 0, 0 }, { 2.9, 0, 0, 0 } },
+		RightKnee = { { 0, 0, 0, 0 }, { 0.4, -0.32, 0, 0 }, { 0.9, -0.06, 0, 0 }, { 1.4, -0.12, 0, 0 }, { 1.9, -0.06, 0, 0 }, { 2.4, -0.32, 0, 0 }, { 2.9, 0, 0, 0 } },
+		LeftHip = { { 0, 0, 0, 0 }, { 0.4, 0.06, 0, 0 }, { 0.9, 0.03, 0, 0 }, { 1.4, 0.18, 0, 0 }, { 1.9, 0.03, 0, 0 }, { 2.4, 0.06, 0, 0 }, { 2.9, 0, 0, 0 } },
+		LeftKnee = { { 0, 0, 0, 0 }, { 0.4, -0.12, 0, 0 }, { 0.9, -0.06, 0, 0 }, { 1.4, -0.32, 0, 0 }, { 1.9, -0.06, 0, 0 }, { 2.4, -0.12, 0, 0 }, { 2.9, 0, 0, 0 } },
+	} },
+	emoteShrug = { seconds = 2, keys = {
+		Waist = { { 0, 0, 0, 0 }, { 0.4, 0.04, 0, 0.03 }, { 1.3, 0.04, 0, 0.03 }, { 2, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.4, -0.06, 0.08, 0.2 }, { 1.3, -0.04, 0.08, 0.22 }, { 2, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.4, 0.429, -0.541, 0.004 }, { 1.3, 0.432, -0.514, 0.024 }, { 2, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.4, 1.355, 0, 0 }, { 1.3, 1.396, 0, 0 }, { 2, 0, 0, 0 } },
+		RightWrist = { { 0, 0, 0, 0 }, { 0.4, 0, -0.6, 0 }, { 1.3, 0, -0.6, 0 }, { 2, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.4, 0.429, 0.541, -0.004 }, { 1.3, 0.432, 0.514, -0.024 }, { 2, 0, 0, 0 } },
+		LeftElbow = { { 0, 0, 0, 0 }, { 0.4, 1.355, 0, 0 }, { 1.3, 1.396, 0, 0 }, { 2, 0, 0, 0 } },
+		LeftWrist = { { 0, 0, 0, 0 }, { 0.4, 0, 0.6, 0 }, { 1.3, 0, 0.6, 0 }, { 2, 0, 0, 0 } },
+	} },
+	emoteFlex = { seconds = 2.8, keys = {
+		Waist = { { 0, 0, 0, 0 }, { 0.45, 0.06, 0, 0 }, { 1.3, 0.06, 0.32, 0 }, { 1.9, 0.06, -0.32, 0 }, { 2.3, 0.04, 0, 0 }, { 2.8, 0, 0, 0 } },
+		Neck = { { 0, 0, 0, 0 }, { 0.45, 0.1, 0, 0 }, { 1.3, 0.1, 0.2, 0 }, { 1.9, 0.1, -0.2, 0 }, { 2.3, 0.05, 0, 0 }, { 2.8, 0, 0, 0 } },
+		RightShoulder = { { 0, 0, 0, 0 }, { 0.45, 1.094, 0.134, 0.979 }, { 0.75, 0.92, 0.107, 0.965 }, { 1.05, 1.079, 0.128, 0.985 }, { 2.2, 1.093, 0.133, 0.98 }, { 2.8, 0, 0, 0 } },
+		RightElbow = { { 0, 0, 0, 0 }, { 0.45, 1.945, 0, 0 }, { 0.75, 2.047, 0, 0 }, { 1.05, 1.957, 0, 0 }, { 2.2, 1.946, 0, 0 }, { 2.8, 0, 0, 0 } },
+		RightWrist = { { 0, 0, 0, 0 }, { 0.45, 0, 0, 0 }, { 0.75, 0, 0, 0 }, { 1.05, 0, 0, 0 }, { 2.2, 0, 0, 0 }, { 2.8, 0, 0, 0 } },
+		LeftShoulder = { { 0, 0, 0, 0 }, { 0.45, 1.094, -0.134, -0.979 }, { 0.75, 0.92, -0.107, -0.965 }, { 1.05, 1.079, -0.128, -0.985 }, { 2.2, 1.093, -0.133, -0.98 }, { 2.8, 0, 0, 0 } },
+		LeftElbow = { { 0, 0, 0, 0 }, { 0.45, 1.945, 0, 0 }, { 0.75, 2.047, 0, 0 }, { 1.05, 1.957, 0, 0 }, { 2.2, 1.946, 0, 0 }, { 2.8, 0, 0, 0 } },
+		LeftWrist = { { 0, 0, 0, 0 }, { 0.45, 0, 0, 0 }, { 0.75, 0, 0, 0 }, { 1.05, 0, 0, 0 }, { 2.2, 0, 0, 0 }, { 2.8, 0, 0, 0 } },
+		RightKnee = { { 0, 0, 0, 0 }, { 0.45, -0.14, 0, 0 }, { 2.3, -0.14, 0, 0 }, { 2.8, 0, 0, 0 } },
+		LeftKnee = { { 0, 0, 0, 0 }, { 0.45, -0.14, 0, 0 }, { 2.3, -0.14, 0, 0 }, { 2.8, 0, 0, 0 } },
+	} },
+}
+
+-- How long each lasts, for whoever plays it (EmoteService, PlayerLife).
+Poses.LENGTH = {
+	idleLook = 4.8,
+	idleShift = 4.2,
+	idlePonder = 4.6,
+	idleYawn = 4.6,
+	idleHand = 3.8,
+	idleTap = 4.4,
+	idleAuraCrossed = 6.4,
+	idleAuraBreeze = 5.8,
+	idleAuraPockets = 5.4,
+	idleAuraBrush = 3.9,
+	emoteWave = 2.9,
+	emoteStretch = 4,
+	emoteSpin = 2.1,
+	emoteSitSquish = 20,
+	emoteAura = 10.8,
+	emoteCheer = 2.8,
+	emoteBow = 2.8,
+	emoteRoyalWave = 3.8,
+	emoteGroove = 8.9,
+	emoteShrug = 2,
+	emoteFlex = 2.8,
+}
+
+function Poses.idleLook(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.idleLook, name, t, r6)
+end
+
+function Poses.idleShift(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.idleShift, name, t, r6)
+end
+
+function Poses.idlePonder(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.idlePonder, name, t, r6)
+end
+
+function Poses.idleYawn(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.idleYawn, name, t, r6)
+end
+
+function Poses.idleHand(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.idleHand, name, t, r6)
+end
+
+function Poses.idleTap(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.idleTap, name, t, r6)
+end
+
+function Poses.idleAuraCrossed(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.idleAuraCrossed, name, t, r6)
+end
+
+function Poses.idleAuraBreeze(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.idleAuraBreeze, name, t, r6)
+end
+
+function Poses.idleAuraPockets(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.idleAuraPockets, name, t, r6)
+end
+
+function Poses.idleAuraBrush(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.idleAuraBrush, name, t, r6)
+end
+
+function Poses.emoteWave(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.emoteWave, name, t, r6)
+end
+
+function Poses.emoteStretch(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.emoteStretch, name, t, r6)
+end
+
+function Poses.emoteSpin(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.emoteSpin, name, t, r6)
+end
+
+function Poses.emoteSitSquish(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.emoteSitSquish, name, t, r6)
+end
+
+function Poses.emoteAura(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.emoteAura, name, t, r6)
+end
+
+function Poses.emoteCheer(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.emoteCheer, name, t, r6)
+end
+
+function Poses.emoteBow(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.emoteBow, name, t, r6)
+end
+
+function Poses.emoteRoyalWave(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.emoteRoyalWave, name, t, r6)
+end
+
+function Poses.emoteGroove(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.emoteGroove, name, t, r6)
+end
+
+function Poses.emoteShrug(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.emoteShrug, name, t, r6)
+end
+
+function Poses.emoteFlex(name: string, t: number, w: number, r6: boolean): CFrame?
+	return play(KEYED.emoteFlex, name, t, r6)
+end
+-- KEYED END
+
+Poses.STAMP = "21531f97"
 return Poses

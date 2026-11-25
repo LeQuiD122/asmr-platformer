@@ -272,11 +272,12 @@ local function buildHall(parent: Instance, centre: CFrame): { [string]: any }
 		Enum.Material.Fabric)
 	-- THE DADO RAIL, round the walls at a hand's height (a gap for the door).
 	for _, run in ipairs({
-		{ Vector3.new(0.2, 0.3, D - 2), Vector3.new(-(W / 2 - 1.1), floorY + 3.2, 0) },
-		{ Vector3.new(0.2, 0.3, D - 2), Vector3.new(W / 2 - 1.1, floorY + 3.2, 0) },
-		{ Vector3.new(W - 2, 0.3, 0.2), Vector3.new(0, floorY + 3.2, D / 2 - 1.1) },
-		{ Vector3.new(W / 2 - 3.6, 0.3, 0.2), Vector3.new(-(W / 4 + 0.8), floorY + 3.2, inner + 0.1) },
-		{ Vector3.new(W / 2 - 3.6, 0.3, 0.2), Vector3.new(W / 4 + 0.8, floorY + 3.2, inner + 0.1) },
+		-- (Proud of the panelling, which is 0.12 thick: the two-hundred-and-twelfth pass.)
+		{ Vector3.new(0.2, 0.3, D - 2), Vector3.new(-(W / 2 - 1.22), floorY + 3.2, 0) },
+		{ Vector3.new(0.2, 0.3, D - 2), Vector3.new(W / 2 - 1.22, floorY + 3.2, 0) },
+		{ Vector3.new(W - 2, 0.3, 0.2), Vector3.new(0, floorY + 3.2, D / 2 - 1.22) },
+		{ Vector3.new(W / 2 - 3.6, 0.3, 0.2), Vector3.new(-(W / 4 + 0.8), floorY + 3.2, inner + 0.22) },
+		{ Vector3.new(W / 2 - 3.6, 0.3, 0.2), Vector3.new(W / 4 + 0.8, floorY + 3.2, inner + 0.22) },
 	}) do
 		part(parent, "DadoRail", run[1], centre * CFrame.new(run[2]), mahogany, Enum.Material.Wood)
 	end
@@ -401,6 +402,147 @@ local function buildHall(parent: Instance, centre: CFrame): { [string]: any }
 	dust.Drag = 1
 	dust.Parent = motes
 
+	-- ===== THE HALL, LIVED IN (the two-hundred-and-twelfth pass, from your note of 2026-11-07: Hill House's models
+	-- inside and out). Its walls were the outside's render, and its back half was bare boards. Now the walls are
+	-- panelled to the rail and papered above it, with a skirting at the foot and a cornice under the ceiling, the
+	-- holes left for the door and the windows; a lamp hangs in the middle; and at the back, by the window, his chair
+	-- with its footstool and the table with his pipe and his mug, the bookcase with his ship on top, the painting of
+	-- the bay, the barometer by the clock and the umbrella stand by the door. All of it on the floor or on a wall.
+	local panelColour = Color3.fromRGB(140, 100, 70)
+	local paper = Color3.fromRGB(176, 190, 166)
+	local inX, inZ = W / 2 - 1, D / 2 - 1
+	local ceilingY = STOREY - 0.3
+	local winLow, winHigh = 3.5 - floorY, 3.5 + 5 - floorY -- the ground-floor windows, from the boards
+	local linings = {
+		-- { the lining's foot (its middle, facing into the hall), its width, the holes in it }
+		{ centre * CFrame.new(-inX + 0.06, floorY, 0) * CFrame.Angles(0, math.pi / 2, 0), D - 2, { { -2, 2 } } },
+		{ centre * CFrame.new(inX - 0.06, floorY, 0) * CFrame.Angles(0, -math.pi / 2, 0), D - 2, { { -2, 2 } } },
+		-- (Turned to face the hall, so its window, at 2 to 6 across the house, is at -6 to -2 across it.)
+		{ centre * CFrame.new(0, floorY, inZ - 0.06) * CFrame.Angles(0, math.pi, 0), W - 2, { { -6, -2 } } },
+		{ centre * CFrame.new(0, floorY, -inZ + 0.06), W - 2, { { -9.5, -5.5 }, { 5.5, 9.5 } }, true },
+	}
+	local panelTop = 3.2
+	for _, lining in ipairs(linings) do
+		local foot, wide, windows, isFront = lining[1], lining[2], lining[3], lining[4]
+		local low, high, skirt = {}, {}, {}
+		for _, w in ipairs(windows) do
+			table.insert(low, { w[1], w[2], winLow, winHigh })
+			table.insert(high, { w[1], w[2], winLow - panelTop, winHigh - panelTop })
+		end
+		if isFront then
+			-- The door's hole, the door 8 high from the boards.
+			table.insert(low, { -2.1, 2.1, -1, 8 })
+			table.insert(high, { -2.1, 2.1, -1, 8 - panelTop })
+			table.insert(skirt, { -2.1, 2.1, -1, 8 })
+		end
+		wallWithHoles(parent, "Panelling", foot, wide, panelTop, 0.12, low, panelColour, Enum.Material.Wood)
+		wallWithHoles(parent, "Wallpaper", foot * CFrame.new(0, panelTop, 0), wide, ceilingY - floorY - panelTop, 0.12, high, paper,
+			Enum.Material.Fabric)
+		wallWithHoles(parent, "Skirting", foot * CFrame.new(0, 0, 0.04), wide, 0.5, 0.2, skirt, mahogany, Enum.Material.Wood)
+		part(parent, "Cornice", Vector3.new(wide, 0.5, 0.35), foot * CFrame.new(0, ceilingY - floorY - 0.25, 0.1), PALETTE.render,
+			Enum.Material.SmoothPlastic)
+	end
+	-- A painted ceiling under the upstairs boards (whose underside was their swirling timber).
+	part(parent, "HallCeiling", Vector3.new(W - 2, 0.1, D - 2), centre * CFrame.new(0, ceilingY - 0.05, 0), PALETTE.render,
+		Enum.Material.SmoothPlastic)
+	-- The lamp hanging in the middle on its chain.
+	cylinder(parent, "PendantChain", 1.5, 0.08, centre * CFrame.new(0, ceilingY - 0.75, 0.5), brass, Enum.Material.Metal)
+	local pendant = cylinder(parent, "PendantShade", 0.7, 1.6, centre * CFrame.new(0, ceilingY - 1.85, 0.5),
+		Color3.fromRGB(240, 222, 184), Enum.Material.Fabric)
+	local hanging = Instance.new("PointLight")
+	hanging.Color = Color3.fromRGB(255, 214, 160)
+	hanging.Brightness = 0.6
+	hanging.Range = 18
+	hanging.Shadows = false
+	hanging.Parent = pendant
+
+	-- HIS CHAIR by the back window, facing into the hall (its -Z), with its footstool.
+	local plush = Color3.fromRGB(176, 138, 64)
+	local chair = centre * CFrame.new(4, floorY, 5.6)
+	for _, x in ipairs({ -1.1, 1.1 }) do
+		for _, z in ipairs({ -0.9, 0.9 }) do
+			part(parent, "ChairLeg", Vector3.new(0.3, 0.5, 0.3), chair * CFrame.new(x, 0.25, z), mahogany, Enum.Material.Wood)
+		end
+	end
+	part(parent, "ChairSeat", Vector3.new(2.8, 0.8, 2.4), chair * CFrame.new(0, 0.9, 0), plush, Enum.Material.Fabric, true)
+	part(parent, "ChairCushion", Vector3.new(2.1, 0.35, 1.9), chair * CFrame.new(0, 1.47, -0.15), plush, Enum.Material.Fabric)
+	part(parent, "ChairBack", Vector3.new(2.8, 2.6, 0.6), chair * CFrame.new(0, 2.6, 0.9), plush, Enum.Material.Fabric, true)
+	for _, x in ipairs({ -1.15, 1.15 }) do
+		part(parent, "ChairArm", Vector3.new(0.5, 0.9, 2.4), chair * CFrame.new(x, 1.75, 0), plush, Enum.Material.Fabric)
+	end
+	part(parent, "Footstool", Vector3.new(1.6, 0.8, 1.2), centre * CFrame.new(4, floorY + 0.4, 3.2), plush, Enum.Material.Fabric)
+	-- The table at his elbow: his pipe and his mug.
+	local side = centre * CFrame.new(6.9, floorY, 5.6)
+	cylinder(parent, "SideTableLeg", 2.1, 0.25, side * CFrame.new(0, 1.05, 0), mahogany, Enum.Material.Wood)
+	cylinder(parent, "SideTableFoot", 0.15, 1, side * CFrame.new(0, 0.075, 0), mahogany, Enum.Material.Wood)
+	cylinder(parent, "SideTableTop", 0.15, 1.5, side * CFrame.new(0, 2.17, 0), mahogany, Enum.Material.Wood, true)
+	cylinder(parent, "Mug", 0.5, 0.42, side * CFrame.new(0.3, 2.5, 0.2), Color3.fromRGB(230, 226, 214), Enum.Material.SmoothPlastic)
+	part(parent, "PipeStem", Vector3.new(0.6, 0.08, 0.08), side * CFrame.new(-0.25, 2.29, -0.25) * CFrame.Angles(0, 0.5, 0),
+		PALETTE.dark, Enum.Material.SmoothPlastic)
+	cylinder(parent, "PipeBowl", 0.3, 0.24, side * CFrame.new(-0.55, 2.39, -0.1), Color3.fromRGB(96, 56, 36), Enum.Material.Wood)
+
+	-- THE BOOKCASE against the back wall, left of the window, his books on its shelves and his ship on top.
+	local case = centre * CFrame.new(-8, floorY, inZ - 0.72)
+	part(parent, "BookcaseBack", Vector3.new(4, 7, 0.2), case * CFrame.new(0, 3.5, 0.5), mahogany, Enum.Material.Wood, true)
+	for _, x in ipairs({ -1.875, 1.875 }) do
+		part(parent, "BookcaseSide", Vector3.new(0.25, 7, 1.2), case * CFrame.new(x, 3.5, 0), mahogany, Enum.Material.Wood, true)
+	end
+	part(parent, "BookcaseTop", Vector3.new(4.2, 0.2, 1.3), case * CFrame.new(0, 7.1, 0), mahogany, Enum.Material.Wood, true)
+	local spines = { Color3.fromRGB(128, 44, 48), Color3.fromRGB(38, 86, 64), Color3.fromRGB(46, 58, 96),
+		Color3.fromRGB(176, 138, 64), Color3.fromRGB(96, 70, 52), Color3.fromRGB(206, 196, 176) }
+	local books = Random.new(1979)
+	for shelf = 0, 4 do
+		local y = 0.1 + shelf * 1.5
+		part(parent, "BookcaseShelf", Vector3.new(3.5, 0.15, 1.1), case * CFrame.new(0, y, 0), mahogany, Enum.Material.Wood, true)
+		if shelf < 4 then
+			local x = -1.65
+			while x < 1.4 do
+				local thick = books:NextNumber(0.18, 0.32)
+				local tall = books:NextNumber(0.85, 1.2)
+				part(parent, "Book", Vector3.new(thick, tall, 0.8), case * CFrame.new(x + thick / 2, y + 0.075 + tall / 2, 0.05),
+					spines[books:NextInteger(1, #spines)], Enum.Material.Fabric)
+				x += thick + 0.02
+			end
+		end
+	end
+	-- His ship, on its stand on top.
+	local ship = case * CFrame.new(0, 7.2, 0)
+	part(parent, "ShipStand", Vector3.new(0.9, 0.2, 0.3), ship * CFrame.new(0, 0.1, 0), mahogany, Enum.Material.Wood)
+	part(parent, "ShipHull", Vector3.new(2, 0.5, 0.5), ship * CFrame.new(0, 0.45, 0), Color3.fromRGB(46, 58, 96), Enum.Material.Wood)
+	part(parent, "ShipDeck", Vector3.new(1.9, 0.08, 0.42), ship * CFrame.new(0, 0.72, 0), PALETTE.timber, Enum.Material.Wood)
+	for _, x in ipairs({ -0.45, 0.45 }) do
+		cylinder(parent, "ShipMast", 1.5, 0.07, ship * CFrame.new(x, 1.5, 0), PALETTE.timber, Enum.Material.Wood)
+		part(parent, "ShipSail", Vector3.new(0.6, 0.8, 0.03), ship * CFrame.new(x, 1.55, 0), Color3.fromRGB(244, 238, 222),
+			Enum.Material.Fabric)
+	end
+
+	-- THE PAINTING of the bay on the left-hand wall, behind the table: sky, sea, and a boat going out.
+	local picture = centre * CFrame.new(-inX + 0.2, floorY + 6.2, 5) * CFrame.Angles(0, -math.pi / 2, 0)
+	part(parent, "PaintingFrame", Vector3.new(3.2, 2.4, 0.16), picture, brass, Enum.Material.Wood)
+	part(parent, "PaintingSky", Vector3.new(2.8, 1.1, 0.04), picture * CFrame.new(0, 0.45, -0.09), Color3.fromRGB(206, 214, 222),
+		Enum.Material.SmoothPlastic)
+	part(parent, "PaintingSea", Vector3.new(2.8, 0.9, 0.04), picture * CFrame.new(0, -0.55, -0.09), Color3.fromRGB(64, 96, 120),
+		Enum.Material.SmoothPlastic)
+	part(parent, "PaintingBoat", Vector3.new(0.5, 0.14, 0.03), picture * CFrame.new(0.6, -0.1, -0.12), PALETTE.dark,
+		Enum.Material.SmoothPlastic)
+	part(parent, "PaintingSail", Vector3.new(0.05, 0.4, 0.03), picture * CFrame.new(0.6, 0.15, -0.12), Color3.fromRGB(244, 238, 222),
+		Enum.Material.SmoothPlastic)
+
+	-- THE BAROMETER on the right-hand wall, past the clock, its needle on Change.
+	local glass = centre * CFrame.new(inX - 0.2, floorY + 5.5, 3.2) * CFrame.Angles(0, math.pi / 2, 0)
+	part(parent, "BarometerCase", Vector3.new(0.7, 2.6, 0.16), glass, mahogany, Enum.Material.Wood)
+	local barometer = part(parent, "BarometerDial", Vector3.new(0.06, 1, 1), glass * CFrame.new(0, -0.6, -0.1)
+		* CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(244, 238, 222), Enum.Material.SmoothPlastic)
+	barometer.Shape = Enum.PartType.Cylinder
+	part(parent, "BarometerNeedle", Vector3.new(0.05, 0.4, 0.02), glass * CFrame.new(0, -0.45, -0.15), PALETTE.dark,
+		Enum.Material.Metal)
+
+	-- THE UMBRELLA STAND by the door, his umbrella in it.
+	local stand = centre * CFrame.new(-2.9, floorY, -inZ + 0.7)
+	cylinder(parent, "UmbrellaStand", 1.6, 0.8, stand * CFrame.new(0, 0.8, 0), Color3.fromRGB(46, 58, 96), Enum.Material.SmoothPlastic)
+	cylinder(parent, "Umbrella", 2.8, 0.22, stand * CFrame.new(0, 1.55, 0), PALETTE.dark, Enum.Material.Fabric)
+	part(parent, "UmbrellaHandle", Vector3.new(0.12, 0.12, 0.45), stand * CFrame.new(0, 3.0, 0.15), mahogany, Enum.Material.Wood)
+
 	return {
 		-- THE HALL'S ROOM, floor to ceiling and wall to wall, that your camera is kept in while you are in it.
 		box = centre * CFrame.new(0, (floorY + STOREY - 0.3) / 2, 0),
@@ -512,10 +654,95 @@ local function buildHouse(parent: Instance, front: CFrame): (BasePart, { [string
 		part(parent, "PorchBracket", Vector3.new(0.4, 1.6, 2), frontWall * CFrame.new(x * (doorW / 2 + 0.6), 9.8, -1),
 			PALETTE.frame, Enum.Material.SmoothPlastic)
 	end
+	-- THE PORCH HOOD (the two-hundred-and-twelfth pass: its two wedges read as a pair of black wings): two slate
+	-- slopes meeting at a ridge over the door, each with a white board along its foot, lying on the brackets.
 	for _, half in ipairs({ -1, 1 }) do
-		wedge(parent, "PorchRoof", Vector3.new(doorW / 2 + 1.2, 1.6, 3),
-			frontWall * CFrame.new(half * (doorW / 4 + 0.6), 11.2, -1.5) * CFrame.Angles(0, half * math.pi / 2, 0),
-			PALETTE.slate, Enum.Material.Slate)
+		local slope = frontWall * CFrame.new(half * 1.55, 11.25, -1.3) * CFrame.Angles(0, 0, -half * 0.42)
+		part(parent, "PorchRoof", Vector3.new(3.5, 0.3, 2.9), slope, PALETTE.slate, Enum.Material.Slate)
+		part(parent, "PorchFascia", Vector3.new(3.5, 0.35, 0.14), slope * CFrame.new(0, -0.2, -1.45), PALETTE.frame,
+			Enum.Material.SmoothPlastic)
+	end
+	part(parent, "PorchRidge", Vector3.new(0.35, 0.3, 2.9), frontWall * CFrame.new(0, 11.95, -1.3), PALETTE.plinth,
+		Enum.Material.Brick)
+	-- THE DOOR'S SURROUND: a white pilaster each side and a head over it, standing on the step.
+	for _, x in ipairs({ -1, 1 }) do
+		part(parent, "DoorPilaster", Vector3.new(0.5, 8.2, 0.3), frontWall * CFrame.new(x * (doorW / 2 + 0.25), 5.3, -0.62),
+			PALETTE.frame, Enum.Material.SmoothPlastic)
+	end
+	part(parent, "DoorHead", Vector3.new(doorW + 1.4, 0.5, 0.45), frontWall * CFrame.new(0, 9.65, -0.7), PALETTE.frame,
+		Enum.Material.SmoothPlastic)
+
+	-- ===== THE HOUSE, FINISHED (the two-hundred-and-twelfth pass, from your note of 2026-11-07: Hill House's models,
+	-- inside and out). It was a plain box of render. Now: dressed stone at its corners, a band of stone between the
+	-- storeys, a gutter under each eave and a downpipe from the front one to the ground, his green shutters at the
+	-- front windows and a box of flowers under each one downstairs. All of it on the walls or the roof it belongs to.
+	local quoin = Color3.fromRGB(206, 198, 182)
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			local row = 0
+			for y = 1.2, height - 0.9, 1 do
+				local long = if row % 2 == 0 then 1.8 else 1.1
+				local other = if row % 2 == 0 then 1.1 else 1.8
+				part(parent, "Quoin", Vector3.new(long, 0.85, 0.3),
+					centre * CFrame.new(sx * (W / 2 - long / 2 + 0.15), y + 0.45, sz * (D / 2 + 0.15)), quoin, Enum.Material.Limestone)
+				part(parent, "Quoin", Vector3.new(0.3, 0.85, other),
+					centre * CFrame.new(sx * (W / 2 + 0.15), y + 0.45, sz * (D / 2 - other / 2 + 0.15)), quoin, Enum.Material.Limestone)
+				row += 1
+			end
+		end
+	end
+	-- The band between the storeys, under the upstairs windows.
+	for _, sz in ipairs({ -1, 1 }) do
+		part(parent, "StringCourse", Vector3.new(W + 0.3, 0.4, 0.3), centre * CFrame.new(0, STOREY + 0.2, sz * (D / 2 + 0.15)),
+			quoin, Enum.Material.Limestone)
+	end
+	for _, sx in ipairs({ -1, 1 }) do
+		part(parent, "StringCourse", Vector3.new(0.3, 0.4, D + 0.3), centre * CFrame.new(sx * (W / 2 + 0.15), STOREY + 0.2, 0),
+			quoin, Enum.Material.Limestone)
+	end
+	-- The gutters under the eaves, and the downpipe from the front one, down the right-hand side wall on its clips.
+	local iron = Color3.fromRGB(46, 50, 56)
+	for _, sz in ipairs({ -1, 1 }) do
+		local gutter = part(parent, "Gutter", Vector3.new(W + 2, 0.5, 0.5), centre * CFrame.new(0, height - 0.15, sz * (D / 2 + 1.05)),
+			iron, Enum.Material.Metal)
+		gutter.Shape = Enum.PartType.Cylinder
+	end
+	-- (Behind the corner's stones, which reach 1.8 along the side wall.)
+	local pipeX, pipeZ = W / 2 + 0.45, -D / 2 + 2.4
+	cylinder(parent, "Downpipe", height - 0.6, 0.4, centre * CFrame.new(pipeX, (height - 0.6) / 2, pipeZ), iron, Enum.Material.Metal)
+	local reach = (D / 2 + 1.05) + pipeZ
+	part(parent, "DownpipeElbow", Vector3.new(0.4, 0.4, reach), centre * CFrame.new(pipeX, height - 0.4, pipeZ - reach / 2), iron,
+		Enum.Material.Metal)
+	for y = 3, height - 3, 6 do
+		part(parent, "DownpipeClip", Vector3.new(0.3, 0.2, 0.55), centre * CFrame.new(W / 2 + 0.2, y, pipeZ), iron, Enum.Material.Metal)
+	end
+	-- His green shutters, open against the wall either side of each front window, and the flower boxes downstairs.
+	local petals = { Color3.fromRGB(226, 120, 150), Color3.fromRGB(248, 244, 236), Color3.fromRGB(206, 64, 72),
+		Color3.fromRGB(240, 196, 80) }
+	for k = 2, #frontHoles do
+		local h = frontHoles[k]
+		local mid = (h[1] + h[2]) / 2
+		local cy = (h[3] + h[4]) / 2
+		local half = (h[2] - h[1]) / 2
+		for _, side in ipairs({ -1, 1 }) do
+			-- (1.6 wide: the upstairs windows are 3.5 apart, room for two shutters back to back.)
+			local shutter = frontWall * CFrame.new(mid + side * (half + 0.85), cy, -0.62)
+			part(parent, "Shutter", Vector3.new(1.6, h[4] - h[3], 0.2), shutter, PALETTE.door, Enum.Material.Wood)
+			for slat = -2, 2 do
+				part(parent, "ShutterSlat", Vector3.new(1.25, 0.12, 0.08), shutter * CFrame.new(0, slat * 0.9, -0.12), PALETTE.door,
+					Enum.Material.Wood)
+			end
+		end
+		if h[3] < STOREY then
+			local box = frontWall * CFrame.new(mid, h[3] - 0.75, -0.9)
+			part(parent, "FlowerBox", Vector3.new(h[2] - h[1], 0.8, 0.8), box, PALETTE.timber, Enum.Material.Wood)
+			part(parent, "FlowerLeaves", Vector3.new(h[2] - h[1] - 0.3, 0.3, 0.6), box * CFrame.new(0, 0.5, 0), PALETTE.canopy,
+				Enum.Material.Grass)
+			for f = 0, 6 do
+				ball(parent, "Flower", 0.45, (box * CFrame.new(-1.5 + f * 0.5, 0.75, (f % 2) * 0.24 - 0.12)).Position,
+					petals[f % #petals + 1], Enum.Material.SmoothPlastic)
+			end
+		end
 	end
 	-- THE MILK on the step, two bottles with their foil caps, and the morning's paper on the mat.
 	for k = 0, 1 do
@@ -614,6 +841,58 @@ local function bench(parent: Instance, at: Vector3, facing: Vector3)
 	end
 end
 
+-- ===== THE GARDEN, LIVED IN (the hundred-and-eighty-eighth pass) =====
+--
+-- From your note of 2026-11-04: "then we need to make level 5 less barren". The top of the crag was a lawn eighty-five
+-- studs across with one apple tree and one bench on it. Now it is a cottage garden: roses along the front of the house
+-- and by the gate, a well, a wheelbarrow of flowers by the path, three beehives under the trees, a birdbath, and three
+-- more apple trees. The made ones come from Studio's mesh generator (Assets/Props, Hill_*); whichever is not there is
+-- left out. Each stands on the grass, placed in the garden's own frame (studs across, studs in from the middle toward
+-- the house), clear of the house (in 4 to 22, across 13 either way), the path (across 2.6 either way of the middle),
+-- the old tree, the bench, and Mrs Dunn inside the gate; its height, and its turn. The well and the hives are solid.
+local GARDEN = {
+	{ "Hill_Well", -24, -18, 7, 0.4 },
+	{ "Hill_Wheelbarrow", 7, -29, 2.6, 1.2 },
+	{ "Hill_Birdbath", 16, -20, 2.6, 0 },
+	{ "Hill_Beehive", -33, 9, 3, 1.57 },
+	{ "Hill_Beehive", -33, 13.5, 3, 1.57 },
+	{ "Hill_Beehive", -33, 18, 3, 1.57 },
+	{ "Hill_Roses", -7, 1.6, 3, 0 },
+	{ "Hill_Roses", 7, 1.6, 3, 1 },
+	{ "Hill_Roses", -11, 1.6, 2.6, 2 },
+	{ "Hill_Roses", 11, 1.6, 2.6, 3 },
+	{ "Hill_Roses", -6.5, -39, 2.8, 0.5 },
+	{ "Hill_Roses", -11, -37, 2.6, 2.5 },
+	{ "Hill_Roses", 22, -12, 3, 1.5 },
+	{ "Hill_Roses", -15, -30, 2.6, 4 },
+}
+local GARDEN_TREES = { { 28, 18 }, { -12, 30 }, { 28, -24 } }
+local GARDEN_SOLID = { Hill_Well = true, Hill_Beehive = true }
+local function dressGarden(garden: Instance, top: Vector3, inward: Vector3, across: Vector3)
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local folder = assets and assets:FindFirstChild("Props")
+	for _, spot in ipairs(GARDEN) do
+		local name = spot[1] :: string
+		local model = folder and folder:FindFirstChild(name)
+		local template = model and model:FindFirstChildWhichIsA("BasePart")
+		if template then
+			local piece = template:Clone()
+			piece.Name = name
+			piece.Size = template.Size * ((spot[4] :: number) / template.Size.Y)
+			local at = top + across * (spot[2] :: number) + inward * (spot[3] :: number)
+			piece.CFrame = CFrame.lookAt(at, at + inward) * CFrame.Angles(0, spot[5] :: number, 0)
+				* CFrame.new(0, piece.Size.Y / 2, 0)
+			piece.Anchored = true
+			piece.CanCollide = GARDEN_SOLID[name] == true
+			piece.CanTouch = false
+			piece.Parent = garden
+		end
+	end
+	for _, spot in ipairs(GARDEN_TREES) do
+		appleTree(garden, top + across * spot[1] + inward * spot[2])
+	end
+end
+
 -- ===== WHO IS UP HERE AT EIGHT (the hundred-and-thirteenth pass) =====
 --
 -- MR GALE, the milkman, at the top of the climb: on the landing, on the far side from the way over to the bridge and
@@ -674,8 +953,21 @@ local function mistSheets(parent: Instance, centre: Vector3, topY: number)
 	local sheet = cylinder(parent, "Mist", 3, 1900, CFrame.new(centre.X, topY - 6, centre.Z), PALETTE.mist,
 		Enum.Material.SmoothPlastic)
 	sheet.CastShadow = false
+	-- OUT TO THE HORIZON (the two-hundred-and-forty-first pass, from "polish the game more"). The sheet ended nineteen
+	-- hundred studs across, and from the middle of the walk you saw its rim and a band of bare pink sky beyond it, a white
+	-- disc hanging in nothing. Square sheets of the same mist (a part is at most 2048 studs a side) go on past it, a hair
+	-- lower so the two never fight, seven by seven, out past where the haze takes everything.
+	local TILE = 1900
+	for gx = -3, 3 do
+		for gz = -3, 3 do
+			local tile = part(parent, "MistFar", Vector3.new(TILE + 4, 3, TILE + 4),
+				CFrame.new(centre.X + gx * TILE, topY - 6.3, centre.Z + gz * TILE), PALETTE.mist, Enum.Material.SmoothPlastic)
+			tile.CastShadow = false
+		end
+	end
 	local wind = Vector3.new(1, 0, 0.4).Unit
-	for ring = 0, 1 do
+	-- (A third ring since the same pass, out where the walk climbs, so the mist is seen moving under the route too.)
+	for ring = 0, 2 do
 		local reach = 130 + ring * 170
 		local count = 6 + ring * 4
 		for index = 1, count do
@@ -856,6 +1148,13 @@ function HillHouseService.start(finish: CFrame, parent: Instance, centre: Vector
 	fillBlock(CFrame.lookAt(houseMid - Vector3.new(0, 1.5, 0), houseMid - Vector3.new(0, 1.5, 0) + inward),
 		Vector3.new(HOUSE_W + 4, 3, HOUSE_D + 4), Enum.Material.Ground)
 	bareGround(houseMid, inward, HOUSE_W + 2, HOUSE_D + 2)
+	-- NO GROUND IN THE HALL EITHER (the two-hundred-and-twelfth pass): the crag's top is lumpy, and its ground stood up
+	-- through the hall's boards (to 0.7 over them), so the hall's floor looked like earth. Inside the walls, from two
+	-- studs under the house's foot (a full cell of ground just under the boards still rendered up through them) to its
+	-- ceiling, there is no terrain at all. The plinth hides the hollow under the boards.
+	local hollow = houseMid + Vector3.new(0, (STOREY - 2) / 2, 0)
+	workspace.Terrain:FillBlock(CFrame.lookAt(hollow, hollow + inward), Vector3.new(HOUSE_W - 2, STOREY + 2, HOUSE_D - 2),
+		Enum.Material.Air)
 	-- WHERE THINGS ARE IN THE HALL, for the scene (HillHouseClient) and for check_shots.
 	model:SetAttribute("HallSpot", hall.spot)
 	model:SetAttribute("HallKey", hall.keyAt)
@@ -888,6 +1187,7 @@ function HillHouseService.start(finish: CFrame, parent: Instance, centre: Vector
 	end
 	appleTree(garden, top - across * 20 + inward * 2)
 	bench(garden, top + across * 22 - inward * 4, out)
+	dressGarden(garden, top, inward, across)
 	people(model, garden, landing, out, endAt, inward, across, topY)
 
 	-- THE FAR THINGS, out of the mist: St Brigid's on its hill, and the Deco tower over the town, toward the sea.
@@ -899,6 +1199,39 @@ function HillHouseService.start(finish: CFrame, parent: Instance, centre: Vector
 	stBrigids(model, churchAt + Vector3.new(0, 18, 0), -seaward)
 	local towerAt = top + seaward * 640 - Vector3.yAxis:Cross(seaward) * 180
 	decoTower(model, Vector3.new(towerAt.X, killY + MIST_OVER_KILL - 40, towerAt.Z))
+	-- THE COUNTRY ROUND IT (the two-hundred-and-forty-first pass): St Brigid's hill was the only ground out of the mist,
+	-- so the walk up crossed a white plain with nothing on it. Hills stand out of it all the way round now, far off and
+	-- the haze taking the further ones, each with a wood on its crown, so the mist is over a country and not a floor. Laid by a fixed seed,
+	-- the same every run, and kept clear of the route (inside 700 studs of its middle) and of the church and the tower.
+	do
+		local mistY = killY + MIST_OVER_KILL
+		local rng = Random.new(1979)
+		local count = 14
+		for index = 1, count do
+			local a = (index + rng:NextNumber(-0.3, 0.3)) / count * math.pi * 2
+			local reach = rng:NextNumber(760, 1500)
+			local at = Vector3.new(centre.X + math.cos(a) * reach, 0, centre.Z + math.sin(a) * reach)
+			local clear = (Vector3.new(at.X, 0, at.Z) - Vector3.new(churchAt.X, 0, churchAt.Z)).Magnitude > 260
+				and (Vector3.new(at.X, 0, at.Z) - Vector3.new(towerAt.X, 0, towerAt.Z)).Magnitude > 220
+			if clear then
+				local radius = rng:NextNumber(110, 240) * reach / 1100
+				local rise = radius * rng:NextNumber(0.3, 0.5)
+				local hillAt = Vector3.new(at.X, mistY - 6, at.Z)
+				farHill(model, hillAt, radius, rise)
+				-- A wood on its crown: canopy balls on the dome's upper half, set into it so none floats.
+				for _ = 1, rng:NextInteger(4, 8) do
+					local r = rng:NextNumber(0, radius * 0.55)
+					local t = rng:NextNumber(0, math.pi * 2)
+					local dx, dz = math.cos(t) * r, math.sin(t) * r
+					local ground = hillAt.Y + rise * math.sqrt(math.max(0, 1 - (r / radius) ^ 2))
+					local size = rng:NextNumber(16, 30) * reach / 1100
+					local tree = ball(model, "FarWood", size, Vector3.new(hillAt.X + dx, ground + size * 0.25, hillAt.Z + dz),
+						PALETTE.canopy:Lerp(Color3.fromRGB(60, 96, 58), rng:NextNumber(0, 0.7)), Enum.Material.Grass)
+					tree.CastShadow = false
+				end
+			end
+		end
+	end
 
 	-- THE DOOR: "Go in". The first time anyone opens it, it swings in, and stays open.
 	local hinge = model:FindFirstChild("DoorHinge", true)
@@ -982,5 +1315,5 @@ function HillHouseService.stop()
 	clearTerrain()
 end
 
-HillHouseService.STAMP = "2b03c327"
+HillHouseService.STAMP = "1d7a91bf"
 return HillHouseService

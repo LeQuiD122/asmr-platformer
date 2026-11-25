@@ -31,7 +31,7 @@ MUTATIONS = [
     ('the song not landing with you', SKY, STORY, 'song.TimePosition = math.max(0, SONG_LANDS - landsIn)', 'song.TimePosition = 0'),
     ('two last chords', SKY, STORY, 'if not (scene.song and scene.song.Parent) then', 'if true then'),
     ('SONG_LANDS off the song', SKY, STORY, 'local SONG_LANDS = 36', 'local SONG_LANDS = 30'),
-    ('the song not looked for', BOOT, HUB, '"MorningChord", "PoolsSong", "BarStrike", "BrickBurst" }', '"MorningChord", "BarStrike", "BrickBurst" }'),
+    ('the song not looked for', BOOT, HUB, '"MorningChord", "PoolsSong", "BarStrike",', '"MorningChord", "BarStrike",'),
     ('nobody in the cloud', SKY, SKYCHECK, 'scene.thin({ here, here:Lerp(marks.outAt, 0.5), marks.outAt })', 'scene.thin(nil)'),
     ('the cloud left thin', SKY, SKYCHECK, '\t\tif scene.shot == "mist" then\n\t\t\tscene.thin(nil)', '\t\tif scene.shot == "never" then\n\t\t\tscene.thin(nil)'),
     ('the cloud thinned away', SKY, SKYCHECK, 'local MIST_THIN = 0.72', 'local MIST_THIN = 0.98'),

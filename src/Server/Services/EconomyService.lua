@@ -26,6 +26,7 @@
 -- (Footprint, StepSound) for every client's StepService to draw and play. The client only ever
 -- previews on its own screen.
 
+local AdService = game:GetService("AdService")
 local AnalyticsService = game:GetService("AnalyticsService")
 local BadgeService = game:GetService("BadgeService")
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -47,7 +48,7 @@ local PURCHASE_ID_CACHE = 100 -- receipts remembered per profile
 local STUDIO_TOKENS = 1000 -- what a fresh profile gets in Studio only, to try the shop
 local CURRENCY = "Tokens"
 -- What can be worn, one of each at a time (Equipped is kind -> item id); a background is the shop's own (ShopLook).
-local WEARABLE = { trail = true, aura = true, steps = true, sound = true, background = true }
+local WEARABLE = { trail = true, aura = true, pal = true, steps = true, sound = true, background = true }
 
 -- What a new save looks like. ProfileStore fills in any field an older save is missing (Reconcile).
 local TEMPLATE = {
@@ -82,6 +83,14 @@ local TEMPLATE = {
 	-- opened, his face seen. The key holder's plaque over your head in the lobby from then on, and the Watcher's ledge
 	-- empty on your screen (trueEnding).
 	TrueEnding = false,
+	-- THE TELEPRINTER ANSWERED (the hundred-and-sixty-fifth pass): YES typed on a creamy keyboard, once a save its tokens
+	-- (answeredTeleprinter), and its old message not printed for you again.
+	-- THE VIP CRATE (the two-hundred-and-thirteenth pass): the day (as DailyDay) it was last opened, once a day.
+	VipCrateDay = 0,
+	-- RUN BOOSTS waiting (the next finished runs pay double, one each), and today's ads watched, by what for.
+	RunBoosts = 0,
+	Ads = {} :: { [string]: number },
+	Teleprinter = false,
 }
 
 type Profile = {
@@ -205,11 +214,36 @@ local function owns(player: Player, id: string): boolean
 	if passes[player] and passes[player][id] then
 		return true
 	end
-	-- VIP comes with the gold sparkle.
-	if id == "Sparkle" and passes[player] and passes[player].VIP then
-		return true
+	-- VIP comes with the gold sparkle, and with everything only VIPs have (earn = "vip", ShopCatalog.VIP).
+	if passes[player] and passes[player].VIP then
+		if id == "Sparkle" then
+			return true
+		end
+		local item = ShopCatalog.get(id)
+		if item and item.earn == "vip" then
+			return true
+		end
 	end
 	return false
+end
+
+-- TODAY'S ADS (the two-hundred-and-thirteenth pass): how many more can be watched today for each thing (ShopCatalog.ADS),
+-- the count starting again each day (UTC, as the daily chest).
+local function adsToday(data: any): { [string]: number }
+	local day = math.floor(os.time() / 86400)
+	if type(data.Ads) ~= "table" or data.Ads.day ~= day then
+		data.Ads = { day = day }
+	end
+	return data.Ads
+end
+
+local function adsLeft(data: any): { [string]: number }
+	local seen = adsToday(data)
+	local left = {}
+	for what, ad in pairs(ShopCatalog.ADS) do
+		left[what] = math.max(0, ad.perDay - (tonumber(seen[what]) or 0))
+	end
+	return left
 end
 
 local function stateFor(player: Player): any
@@ -238,6 +272,10 @@ local function stateFor(player: Player): any
 		earned = profile.Data.Earned,
 		chances = profile.Data.SecondChances,
 		crates = randomOk[player] == true, -- the background crates offered (Roblox's policy for paid random items)
+		vipCrateDay = tonumber(profile.Data.VipCrateDay) or 0, -- the VIP crate: the day it was last opened
+		boosts = tonumber(profile.Data.RunBoosts) or 0, -- run boosts waiting
+		adsLeft = adsLeft(profile.Data), -- ads that can still be watched today, by what for
+		vipToday = math.floor(os.time() / 86400), -- (today, on the server's clock)
 	}
 end
 
@@ -524,10 +562,99 @@ end
 -- BillboardGui on their Head, the server's, so every client draws it. Put away on a level (InLevel set), where a
 -- run is played with nothing over anyone. In the VIP pass's own colours, rounded like the shop's tiles.
 local VIP_TAG = "VipTag"
-local VIP_FILL = Color3.fromRGB(206, 203, 246)
 local VIP_INK = Color3.fromRGB(38, 33, 92)
 
+-- THE VIP LOUNGE'S GATE (HubService.buildVipLounge): a VIP's character is in the collision group VipGuests, which the
+-- gate's group (VipGate) lets through; everyone else's bumps into it. Set as the character comes and as VIP is bought.
+local VIP_GUESTS, VIP_GATE = "VipGuests", "VipGate"
+local function vipGroups()
+	local physics = game:GetService("PhysicsService")
+	for _, name in ipairs({ VIP_GUESTS, VIP_GATE }) do
+		if not physics:IsCollisionGroupRegistered(name) then
+			physics:RegisterCollisionGroup(name)
+		end
+	end
+	physics:CollisionGroupSetCollidable(VIP_GUESTS, VIP_GATE, false)
+end
+local guestWatch: { [Model]: RBXScriptConnection } = {}
+local function vipGuest(player: Player)
+	local character = player.Character
+	if not character then
+		return
+	end
+	local group = if passes[player] ~= nil and passes[player].VIP == true then VIP_GUESTS else "Default"
+	pcall(vipGroups)
+	for _, part in ipairs(character:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.CollisionGroup = group
+		end
+	end
+	if not guestWatch[character] then
+		guestWatch[character] = character.DescendantAdded:Connect(function(part: Instance)
+			if part:IsA("BasePart") then
+				part.CollisionGroup = if passes[player] ~= nil and passes[player].VIP == true then VIP_GUESTS else "Default"
+			end
+		end)
+		character.Destroying:Connect(function()
+			local watch = guestWatch[character]
+			guestWatch[character] = nil
+			if watch then
+				watch:Disconnect()
+			end
+		end)
+	end
+end
+
+-- THE TAGS OVER A HEAD (the two-hundred-and-eighteenth pass): chips of one height (`height` studs), their bottoms at `lift`
+-- over the head, side by side with `gap` between them when there are two (VIP `vip` studs across, the key holder's `key`),
+-- centred together; the VIP chip's billboard taller than its chip, for the crown on its top edge (`pill`, the share of it
+-- the chip is, and `bottom`, where the chip's foot is, room left under it for the shadow).
+local TAGS = { height = 0.95, lift = 2.55, gap = 0.2, vip = 2.5, key = 3.9, pill = 0.68, bottom = 0.95 }
+
+-- Where a tag's billboard (`tall` studs) is centred so its chip's foot is at TAGS.lift over the head.
+local function tagHeight(tall: number): number
+	return TAGS.lift + tall / 2 - (1 - TAGS.bottom) * tall
+end
+
+-- A SOFT SHADOW under a chip: its own shape, dark and half see-through, a little lower.
+local function chipShadow(gui: BillboardGui, share: number)
+	local shadow = Instance.new("Frame")
+	shadow.Name = "Shadow"
+	shadow.AnchorPoint = Vector2.new(0.5, 1)
+	shadow.Position = UDim2.fromScale(0.5, 1)
+	shadow.Size = UDim2.fromScale(0.97, share)
+	shadow.BackgroundColor3 = Color3.fromRGB(20, 16, 40)
+	shadow.BackgroundTransparency = 0.62
+	shadow.BorderSizePixel = 0
+	shadow.ZIndex = 0
+	shadow.Parent = gui
+	local round = Instance.new("UICorner")
+	round.CornerRadius = UDim.new(0.5, 0)
+	round.Parent = shadow
+end
+
+-- A GLOSS on a chip's top half: white, mostly see-through, fading down, the shine of something chunky and new.
+local function chipGloss(pill: Frame)
+	local gloss = Instance.new("Frame")
+	gloss.Name = "Gloss"
+	gloss.AnchorPoint = Vector2.new(0.5, 0)
+	gloss.Position = UDim2.fromScale(0.5, 0.07)
+	gloss.Size = UDim2.fromScale(0.9, 0.46)
+	gloss.BackgroundColor3 = Color3.new(1, 1, 1)
+	gloss.BorderSizePixel = 0
+	gloss.ZIndex = 2
+	gloss.Parent = pill
+	local round = Instance.new("UICorner")
+	round.CornerRadius = UDim.new(0.5, 0)
+	round.Parent = gloss
+	local fade = Instance.new("UIGradient")
+	fade.Rotation = 90
+	fade.Transparency = NumberSequence.new(0.55, 1)
+	fade.Parent = gloss
+end
+
 local function vipTag(player: Player)
+	pcall(vipGuest, player)
 	local character = player.Character
 	local head = character and character:FindFirstChild("Head")
 	if not (head and head:IsA("BasePart")) then
@@ -547,18 +674,21 @@ local function vipTag(player: Player)
 		-- shop's own chunky letters, white with a dark outline; a little gold crown of three points sitting on it; and
 		-- a shine that sweeps across it now and then (ShopService plays the shine on each screen). It was a plain
 		-- lilac pill with VIP in it.
+		-- A CHIP NOW (the two-hundred-and-eighteenth pass, from your note of 2026-11-16: "improve the tags above my head"):
+		-- smaller, a soft shadow under it and a gloss on its top half, and beside the key holder's, not under it (TAGS).
 		local gui = Instance.new("BillboardGui")
 		gui.Name = VIP_TAG
-		gui.Size = UDim2.new(2.7, 0, 1.25, 0) -- studs, so it shrinks with distance like the head it is on
-		gui.StudsOffsetWorldSpace = Vector3.new(0, 3.35, 0) -- over the name Roblox shows
+		gui.Size = UDim2.new(TAGS.vip, 0, TAGS.height / TAGS.pill, 0) -- studs, so it shrinks with distance like the head it is on
+		gui.StudsOffsetWorldSpace = Vector3.new(0, tagHeight(TAGS.height / TAGS.pill), 0)
 		gui.MaxDistance = 80
 		gui.LightInfluence = 0
 		gui.AlwaysOnTop = false
+		chipShadow(gui, TAGS.pill)
 		local pill = Instance.new("Frame")
 		pill.Name = "Pill"
 		pill.AnchorPoint = Vector2.new(0.5, 1)
-		pill.Position = UDim2.fromScale(0.5, 1)
-		pill.Size = UDim2.fromScale(1, 0.72)
+		pill.Position = UDim2.fromScale(0.5, TAGS.bottom)
+		pill.Size = UDim2.fromScale(1, TAGS.pill)
 		pill.BackgroundColor3 = Color3.new(1, 1, 1)
 		pill.ClipsDescendants = true
 		pill.Parent = gui
@@ -566,8 +696,9 @@ local function vipTag(player: Player)
 		corner.CornerRadius = UDim.new(0.5, 0)
 		corner.Parent = pill
 		local fill = Instance.new("UIGradient")
-		fill.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 214, 120)),
-			ColorSequenceKeypoint.new(0.5, VIP_FILL), ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 160, 210)) })
+		-- (Deeper than the pass's own lilac since the two-hundred-and-eighteenth pass, so the white letters stand out.)
+		fill.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 186, 70)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(158, 120, 250)), ColorSequenceKeypoint.new(1, Color3.fromRGB(246, 110, 186)) })
 		fill.Rotation = 15
 		fill.Parent = pill
 		local rim = Instance.new("UIStroke")
@@ -576,12 +707,13 @@ local function vipTag(player: Player)
 		rim.Transparency = 0.1
 		rim.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		rim.Parent = pill
+		chipGloss(pill)
 		local word = Instance.new("TextLabel")
 		word.Name = "Word"
 		word.BackgroundTransparency = 1
 		word.AnchorPoint = Vector2.new(0.5, 0.5)
-		word.Position = UDim2.fromScale(0.5, 0.52)
-		word.Size = UDim2.fromScale(0.8, 0.78)
+		word.Position = UDim2.fromScale(0.5, 0.54)
+		word.Size = UDim2.fromScale(0.74, 0.72)
 		word.FontFace = Style.FONT.display
 		word.TextScaled = true
 		word.Text = "VIP"
@@ -615,8 +747,8 @@ local function vipTag(player: Player)
 		crown.Name = "Crown"
 		crown.BackgroundTransparency = 1
 		crown.AnchorPoint = Vector2.new(0.5, 1)
-		crown.Position = UDim2.fromScale(0.5, 0.34)
-		crown.Size = UDim2.fromScale(0.36, 0.34)
+		crown.Position = UDim2.fromScale(0.5, TAGS.bottom - TAGS.pill + 0.08)
+		crown.Size = UDim2.fromScale(0.42, 0.34)
 		crown.ZIndex = 4 -- over the plaque's top edge, which it sits on
 		crown.Parent = gui
 		local gold, goldEdge = Color3.fromRGB(255, 208, 84), Color3.fromRGB(150, 96, 20)
@@ -679,26 +811,36 @@ local function keyTag(player: Player)
 		if existing then
 			existing:Destroy()
 		end
+		local vip = head:FindFirstChild(VIP_TAG)
+		if vip and vip:IsA("BillboardGui") then
+			vip.StudsOffset = Vector3.zero
+		end
 		return
 	end
 	local tag = existing
 	if not (tag and tag:IsA("BillboardGui")) then
+		-- A CHIP NOW (the two-hundred-and-eighteenth pass): the VIP chip's height, beside it; a brass key in a round green
+		-- medallion at its left (its bow was a ring with a bar through it, and read as a G), KEY HOLDER to its right.
 		local gui = Instance.new("BillboardGui")
 		gui.Name = KEY_TAG
-		gui.Size = UDim2.new(3.6, 0, 0.95, 0) -- studs, so it shrinks with distance like the head it is on
+		gui.Size = UDim2.new(TAGS.key, 0, TAGS.height / TAGS.bottom, 0) -- studs, so it shrinks with distance like the head
 		gui.MaxDistance = 80
 		gui.LightInfluence = 0
 		gui.AlwaysOnTop = false
+		chipShadow(gui, TAGS.bottom)
 		local pill = Instance.new("Frame")
 		pill.Name = "Pill"
-		pill.Size = UDim2.fromScale(1, 1)
+		pill.AnchorPoint = Vector2.new(0.5, 1)
+		pill.Position = UDim2.fromScale(0.5, TAGS.bottom)
+		pill.Size = UDim2.fromScale(1, TAGS.bottom)
 		pill.BackgroundColor3 = Color3.new(1, 1, 1)
+		pill.ClipsDescendants = true
 		pill.Parent = gui
 		local corner = Instance.new("UICorner")
 		corner.CornerRadius = UDim.new(0.5, 0)
 		corner.Parent = pill
 		local fill = Instance.new("UIGradient")
-		fill.Color = ColorSequence.new(Color3.fromRGB(96, 186, 120), KEY_GREEN)
+		fill.Color = ColorSequence.new(Color3.fromRGB(110, 200, 134), KEY_GREEN)
 		fill.Rotation = 90
 		fill.Parent = pill
 		local rim = Instance.new("UIStroke")
@@ -706,59 +848,79 @@ local function keyTag(player: Player)
 		rim.Thickness = 2
 		rim.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		rim.Parent = pill
-		-- THE KEY: a brass ring for its bow, its shank, and two teeth, at the plaque's left end.
-		local key = Instance.new("Frame")
-		key.Name = "Key"
-		key.BackgroundTransparency = 1
-		key.AnchorPoint = Vector2.new(0, 0.5)
-		key.Position = UDim2.fromScale(0.07, 0.5)
-		key.Size = UDim2.fromScale(0.2, 0.6)
-		key.Parent = pill
-		local bow = Instance.new("Frame")
-		bow.Name = "Bow"
-		bow.AnchorPoint = Vector2.new(0, 0.5)
-		bow.Position = UDim2.fromScale(0, 0.5)
-		bow.Size = UDim2.fromScale(1, 1)
-		bow.SizeConstraint = Enum.SizeConstraint.RelativeYY
+		chipGloss(pill)
+		-- THE MEDALLION: deep green, a brass ring round it, at the chip's left end.
+		local medal = Instance.new("Frame")
+		medal.Name = "Medal"
+		medal.AnchorPoint = Vector2.new(0, 0.5)
+		medal.Position = UDim2.fromScale(0.03, 0.5)
+		medal.Size = UDim2.fromScale(0.8, 0.8)
+		medal.SizeConstraint = Enum.SizeConstraint.RelativeYY
+		medal.BackgroundColor3 = KEY_DEEP
+		medal.ZIndex = 3
+		medal.Parent = pill
+		local medalRound = Instance.new("UICorner")
+		medalRound.CornerRadius = UDim.new(0.5, 0)
+		medalRound.Parent = medal
+		local medalRim = Instance.new("UIStroke")
+		medalRim.Color = KEY_BRASS
+		medalRim.Thickness = 1.5
+		medalRim.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		medalRim.Parent = medal
+		-- THE KEY in it, lying across: its bow a brass ring on the left, its shaft to the right, two teeth down off the end.
+		local function brass(name: string, x: number, y: number, w: number, h: number, round: boolean?): Frame
+			local bit = Instance.new("Frame")
+			bit.Name = name
+			bit.AnchorPoint = Vector2.new(0.5, 0.5)
+			bit.Position = UDim2.fromScale(x, y)
+			bit.Size = UDim2.fromScale(w, h)
+			bit.BackgroundColor3 = KEY_BRASS
+			bit.BorderSizePixel = 0
+			bit.ZIndex = 4
+			bit.Parent = medal
+			if round then
+				local r = Instance.new("UICorner")
+				r.CornerRadius = UDim.new(0.5, 0)
+				r.Parent = bit
+			end
+			return bit
+		end
+		local bow = brass("Bow", 0.3, 0.46, 0.34, 0.34, true)
 		bow.BackgroundTransparency = 1
-		bow.Parent = key
-		local bowCorner = Instance.new("UICorner")
-		bowCorner.CornerRadius = UDim.new(0.5, 0)
-		bowCorner.Parent = bow
 		local bowRing = Instance.new("UIStroke")
 		bowRing.Color = KEY_BRASS
-		bowRing.Thickness = 3
+		bowRing.Thickness = 2.5
 		bowRing.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		bowRing.Parent = bow
-		for _, bar in ipairs({ { 0.45, 0.5, 0.55, 0.16 }, { 0.82, 0.68, 0.08, 0.3 }, { 0.92, 0.68, 0.08, 0.3 } }) do
-			local piece = Instance.new("Frame")
-			piece.Name = "Shank"
-			piece.AnchorPoint = Vector2.new(0, 0.5)
-			piece.Position = UDim2.fromScale(bar[1], bar[2])
-			piece.Size = UDim2.fromScale(bar[3], bar[4])
-			piece.BackgroundColor3 = KEY_BRASS
-			piece.BorderSizePixel = 0
-			piece.Parent = key
-		end
+		brass("Shaft", 0.6, 0.46, 0.34, 0.09)
+		brass("Tooth", 0.72, 0.56, 0.07, 0.14)
+		brass("Tooth", 0.62, 0.56, 0.07, 0.11)
 		local word = Instance.new("TextLabel")
 		word.Name = "Word"
 		word.BackgroundTransparency = 1
 		word.AnchorPoint = Vector2.new(1, 0.5)
-		word.Position = UDim2.fromScale(0.94, 0.52)
-		word.Size = UDim2.fromScale(0.64, 0.7)
+		word.Position = UDim2.fromScale(0.95, 0.54)
+		word.Size = UDim2.fromScale(0.68, 0.66)
 		word.FontFace = Style.FONT.display
 		word.TextScaled = true
 		word.Text = "KEY HOLDER"
 		word.TextColor3 = Color3.fromRGB(255, 255, 255)
 		word.TextStrokeColor3 = KEY_DEEP
 		word.TextStrokeTransparency = 0
+		word.ZIndex = 3
 		word.Parent = pill
 		gui.Parent = head
 		tag = gui
 	end
 	local shown = tag :: BillboardGui
-	-- Over the name Roblox shows; over the VIP tag too, if they have that.
-	shown.StudsOffsetWorldSpace = Vector3.new(0, if head:FindFirstChild(VIP_TAG) then 4.75 else 3.35, 0)
+	-- SIDE BY SIDE with the VIP chip, if they have that, the two centred together over the head; alone, over the middle.
+	local vip = head:FindFirstChild(VIP_TAG)
+	local both = TAGS.vip + TAGS.gap + TAGS.key
+	shown.StudsOffsetWorldSpace = Vector3.new(0, tagHeight(TAGS.height / TAGS.bottom), 0)
+	shown.StudsOffset = Vector3.new(if vip then both / 2 - TAGS.key / 2 else 0, 0, 0)
+	if vip and vip:IsA("BillboardGui") then
+		vip.StudsOffset = Vector3.new(-both / 2 + TAGS.vip / 2, 0, 0)
+	end
 	shown.Enabled = player:GetAttribute("InLevel") == nil
 end
 
@@ -771,10 +933,12 @@ local function dress(player: Player)
 	end
 	local trail = ShopCatalog.get(profile.Data.Equipped.trail)
 	local aura = ShopCatalog.get(profile.Data.Equipped.aura)
+	local pal = ShopCatalog.get(profile.Data.Equipped.pal)
 	ShopCatalog.wear(root,
 		if trail and owns(player, trail.id) then trail else nil,
 		if aura and owns(player, aura.id) then aura else nil,
-		"Cosmetic")
+		"Cosmetic",
+		if pal and pal.kind == "pal" and owns(player, pal.id) then pal else nil)
 	vipTag(player)
 	keyTag(player)
 end
@@ -969,6 +1133,8 @@ local function load(player: Player)
 	materialsAttribute(player)
 	-- The true ending seen: told to this player's screen (the Watcher's ledge empty, StoryClient).
 	player:SetAttribute("TrueEnding", ready.Data.TrueEnding == true)
+	-- The teleprinter answered: its old message is not printed for them again (Teleprinter on their screen).
+	player:SetAttribute("Teleprinter", ready.Data.Teleprinter == true)
 	stepGear(player)
 	showCollection(player)
 	if not ready.Data.Welcomed then
@@ -1007,7 +1173,7 @@ end
 
 -- ===== WHAT THE CLIENT CAN ASK =====
 
-local ACTIONS = { buy = true, equip = true, unequip = true, code = true, crate = true }
+local ACTIONS = { buy = true, equip = true, unequip = true, code = true, crate = true, vipCrate = true }
 
 local function answer(player: Player, ok: boolean, reason: string?): any
 	return { ok = ok, reason = reason, state = stateFor(player) }
@@ -1020,6 +1186,39 @@ local function handle(player: Player, action: any, id: any): any
 	local profile = profiles[player]
 	if not profile or not profile:IsActive() then
 		return answer(player, false, "loading")
+	end
+	-- THE VIP CRATE (the two-hundred-and-thirteenth pass): a VIP's free background crate, once a day (UTC, as the daily
+	-- chest), opened in the VIP lounge. One you do not have yet, rolled here with the server's dice; tokens instead
+	-- (ShopCatalog.VIP.crateTokens) when there is none left for you, or where crates are not offered (randomOk).
+	if action == "vipCrate" then
+		if not (passes[player] and passes[player].VIP) then
+			return answer(player, false, "vip")
+		end
+		local data = profile.Data
+		local day = today()
+		if (tonumber(data.VipCrateDay) or 0) == day then
+			return answer(player, false, "tomorrow")
+		end
+		data.VipCrateDay = day
+		local won = if randomOk[player] == true then ShopCatalog.rollCrate(function(other: string): boolean
+			return owns(player, other)
+		end, crateDice:NextNumber(), crateDice:NextNumber()) else nil
+		if won then
+			data.Owned[won.id] = true
+			pcall(function()
+				AnalyticsService:LogCustomEvent(player, "VipCrate", 1,
+					{ [Enum.AnalyticsCustomFieldKeys.CustomField01.Name] = won.rarity or "" })
+			end)
+			local opened = answer(player, true)
+			opened.won = won.id
+			return opened
+		end
+		local vipTokens = ShopCatalog.VIP.crateTokens
+		data.Tokens += vipTokens
+		logEconomy(player, true, vipTokens, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, "VipCrate")
+		local paid = answer(player, true)
+		paid.tokens = vipTokens
+		return paid
 	end
 	-- A CODE POSTED in the lobby's post box (ShopCatalog.CODES): its tokens once a save, while it lasts; otherwise why
 	-- not (unknown, ended, used), for the box to say. Told with the usual pill.
@@ -1105,6 +1304,12 @@ local function handle(player: Player, action: any, id: any): any
 	-- EARNED, NEVER SOLD (the green ribbon: finishStory gives it).
 	if action == "buy" and item.earn then
 		return answer(player, false, "earned")
+	end
+	-- HERE FOR A SEASON: not sold before or after its window (ShopCatalog.season), whatever a screen says.
+	local inSeason = if item.limited then ShopCatalog.season(item, nil, passes[player] ~= nil and passes[player].VIP == true)
+		else "on"
+	if action == "buy" and item.limited and inSeason ~= "on" and inSeason ~= "early" then
+		return answer(player, false, "gone")
 	end
 	if action == "buy" then
 		local price = item.price
@@ -1838,6 +2043,10 @@ local function onDev(player: Player, action: any)
 		data.TrueEnding = not data.TrueEnding
 		player:SetAttribute("TrueEnding", data.TrueEnding == true)
 		keyTag(player)
+	elseif action == "teleprinter" then
+		-- The teleprinter as if answered, and not again: its old message, and its tokens, to see once more.
+		data.Teleprinter = not data.Teleprinter
+		player:SetAttribute("Teleprinter", data.Teleprinter == true)
 	elseif action == "storyKnown" then
 		-- Everything learned about your father, as if every question had been asked, so the time clock by Mr Barlow takes
 		-- your card at once (rejoin, or ask anyone something, for the journal to show the notes).
@@ -1957,8 +2166,28 @@ local function receipt(info: any): Enum.ProductPurchaseDecision
 		elseif item.id == "SecondChance" then
 			-- KEPT until used: one hardcore fall undone (Bootstrap spends it through spendChance).
 			profile.Data.SecondChances += 1
+		elseif item.id == "RunBoost" then
+			-- KEPT until a run is finished: that run pays double (runFinished).
+			profile.Data.RunBoosts = (tonumber(profile.Data.RunBoosts) or 0) + 1
 		else
 			return Enum.ProductPurchaseDecision.NotProcessedYet -- nothing else is sold as a product yet
+		end
+		-- WATCHED, NOT BOUGHT (a rewarded video ad's reward): counted against today's ads for it.
+		local channel = nil
+		pcall(function()
+			channel = info.ProductPurchaseChannel
+		end)
+		if channel == Enum.ProductPurchaseChannel.AdReward then
+			for what, ad in pairs(ShopCatalog.ADS) do
+				if ad.product == item.id then
+					local seen = adsToday(profile.Data)
+					seen[what] = (tonumber(seen[what]) or 0) + 1
+				end
+			end
+			pcall(function()
+				AnalyticsService:LogCustomEvent(player, "AdRewarded", 1,
+					{ [Enum.AnalyticsCustomFieldKeys.CustomField01.Name] = item.id })
+			end)
 		end
 		while #cache >= PURCHASE_ID_CACHE do
 			table.remove(cache, 1)
@@ -2110,6 +2339,17 @@ function EconomyService.runFinished(player: Player, hardcore: boolean, best: boo
 	end
 	local double = passes[player] ~= nil and passes[player].DoubleTokens == true
 	local amount = ShopCatalog.reward(run.length, hardcore, best, double, friend)
+	-- VIP: a fifth more, after the 2x (the two stack).
+	local vip = passes[player] ~= nil and passes[player].VIP == true
+	if vip then
+		amount = ShopCatalog.vipReward(amount)
+	end
+	-- A RUN BOOST waiting (bought, or watched for): this run pays double, and it is used.
+	local boosted = (tonumber(profile.Data.RunBoosts) or 0) > 0
+	if boosted then
+		profile.Data.RunBoosts -= 1
+		amount *= 2
+	end
 	if profile.Data.Earned == 0 then
 		funnel(player, 6, "First run finished")
 	end
@@ -2134,7 +2374,7 @@ function EconomyService.runFinished(player: Player, hardcore: boolean, best: boo
 	push(player)
 	if earnedRemote then
 		earnedRemote:FireClient(player, amount + prize + foundTokens, { length = run.length, hardcore = hardcore, best = best,
-			double = double, friend = friend, challenges = #done, materials = foundCount, gift = foundGift })
+			double = double, friend = friend, vip = vip, boost = boosted, challenges = #done, materials = foundCount, gift = foundGift })
 	end
 end
 
@@ -2384,6 +2624,11 @@ function EconomyService.claimDaily(player: Player): { [string]: any }
 	end
 	local streak = if last == now - 1 then (tonumber(data.DailyStreak) or 0) + 1 else 1
 	local amount = ShopCatalog.dailyReward(streak)
+	-- VIP: half as much again (the two-hundred-and-fourteenth pass).
+	local vip = passes[player] ~= nil and passes[player].VIP == true
+	if vip then
+		amount = math.floor(amount * ShopCatalog.VIP.daily + 0.5)
+	end
 	data.DailyDay = now
 	data.DailyStreak = streak
 	data.Tokens += amount
@@ -2395,7 +2640,7 @@ function EconomyService.claimDaily(player: Player): { [string]: any }
 	push(player)
 	dailyAttributes(player)
 	if earnedRemote then
-		earnedRemote:FireClient(player, amount, { daily = true, streak = streak })
+		earnedRemote:FireClient(player, amount, { daily = true, streak = streak, vip = vip })
 	end
 	return { opened = true, amount = amount, streak = streak, nextIn = nextIn }
 end
@@ -2449,6 +2694,27 @@ function EconomyService.trueEnding(player: Player)
 	end
 end
 
+-- THE TELEPRINTER ANSWERED (the hundred-and-sixty-fifth pass; DeformationService, YES typed on a creamy keyboard): once a
+-- save, ShopCatalog.REWARD.TELEPRINTER tokens, said on the tokens' pill; and the player's Teleprinter, so its old message is
+-- not printed for them again. What it paid (0 after the first time, or with no save to keep it in).
+function EconomyService.answeredTeleprinter(player: Player): number
+	local profile = profiles[player]
+	if not (profile and profile:IsActive()) or profile.Data.Teleprinter == true then
+		return 0
+	end
+	profile.Data.Teleprinter = true
+	local amount = ShopCatalog.REWARD.TELEPRINTER
+	profile.Data.Tokens += amount
+	profile.Data.Earned += amount
+	logEconomy(player, true, amount, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, "Teleprinter")
+	player:SetAttribute("Teleprinter", true)
+	push(player)
+	if earnedRemote then
+		earnedRemote:FireClient(player, amount, { teleprinter = true })
+	end
+	return amount
+end
+
 function EconomyService.isWelcomed(player: Player): boolean
 	local profile = profiles[player]
 	return profile ~= nil and profile.Data.Welcomed == true
@@ -2484,6 +2750,179 @@ function EconomyService.start()
 			.. "src/Server/Bootstrap.server.lua.")
 	end
 	MarketplaceService.ProcessReceipt = receipt
+	-- THE BOUTIQUE (the two-hundred-and-thirteenth pass, ShopCatalog.BOUTIQUE): the Roblox catalog searched with each
+	-- collection's words, the items kept that a character wears, are paid for, are not limited, and have a name to show;
+	-- the shelves kept for an hour, for every player in the server. Each player is told which of them they own (asked of
+	-- Roblox once a session, and again when they buy one). Buying is Roblox's own window, on the player's screen.
+	local boutiqueRemote = functions:WaitForChild("Boutique", 10)
+	if boutiqueRemote and boutiqueRemote:IsA("RemoteFunction") then
+		local stock = { at = -math.huge, items = {} :: { any }, busy = false }
+		local ownedOf: { [Player]: { [number]: boolean } } = {}
+		local function shown(name: any): string?
+			-- What Nunito can draw (letters, numbers, everyday marks); a name of nothing but symbols is no name.
+			local kept = tostring(name):gsub("[^%w%s%-%.,'&!%(%)]", ""):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+			return if #kept >= 3 then kept else nil
+		end
+		local function restock()
+			local AvatarEditorService = game:GetService("AvatarEditorService")
+			local shelf, seen = {}, {}
+			local spec = ShopCatalog.BOUTIQUE
+			for _, collection in ipairs(spec.collections) do
+				for _, word in ipairs(collection.words) do
+					local params = CatalogSearchParams.new()
+					params.SearchKeyword = word
+					params.Limit = 30
+					params.SortType = Enum.CatalogSortType.Relevance
+					local ok, pages = pcall(function(): any
+						return AvatarEditorService:SearchCatalogAsync(params)
+					end)
+					if ok and pages then
+						local taken = 0
+						for _, found in ipairs(pages:GetCurrentPage()) do
+							if taken >= spec.per then
+								break
+							end
+							local price = tonumber(found.Price)
+							local restricted = type(found.ItemRestrictions) == "table" and #found.ItemRestrictions > 0
+							local name = shown(found.Name)
+							-- ON THEME: every word searched for is in its name ("bubble wrap" is not "face bandages
+							-- wrap"); no test shop's; and not the same thing again from the same seller.
+							local lower = string.lower(name or "")
+							local fits = true
+							for part in string.gmatch(string.lower(word), "%a+") do
+								if not string.find(lower, part, 1, true) then
+									fits = false
+								end
+							end
+							local seller = tostring(found.CreatorName or "")
+							local twin = lower .. "|" .. string.lower(seller)
+							if found.ItemType == "Asset" and spec.kinds[found.AssetType] and price and price >= spec.min
+								and not restricted and name and fits and not string.find(string.lower(seller), "test", 1, true)
+								and not seen[found.Id] and not seen[twin] then
+								seen[found.Id] = true
+								seen[twin] = true
+								taken += 1
+								table.insert(shelf, { id = found.Id, name = name, creator = shown(found.CreatorName) or "a creator",
+									price = price, kind = found.AssetType, collection = collection.name })
+							end
+						end
+					end
+					task.wait(0.05)
+				end
+			end
+			if #shelf > 0 then
+				stock.items = shelf
+				stock.at = os.clock()
+			end
+		end
+		local function ownsOf(player: Player): { [number]: boolean }
+			local known = ownedOf[player]
+			if known then
+				return known
+			end
+			known = {}
+			ownedOf[player] = known
+			local left = #stock.items
+			for _, entry in ipairs(stock.items) do
+				task.spawn(function()
+					local ok, has = pcall(function(): boolean
+						return MarketplaceService:PlayerOwnsAsset(player, entry.id)
+					end)
+					if ok and has then
+						known[entry.id] = true
+					end
+					left -= 1
+				end)
+			end
+			local waited = 0
+			while left > 0 and waited < 6 do
+				waited += task.wait(0.1)
+			end
+			return known
+		end
+		boutiqueRemote.OnServerInvoke = function(player: Player): any
+			if os.clock() - stock.at > ShopCatalog.BOUTIQUE.refresh or #stock.items == 0 then
+				if not stock.busy then
+					stock.busy = true
+					pcall(restock)
+					stock.busy = false
+				else
+					local waited = 0
+					while stock.busy and waited < 15 do
+						waited += task.wait(0.2)
+					end
+				end
+			end
+			local owned = {}
+			for id in pairs(ownsOf(player)) do
+				table.insert(owned, id)
+			end
+			return { items = stock.items, owned = owned }
+		end
+		MarketplaceService.PromptPurchaseFinished:Connect(function(player: Player, assetId: number, bought: boolean)
+			if bought and ownedOf[player] then
+				ownedOf[player][assetId] = true
+				pcall(function()
+					AnalyticsService:LogCustomEvent(player, "BoutiqueBought", 1,
+						{ [Enum.AnalyticsCustomFieldKeys.CustomField01.Name] = tostring(assetId) })
+				end)
+			end
+		end)
+		Players.PlayerRemoving:Connect(function(player: Player)
+			ownedOf[player] = nil
+		end)
+	else
+		warn("EconomyService: no RemoteFunctions.Boutique, so the shop's Wear tab is empty. Paste src/Server/Bootstrap.server.lua.")
+	end
+	-- REWARDED VIDEO ADS (the two-hundred-and-thirteenth pass): a player asks to watch one for something
+	-- (ShopCatalog.ADS); today's allowance is checked, and Roblox plays it with that thing's developer product as its
+	-- reward, which lands in receipt like any purchase. What happened is told back. In Studio, where no ads are served,
+	-- a watched one is pretended: the reward is given as the receipt would give it.
+	local watchAd = events:WaitForChild("WatchAd", 10)
+	if watchAd and watchAd:IsA("RemoteEvent") then
+		local watching: { [Player]: boolean } = {}
+		watchAd.OnServerEvent:Connect(function(player: Player, what: any)
+			local ad = if typeof(what) == "string" then ShopCatalog.ADS[what] else nil
+			local item = ad and ShopCatalog.get(ad.product)
+			local profile = profiles[player]
+			if not (ad and item and item.productId and profile and profile:IsActive()) then
+				watchAd:FireClient(player, what, false, "unknown")
+				return
+			end
+			if watching[player] then
+				watchAd:FireClient(player, what, false, "busy")
+				return
+			end
+			if (adsLeft(profile.Data)[what] or 0) <= 0 then
+				watchAd:FireClient(player, what, false, "limit")
+				return
+			end
+			watching[player] = true
+			if RunService:IsStudio() then
+				task.wait(1)
+				if item.id == "SecondChance" then
+					profile.Data.SecondChances += 1
+				elseif item.id == "RunBoost" then
+					profile.Data.RunBoosts = (tonumber(profile.Data.RunBoosts) or 0) + 1
+				end
+				local seen = adsToday(profile.Data)
+				seen[what] = (tonumber(seen[what]) or 0) + 1
+				watching[player] = nil
+				push(player)
+				watchAd:FireClient(player, what, true, "ShowCompleted")
+				return
+			end
+			local ok, result = pcall(function(): any
+				local reward = AdService:CreateAdRewardFromDevProductId(item.productId)
+				return AdService:ShowRewardedVideoAdAsync(player, reward)
+			end)
+			watching[player] = nil
+			local outcome = if ok and typeof(result) == "EnumItem" then result.Name else "failed"
+			watchAd:FireClient(player, what, ok and outcome == "ShowCompleted", outcome)
+		end)
+	else
+		warn("EconomyService: no RemoteEvents.WatchAd, so no ad can be watched. Paste src/Server/Bootstrap.server.lua.")
+	end
 	-- THE DASHBOARD SEES EVERY ROBUX PROMPT CLOSE (custom events PassPrompt and ProductPrompt, 1 bought, 0 not, the
 	-- item in CustomField01): how many who are shown a price pay it, item by item. What is granted is the receipt's
 	-- business, not this.
@@ -2595,5 +3034,5 @@ function EconomyService.start()
 	print(("EconomyService: running, %s."):format(if saving then "saving with ProfileStore" else "NOT SAVING (no ProfileStore)"))
 end
 
-EconomyService.STAMP = "66b1627b"
+EconomyService.STAMP = "08b8b30e"
 return EconomyService

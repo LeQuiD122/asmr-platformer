@@ -6,10 +6,12 @@ Writes audio/shop/, for a Folder SoundService.ShopSounds:
 
     ShopOpen          a sweet jar's lid twisted off with a soft pop, and a few warm notes tumbling out
     ShopClose         the lid set back on and pressed down: a hollow thock and a click
-    ShopTab_x9        a different small sound for each kind of thing in the shop, in the order of its tabs
-                      (ShopCatalog.TABS, then Backgrounds): Featured a sparkle of notes, Steps two footfalls on wood,
+    ShopTab_x11       a different small sound for each kind of thing in the shop, in the order of its tabs
+                      (ShopCatalog.TABS): Pals (the two-hundred-and-sixteenth pass) a soft squishy boop and a little
+                      hop of two notes, Featured a sparkle of notes, Steps two footfalls on wood,
                       Trails a soft swish, Sounds a squeak toy, Auras a bell's shimmer, Emotes a rubber boing, Passes a
-                      ticket stamped, Tokens coins chinking, Backgrounds a roll of paper unrolling
+                      ticket stamped, Tokens coins chinking, Backgrounds a roll of paper unrolling, Wear (the boutique,
+                      the two-hundred-and-thirteenth pass) a garment's soft rustle and a wooden hanger set on a rail
     CookieCrunch_x4   biting a crisp biscuit: the snap, crumbs falling (the cursor's bite, the cookie background)
     CrateShake        a crate of backgrounds shaken: a box rattling with something soft inside
     CrateReveal_x5    what came out, by its rarity: common a soft pop, rare a chime, epic notes rising, legendary a bell
@@ -102,6 +104,16 @@ def tab(take, rng):
             f = rng.uniform(2200, 3000)
             coin = strike(0.4, [f, f * 1.41, f * 2.03], [0.25, 0.15, 0.08], [1.0, 0.5, 0.25], rng, hardness=0.7)
             add(x, peak(lp(coin, 4200)), k * rng.uniform(0.05, 0.09), 0.5 - 0.08 * k)
+    elif take == 9:  # Wear: a garment's soft rustle, and a wooden hanger set on a rail
+        t = t_(0.5)
+        rustle = bp(white(0.5, rng), 400, 2200) * (0.5 + 0.5 * np.sin(2 * np.pi * 7 * t) ** 2) * env(t, 0.03, 0.35)
+        add(x, peak(lp(rustle, 2600)), 0.0, 0.55)
+        add(x, peak(wood_bar(392.0, 0.5, rng, velocity=0.35)), 0.34, 0.5)
+        add(x, peak(strike(0.18, [1250, 1900], [0.05, 0.03], [1.0, 0.4], rng, hardness=0.5)), 0.36, 0.2)
+    elif take == 10:  # Pals: a soft squishy boop, and a little hop of two notes
+        add(x, peak(bubble(260, rng, xi=0.16)), 0.0, 0.7)
+        add(x, peak(wood_bar(523.25, 0.6, rng, velocity=0.3)), 0.12, 0.35)
+        add(x, peak(wood_bar(659.25, 0.6, rng, velocity=0.3)), 0.24, 0.3)
     else:  # Backgrounds: a roll of paper unrolling across a table
         t = t_(0.6)
         roll = bp(white(0.6, rng), 250, 1600) * (0.6 + 0.4 * np.sin(2 * np.pi * 14 * t) ** 2) * env(t, 0.05, 0.45)
@@ -170,7 +182,14 @@ if __name__ == "__main__":
     print(write(OUT / "ShopOpen.wav", shop_open(rng_for("ShopOpen", 10500))))
     print(write(OUT / "ShopClose.wav", shop_close(rng_for("ShopClose", 10500))))
     rng = rng_for("ShopTab", 10500)
-    print(write_sheet(OUT / "ShopTab_x9.wav", [tab(k, rng) for k in range(9)], SLOTS["ShopTab"]))
+    takes = [tab(k, rng) for k in range(11)]
+    # By name: the takes above are in the order they were first made; the sheet is in the shop's tabs' order.
+    MADE = ["Featured", "Steps", "Trails", "Sounds", "Auras", "Emotes", "Passes", "Tokens", "Backgrounds", "Wear", "Pals"]
+    TABS = ["Featured", "Pals", "Steps", "Trails", "Sounds", "Auras", "Emotes", "Passes", "Tokens", "Backgrounds", "Wear"]
+    old = OUT / "ShopTab_x10.wav"
+    if old.exists():
+        old.unlink()
+    print(write_sheet(OUT / "ShopTab_x11.wav", [takes[MADE.index(name)] for name in TABS], SLOTS["ShopTab"]))
     rng = rng_for("CookieCrunch", 10500)
     print(write_sheet(OUT / "CookieCrunch_x4.wav", [cookie_crunch(k, rng) for k in range(4)], SLOTS["CookieCrunch"]))
     print(write(OUT / "CrateShake.wav", crate_shake(rng_for("CrateShake", 10500))))

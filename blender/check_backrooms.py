@@ -17,7 +17,12 @@ and holds them to what the back rooms are for:
   THE WAY OUT the door's prompt; Hardcore back to the start (clock reset), Chill to the checkpoint, the lobby if the
               run is gone.
   THE SOUND   the baths' own hum (AmbienceService's backRooms bed).
+  HIS HANDS   (the hundred-and-sixty-seventh pass) caught, he is squared up to you GRIP studs off on open floor and
+              your screen sets you there; his hold, worked out from his rig's own joints, closes his hands at your sides
+              at chest height with his fingers behind your back, his feet on the carpet, his elbows inside a corridor,
+              nothing of him inside you and his face over yours; and the shots of it never past a wall.
 """
+import math
 import pathlib
 import re
 import sys
@@ -473,11 +478,11 @@ for needle, why in (
     ("one.at = one.at:Lerp(root.CFrame, 1 - math.exp(-dt * FOLLOW))", "he jumps from place to place"),
     ('drive(one, "Knee" .. side, CFrame.Angles(0.75 * math.max(0, -leg) * math.min(pace, 1.2), 0, 0))',
      "his knees bend the ordinary way (or not at all)"),
-    ('drive(one, "Hip" .. side, CFrame.Angles(leg * swing, 0, 0))', "his legs do not walk"),
+    ('drive(one, "Hip" .. side, CFrame.Angles(leg * swing * (if side == "R" then 0.7 else 1), 0, 0))', "his legs do not walk"),
     ('drive(one, "Shoulder" .. side, CFrame.Angles(1.4 + 0.12 * late, 0, -0.15 * sign))', "rushing, he does not reach for you"),
     ("if to.Magnitude < LOOK_NEAR and camera.CFrame.LookVector:Dot(-to.Unit) > 0.55 then", "his head never turns to look at you"),
     ("thud(one.at.Position, math.clamp(pace, 0.4, 1.2))", "his feet come down without a sound"),
-    ("one.tilt += ((if paused then 0.7 else 0) - one.tilt)", "stopping, his head does not tip over"),
+    ("one.tilt += ((if paused and not staring then 0.7 else 0) - one.tilt)", "stopping, his head does not tip over"),
     ("if item:IsA(\"Sound\") then\n\t\t\titem:Destroy()", "his breath is heard twice"),
 ):
     if needle not in STALKER:
@@ -499,7 +504,21 @@ for needle, why in (
     ("light.Brightness = 0\n\tend\n\tsound(\"TubeDie\"", "the lights do not go out before he is there"),
     # (Not zoomed to a narrow lens a stud off his face any more, the hundred-and-thirty-third pass: that was two slabs.
     # Over your shoulder at a size you can read, and it flies at the lens.)
-    ("eye = CFrame.lookAt(his - toward * 5.6 + across * 1.7 + Vector3.new(0, 0.5, 0), his)", "his face is not seen whole"),
+    # (And never past a wall behind you, the hundred-and-sixty-seventh pass.)
+    # (Aimed a little over his head since pass 222, so the lid going up stays in the picture.)
+    # (From the way with the most room since pass 223, still through Cinema.clear.)
+    ("eye = CFrame.lookAt(Cinema.clear(aim + best * off + Vector3.new(0, 0.05, 0), aim, current.ignore), aim)",
+     "his face is not seen whole, or the camera is past a wall"),
+    ("local best, room = back, roomAlong(aim, back, 6.5, current.ignore)", "in a small room the lens is shoved up to his face"),
+    ("local aim = his + Vector3.new(0, 0.45, 0)", "the lid going up leaves the picture"),
+    # (Pass 222: the made head shudders, throws open past wide, its fangs grow and its spit snaps.)
+    ("setFang(entry, tipped, grow)", "the fangs do not come out of the gums as he opens"),
+    ("strand.broken = true", "the spit does not snap, or joins again"),
+    ("current.mine[item] = true", "your own hair or hat can fill the shot of his face"),
+    ("local fits = math.deg(2 * math.atan(2.1 / math.max(near, 0.5)))", "in a small room his face fills the screen"),
+    ('piece("Chin"', "his lower fangs stand on nothing"),
+    ("local lidRoot = -hh * 0.4", "his upper fangs are inside his head, never seen"),
+    ("1 + 2.70158 * q * q * q + 1.70158 * q * q", "the mouth does not throw open past wide"),
     ("local from = his:Lerp(eye.Position + eye.LookVector * 1.4, lunge)", "his face does not lunge at you"),
     ('grade.Name = "BackRoomsGrade"', "the back rooms have no light of their own"),
     ("backRoomsLight(down)", "the back rooms' light stays on after you leave"),
@@ -549,6 +568,272 @@ for name, tall in tall_things.items():
         if height and tall * scale * (1 - 0.45) > height - 0.5:
             fail("BackRoomsService: the %s, stretched or giant, would come up through the ceiling" % name)
 
+# ===================================================================== in his hands (167)
+# From your note of 2026-11-03: "fix the issue with the backrooms animation where it incorrectly positions the characters
+# in the hands of the monster". His hands closed six studs out from him and above your head, round nothing, wherever you
+# were. Now: at the catch he is squared up to you GRIP studs off on open floor and facing you (BackRoomsService), your
+# own screen sets you exactly there in the black (StoryClient's holdMe), and his hold (StalkerClient's HOLD) is checked
+# here by his rig's own sums: his hands at your sides at chest height, his fingers behind your back, his feet on the
+# carpet, his elbows inside a four-stud corridor, his body and head clear of yours, his face over yours.
+grip = re.search(r"^local GRIP = ([\d.]+)", ROOMS, re.M)
+GRIP = float(grip.group(1)) if grip else 0.0
+for needle, why in (
+    ("local spot = squaredUp(target.Position, here)\n\t\t\tif spot then\n\t\t\t\there = spot\n"
+     "\t\t\t\tmodel:PivotTo(CFrame.lookAt(here, Vector3.new(target.Position.X, here.Y, target.Position.Z)))\n"
+     '\t\t\t\tmodel:SetAttribute("Grip", GRIP)', "he is not squared up to you at the catch, or your screen is not told how far"),
+    ("if back.Magnitude > 0.05 and openLine(feet, feet + back.Unit * GRIP) then", "he is not held back the way he came"),
+    ("if openLine(feet, spot) and (spot - him).Magnitude < nearest then", "he may be squared up into a wall"),
+    ("\t\tif not walkable(x, y) then\n\t\t\treturn false", "open floor is not read from the rooms"),
+):
+    if needle not in ROOMS:
+        fail("BackRoomsService: " + why)
+catch_at = ROOMS.find("-- CAUGHT.")
+if not (catch_at > 0 and 0 < ROOMS.find("local spot = squaredUp(", catch_at) < ROOMS.find('model:SetAttribute("Caught", true)', catch_at)):
+    fail("BackRoomsService: he is squared up after every screen is told he has you")
+for needle, why in (
+    ("if one.grab == 0 then\n\t\t\tone.at = root.CFrame", "his hold is drawn eased after where he is, not where he holds you"),
+    ('drive(one, "Hip", CFrame.new(0, -HOLD.hips * g, 0))', "his hips are not in the hold"),
+    ('drive(one, "Spine", CFrame.Angles(-HOLD.spine * g, 0, 0))', "his back is not in the hold"),
+    ('drive(one, "Hip" .. side, CFrame.Angles(-HOLD.thigh * g, 0, 0))', "his thighs are not in the hold"),
+    ('drive(one, "Knee" .. side, CFrame.Angles(HOLD.knee * g, 0, 0))', "his knees are not in the hold"),
+    ('drive(one, "Shoulder" .. side, CFrame.Angles(HOLD.shoulder * g, -HOLD.shoulderYaw * sign * g,\n'
+     '\t\t\t\t-HOLD.shoulderRoll * sign * g))', "his shoulders are not in the hold"),
+    ('drive(one, "Elbow" .. side, CFrame.Angles(HOLD.elbow * g, 0, -HOLD.elbowTwist * sign * g))', "his elbows are not in the hold"),
+    ('drive(one, "NeckJ", CFrame.Angles(HOLD.neck * g, 0, 0))', "his neck is not in the hold"),
+    ('drive(one, "HeadJ", CFrame.Angles(HOLD.head * g, 0,', "his head is not in the hold"),
+):
+    if needle not in STALKER:
+        fail("StalkerClient: " + why)
+for needle, why in (
+    ("local spot = Vector3.new(his.Position.X, root.Position.Y, his.Position.Z) + ahead.Unit * grip",
+     "you are not set where his hands close"),
+    ("root.CFrame = CFrame.lookAt(spot, Vector3.new(his.Position.X, spot.Y, his.Position.Z))", "you are not turned to him"),
+    ("Cinema.black(true, 0.06)\n\tlocal camera = workspace.CurrentCamera\n\tlocal eye = camera.CFrame\n"
+     "\tlocal character = Players.LocalPlayer.Character\n"
+     '\tlocal root = character and character:FindFirstChild("HumanoidRootPart")\n\tholdMe(character)',
+     "you are moved into his hands where it can be seen, or never"),
+    ("Cinema.point(CFrame.lookAt(Cinema.clear(want, mid, current.ignore), mid), 60 - 4 * k)",
+     "the shot of him holding you can be in a wall"),
+    ("if math.max(left, right) >= 5 then", "the shot of him holding you is not taken from the side with room"),
+):
+    if needle not in STORY_CLIENT:
+        fail("StoryClient: " + why)
+
+# HIM, REFINED (223 and 224, from "make the backrooms character even better" and "refine him"): round limbs over his
+# rig's own blocks, an office man's clothes, five jointed fingers, socked feet, a hump, a suit that reads against the
+# walls; and on each screen his fingers flex and his back heaves.
+for needle, why in (
+    ("local function rounded(model: Model, limb: Part): Part", "his limbs are flat sticks again"),
+    ('rigPart(model, "Tie"', "he has lost his collar and tie"),
+    ('rigPart(model, "Sole"', "his feet are black blocks again"),
+    ('rigPart(model, "Hump"', "his stoop has no hump"),
+    ("local suit, skin = Color3.fromRGB(46, 43, 44)", "his suit is black again, a cut-out against the walls"),
+):
+    if needle not in ROOMS:
+        fail("BackRoomsService: " + why)
+for needle, why in (
+    ("local function flex(one: Seen, curl: number, now: number, restless: number)", "his fingers never move"),
+    ("flex(one, 0.75 * g, now, 0.06)", "his fingers do not close on you"),
+    ("local breath = math.sin(now * 2.2)", "he does not breathe"),
+):
+    if needle not in STALKER:
+        fail("StalkerClient: " + why)
+
+# BIGGER, AND REFINED AGAIN (pass 225): the hall and the south wing, his badge and buttons, the limp, the hold light,
+# your thought cleared at the cut.
+if W < 50 or H < 32:
+    fail("the back rooms shrank back (pass 225 made them 54 by 36)")
+for src, needle, why in (
+    (ROOMS, r'badgeWords.Text = "E. MARSH\nSTAFF"', "his staff badge is gone"),
+    (ROOMS, 'rigPart(model, "Button"', "his jacket's buttons are gone"),
+    (ROOMS, 'rigPart(model, "DampHem"', "his damp trouser hems are gone"),
+    (STALKER, "local limp = 0.2 * math.max(0, -s) * math.min(pace, 1.2)", "he no longer limps"),
+    (STALKER, 'spot.Name = "HoldLight"', "he is a black shape in the hold again"),
+    (STALKER, 'item:IsA("SurfaceGui") then', "his hidden body's badge words float on screen"),
+    (STORY_CLIENT, 'gui:FindFirstChild("CinemaThought")', "your thought hangs on into his face"),
+):
+    if needle not in src:
+        fail(why)
+
+# PASS 226: he stops dead when he first sees you, then comes; his tie swings; his neck cracks; the catch's hits are
+# dark, never the white flash.
+CINEMA_SRC = (SRC / "Client" / "Services" / "Cinema.lua").read_text(encoding="utf-8")
+for src, needle, why in (
+    (ROOMS, 'model:SetAttribute("Spotted", now)', "he no longer stops dead when he sees you"),
+    (STALKER, "tie.weld.C0 = tie.rest * tie.pivot:Inverse() * CFrame.Angles(hang, 0, 0) * tie.pivot", "his tie hangs dead"),
+    (STALKER, 'real:GetAttribute("Spotted") ~= nil and not one.spotted', "his head does not snap round to you"),
+    (CINEMA_SRC, "effect.Brightness = if dark then -0.18 else 0.12", "an impact cannot be dark"),
+    (STORY_CLIENT, "Cinema.impact(1.6, true)", "his head throwing open flashes white again"),
+    (STORY_CLIENT, "Cinema.impact(2, true)", "his lunge flashes white again"),
+    (STORY_CLIENT, "Cinema.impact(0.6, true)", "the cut to his hold flashes white again"),
+):
+    if needle not in src:
+        fail(why)
+
+# PASS 227: his own mouth. His made head cut at the lips (MarshMouth), the face shot opening his skull and his own jaw
+# (not a lid over a second mouth), the walking copy wearing the two pieces with his jaw moving; the lid kept only as
+# the fallback.
+MOUTH_SRC = (SRC / "Client" / "Services" / "MarshMouth.lua").read_text(encoding="utf-8")     if (SRC / "Client" / "Services" / "MarshMouth.lua").exists() else ""
+for src, needle, why in (
+    (MOUTH_SRC, "AssetService:CreateEditableMeshAsync(Content.fromUri(template.MeshId))", "his head is not cut from its own mesh"),
+    (MOUTH_SRC, "local x = across(a, b, a.d / (a.d - b.d))", "triangles across his lips are not cut where they cross"),
+    (MOUTH_SRC, "MarshMouth.HINGE = Vector3.new(0, -0.42 + MarshMouth.SLOPE * 0.95, 0.15)", "his jaw is not hinged under his ears"),
+    (STORY_CLIENT, "if template and mouth then", "the face shot does not open his own mouth"),
+    (STORY_CLIENT, "if template and not own then", "the lid is no longer only the fallback"),
+    (STORY_CLIENT, 'or string.sub(item.Name, 1, 5) == "Mouth") then', "his walking head's pieces stay in the face shot"),
+    (STORY_CLIENT, "task.spawn(MarshMouth.prepare)", "his head is never cut"),
+    (STALKER, "weld.C0 = mouth.base * h * CFrame.Angles(-math.rad(38) * one.open, 0, 0) * h:Inverse()", "his jaw does not move as he walks"),
+    (STALKER, "gape(one, 0.85 * g + 0.06 * math.sin(now * 13), dt)", "his mouth does not open over you in the hold"),
+):
+    if needle not in src:
+        fail(why)
+
+# PASS 228: his eyes. His lids cut from his skull and hinged up into his head, an eye behind each; shut until he has
+# seen you, then open; flying open in the face shot.
+for src, needle, why in (
+    (MOUTH_SRC, "side = lidOf(a, b, c) or 1", "his lids are not cut from his skull"),
+    (MOUTH_SRC, 'ball("MouthEye", ', "there is nothing behind his lids"),
+    (STALKER, "stare(one, if one.spotted ~= nil then 1 else 0, dt)", "his eyes do not open when he sees you"),
+    (STORY_CLIENT, "entry.part.CFrame = tipped * MarshMouth.lidTurn(entry.eyelid, face.scale, face.eyeOpen or 1)", "his eyes do not open in the face shot"),
+):
+    if needle not in src:
+        fail(why)
+
+# PASS 229: the sea's monsters' jaws, cut the same way (MarshMouth.jaw): the serpent's worked as it swims, the
+# leviathan's breathing and roaring in the lobby.
+SUNK_CLIENT = (SRC / "Client" / "Services" / "SunkenCityClient.lua").read_text(encoding="utf-8")
+for src, needle, why in (
+    (MOUTH_SRC, "local front, back = split(down, ahead)", "a sea monster's jaw takes its throat with it"),
+    (MOUTH_SRC, "function MarshMouth.leviathan()", "the leviathan's jaw never moves"),
+    (SUNK_CLIENT, "SerpentJaw.work(eye, nearness)", "the serpent's jaw never moves"),
+    (STORY_CLIENT, "task.spawn(MarshMouth.leviathan)", "the leviathan's jaw is never started"),
+):
+    if needle not in src:
+        fail(why)
+
+# HIS RIG, as BackRoomsService builds it (each joint's line, so a rig changed there is a sum to redo here).
+RIG = (
+    'joint("Hip", root, hips, CFrame.new(0, 5.3, 0), CFrame.identity)',
+    'joint("Hip" .. tag, hips, thigh, CFrame.new(side * 0.34, -0.1, 0), CFrame.new(0, 1.3, 0))',
+    'joint("Knee" .. tag, thigh, shin, CFrame.new(0, -1.3, 0), CFrame.new(0, 1.25, 0))',
+    'rigPart(model, "Foot", Vector3.new(0.42, 0.24, 0.9), suit, Enum.Material.Fabric), CFrame.new(0, -1.3, -0.22))',
+    'joint("Spine", hips, torso, CFrame.new(0, 0.2, 0) * CFrame.Angles(math.rad(-16), 0, 0), CFrame.new(0, -1.15, 0))',
+    'joint("Shoulder" .. tag, torso, upper, CFrame.new(side * 0.72, 1.05, 0) * CFrame.Angles(math.rad(16), 0, 0),\n'
+    '\t\t\tCFrame.new(0, 1.15, 0))',
+    'joint("Elbow" .. tag, upper, lower, CFrame.new(0, -1.15, 0), CFrame.new(0, 1.15, 0))',
+    "welded(lower, hand, CFrame.new(0, -1.4, -0.02))",
+    # (Five two-jointed fingers since pass 223; the middle one reaches as the three pegs did, about 1.2 below the hand.)
+    'local long = ({ 0.62, 0.86, 0.95, 0.88, 0.66 })[k]',
+    'joint("NeckJ", torso, neck, CFrame.new(0, 1.15, 0) * CFrame.Angles(math.rad(-22), 0, 0), CFrame.new(0, -0.42, 0))',
+    'joint("HeadJ", neck, head, CFrame.new(0, 0.45, 0) * CFrame.Angles(math.rad(-18), 0, 0), CFrame.new(0, -0.72, 0))',
+    "welded(head, seam, CFrame.new(0, -0.08, -0.56))",
+)
+for line in RIG:
+    if line not in ROOMS:
+        fail("BackRoomsService: his rig has changed (%s...), so the sums for his hold here must be redone" % line[:40])
+hold = dict((k, float(v)) for k, v in re.findall(r"(\w+) = ([\d.]+)", STALKER[STALKER.find("local HOLD = {"):
+                                                                                STALKER.find("}", STALKER.find("local HOLD = {"))]))
+
+
+def mat(rows):
+    return [list(r) for r in rows]
+
+
+def mul(a, b):
+    return [[sum(a[i][k] * b[k][j] for k in range(4)) for j in range(4)] for i in range(4)]
+
+
+def move(x, y, z):
+    return mat(((1, 0, 0, x), (0, 1, 0, y), (0, 0, 1, z), (0, 0, 0, 1)))
+
+
+def turn(rx, ry, rz):
+    # Roblox's CFrame.Angles(rx, ry, rz): X, then Y, then Z, each about the frame before it.
+    cx, sx, cy, sy, cz, sz = (math.cos(rx), math.sin(rx), math.cos(ry), math.sin(ry), math.cos(rz), math.sin(rz))
+    x = mat(((1, 0, 0, 0), (0, cx, -sx, 0), (0, sx, cx, 0), (0, 0, 0, 1)))
+    y = mat(((cy, 0, sy, 0), (0, 1, 0, 0), (-sy, 0, cy, 0), (0, 0, 0, 1)))
+    z = mat(((cz, -sz, 0, 0), (sz, cz, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1)))
+    return mul(mul(x, y), z)
+
+
+def at(m):
+    return (m[0][3], m[1][3], m[2][3])
+
+
+def hung(parent, c0, transform, c1_y):
+    # A Motor6D: the child at parent * C0 * Transform * C1:Inverse(), every C1 here a plain offset up the child.
+    return mul(mul(mul(parent, c0), transform), move(0, -c1_y, 0))
+
+
+KEYS = ("hips", "spine", "thigh", "knee", "shoulder", "shoulderYaw", "shoulderRoll", "elbow", "elbowTwist", "neck", "head")
+if GRIP <= 0 or any(k not in hold for k in KEYS):
+    fail("StalkerClient or BackRoomsService: his hold or GRIP cannot be read, so it cannot be checked")
+else:
+    rad = math.radians
+    hips = hung(move(0, 0, 0), move(0, 5.3, 0), move(0, -hold["hips"], 0), 0)
+    torso = hung(hips, mul(move(0, 0.2, 0), turn(rad(-16), 0, 0)), turn(-hold["spine"], 0, 0), -1.15)
+    body = {}
+    for tag, side, sign in (("L", -1, 1), ("R", 1, -1)):
+        upper = hung(torso, mul(move(side * 0.72, 1.05, 0), turn(rad(16), 0, 0)),
+                     turn(hold["shoulder"], -hold["shoulderYaw"] * sign, -hold["shoulderRoll"] * sign), 1.15)
+        lower = hung(upper, move(0, -1.15, 0), turn(hold["elbow"], 0, -hold["elbowTwist"] * sign), 1.15)
+        hand = mul(lower, move(0, -1.4, -0.02))
+        body["hand" + tag] = at(hand)
+        body["tip" + tag] = at(mul(hand, move(0, -0.72 - 0.475, 0)))
+        body["elbow" + tag] = at(mul(upper, move(0, -1.15, 0)))
+        thigh = hung(hips, move(side * 0.34, -0.1, 0), turn(-hold["thigh"], 0, 0), 1.3)
+        shin = hung(thigh, move(0, -1.3, 0), turn(hold["knee"], 0, 0), 1.25)
+        body["foot" + tag] = at(mul(shin, move(0, -1.3, -0.22)))
+    neck = hung(torso, mul(move(0, 1.15, 0), turn(rad(-22), 0, 0)), turn(hold["neck"], 0, 0), -0.42)
+    head = hung(neck, mul(move(0, 0.45, 0), turn(rad(-18), 0, 0)), turn(hold["head"], 0, 0.45), -0.72)  # (tipped, as drawn)
+    body["head"] = at(head)
+    body["face"] = at(mul(head, move(0, -0.08, -0.56)))
+    body["torso"] = at(torso)
+    body["torsoTop"] = at(mul(torso, move(0, 1.15, 0)))
+
+    # YOU, GRIP studs in front of him and facing him: a body two studs across, a stud deep, from the carpet to 5.2 (the
+    # chest from 2.95 to 4.55 on R15, 2 to 4 on R6), your head's middle at 4.6.
+    def outside(p, margin):
+        gaps = (abs(p[0]) - 1.0, max(-p[1], p[1] - 5.2), abs(p[2] + GRIP) - 0.5)
+        return max(gaps) >= margin
+
+    for tag in ("L", "R"):
+        hx, hy, hz = body["hand" + tag]
+        if not (1.0 <= abs(hx) <= 1.45 and 3.1 <= hy <= 4.0 and -GRIP - 0.5 <= hz <= -GRIP + 0.3):
+            fail("StalkerClient: his %s hand closes at (%.2f, %.2f, %.2f), not at your side at chest height "
+                 "(%.1f in front of him)" % ("left" if tag == "L" else "right", hx, hy, hz, GRIP))
+        tx, ty, tz = body["tip" + tag]
+        if not (tz < -GRIP - 0.5 and abs(tx) < 1.05 and 2.9 <= ty <= 4.3):
+            fail("StalkerClient: his %s fingers end at (%.2f, %.2f, %.2f), not round behind your back"
+                 % ("left" if tag == "L" else "right", tx, ty, tz))
+        if abs(body["foot" + tag][1] - 0.12) > 0.08:
+            fail("StalkerClient: holding you, his %s foot is %.2f off the carpet" % (tag, body["foot" + tag][1] - 0.12))
+        if abs(body["elbow" + tag][0]) > 1.8:
+            fail("StalkerClient: holding you, his elbows stand %.2f out, through a four-stud corridor's walls"
+                 % abs(body["elbow" + tag][0]))
+        if not outside(body["elbow" + tag], 0.15):
+            fail("StalkerClient: holding you, his elbow is inside you")
+    for part in ("torso", "torsoTop", "head"):
+        if not outside(body[part], 0.3):
+            fail("StalkerClient: holding you, his %s is inside you" % part)
+    fx, fy, fz = body["face"]
+    if not (fy > 5.0 and math.dist(body["face"], (0, 4.6, -GRIP)) < 1.8 and fz > -GRIP):
+        fail("StalkerClient: holding you, his face is at (%.2f, %.2f, %.2f), not over yours" % (fx, fy, fz))
+
+# THE HEAD THAT OPENS IS THE HEAD HE WEARS (pass 221): where Assets/Props.Marsh_Head is worn (BackRoomsService), the
+# screamer opens that model and hides the one he wears, not the old two halves in front of it.
+STORY = (SRC / "Client" / "Services" / "StoryClient.lua").read_text(encoding="utf-8")
+if '"Marsh_Head"' in ROOMS:
+    for needle, why in (
+        ('FindFirstChild("Marsh_Head")', "the screamer does not look for the made head"),
+        ('head.Name = "Lid"', "the screamer does not open the made head (its lid)"),
+        ('item.Name == "MadeHead"', "the made head he wears is not hidden while his face opens"),
+        ("if template then {} else { -1, 1 }", "the old halves are still built where the made head is"),
+        ("if lid and jaw and hinge then", "placeScreamer does not tip the made head open"),
+    ):
+        if needle not in STORY:
+            fail("StoryClient: " + why)
+
 if problems:
     print("PROBLEMS:")
     for line in dict.fromkeys(problems):
@@ -556,4 +841,5 @@ if problems:
     sys.exit(1)
 print("back rooms: %d by %d tiles, closed all round, every floor tile walkable, the way out %d tiles from where you "
       "arrive, %d tubes and no tile more than %d from one, real light only, nothing floating, found after %d falls in a "
-      "run and left as the fall would have." % (W, H, walk, len(lights), worst, falls or 0))
+      "run and left as the fall would have; caught, held in his hands %.1f studs off." % (W, H, walk, len(lights), worst,
+                                                                                   falls or 0, GRIP))
