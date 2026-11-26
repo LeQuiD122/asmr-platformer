@@ -101,6 +101,10 @@ for item_id, tab, kind, rest in items:
                 fail("%s comes with VIP, and having VIP gives nothing of it" % item_id)
             if item_id not in re.search(r"ShopCatalog\.VIP = \{.*?items = \{([^}]*)\}", CATALOG, re.S).group(1):
                 fail("%s comes with VIP but is not in the list of what VIP gives (ShopCatalog.VIP.items)" % item_id)
+        elif earn.group(1) == "secret":
+            # FOUND (pass 268): Fluff, in the back rooms' mouse hole, once a save.
+            if 'if data.Owned.PalDust then\n\t\treturn false\n\tend\n\tdata.Owned.PalDust = true' not in ECONOMY:
+                fail("%s is found in the back rooms, and finding it gives nothing, or gives it more than once" % item_id)
         elif earn.group(1) != "story":
             fail("%s is earned by %s, which nothing gives" % (item_id, earn.group(1)))
     elif bool(price) == bool(robux):
@@ -167,8 +171,11 @@ adds = re.findall(r"[Dd]ata\.Tokens \+= ([\w.]+)", ECONOMY)
 # for YES typed under the player's own feet.)
 # (And since the two-hundred-and-thirteenth pass the VIP crate's, vipTokens, when there is no background left for a VIP:
 # once a day, for a player Roblox says has VIP; checked with the request below.)
+# (And since pass 268 Fluff's, dustTokens, once a save, for picking up the dust bunny in the back rooms.)
+# (And since the two-hundred-and-sixtieth the climb's, climbTokens, in climbed: only for metres above the save's own best,
+# which only ClimbService reports, from where the server saw the climber standing.)
 if sorted(adds) != sorted(["STUDIO_TOKENS", "item.tokens", "amount", "amount", "amount", "amount", "amount", "amount", "amount",
-                           "prize", "starterTokens", "codeTokens", "DEV_TOKENS", "vipTokens"]):
+                           "prize", "starterTokens", "codeTokens", "DEV_TOKENS", "vipTokens", "climbTokens", "dustTokens"]):
     fail("EconomyService adds tokens somewhere other than a run, a token pack, the Studio gift and the Studio "
          "test panel: %s" % adds)
 # The teleprinter pays once a save: the flag is looked at, and set, before a token is added.

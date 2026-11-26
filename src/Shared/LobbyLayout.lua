@@ -34,14 +34,21 @@ LobbyLayout.DECKS = {
 	arcade = { x = -104, z = 0, w = 56, d = 76 },
 	-- Wider (the two-hundred-and-fifth pass): its west wing is the WORKSHOP, by the squish room's lift (AT below).
 	garden = { x = 0, z = 106, w = 176, d = 48 },
+	-- THE CLIMB'S OWN DECK (pass 265, from your note: "positioning the climb entrance somewhere closer to the levels
+	-- themselves since this is where the main focus will be"): east of the level gates, one short walk from them.
+	-- (Pass 268, from your note: "make it so the entrance to the climb is not covered by any objects or other places or
+	-- entrances". Its walk came off the gates deck beside the last level pads and read as one more of them: now it comes
+	-- off the gates deck's south-east, clear of the pads by a good stride.)
+	climb = { x = 106, z = -100, w = 60, d = 64 },
 }
 
--- THE WALKS: a boardwalk from the plaza to each place, as wide as `width`, edge to edge, railed both sides.
+-- THE WALKS: a boardwalk from the plaza (or `from`) to each place, as wide as `width`, edge to edge, railed both sides.
 LobbyLayout.WALKS = {
 	{ to = "gates", width = 24 },
 	{ to = "fame", width = 20 },
 	{ to = "arcade", width = 20 },
 	{ to = "garden", width = 20 },
+	{ to = "climb", width = 18, from = "gates" },
 }
 
 -- WHERE EACH THING STANDS, from the origin (on the deck at y = 1 unless it says).
@@ -71,7 +78,19 @@ LobbyLayout.AT = {
 	materials = Vector3.new(-102, 1, -27),
 	postBox = Vector3.new(-92, 1, 22),
 	backDoor = Vector3.new(-112, 1, 18), -- the doorway, facing +X; its house and the corridor in it run back west
+	-- THE CLIMB'S DECK (pass 265): the tower in its middle, its door toward the gates (-X); the board of the highest
+	-- climbers at the deck's south side, turned across the path (nothing stands between the gateway and the tower's
+	-- door, seen from the gates).
+	climbTower = Vector3.new(114, 1, -100),
+	climbBoard = Vector3.new(100, 1, -76),
+	climbBoardFaces = Vector3.new(100, 1, -100),
+	-- THE CLIMB'S GATEWAY (pass 265): two stone piers either side of the walk's mouth onto the climb's deck, an iron arch
+	-- between them with the name on it; this is the middle of the arch, on the deck.
+	climbGate = Vector3.new(84, 1, -100),
 	-- THE GARDEN
+	-- (Pass 265: where the climbing tower stood, in the garden's east wing, Bumble in marble on a pedestal, turned to the
+	-- garden's middle.)
+	gardenStatue = Vector3.new(78, 1, 102),
 	viewer = Vector3.new(40, 1, 106), -- the telescope, looking out east over the rail
 	lift = Vector3.new(-38, 1, 104), -- the squish room's lift, its door toward the garden (+X)
 	-- THE WORKSHOP, the garden's west wing (the two-hundred-and-fifth pass, from your note of 2026-11-07: options and the
@@ -91,10 +110,12 @@ LobbyLayout.ARC = { radius = 30, spread = 172 }
 
 -- THE BENCHES (x, z, facing in radians: a sitter faces (sin, 0, cos) of it) and the planters (x, z).
 LobbyLayout.BENCHES = {
-	{ x = -22, z = 12, facing = math.pi / 2 }, -- either side of the pool, facing it
-	{ x = 22, z = 12, facing = -math.pi / 2 },
-	{ x = -10, z = 28, facing = math.pi }, -- across its far end, clear of the way onto the garden's walk
-	{ x = 10, z = 28, facing = math.pi },
+	-- (Pass 265, from your note: "position the fountain better, it's too close to the benches". Further out, a good
+	-- stride of floor between every bench and the pool's step, the far two on the diagonals.)
+	{ x = -26, z = 12, facing = math.pi / 2 }, -- either side of the pool, facing it
+	{ x = 26, z = 12, facing = -math.pi / 2 },
+	{ x = -20, z = 30, facing = math.pi * 3 / 4 }, -- its far corners, turned to it, clear of the way onto the garden's walk
+	{ x = 20, z = 30, facing = -math.pi * 3 / 4 },
 	{ x = -26, z = 118, facing = 0 }, -- the garden's, facing the sea
 	{ x = -8, z = 118, facing = 0 },
 	{ x = 10, z = 118, facing = 0 },
@@ -111,11 +132,13 @@ LobbyLayout.PLANTERS = {
 -- THE LAMP POSTS (x, z), each a real light: the plaza has its columns' lamps and the canopy's lanterns, and every
 -- other place has these. The last four stand on the walks, one each, at the side.
 LobbyLayout.LAMPS = {
-	{ x = -46, z = -94 }, { x = 46, z = -94 }, { x = -46, z = -150 }, { x = 46, z = -150 },
+	{ x = -46, z = -94 }, { x = 36, z = -90 }, { x = -46, z = -150 }, { x = 46, z = -150 },
 	{ x = 84, z = -16 }, { x = 84, z = 16 },
 	{ x = -84, z = -16 }, { x = -84, z = 16 },
 	{ x = -24, z = 104 }, { x = 24, z = 104 },
-	{ x = 10.5, z = -63 }, { x = 59, z = -8.5 }, { x = -59, z = 8.5 }, { x = -8.5, z = 62 },
+	-- (Pass 270, from your note: "this lantern is wrongly positioned". Each walk's lamp stood with its foot half on the
+	-- rail, its post right against it. Now a stride in from the rail, its whole foot on the boards.)
+	{ x = 9, z = -63 }, { x = 59, z = -7 }, { x = -59, z = 7 }, { x = -7, z = 62 },
 }
 
 -- EACH PLACE ITS OWN COLOURS (the hundred-and-ninth pass, from your notes: "greatly improve the vibe and aesthetics
@@ -127,6 +150,7 @@ LobbyLayout.ZONES = {
 	fame = { inlay = Color3.fromRGB(146, 124, 88), trim = Color3.fromRGB(226, 202, 150) }, -- old gold, for the best
 	arcade = { inlay = Color3.fromRGB(138, 102, 128), trim = Color3.fromRGB(226, 182, 210) }, -- candy, for the shop
 	garden = { inlay = Color3.fromRGB(112, 150, 104), trim = Color3.fromRGB(196, 214, 170) }, -- the lawn
+	climb = { inlay = Color3.fromRGB(104, 110, 150), trim = Color3.fromRGB(196, 204, 244) }, -- dusk blue, for the sky it goes up into
 }
 
 -- THE FESTOONS (the hundred-and-ninth pass): over every walk, two strings of warm bulbs and pastel bunting
@@ -168,15 +192,16 @@ function LobbyLayout.arc(count: number): { CFrame }
 	return out
 end
 
--- THE WALK from the plaza to `to`: its centre, its length (along the way) and its width, and whether it runs along X.
+-- THE WALK from the plaza (or the walk's `from`) to `to`: its centre, its length (along the way) and its width, and whether it runs along X.
 function LobbyLayout.walk(to: string): (Vector3, number, number, boolean)
-	local plaza, deck = LobbyLayout.DECKS.plaza, (LobbyLayout.DECKS :: any)[to]
-	local width = 20
+	local width, from = 20, "plaza"
 	for _, w in ipairs(LobbyLayout.WALKS) do
 		if w.to == to then
 			width = w.width
+			from = (w :: any).from or "plaza"
 		end
 	end
+	local plaza, deck = (LobbyLayout.DECKS :: any)[from], (LobbyLayout.DECKS :: any)[to]
 	if deck.x ~= plaza.x then
 		-- East or west: from the plaza's side to the deck's.
 		local sign = if deck.x > plaza.x then 1 else -1
@@ -209,5 +234,5 @@ function LobbyLayout.over(offset: Vector3, slack: number): boolean
 	return false
 end
 
-LobbyLayout.STAMP = "9c2c93b6"
+LobbyLayout.STAMP = "b18e1913"
 return LobbyLayout

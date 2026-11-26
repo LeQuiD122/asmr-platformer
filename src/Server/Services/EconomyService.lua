@@ -87,6 +87,8 @@ local TEMPLATE = {
 	-- (answeredTeleprinter), and its old message not printed for you again.
 	-- THE VIP CRATE (the two-hundred-and-thirteenth pass): the day (as DailyDay) it was last opened, once a day.
 	VipCrateDay = 0,
+	-- THE CLIMB (the two-hundred-and-sixtieth pass): the highest you have stood on it, in metres (ClimbService).
+	ClimbBest = 0,
 	-- RUN BOOSTS waiting (the next finished runs pay double, one each), and today's ads watched, by what for.
 	RunBoosts = 0,
 	Ads = {} :: { [string]: number },
@@ -2438,6 +2440,37 @@ function EconomyService.markHeard(player: Player, key: string)
 	profile.Data.Heard[key] = true
 end
 
+-- THE CLIMB'S BEST (ClimbService): the highest you have stood, in metres, kept in the save.
+function EconomyService.climbBest(player: Player): number
+	local profile = profiles[player]
+	local best = if profile and profile:IsActive() then tonumber(profile.Data.ClimbBest) else nil
+	return math.max(0, best or 0)
+end
+
+-- A new height on the climb: kept if it is a new best, and CLIMB_EVERY metres of new best pay CLIMB_TOKENS each (only
+-- heights never reached before pay, so climbing the same stretch again earns nothing). Returns the tokens paid.
+local CLIMB_EVERY, CLIMB_TOKENS = 25, 5
+function EconomyService.climbed(player: Player, metres: number): number
+	local profile = profiles[player]
+	if not (profile and profile:IsActive()) or typeof(metres) ~= "number" or metres ~= metres or metres > 1e6 then
+		return 0
+	end
+	local data = profile.Data
+	local before = math.max(0, tonumber(data.ClimbBest) or 0)
+	if metres <= before then
+		return 0
+	end
+	data.ClimbBest = metres
+	local climbTokens = (math.floor(metres / CLIMB_EVERY) - math.floor(before / CLIMB_EVERY)) * CLIMB_TOKENS
+	if climbTokens > 0 then
+		data.Tokens += climbTokens
+		data.Earned += climbTokens
+		logEconomy(player, true, climbTokens, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, "Climb")
+		push(player)
+	end
+	return climbTokens
+end
+
 function EconomyService.foundBackRooms(player: Player): boolean
 	local profile = profiles[player]
 	return profile ~= nil and profile:IsActive() and profile.Data.FoundBackRooms == true
@@ -2459,6 +2492,32 @@ function EconomyService.setOpenReader(fn)
 end
 
 -- A HIDDEN CACHE FOUND (Interactables.cache, one a level): its tokens, once a save. True when it paid.
+-- FLUFF, FOUND (pass 268): the dust bunny in the back rooms' mouse hole, picked up. Once a save: the pal (PalDust,
+-- never sold) and a few tokens, said on the pill. True when it was new.
+function EconomyService.foundDustBunny(player: Player): boolean
+	local profile = profiles[player]
+	if not (profile and profile:IsActive()) then
+		return false
+	end
+	local data = profile.Data
+	if data.Owned.PalDust then
+		return false
+	end
+	data.Owned.PalDust = true
+	local dustTokens = ShopCatalog.REWARD.DUST or 50
+	data.Tokens += dustTokens
+	data.Earned += dustTokens
+	logEconomy(player, true, dustTokens, Enum.AnalyticsEconomyTransactionType.Gameplay.Name, "DustBunny")
+	pcall(function()
+		AnalyticsService:LogCustomEvent(player, "DustBunnyFound")
+	end)
+	push(player)
+	if earnedRemote then
+		earnedRemote:FireClient(player, dustTokens, { pal = "Fluff" })
+	end
+	return true
+end
+
 function EconomyService.foundCache(player: Player, levelId: number): boolean
 	local profile = profiles[player]
 	if not (profile and profile:IsActive()) then
@@ -3034,5 +3093,5 @@ function EconomyService.start()
 	print(("EconomyService: running, %s."):format(if saving then "saving with ProfileStore" else "NOT SAVING (no ProfileStore)"))
 end
 
-EconomyService.STAMP = "08b8b30e"
+EconomyService.STAMP = "003ddfae"
 return EconomyService

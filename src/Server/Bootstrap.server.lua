@@ -204,6 +204,9 @@ ensureRemoteEvent(remoteEventsFolder, "SecondChance")
 ensureRemoteEvent(remoteEventsFolder, "WatchAd")
 -- THE SQUISH ROOM: the server tells a player in it that the lobby is away for a run ("closed").
 ensureRemoteEvent(remoteEventsFolder, "SquishRoom")
+-- THE CLIMB (the two-hundred-and-sixtieth pass): the server tells a climber it is moving them ("going", "arrived"), that
+-- they fell ("fell"), a new 25 m ("milestone"), tokens paid ("paid"); a climber asks to "leave".
+ensureRemoteEvent(remoteEventsFolder, "Climb")
 -- THE SQUISH ROOM'S EASEL (the two-hundred-and-thirty-third pass): a player's strokes to the server ("draw", "wipe", and
 -- "sync" for the paper as it is), and everyone's on to everyone ("draw", "wipe", "all", "gone").
 ensureRemoteEvent(remoteEventsFolder, "Easel")
@@ -1168,6 +1171,10 @@ local function storyLevel(run: any, origin: Vector3?)
 		elseif player:GetAttribute("InSquishRoom") then
 			run.players[player] = nil
 			tellStory(player, "behind")
+		elseif player:GetAttribute("InClimb") then
+			-- (Gone up the climb meanwhile: left out, as from the squish room.)
+			run.players[player] = nil
+			tellStory(player, "behind")
 		else
 			table.insert(going, player)
 		end
@@ -1523,6 +1530,22 @@ do
 	end
 end
 
+-- THE CLIMB (the two-hundred-and-sixtieth pass): the lobby's tower, and the endless climb far out in the sky. Optional,
+-- like the squish room, and built on its own thread (it waits for ChunkBuilder's templates).
+do
+	local climbModule = Services:FindFirstChild("ClimbService")
+	if climbModule and climbModule:IsA("ModuleScript") then
+		task.spawn(function()
+			local ok, err = pcall(function()
+				(require(climbModule) :: any).build(HubService.origin())
+			end)
+			if not ok then
+				warn("Bootstrap: the climb failed to build: " .. tostring(err))
+			end
+		end)
+	end
+end
+
 -- JOINING A RUN THAT IS ALREADY ON. While the lobby is away (from a run's start until its first runner is
 -- back) there is nowhere to stand but the level, so someone joining the server then is put on it, and is
 -- one of its runners: counted in (so it is not torn down under them), playing it in its mode, on its clock,
@@ -1581,6 +1604,10 @@ local function wirePlayer(player: Player)
 		if not PlayerStateService.getState(player) then
 			PlayerStateService.init(player, target)
 			TimerService.init(player)
+		end
+		-- (A climber is never put into a run that is on: ClimbService puts them back at the bottom of the climb.)
+		if player:GetAttribute("InClimb") then
+			lobbyAway = false
 		end
 		if levelInstance and not inRunNow and lobbyAway and not player:GetAttribute("InSquishRoom") then
 			joinRunLate(player)
@@ -2604,6 +2631,14 @@ local function backThroughTheDoor(player: Player)
 		goingBack[player] = nil
 	end)
 end
+-- FLUFF, the back rooms' dust bunny (pass 268): picked up, it is yours.
+if BackRoomsService and BackRoomsService.setDustHandler then
+	BackRoomsService.setDustHandler(function(player: Player)
+		if EconomyService and EconomyService.foundDustBunny then
+			EconomyService.foundDustBunny(player)
+		end
+	end)
+end
 if BackRoomsService and BackRoomsService.setReturn then
 	BackRoomsService.setReturn(backThroughTheDoor)
 end
@@ -2616,6 +2651,9 @@ if HubService.setBackRoomsDoor then
 			return
 		end
 		if HubService.isInRun(player) or player:GetAttribute("InLevel") ~= nil or player:GetAttribute("InSquishRoom") then
+			return
+		end
+		if player:GetAttribute("InClimb") then
 			return
 		end
 		if not (EconomyService and EconomyService.foundBackRooms and EconomyService.foundBackRooms(player)) then
@@ -2811,13 +2849,14 @@ local PASTE_STAMPS: { [string]: { [string]: string } } = {
 		Conversations = "3ea9ed08",
 		Keepsakes = "2213dd3d",
 		LevelDefinitions = "bd7939e3",
-		LobbyLayout = "9c2c93b6",
-		MaterialAppearance = "9da9d575",
+		LobbyLayout = "b18e1913",
+		MaterialAppearance = "6bdd71ba",
 		MaterialConfig = "dd3a5a52",
+		PetStatues = "d221dcfe",
 		PlanShapes = "c4c2dee5",
 		Poses = "21531f97",
 		SeaRig = "1b6665f8",
-		ShopCatalog = "4bba8e94",
+		ShopCatalog = "0ff72774",
 		SkyPath = "ee880e00",
 		SoundAudition = "9dc92c15",
 		Style = "8898a74b",
@@ -2825,24 +2864,25 @@ local PASTE_STAMPS: { [string]: { [string]: string } } = {
 		WaterSounds = "f8d3e842",
 	},
 	server = {
-		BackRoomsService = "2b79ce56",
-		BackdropService = "74db258b",
+		BackRoomsService = "5e2bfadd",
+		BackdropService = "2f93d151",
 		BestTimeService = "71828c8e",
 		ChunkService = "5351e0e7",
+		ClimbService = "a82c0090",
 		DeformationService = "862e0512",
 		DiveFinaleService = "4e31aa6b",
-		EconomyService = "08b8b30e",
-		FloodedHallsService = "8b707b0d",
-		HillHouseService = "1d7a91bf",
-		HubService = "5f04e3a1",
+		EconomyService = "003ddfae",
+		FloodedHallsService = "ba0214f5",
+		HillHouseService = "2358394c",
+		HubService = "ac738805",
 		Interactables = "d86f603a",
 		LeaderboardService = "5cb1004e",
 		LevelService = "47bc8749",
-		LightingService = "6c4e1c71",
-		SkyPoolsService = "513603d6",
+		LightingService = "3a4d9d6b",
+		SkyPoolsService = "58f30b86",
 		SquishRoomService = "d1cb07b5",
 		StoryService = "b9e0dbb5",
-		SunkenCityService = "e6a3eb71",
+		SunkenCityService = "97568dff",
 		TimerService = "4c754864",
 		Townsfolk = "61b686e8",
 	},
@@ -2852,37 +2892,39 @@ local PASTE_STAMPS: { [string]: { [string]: string } } = {
 		AudioService = "eb31b80b",
 		Cinema = "c2320b3c",
 		CityShoreClient = "b1d8bd87",
+		ClimbClient = "70b75f94",
 		CosmeticsClient = "d8c7c6f3",
 		DeathService = "fd20a739",
 		DeformationRenderer = "9425438f",
-		DevPanelClient = "37eb0a07",
+		DevPanelClient = "e07362ce",
 		DrawingBoard = "2584d982",
 		EmoteService = "6b4fb966",
-		FloodedHallsClient = "1c3a6b78",
+		FloodedHallsClient = "a780483b",
 		GroundMarks = "d996c287",
 		Haptics = "326501ab",
 		HillHouseClient = "940260b5",
 		HubLeverService = "cb5ad0b8",
-		HubVoteService = "9f52f1f8",
+		HubVoteService = "7c64d461",
 		JournalService = "930eb700",
+		LightGuard = "3beebf02",
 		LobbyLife = "19fe7174",
-		MarshMouth = "a5ee35df",
-		Maw = "31b25c99",
-		OnboardingService = "154bdcdc",
-		PauseMenuService = "2c4c2fe2",
+		MarshMouth = "ec4896a1",
+		Maw = "b0412862",
+		OnboardingService = "b1aed416",
+		PauseMenuService = "ae2bbbf7",
 		PlayerLife = "d14b951a",
 		RunFeel = "2bc3fccd",
 		ScreenEffects = "1aab395f",
 		SearchlightClient = "ee204a83",
 		ShopLook = "90e3eed1",
 		ShopModels = "9f46b345",
-		ShopService = "810e3dc0",
+		ShopService = "00321a71",
 		SkyPoolsClient = "44ad1308",
 		SquishRoomClient = "94acbe7c",
-		StalkerClient = "a6823855",
+		StalkerClient = "a1c8d7eb",
 		StepService = "c10931d2",
-		StoryClient = "3da889d8",
-		SunkenCityClient = "a76f5f25",
+		StoryClient = "c0e12782",
+		SunkenCityClient = "5ca31787",
 		TalkClient = "4cf69365",
 		Teleprinter = "32391f7f",
 		UIService = "5d894e66",
@@ -2905,17 +2947,17 @@ local function pasteCheck()
 	local SERVER_MODULES = { "BackRoomsService", "BackdropService", "BestTimeService", "ChunkService", "DeformationService",
 		"DiveFinaleService", "EconomyService", "FloodedHallsService", "HillHouseService", "HubService", "Interactables",
 		"LeaderboardService", "LevelService", "LightingService", "PlayerStateService", "SkyPoolsService",
-		"SquishRoomService", "StoryService", "SunkenCityService", "TimerService", "Townsfolk" }
+		"SquishRoomService", "StoryService", "SunkenCityService", "TimerService", "Townsfolk", "ClimbService" }
 	local SHARED_MODULES = { "ChunkDefinitions", "Conversations", "HallRoute", "Keepsakes", "LevelDefinitions",
-		"LobbyLayout", "MaterialAppearance", "MaterialConfig", "PlanShapes", "Poses", "SeaRig", "ShopCatalog", "SkyPath",
+		"LobbyLayout", "MaterialAppearance", "MaterialConfig", "PetStatues", "PlanShapes", "Poses", "SeaRig", "ShopCatalog", "SkyPath",
 		"SoundAudition", "Style", "SubRegionGrid", "SunkenPath", "Types", "WaterSounds" }
 	local CLIENT_MODULES = { "AmbienceService", "AudioService", "Cinema", "CityShoreClient", "CloudService", "CosmeticsClient",
 		"DeathService", "DeformationRenderer", "DevPanelClient", "DrawingBoard", "EmoteService", "FloodedHallsClient",
 		"HillHouseClient", "HubLeverService", "HubVoteService", "InputService", "JournalService", "GroundMarks", "LobbyLife", "MarshMouth", "Maw", "OnboardingService",
 		"PlayerLife",
 		"PauseMenuService", "ScreenEffects", "SeaService", "SearchlightClient", "ShopService", "SkyPoolsClient",
-		"ShopLook", "ShopModels", "AdOffers", "SquishRoomClient", "StalkerClient", "StepService", "StoryClient", "SunkenCityClient", "TalkClient", "UIService",
-		"RunFeel", "Haptics", "Teleprinter",
+		"ShopLook", "ShopModels", "AdOffers", "SquishRoomClient", "ClimbClient", "StalkerClient", "StepService", "StoryClient", "SunkenCityClient", "TalkClient", "UIService",
+		"RunFeel", "Haptics", "Teleprinter", "LightGuard",
 		"ViewModeService" }
 	-- Taken out of the game: still there, they would run alongside what replaced them.
 	local GONE = { "KeepsakeService", "PromptStyleService" }

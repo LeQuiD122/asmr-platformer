@@ -314,7 +314,10 @@ local POOL_WATER_COLOUR = Color3.fromRGB(70, 170, 168)
 local POOL_LINING = Color3.fromRGB(198, 226, 222)
 -- If this MaterialVariant exists under MaterialService -- it is the glazed mosaic the backdrop's
 -- colonnade uses -- the pool is lined with it. If not, the pool is ceramic tile like the rest.
-local POOL_TILE_VARIANT = "PoolTileBackdrop"
+-- THE POOL'S OWN MOSAIC (the two-hundred-and-fifty-sixth pass): small aqua and white squares made for
+-- it in Studio's material generator, MaterialService.LevelSurfaces.PoolMosaic. The backdrop's glazed
+-- tile stands in where it has not been made.
+local POOL_TILE_VARIANTS = { "PoolMosaic", "PoolTileBackdrop" }
 
 -- ===== BEHIND THE START =====
 --
@@ -792,8 +795,169 @@ end
 -- reads as a screen rather than as a window. The PointLight is what turns it into a source: it
 -- picks out the tile relief on the surrounding wall, and grout lines catching light at a
 -- grazing angle is most of what says "tiled" from across a room.
+-- ===== GLAZING (pass 258) =====
+-- The frosted pane's colour (Neon: its value is how bright it reads), the iron of the frame and bars, and the spacing
+-- the bars are set at.
+local WINDOW = {}
+WINDOW.WINDOW_PANE = Color3.fromRGB(184, 200, 194)
+WINDOW.WINDOW_IRON = Color3.fromRGB(48, 58, 60)
+WINDOW.WINDOW_PITCH = 7
+-- THE SUN COMING IN (pass 259, from your note: "make the windows spill light rays inside, like the sun would"). Soft
+-- streaked beams (a Beam with the ray texture, turned to face you, so it reads as a shaft of light in the air from any
+-- side rather than as a flat sheet) falling from each window into the room. WINDOW.RAY_TEXTURE is textures/halls/light_ray.png
+-- uploaded; WINDOW.RAY_FADE is how see-through a ray is at the glass (1 is invisible), WINDOW.RAY_DOWN how steeply the sun falls.
+WINDOW.RAY_TEXTURE = "rbxassetid://135226752616561"
+WINDOW.RAY_FADE = 0.7
+WINDOW.RAY_DOWN = 0.62
+WINDOW.RAY_COLOUR = Color3.fromRGB(255, 240, 212)
+-- The sun's own lean along the walls, the same for every window so the rays in a room are parallel.
+WINDOW.RAY_LEAN = Vector3.new(0.5, 0, 0.3)
+
+-- Rays from an opening `size` at `cf`, falling into the room on its `inward` side.
+local function sunRays(parent: Instance, cf: CFrame, size: Vector3, inward: Vector3)
+	local along = (WINDOW.RAY_LEAN - inward * WINDOW.RAY_LEAN:Dot(inward))
+	local fall = (inward + Vector3.new(0, -WINDOW.RAY_DOWN * 1.6, 0) + along * 0.6).Unit
+	-- Long enough to reach the floor under a high window, and no further.
+	local reach = math.clamp((cf.Position.Y - hallFloorY + 10) / math.max(0.3, -fall.Y), 40, 150)
+	local holder = Instance.new("Part")
+	holder.Name = "SunRay"
+	holder.Size = Vector3.new(1, 1, 1)
+	holder.CFrame = CFrame.new(cf.Position)
+	holder.Transparency = 1
+	holder.Anchored = true
+	holder.CanCollide = false
+	holder.CanQuery = false
+	holder.CanTouch = false
+	holder.CastShadow = false
+	holder.Parent = parent
+	-- (Parented first: an attachment's WorldPosition set before it has a part is taken as its offset from the part.)
+	local start = Instance.new("Attachment")
+	start.Parent = holder
+	start.WorldPosition = cf.Position + inward * 1.5
+	local finish = Instance.new("Attachment")
+	finish.Parent = holder
+	finish.WorldPosition = cf.Position + inward * 1.5 + fall * reach
+	-- A broad soft ray and a narrower, brighter core inside it.
+	for _, spec in ipairs({ { 1.0, 1.7, 0 }, { 0.55, 1.0, -0.06 } }) do
+		local ray = Instance.new("Beam")
+		ray.Attachment0 = start
+		ray.Attachment1 = finish
+		ray.FaceCamera = true
+		ray.Texture = WINDOW.RAY_TEXTURE
+		ray.TextureMode = Enum.TextureMode.Stretch
+		ray.TextureLength = 1
+		ray.TextureSpeed = 0.03
+		ray.LightEmission = 1
+		ray.LightInfluence = 0
+		ray.Color = ColorSequence.new(WINDOW.RAY_COLOUR)
+		ray.Width0 = size.X * spec[1]
+		ray.Width1 = size.X * spec[2]
+		local glass = math.clamp(WINDOW.RAY_FADE + spec[3], 0, 1)
+		ray.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, glass),
+			NumberSequenceKeypoint.new(0.35, math.min(1, glass + 0.05)),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		ray.Segments = 1
+		ray.Parent = holder
+	end
+end
+
+-- Bars, frame, sill and lintel over an opening `size` (X across, Y up, Z through the wall) at `cf`. Everything runs
+-- through the opening's depth and a little past it, so it reads from whichever side the room is on.
+local function glaze(parent: Instance, cf: CFrame, size: Vector3, inward: Vector3?, panel: BasePart?)
+	local depth = size.Z + 0.5
+	local function iron(offset: Vector3, piece: Vector3)
+		local bar = Instance.new("Part")
+		bar.Name = "GlazingBar"
+		bar.Size = piece
+		bar.CFrame = cf * CFrame.new(offset)
+		bar.Anchored = true
+		bar.CanCollide = false
+		bar.CanQuery = false
+		bar.CastShadow = false
+		bar.Material = Enum.Material.Metal
+		bar.Color = WINDOW.WINDOW_IRON
+		bar.Parent = parent
+	end
+	-- The frame, just inside the reveal.
+	local rim = 0.9
+	iron(Vector3.new(0, size.Y / 2 - rim / 2, 0), Vector3.new(size.X, rim, depth))
+	iron(Vector3.new(0, -size.Y / 2 + rim / 2, 0), Vector3.new(size.X, rim, depth))
+	iron(Vector3.new(size.X / 2 - rim / 2, 0, 0), Vector3.new(rim, size.Y, depth))
+	iron(Vector3.new(-size.X / 2 + rim / 2, 0, 0), Vector3.new(rim, size.Y, depth))
+	-- Mullions and transoms. A heavier mullion down the middle of a wide window, as a sash would have.
+	local across = math.max(1, math.floor(size.X / WINDOW.WINDOW_PITCH + 0.5)) - 1
+	local up = math.max(1, math.floor(size.Y / WINDOW.WINDOW_PITCH + 0.5)) - 1
+	for i = 1, across do
+		local x = -size.X / 2 + i * size.X / (across + 1)
+		local heavy = across % 2 == 1 and i == (across + 1) / 2
+		iron(Vector3.new(x, 0, 0), Vector3.new(if heavy then 0.8 else 0.45, size.Y, depth))
+	end
+	for i = 1, up do
+		local y = -size.Y / 2 + i * size.Y / (up + 1)
+		iron(Vector3.new(0, y, 0), Vector3.new(size.X, 0.45, depth))
+	end
+	-- A REAL WINDOW'S PANES ARE NOT ONE SHEET (pass 259): each its own frosted pane, none quite the tone of the
+	-- next, the odd one grimed over and the top row of a tall window a little warmer, like the sky above the
+	-- line of the roofs outside. The opening's own panel is kept, unseen, for the light it carries.
+	if inward and panel then
+		panel.Transparency = 1
+		local seed = Random.new(math.floor(cf.Position.X * 7 + cf.Position.Z * 13))
+		local wide, tall = size.X / (across + 1), size.Y / (up + 1)
+		for i = 0, across do
+			for j = 0, up do
+				local pane = Instance.new("Part")
+				pane.Name = "Pane"
+				pane.Size = Vector3.new(wide - 0.3, tall - 0.3, size.Z + 0.1) -- as deep as the opening: thinner sat behind the wall's face
+				pane.CFrame = cf * CFrame.new(-size.X / 2 + (i + 0.5) * wide, -size.Y / 2 + (j + 0.5) * tall, 0)
+				pane.Anchored = true
+				pane.CanCollide = false
+				pane.CanQuery = false
+				pane.CastShadow = false
+				pane.Material = Enum.Material.Neon
+				local tone = WINDOW.WINDOW_PANE:Lerp(Color3.new(1, 1, 1), seed:NextNumber(-0.06, 0.1))
+				if j == up and up > 1 then
+					tone = tone:Lerp(Color3.fromRGB(226, 222, 196), 0.35)
+				end
+				if seed:NextNumber() < 0.14 then
+					-- Grimed over: the light only just through it.
+					tone = tone:Lerp(Color3.fromRGB(92, 104, 98), seed:NextNumber(0.35, 0.6))
+				end
+				pane.Color = tone
+				pane.Parent = parent
+			end
+		end
+		sunRays(parent, cf, size, inward)
+	end
+	-- The sill and the lintel, in the hall's cream trim, standing proud of the wall on both faces.
+	for _, spec in ipairs({ { -size.Y / 2 - 1.1, 1.4, 3.6 }, { size.Y / 2 + 1.3, 1.8, 3.8 } }) do
+		local stone = Instance.new("Part")
+		stone.Name = if spec[1] < 0 then "Sill" else "Lintel"
+		stone.Size = Vector3.new(size.X + 4.4, spec[2], size.Z + spec[3] * 2)
+		stone.CFrame = cf * CFrame.new(0, spec[1], 0)
+		stone.Anchored = true
+		stone.CanCollide = false
+		stone.Material = Enum.Material.CeramicTiles
+		stone.Color = TRIM_COLOUR
+		stone.Parent = parent
+	end
+	-- A keystone over a proper window, standing a little proud of the lintel.
+	if inward then
+		local key = Instance.new("Part")
+		key.Name = "Keystone"
+		key.Size = Vector3.new(3.2, 3.6, size.Z + 8.4)
+		key.CFrame = cf * CFrame.new(0, size.Y / 2 + 2.1, 0)
+		key.Anchored = true
+		key.CanCollide = false
+		key.Material = Enum.Material.CeramicTiles
+		key.Color = TRIM_COLOUR
+		key.Parent = parent
+	end
+end
+
 local function lightPanel(parent: Instance, cf: CFrame, size: Vector3, brightness: number,
-	overhead: boolean?)
+	overhead: boolean?, inward: Vector3?)
 	-- ===== THE REVEAL =====
 	--
 	-- A window in a two-stud wall is a TUNNEL, not a rectangle, and that tunnel is where the
@@ -849,6 +1013,13 @@ local function lightPanel(parent: Instance, cf: CFrame, size: Vector3, brightnes
 	panel.Parent = parent
 
 	if not overhead then
+		-- A WINDOW, NOT A LIT SQUARE (the two-hundred-and-fifty-eighth pass, from your note: "these light squares are
+		-- out of place, change them to something better looking as a source of lighting"). The opening keeps its
+		-- light (the PointLight below, which is what lights the hall), and is glazed: frosted panes in an iron
+		-- frame, divided by glazing bars, on a stone sill under a lintel. The pane is a soft daylight now rather
+		-- than full white, so it reads as frosted glass with the day behind it. Nudge WINDOW.WINDOW_PANE to taste.
+		panel.Color = WINDOW.WINDOW_PANE
+		glaze(parent, cf, size, inward, panel)
 		local light = Instance.new("PointLight")
 		light.Color = GLOW_COLOUR
 		-- DIMMER AND SHORTER-RANGED than the first pass, and the range matters more than the
@@ -958,6 +1129,30 @@ local function legFrame(leg: HallRoute.Leg, along: number, lateral: number,
 	return CFrame.fromMatrix(
 		hallOrigin + Vector3.new(flat.X, hallFloorY + height, flat.Z),
 		side, Vector3.new(0, 1, 0), leg.dir)
+end
+
+-- ===== A PIER, FINISHED (the two-hundred-and-fifty-sixth pass) =====
+--
+-- A pier was a tiled post with a slab on top: it read as a stack of boxes. Now it stands on a
+-- plinth, carries a dark band at the shallows' water line, and meets its cap through a cream
+-- necking, the way the columns beside it are finished.
+local function pier(halls: Model, leg: HallRoute.Leg, along: number, foot: number, top: number,
+	capital: number)
+	slab(halls, legFrame(leg, along, 0, (foot + top - capital) / 2),
+		Vector3.new(11, top - capital - foot, 11), "Pier")
+	local cap = slab(halls, legFrame(leg, along, 0, top - capital / 2),
+		Vector3.new(16, capital, 16), "PierCap")
+	cap.Color = TRIM_COLOUR
+	local neck = slab(halls, legFrame(leg, along, 0, top - capital - 0.7),
+		Vector3.new(12.6, 1.4, 12.6), "PierNeck", { free = true })
+	neck.Color = TRIM_COLOUR
+	local plinth = slab(halls, legFrame(leg, along, 0, foot + 1.8),
+		Vector3.new(14.4, 3.6, 14.4), "PierPlinth", { free = true })
+	plinth.Color = TRIM_COLOUR
+	local band = slab(halls, legFrame(leg, along, 0, WATER_DEPTH + 2.2),
+		Vector3.new(11.5, 1.6, 11.5), "PierBand", { free = true })
+	band.Color = ACCENT_TILE
+	band.CanCollide = false
 end
 
 -- ===== THE TRANSVERSE ARCH, BUILT HERE RATHER THAN IMPORTED =====
@@ -1201,14 +1396,66 @@ end
 
 -- A LAMP HANGING ON A CHAIN over the walkway's edge, high over the deck, with a real light in it (named so the client
 -- fails it with the roof lights when it is behind you).
+-- MADE, since the two-hundred-and-fifty-eighth pass ("the lamp models are too simple"): Hall_Chain, oval links each
+-- turned a quarter to the last, and Hall_LampShade, a dished enamel shade with a rolled rim, a fitter on top and a cup
+-- inside for the bulb (blender/gen_hall_lamps.py). The rod and flat cylinder stand in without the import.
+local LAMP = {}
+LAMP.LAMP_SHADE_SIZE = Vector3.new(5.68, 3.52, 5.68)
+LAMP.LAMP_SHADE_TOP = 1.76 -- from the shade's centre up to its fitter's top
+LAMP.LAMP_CHAIN_SIZE = Vector3.new(0.44, 13.8, 0.44)
+LAMP.LAMP_ENAMEL = Color3.fromRGB(34, 84, 70)
+
+local function madePiece(parent: Instance, name: string, size: Vector3, cf: CFrame): BasePart?
+	local template = kitMesh(name)
+	if not template then
+		return nil
+	end
+	local made = template:Clone()
+	made.Name = name
+	made.Size = size
+	made.CFrame = cf
+	made.Anchored = true
+	made.CanCollide = false
+	made.CanQuery = false
+	made.Parent = parent
+	return made
+end
+
 local function pendant(halls: Model, leg: HallRoute.Leg, along: number, lateral: number, at: number)
 	local drop = 14
 	local top = legFrame(leg, along, lateral, HEIGHT)
-	fitting(halls, "PendantChain", Vector3.new(0.25, drop, 0.25), top * CFrame.new(0, -drop / 2, 0), IRON, Enum.Material.Metal)
-	local shade = fitting(halls, "PendantShade", Vector3.new(1.6, 5, 5), top * CFrame.new(0, -drop - 0.4, 0)
-		* CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(40, 96, 84), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-	shade.Reflectance = 0.1
-	local bulb = fitting(halls, "PendantLight", Vector3.new(1.3, 1.3, 1.3), top * CFrame.new(0, -drop - 1.4, 0),
+	local chain = madePiece(halls, "Hall_Chain", LAMP.LAMP_CHAIN_SIZE, top * CFrame.new(0, -LAMP.LAMP_CHAIN_SIZE.Y / 2, 0))
+	local shade = madePiece(halls, "Hall_LampShade", LAMP.LAMP_SHADE_SIZE,
+		top * CFrame.new(0, -LAMP.LAMP_CHAIN_SIZE.Y - LAMP.LAMP_SHADE_TOP, 0))
+	-- A cream ceiling rose where the chain is fixed.
+	local rose = fitting(halls, "PendantRose", Vector3.new(0.7, 2.6, 2.6), top * CFrame.new(0, -0.3, 0)
+		* CFrame.Angles(0, 0, math.pi / 2), TRIM_COLOUR, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+	rose.CastShadow = false
+	local bulbAt
+	if chain and shade then
+		chain.Name = "PendantChain"
+		chain.Material = Enum.Material.Metal
+		chain.Color = IRON
+		shade.Name = "PendantShade"
+		shade.Material = Enum.Material.SmoothPlastic
+		shade.Color = LAMP.LAMP_ENAMEL
+		shade.Reflectance = 0.15
+		bulbAt = top * CFrame.new(0, -LAMP.LAMP_CHAIN_SIZE.Y - LAMP.LAMP_SHADE_TOP - 0.4, 0)
+	else
+		if chain then
+			chain:Destroy()
+		end
+		if shade then
+			shade:Destroy()
+		end
+		fitting(halls, "PendantChain", Vector3.new(0.25, drop, 0.25), top * CFrame.new(0, -drop / 2, 0), IRON,
+			Enum.Material.Metal)
+		local stand = fitting(halls, "PendantShade", Vector3.new(1.6, 5, 5), top * CFrame.new(0, -drop - 0.4, 0)
+			* CFrame.Angles(0, 0, math.pi / 2), LAMP.LAMP_ENAMEL, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		stand.Reflectance = 0.1
+		bulbAt = top * CFrame.new(0, -drop - 1.4, 0)
+	end
+	local bulb = fitting(halls, "PendantLight", Vector3.new(1.3, 1.3, 1.3), bulbAt,
 		Color3.fromRGB(255, 232, 196), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 	bulb:SetAttribute("Along", at)
 	local light = Instance.new("PointLight")
@@ -1438,7 +1685,8 @@ local function buildLeg(halls: Model, leg: HallRoute.Leg, legIndex: number, isLa
 					local window = lightPanel(halls,
 						legFrame(leg, panel, side * wallToLane, HEIGHT * 0.74)
 							* CFrame.Angles(0, math.pi / 2, 0),
-						Vector3.new(BAY * 0.16, HEIGHT * 0.42, WALL_THICK * 0.3), 1.1)
+						Vector3.new(BAY * 0.16, HEIGHT * 0.42, WALL_THICK * 0.3), 1.1, false,
+						legFrame(leg, 0, 0, 0).XVector * -side)
 					local lamp = window:FindFirstChildOfClass("PointLight")
 					if lamp then
 						-- FAR ENOUGH TO CROSS THE HALL: two rows of windows that only light
@@ -1525,10 +1773,7 @@ local function buildLeg(halls: Model, leg: HallRoute.Leg, legIndex: number, isLa
 		-- last room. A pier stopping at the shallows' level would be hanging in forty studs of
 		-- water.
 		local foot = if poolUnder(legFrame(leg, along, 0, 0).Position) then -POOL_DEPTH else 0
-		slab(halls, legFrame(leg, along, 0, (foot + pierTop - capital) / 2),
-			Vector3.new(11, pierTop - capital - foot, 11), "Pier")
-		slab(halls, legFrame(leg, along, 0, pierTop - capital / 2),
-			Vector3.new(16, capital, 16), "PierCap")
+		pier(halls, leg, along, foot, pierTop, capital)
 
 		-- ===== THE GALLERIES, their signs and lifebuoys, and a lamp hung over the walkway (above) =====
 		local bayHalf = (span / bays) / 2
@@ -1915,6 +2160,15 @@ type Station = {
 	points: { Vector3 },
 }
 
+-- INTO THE DARK (pass 259, from your note: "I don't like that I can see what's inside the slide and the bottoms of
+-- it, it creates a safe feeling"). The flume is its bright plastic at the mouth and goes dark as it goes down the
+-- shaft, staves and water both, so from the gangway it curls away into black and you never see where it ends.
+-- FLUME_FADE.FLUME_FADE_FROM and FLUME_FADE.FLUME_FADE_TO are how far down the drop (0 the mouth, 1 the end) it starts and finishes going dark.
+local FLUME_FADE = {}
+FLUME_FADE.FLUME_FADE_FROM = 0.08
+FLUME_FADE.FLUME_FADE_TO = 0.4
+FLUME_FADE.FLUME_DARK = Color3.fromRGB(6, 8, 10)
+
 local function buildFlume(halls: Model, slideFrame: CFrame)
 	local stations: { Station } = {}
 	for index = 0, FLUME_SEGMENTS do
@@ -1933,10 +2187,18 @@ local function buildFlume(halls: Model, slideFrame: CFrame)
 		table.insert(stations, station)
 	end
 
+	local mouthY, endY = stations[1].centre.Y, stations[#stations].centre.Y
+	local function gloom(at: Vector3): number
+		local down = (mouthY - at.Y) / math.max(1, mouthY - endY)
+		local t = math.clamp((down - FLUME_FADE.FLUME_FADE_FROM) / (FLUME_FADE.FLUME_FADE_TO - FLUME_FADE.FLUME_FADE_FROM), 0, 1)
+		return t * t * (3 - 2 * t)
+	end
+
 	-- THE SHELL.
 	for index = 1, FLUME_SEGMENTS do
 		local a, b = stations[index], stations[index + 1]
 		local middle = (a.centre + b.centre) / 2
+		local dark = gloom(middle)
 		for k = 1, #a.points - 1 do
 			local from = (a.points[k] + a.points[k + 1]) / 2
 			local to = (b.points[k] + b.points[k + 1]) / 2
@@ -1947,9 +2209,10 @@ local function buildFlume(halls: Model, slideFrame: CFrame)
 			end
 			local cf, run = spanFrame(from, to, outward)
 			local chord = across.Magnitude / 2
-			flumePart(halls, "FlumeShell",
+			local stave = flumePart(halls, "FlumeShell",
 				Vector3.new(chord * (1 + SLIDE_WALL / a.radius) + 0.15, SLIDE_WALL, run + 0.7),
-				cf * CFrame.new(0, SLIDE_WALL / 2, 0), FLUME_COLOUR)
+				cf * CFrame.new(0, SLIDE_WALL / 2, 0), FLUME_COLOUR:Lerp(FLUME_FADE.FLUME_DARK, dark))
+			stave.Reflectance = 0.12 * (1 - dark)
 		end
 	end
 
@@ -1967,10 +2230,11 @@ local function buildFlume(halls: Model, slideFrame: CFrame)
 		local from, wideFrom = level(a)
 		local to, wideTo = level(b)
 		local cf, run = spanFrame(from, to, (a.up + b.up).Unit)
+		local dark = gloom((from + to) / 2)
 		local water = flumePart(halls, "FlumeWater", Vector3.new((wideFrom + wideTo) / 2, 0.2, run + 0.12),
-			cf * CFrame.new(0, -0.1, 0), FLUME_WATER)
+			cf * CFrame.new(0, -0.1, 0), FLUME_WATER:Lerp(FLUME_FADE.FLUME_DARK, dark))
 		water.Transparency = 0.38
-		water.Reflectance = 0.2
+		water.Reflectance = 0.2 * (1 - dark)
 		water.CastShadow = false
 		local flow = Instance.new("Texture")
 		flow.Name = "Flow"
@@ -2024,7 +2288,7 @@ local function buildFlume(halls: Model, slideFrame: CFrame)
 			local lip = flumePart(halls, "FlumeLip",
 				Vector3.new((to - from).Magnitude + 0.35, FLUME_LIP, FLUME_LIP),
 				CFrame.lookAt(from:Lerp(to, 0.5), to) * CFrame.Angles(0, math.rad(90), 0),
-				FLUME_TRIM, Enum.PartType.Cylinder)
+				FLUME_TRIM:Lerp(FLUME_FADE.FLUME_DARK, gloom(from:Lerp(to, 0.5))), Enum.PartType.Cylinder)
 			-- Trim casts no shadow of its own: the shell it sits on already does, and there are
 			-- more than a hundred of these.
 			lip.CastShadow = false
@@ -2048,7 +2312,7 @@ local function buildFlume(halls: Model, slideFrame: CFrame)
 			local flange = flumePart(halls, "FlumeFlange",
 				Vector3.new((p1 - p0).Magnitude * (1 + (SLIDE_WALL + 0.9) / station.radius) + 0.2,
 					0.9, 1.3),
-				cf * CFrame.new(0, SLIDE_WALL + 0.45, 0), FLUME_TRIM)
+				cf * CFrame.new(0, SLIDE_WALL + 0.45, 0), FLUME_TRIM:Lerp(FLUME_FADE.FLUME_DARK, gloom(middle)))
 			flange.CastShadow = false
 		end
 	end
@@ -2057,7 +2321,7 @@ local function buildFlume(halls: Model, slideFrame: CFrame)
 	local up = Vector3.new(0, 1, 0)
 	local upright = CFrame.Angles(0, 0, math.pi / 2)
 	local function steel(name: string, size: Vector3, cf: CFrame, shape: Enum.PartType?): Part
-		local part = flumePart(halls, name, size, cf, STEEL_COLOUR, shape)
+		local part = flumePart(halls, name, size, cf, STEEL_COLOUR:Lerp(FLUME_FADE.FLUME_DARK, gloom(cf.Position)), shape)
 		part.Material = Enum.Material.Metal
 		part.Reflectance = 0.04
 		return part
@@ -2337,22 +2601,60 @@ local function exposedRuns(pool: Pool, side: PoolSide): { { number } }
 end
 
 -- The pool's lining: POOL_LINING tile, and the glazed mosaic variant over it if Studio has one.
-local poolVariant: boolean? = nil
+local poolVariant: any = nil
 local function poolTile(part: BasePart)
 	part.Color = POOL_LINING
 	if poolVariant == nil then
-		poolVariant = game:GetService("MaterialService"):FindFirstChild(POOL_TILE_VARIANT) ~= nil
+		poolVariant = false
+		for _, name in ipairs(POOL_TILE_VARIANTS) do
+			local found = game:GetService("MaterialService"):FindFirstChild(name, true)
+			if found and found:IsA("MaterialVariant") then
+				poolVariant = found
+				break
+			end
+		end
 	end
-	if poolVariant then
+	local variant = poolVariant
+	if variant then
 		local ok = pcall(function()
-			part.Material = Enum.Material.Concrete
-			part.MaterialVariant = POOL_TILE_VARIANT
+			part.Material = variant.BaseMaterial
+			part.MaterialVariant = variant.Name
 		end)
 		if not ok then
 			poolVariant = false
+		elseif variant.Name == "PoolMosaic" then
+			-- The mosaic is aqua and white already; the lining tint would only grey it.
+			part.Color = Color3.fromRGB(236, 246, 244)
 		end
 	end
 end
+
+-- A POOL FITTING from the kit at the size asked for (these are made at the hall's scale, not the
+-- kit's scale of one).
+local function poolPiece(parent: Instance, name: string, size: Vector3, cf: CFrame): BasePart?
+	local template = kitMesh(name)
+	if not template then
+		return nil
+	end
+	local made = template:Clone()
+	made.Name = name
+	made.Size = size
+	made.CFrame = cf
+	made.Anchored = true
+	made.CanCollide = false
+	made.CanQuery = false
+	made.CastShadow = false
+	made.Parent = parent
+	return made
+end
+
+-- THE LADDER'S SHAPE (blender/gen_pool_kit.py): its feet, from its box's centre at scale 1, and how
+-- much it is grown so its rails break the shallows' surface and its treads go well down the pool.
+local LADDER = {}
+LADDER.LADDER_SIZE = Vector3.new(4.116, 16.88, 7.232)
+LADDER.LADDER_FOOT = Vector3.new(-1.442, 4.7, 0)
+LADDER.LADDER_GROW = Vector3.new(1.6, 2.2, 1.25)
+LADDER.LADDER_RAIL_OUT = 2.8 -- from its feet to where its rails drop down the wall, at scale 1
 
 local function buildPools(halls: Model)
 	local up = Vector3.new(0, 1, 0)
@@ -2449,16 +2751,44 @@ local function buildPools(halls: Model)
 
 				-- A LANE ROPE floating along the edge, a few studs in. Floats in a repeating run of
 				-- colours, and the one strong colour anywhere in the building.
+				-- THE FLOATS ARE FLOATS (the two-hundred-and-fifty-sixth pass): a cord threaded with
+				-- ridged discs, Pool_LaneRope, where a smooth cylinder read as a pole lying on the water.
+				-- The cylinder stands in without the import.
 				local floats = math.max(1, math.floor(length / 32 + 0.5))
 				for k = 0, floats - 1 do
-					local rope = fitting(halls, "LaneRope",
-						Vector3.new(length / floats - 0.4, 1.8, 1.8),
-						CFrame.fromMatrix(side.axis * (side.at - side.sign * (WALL_THICK + 3))
-							+ side.run * (lo + (k + 0.5) * length / floats)
-							+ up * (hallFloorY + WATER_DEPTH + 0.15), side.run, up),
-						ROPE_COLOURS[(k + sideIndex) % #ROPE_COLOURS + 1], Enum.Material.SmoothPlastic,
-						Enum.PartType.Cylinder)
-					rope.CastShadow = false
+					local ropeAt = CFrame.fromMatrix(side.axis * (side.at - side.sign * (WALL_THICK + 3))
+						+ side.run * (lo + (k + 0.5) * length / floats)
+						+ up * (hallFloorY + WATER_DEPTH + 0.15), side.run, up)
+					local colour = ROPE_COLOURS[(k + sideIndex) % #ROPE_COLOURS + 1]
+					local ropeSize = Vector3.new(length / floats - 0.4, 1.8, 1.8)
+					local rope = poolPiece(halls, "Pool_LaneRope", ropeSize, ropeAt)
+					if rope then
+						rope.Name = "LaneRope"
+						rope.Material = Enum.Material.SmoothPlastic
+						rope.Color = colour
+					else
+						local stand = fitting(halls, "LaneRope", ropeSize, ropeAt, colour,
+							Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+						stand.CastShadow = false
+					end
+				end
+
+				-- STEEL LADDERS over the coping, one near each end of a long side, on a bay's line
+				-- (the wall lamps are at the middle of a bay), so a pool this deep has a way out.
+				if length > BAY * 1.6 then
+					local scaled = LADDER.LADDER_FOOT * LADDER.LADDER_GROW
+					local footOut = -WALL_THICK - 0.6 + LADDER.LADDER_RAIL_OUT * LADDER.LADDER_GROW.X
+					for _, at in ipairs({ lo + length / count, hi - length / count }) do
+						local foot = frame(at, footOut, 0.9) * CFrame.Angles(0, math.pi, 0)
+						local ladder = poolPiece(halls, "Pool_Ladder", LADDER.LADDER_SIZE * LADDER.LADDER_GROW,
+							foot * CFrame.new(-scaled.X, -scaled.Y, 0))
+						if ladder then
+							ladder.Material = Enum.Material.Metal
+							ladder.Color = Color3.fromRGB(206, 210, 208)
+							ladder.Reflectance = 0.2
+							ladder.CastShadow = true
+						end
+					end
 				end
 			end
 		end
@@ -2504,6 +2834,207 @@ local function buildPools(halls: Model)
 	end
 end
 
+-- ===== THE POOLS, LIVED IN (the two-hundred-and-sixty-second pass) =====
+--
+-- From your note: "improve the surroundings of level 4 and the models inside the pools and the pools themselves". What a
+-- real pool hall has and these did not:
+--   * LIGHT IN THE WATER: the bright net of caustics on a pool's floor and walls, two layers drifting across each other
+--     (FloodedHallsClient moves every texture tagged HallsDrift by its DriftU and DriftV), fainter on the shallows'
+--     floor; and a slow ripple on every water surface.
+--   * BACKSTROKE FLAGS: a line of pennants across each pool near both ends, on posts standing in the shallows.
+--   * THE EDGE'S MARKINGS: tiles set in the coping, the depth and NO DIVING by turns.
+--   * DRAINS down the middle of the floor, and a few things lost in it: a swim ring, a kickboard, a noodle, some on the
+--     bottom and one floating.
+local POOL_LIFE = {
+	CAUSTICS = "rbxassetid://113790123785633", -- textures/halls/caustics.png
+	RIPPLE = "rbxasset://textures/water/normal_1.dds",
+	LIGHT = Color3.fromRGB(214, 255, 246),
+	FLAGS = { Color3.fromRGB(214, 64, 60), Color3.fromRGB(240, 236, 222), Color3.fromRGB(52, 98, 170) },
+	TOYS = { Color3.fromRGB(246, 120, 150), Color3.fromRGB(255, 176, 74), Color3.fromRGB(110, 206, 190),
+		Color3.fromRGB(250, 220, 90), Color3.fromRGB(120, 150, 240) },
+	TILE = Color3.fromRGB(38, 74, 110),
+	RING_SIZE = Vector3.new(4.02, 1.0, 4.02),
+	BOARD_SIZE = Vector3.new(2.4, 0.32, 3.6),
+}
+
+local function drift(part: BasePart, face: Enum.NormalId, image: string, studs: number, transparency: number, u: number, v: number)
+	local texture = Instance.new("Texture")
+	texture.Name = "Drift"
+	texture.Texture = image
+	texture.Face = face
+	texture.StudsPerTileU = studs
+	texture.StudsPerTileV = studs
+	texture.Transparency = transparency
+	texture.Color3 = POOL_LIFE.LIGHT
+	texture:SetAttribute("DriftU", u)
+	texture:SetAttribute("DriftV", v)
+	texture.Parent = part
+	game:GetService("CollectionService"):AddTag(texture, "HallsDrift")
+end
+
+-- A pennant hanging from a line: two wedges back to back, point down.
+local function pennant(halls: Model, at: CFrame, colour: Color3)
+	for _, s in ipairs({ -1, 1 }) do
+		local w = Instance.new("WedgePart")
+		w.Name = "BackstrokeFlag"
+		w.Anchored = true
+		w.CanCollide = false
+		w.CanQuery = false
+		w.CanTouch = false
+		w.CastShadow = false
+		w.Size = Vector3.new(0.08, 1.6, 0.75)
+		-- Each wedge's tall edge at the pennant's middle, sloping out and up to the line.
+		w.CFrame = at * CFrame.new(0, -0.8, s * 0.375) * CFrame.Angles(math.pi, if s > 0 then 0 else math.pi, 0)
+		w.Color = colour
+		w.Material = Enum.Material.Fabric
+		w.Parent = halls
+	end
+end
+
+local function dressPools(halls: Model)
+	local up = Vector3.new(0, 1, 0)
+	-- THE LIGHT IN THE WATER.
+	for _, item in ipairs(halls:GetChildren()) do
+		if item:IsA("BasePart") then
+			if item.Name == "PoolFloor" then
+				drift(item, Enum.NormalId.Top, POOL_LIFE.CAUSTICS, 26, 0.25, 0.9, 0.45)
+				drift(item, Enum.NormalId.Top, POOL_LIFE.CAUSTICS, 37, 0.42, -0.55, 0.75)
+			elseif item.Name == "PoolStep" and item.Size.Y > 1 then
+				drift(item, Enum.NormalId.Top, POOL_LIFE.CAUSTICS, 26, 0.3, 0.9, 0.45)
+			elseif item.Name == "PoolWall" then
+				-- (A pool wall's frame looks outward: its inside, toward the water, is its Left face.)
+				drift(item, Enum.NormalId.Left, POOL_LIFE.CAUSTICS, 24, 0.45, 0.7, -0.35)
+			elseif item.Name == "Floor" then
+				drift(item, Enum.NormalId.Top, POOL_LIFE.CAUSTICS, 30, 0.58, 0.6, 0.35)
+			elseif item.Name == "Water" or item.Name == "PoolWater" then
+				drift(item, Enum.NormalId.Top, POOL_LIFE.RIPPLE, 22, 0.72, 0.5, 0.28)
+			end
+		end
+	end
+
+	for poolIndex, pool in ipairs(hallPools) do
+		local leg = pool.leg
+		local rng = Random.new(262 * 31 + poolIndex)
+		local length = pool.to - pool.from
+		-- A MARBLE PAL IN THE FIRST POOL (pass 264: "marble where there's pools"): Wibble, in white marble on a tall
+		-- marble column that stands on the pool's floor and rises out of the water, off to one side of the swim, turned to
+		-- the pool's middle and spouting into it.
+		if poolIndex == 1 and length > BAY then
+			local PetStatues = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PetStatues")) :: any
+			local along = (pool.from + pool.to) / 2
+			-- (Inside the lane rope, which floats WALL_THICK + 3 in from the wall: at POOL_HALF - 9 it stood on the rope.)
+			local foot = legFrame(leg, along, 10, -POOL_DEPTH)
+			local facing = legFrame(leg, along, 0, -POOL_DEPTH).Position
+			PetStatues.statue(halls, "Pal_Jelly", CFrame.lookAt(foot.Position, facing), 14, POOL_DEPTH + WATER_DEPTH + 3,
+				"marble", true)
+		end
+		-- BACKSTROKE FLAGS, near each end: two posts in the shallows, a line between them, pennants along it.
+		if length > BAY * 1.4 then
+			for _, along in ipairs({ pool.from + math.min(28, length * 0.15), pool.to - math.min(28, length * 0.15) }) do
+				local lineY = WATER_DEPTH + 9
+				for _, side in ipairs({ -1, 1 }) do
+					local foot = legFrame(leg, along, side * (POOL_HALF + 5), 0)
+					fitting(halls, "FlagPost", Vector3.new(0.6, lineY + 1, 0.6), foot * CFrame.new(0, (lineY + 1) / 2, 0),
+						Color3.fromRGB(206, 210, 208), Enum.Material.Metal)
+					fitting(halls, "FlagPostFoot", Vector3.new(1.6, 0.6, 1.6), foot * CFrame.new(0, 0.3, 0),
+						Color3.fromRGB(150, 156, 152), Enum.Material.Metal)
+					local cap = fitting(halls, "FlagPostCap", Vector3.new(0.9, 0.9, 0.9), foot * CFrame.new(0, lineY + 1.2, 0),
+						POOL_LIFE.FLAGS[1], Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+					cap.CastShadow = false
+				end
+				local reach = (POOL_HALF + 5) * 2
+				local line = fitting(halls, "FlagLine", Vector3.new(reach, 0.12, 0.12), legFrame(leg, along, 0, lineY),
+					Color3.fromRGB(240, 238, 230), Enum.Material.Fabric)
+				line.CastShadow = false
+				local count = math.floor((reach - 4) / 2.2)
+				for k = 0, count - 1 do
+					local lateral = -reach / 2 + 2 + (k + 0.5) * (reach - 4) / count
+					-- (The line runs across the leg: the leg frame's X is across.)
+					local at = legFrame(leg, along, lateral, lineY) * CFrame.Angles(0, math.pi / 2, 0)
+					pennant(halls, at, POOL_LIFE.FLAGS[k % #POOL_LIFE.FLAGS + 1])
+				end
+			end
+		end
+		-- DRAINS down the middle of the floor.
+		local floorAt = -POOL_DEPTH + 0.15
+		local drains = math.max(1, math.floor(length / (BAY * 1.5)))
+		for k = 1, drains do
+			local along = pool.from + k * length / (drains + 1)
+			local grate = fitting(halls, "PoolDrain", Vector3.new(6, 0.3, 6), legFrame(leg, along, 0, floorAt),
+				Color3.fromRGB(28, 36, 40), Enum.Material.Metal)
+			grate.CastShadow = false
+			for bar = -2, 2 do
+				fitting(halls, "PoolDrainBar", Vector3.new(5.4, 0.35, 0.35), legFrame(leg, along + bar * 1.1, 0, floorAt + 0.1),
+					Color3.fromRGB(120, 130, 132), Enum.Material.Metal)
+			end
+		end
+		-- LOST THINGS: a ring and a kickboard on the bottom, a noodle on the bottom or afloat.
+		local function spot(): (number, number)
+			return rng:NextNumber(pool.from + 12, math.max(pool.from + 13, pool.to - 12)),
+				rng:NextNumber(-(POOL_HALF - 9), POOL_HALF - 9)
+		end
+		local a, l = spot()
+		local ring = poolPiece(halls, "Pool_Ring", POOL_LIFE.RING_SIZE,
+			legFrame(leg, a, l, floorAt + 0.6) * CFrame.Angles(math.rad(rng:NextNumber(-8, 8)), rng:NextNumber(0, 6.28), 0))
+		if ring then
+			ring.Material = Enum.Material.SmoothPlastic
+			ring.Color = POOL_LIFE.TOYS[rng:NextInteger(1, #POOL_LIFE.TOYS)]
+		end
+		a, l = spot()
+		local board = poolPiece(halls, "Pool_Kickboard", POOL_LIFE.BOARD_SIZE,
+			legFrame(leg, a, l, floorAt + 0.3) * CFrame.Angles(0, rng:NextNumber(0, 6.28), math.rad(rng:NextNumber(-6, 6))))
+		if board then
+			board.Material = Enum.Material.SmoothPlastic
+			board.Color = POOL_LIFE.TOYS[rng:NextInteger(1, #POOL_LIFE.TOYS)]
+		end
+		a, l = spot()
+		local afloat = poolIndex % 2 == 1
+		local noodleY = if afloat then WATER_DEPTH + 0.05 else floorAt + 0.45
+		local noodle = fitting(halls, "PoolNoodle", Vector3.new(9, 0.9, 0.9),
+			legFrame(leg, a, l, noodleY) * CFrame.Angles(0, rng:NextNumber(0, 6.28), 0),
+			POOL_LIFE.TOYS[rng:NextInteger(1, #POOL_LIFE.TOYS)], Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		noodle.CastShadow = false
+		-- A floating ring as well, in every other pool.
+		if afloat then
+			a, l = spot()
+			local floater = poolPiece(halls, "Pool_Ring", POOL_LIFE.RING_SIZE,
+				legFrame(leg, a, l, WATER_DEPTH + 0.1) * CFrame.Angles(0, rng:NextNumber(0, 6.28), 0))
+			if floater then
+				floater.Material = Enum.Material.SmoothPlastic
+				floater.Color = POOL_LIFE.TOYS[rng:NextInteger(1, #POOL_LIFE.TOYS)]
+			end
+		end
+		-- THE EDGE'S MARKINGS, every bay along each open side's coping, the depth and NO DIVING by turns.
+		for sideIndex, side in ipairs(poolSides(pool.box)) do
+			for _, span in ipairs(exposedRuns(pool, side)) do
+				local lo, hi = span[1], span[2]
+				local count = math.floor((hi - lo) / BAY)
+				for k = 0, count - 1 do
+					local along = lo + (k + 0.5) * (hi - lo) / math.max(1, count)
+					local at = side.axis * (side.at + side.sign * -3.5) + side.run * along + up * (hallFloorY + 1.05)
+					local tile = fitting(halls, "PoolMarking", Vector3.new(4.4, 0.12, 2.2),
+						CFrame.fromMatrix(at, side.run, up), POOL_LIFE.TILE, Enum.Material.SmoothPlastic)
+					tile.CastShadow = false
+					local gui = Instance.new("SurfaceGui")
+					gui.Face = Enum.NormalId.Top
+					gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+					gui.PixelsPerStud = 40
+					gui.LightInfluence = 0.6
+					gui.Parent = tile
+					local text = Instance.new("TextLabel")
+					text.BackgroundTransparency = 1
+					text.Size = UDim2.fromScale(1, 1)
+					text.TextScaled = true
+					text.TextColor3 = Color3.fromRGB(240, 244, 246)
+					text.FontFace = Style.FONT.heading
+					text.Text = if (k + sideIndex) % 2 == 0 then "11 m" else "NO DIVING"
+					text.Parent = gui
+				end
+			end
+		end
+	end
+end
+
 -- ===== THE TALL HALL =====
 --
 -- One stretch where the ceiling goes, and it is the only place in the level the building does
@@ -2543,7 +3074,8 @@ local function buildTall(halls: Model)
 				legFrame(leg, tall.from + (step - 0.5) * (span / TALL_BAYS),
 					side * (HALL_HALF_WIDTH - WALL_THICK * 0.4), HEIGHT * 1.52)
 					* CFrame.Angles(0, math.pi / 2, 0),
-				Vector3.new(BAY * 0.34, HEIGHT * 0.34, WALL_THICK * 0.3), 1.4)
+				Vector3.new(BAY * 0.34, HEIGHT * 0.34, WALL_THICK * 0.3), 1.4, false,
+				legFrame(leg, 0, 0, 0).XVector * -side)
 		end
 	end
 
@@ -3025,7 +3557,8 @@ local function buildEnd(halls: Model, endFrame: CFrame, surfaceY: number): (CFra
 						local window = lightPanel(halls,
 							CFrame.fromMatrix(spot + Vector3.new(0, HEIGHT * 0.7, 0), across,
 								Vector3.new(0, 1, 0)),
-							Vector3.new(BAY * 0.3, HEIGHT * 0.26, WALL_THICK * 0.3), 1.1)
+							Vector3.new(BAY * 0.3, HEIGHT * 0.26, WALL_THICK * 0.3), 1.1, false,
+							-axis * sign)
 						window.Name = "ChamberWindow"
 						local lamp = window:FindFirstChildOfClass("PointLight")
 						if lamp then
@@ -3458,10 +3991,7 @@ local function buildChamberPiers(halls: Model, pitAt: Vector3)
 			local overPit = math.abs(p.X - pitAt.X) < PIT_HALF + 10
 				and math.abs(p.Z - pitAt.Z) < PIT_HALF + 10
 			if deepInside and not overPit then
-				slab(halls, legFrame(leg, along, 0, (pierTop - capital) / 2),
-					Vector3.new(11, pierTop - capital, 11), "Pier")
-				slab(halls, legFrame(leg, along, 0, pierTop - capital / 2),
-					Vector3.new(16, capital, 16), "PierCap")
+				pier(halls, leg, along, 0, pierTop, capital)
 			end
 			along += BAY
 		end
@@ -3610,7 +4140,8 @@ local function buildEntrance(halls: Model, leg: HallRoute.Leg)
 	local window = lightPanel(halls,
 		legFrame(leg, mid, HALL_HALF_WIDTH - WALL_THICK * 0.4, HEIGHT * 0.74)
 			* CFrame.Angles(0, math.pi / 2, 0),
-		Vector3.new(BAY * 0.16, HEIGHT * 0.42, WALL_THICK * 0.3), 0.8)
+		Vector3.new(BAY * 0.16, HEIGHT * 0.42, WALL_THICK * 0.3), 0.8, false,
+		-legFrame(leg, 0, 0, 0).XVector)
 	local lamp = window:FindFirstChildOfClass("PointLight")
 	if lamp then
 		lamp.Range = 26 * SCALE
@@ -3643,7 +4174,8 @@ local function buildEntrance(halls: Model, leg: HallRoute.Leg)
 	local light = lightPanel(halls,
 		legFrame(leg, (far + alcove) / 2, alcoveOut + WALL_THICK / 2 - WALL_THICK * 0.4,
 			HEIGHT * 0.55) * CFrame.Angles(0, math.pi / 2, 0),
-		Vector3.new(BAY * 0.22, HEIGHT * 0.4, WALL_THICK * 0.3), 3.4)
+		Vector3.new(BAY * 0.22, HEIGHT * 0.4, WALL_THICK * 0.3), 3.4, false,
+		-legFrame(leg, 0, 0, 0).XVector)
 	light.Name = "PassageLight"
 	local spill = light:FindFirstChildOfClass("PointLight")
 	if spill then
@@ -3851,6 +4383,10 @@ function FloodedHallsService.build(origin: Vector3, level: any?): Model
 	end
 	-- And the pool down the middle, now its holes are cut. See buildPools.
 	buildPools(halls)
+	local poolsLived, poolsErr = pcall(dressPools, halls)
+	if not poolsLived then
+		warn("FloodedHallsService: the pools' light and things: " .. tostring(poolsErr))
+	end
 	buildTall(halls)
 
 	-- THE ONE DEEP END USED TO BE PLACED BY HAND HERE, on the first leg, at a fixed depth,
@@ -4631,5 +5167,5 @@ function FloodedHallsService.applyAtmosphere(): () -> ()
 	end
 end
 
-FloodedHallsService.STAMP = "8b707b0d"
+FloodedHallsService.STAMP = "ba0214f5"
 return FloodedHallsService

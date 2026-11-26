@@ -169,7 +169,7 @@ def pool(world, material):
 
 for world, material, name in (
     ("FloodedHalls", "Concrete", "HallsConcrete"), ("FloodedHalls", "Metal", "HallsPaint"),
-    ("FloodedHalls", "CeramicTiles", "HallsTile"), ("SunkenCity", "Concrete", "CityAshlar"),
+    ("FloodedHalls", "CeramicTiles", "HallsGlaze"), ("SunkenCity", "Concrete", "CityAshlar"),
     ("SunkenCity", "Brick", "CityBrick"), ("SunkenCity", "Plaster", "CityRender"), ("SunkenCity", "Slate", "CitySlate"),
 ):
     if name not in pool(world, material):

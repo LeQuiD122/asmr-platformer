@@ -1823,7 +1823,7 @@ local function tower(parent: Instance, centre: Vector3, seaY: number, poolY: num
 end
 
 -- ===== THE FINAL POOL, under the clouds, and the sea it drains into =====
-local function finalPool(parent: Instance, centre: Vector3, surfaceY: number, seaY: number)
+local function finalPool(parent: Instance, centre: Vector3, surfaceY: number, seaY: number, slideEnd: Vector3?)
 	local floor = column(parent, "FinalPoolFloor", FINAL_RADIUS * 2, centre, surfaceY - FINAL_DEEP - 2,
 		surfaceY - FINAL_DEEP, TILE, tileMaterial or Enum.Material.SmoothPlastic, true)
 	if floor and tileMaterial then
@@ -1870,6 +1870,19 @@ local function finalPool(parent: Instance, centre: Vector3, surfaceY: number, se
 		local at = centre + out * (FINAL_RADIUS + 1.5) + Vector3.new(0, surfaceY - FINAL_DEEP / 2 - 0.2, 0)
 		block(parent, "FinalPoolRim", Vector3.new(2 * math.pi * (FINAL_RADIUS + 1.5) / pieces + 0.6, FINAL_DEEP + 3.6, 3),
 			CFrame.lookAt(at, at + out), COPING, MARBLE, true)
+	end
+	-- A MARBLE PAL IN THE LAST POOL (pass 264: "marble where there's pools"): Nimbus, in white marble on a marble column
+	-- standing on the pool's floor, across the pool from where the slide lands, turned to the tower and spouting toward
+	-- it, so it is the first thing you see as you come off the slide.
+	do
+		local PetStatues = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PetStatues")) :: any
+		local away = if slideEnd then Vector3.new(centre.X - slideEnd.X, 0, centre.Z - slideEnd.Z) else Vector3.new(-1, 0, 0)
+		if away.Magnitude < 1 then
+			away = Vector3.new(-1, 0, 0)
+		end
+		local foot = centre + away.Unit * (FINAL_RADIUS - 17) + Vector3.new(0, surfaceY - FINAL_DEEP, 0)
+		PetStatues.statue(parent, "Pal_Cloud", CFrame.lookAt(foot, Vector3.new(centre.X, foot.Y, centre.Z)), 16, FINAL_DEEP + 3,
+			"marble", true)
 	end
 	-- IT DRAINS INTO THE SEA: six falls off the rim, all the way down.
 	for index = 1, 6 do
@@ -2332,7 +2345,7 @@ function SkyPoolsService.build(level: any, parent: Instance): Model?
 	local slideLong = buildSlide(model, spec, h.topY)
 
 	-- ===== The tower, the pool it stands in, the clouds, the sky round it =====
-	finalPool(model, towerCentre, h.poolY, h.seaY)
+	finalPool(model, towerCentre, h.poolY, h.seaY, if SkyPath then SkyPath.point(spec, 1) else nil)
 	tower(model, towerCentre, h.seaY, h.poolY, h.topY)
 	cloudSea(model, towerCentre, h.cloudTop)
 	local radius: number = level.radius or flat.Magnitude
@@ -2697,5 +2710,5 @@ Players.PlayerRemoving:Connect(function(player: Player)
 	arrivedAt[player] = nil
 end)
 
-SkyPoolsService.STAMP = "513603d6"
+SkyPoolsService.STAMP = "58f30b86"
 return SkyPoolsService

@@ -891,6 +891,12 @@ local function dressGarden(garden: Instance, top: Vector3, inward: Vector3, acro
 	for _, spot in ipairs(GARDEN_TREES) do
 		appleTree(garden, top + across * spot[1] + inward * spot[2])
 	end
+	-- A PAL CLIPPED IN HEDGE (pass 264: the pals as a structure on every level): Bumble, as topiary on a low hedge plinth,
+	-- on the lawn by the well, turned to the path, the way a cottage garden has a peacock in box. (Seen in play: at -22, -2
+	-- it stood under the old apple tree, whose trunk is at -20, 2.)
+	local PetStatues = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PetStatues")) :: any
+	local hedgeAt = top + across * -26 + inward * -8
+	PetStatues.statue(garden, "Pal_Bee", CFrame.lookAt(hedgeAt, hedgeAt + across), 6.5, 1.6, "topiary")
 end
 
 -- ===== WHO IS UP HERE AT EIGHT (the hundred-and-thirteenth pass) =====
@@ -998,14 +1004,134 @@ local function mistSheets(parent: Instance, centre: Vector3, topY: number)
 	end
 end
 
-local function farHill(parent: Instance, at: Vector3, radius: number, rise: number)
-	-- Ground standing out of the mist: a squashed dome of grass on a rock body going down into it.
-	local dome = part(parent, "FarHill", Vector3.new(radius * 2, rise * 2, radius * 2), CFrame.new(at), PALETTE.canopy,
-		Enum.Material.Grass)
-	local shape = Instance.new("SpecialMesh")
-	shape.MeshType = Enum.MeshType.Sphere
-	shape.Parent = dome
-	dome.CastShadow = false
+-- ===== THE COUNTRY OUT OF THE MIST, IN TERRAIN (pass 270) =====
+--
+-- From your note: "improve the background hills". They were squashed balls of grass, every one the same smooth egg,
+-- and a squashed ball is not a hill. Now each is smooth voxel terrain written from a height field (WriteVoxels): a
+-- long rolling ridge on a warped outline, lumps and a second crest along it, a saddle between; grass on its gentle
+-- slopes, patches of meadow, bare earth where it steepens and rock where it falls away. Only its shell above the mist
+-- is made (the mist hides its feet), in slices a frame apart, and every slice is put down in `filled` so the level
+-- takes it all away with the rest of its terrain.
+type Hill = { cx: number, cz: number, base: number, radius: number, rise: number, seed: number, along: Vector3,
+	stretch: number, flat: number?, far: boolean? }
+
+-- THE LAND ON A HILL (pass 271, from your note: "improve the hills"): the gentle slopes laid out in FIELDS, a patchwork
+-- on a grid turned with the hill and bent by noise, about FIELD studs a side, mostly grass and some ploughed earth, with
+-- HEDGEROWS of leafy green along their edges; moorland over the high ground; bare earth where it steepens; rock where it
+-- falls away. The far ranges are all moor and rock (fields too small to see).
+local FIELD = 64
+local function landAt(h: Hill, x: number, z: number, height: number, slope: number): Enum.Material
+	-- (Seen in play: rock on anything but the steepest drops reads as crushed glass at this distance, and the moor took
+	-- most slopes so the fields hardly showed; both held back.)
+	if slope > 1.35 then
+		return Enum.Material.Rock
+	elseif slope > 0.8 then
+		return Enum.Material.Ground
+	end
+	if h.far or height > h.rise * 0.82 or slope > 0.6 then
+		return if math.noise(x / 50, z / 50, h.seed + 3) > 0.42 then Enum.Material.Ground else Enum.Material.LeafyGrass
+	end
+	local dx, dz = x - h.cx, z - h.cz
+	local u = (dx * h.along.X + dz * h.along.Z) + 18 * math.noise(x / 90, z / 90, h.seed)
+	local v = (-dx * h.along.Z + dz * h.along.X) + 18 * math.noise(z / 90, x / 90, h.seed + 1)
+	local fu, fv = u / FIELD, v / (FIELD * 0.8)
+	local eu, ev = math.abs(fu - math.floor(fu + 0.5)) * FIELD, math.abs(fv - math.floor(fv + 0.5)) * FIELD * 0.8
+	if eu < 4 or ev < 4 then
+		return Enum.Material.LeafyGrass -- a hedgerow
+	end
+	local pick = math.noise(math.floor(fu) * 1.7 + h.seed, math.floor(fv) * 1.3, 0.5)
+	return if pick > 0.3 then Enum.Material.Ground elseif pick < -0.3 then Enum.Material.LeafyGrass else Enum.Material.Grass
+end
+
+-- Its height above `base` at (x, z): 0 outside it.
+local function hillHeight(h: Hill, x: number, z: number): number
+	local dx, dz = x - h.cx, z - h.cz
+	local a = (dx * h.along.X + dz * h.along.Z) / h.radius
+	local b = (-dx * h.along.Z + dz * h.along.X) / (h.radius * h.stretch)
+	-- A warped outline, so no hill is an ellipse.
+	local warp = 0.22 * math.noise(a * 1.1 + h.seed, b * 1.1 - h.seed, 0.37)
+	local d = math.sqrt(a * a + b * b) + warp
+	if d >= 1 then
+		return 0
+	end
+	local dome = (1 - d * d) ^ 1.35
+	-- A second crest off along the ridge, and a saddle between, and lumps all over it.
+	local crest = math.exp(-((a - 0.45) ^ 2 + (b * 1.4) ^ 2) * 6) * 0.35
+	local lumps = 0.16 * math.noise(a * 2.6 + h.seed * 3, b * 2.6, 1.7) + 0.07 * math.noise(a * 6, b * 6 + h.seed, 4.1)
+	local height = h.rise * math.max(0, dome * (1 + lumps) + crest * dome)
+	if h.flat then
+		-- A level crown (St Brigid's, for its church): flattened to `flat`, eased into the slope round it.
+		local top = h.flat :: number
+		if height > top then
+			height = top + (height - top) * 0.08
+		end
+	end
+	return height
+end
+
+local function writeHill(h: Hill, alive: () -> boolean)
+	local terrain = workspace.Terrain
+	-- Its box, fitted to its turned outline (a long ridge on a slant is not a square).
+	local ex = (math.abs(h.along.X) + math.abs(h.along.Z) * h.stretch) * h.radius * 1.3
+	local ez = (math.abs(h.along.Z) + math.abs(h.along.X) * h.stretch) * h.radius * 1.3
+	local x0 = math.floor((h.cx - ex) / 4) * 4
+	local z0 = math.floor((h.cz - ez) / 4) * 4
+	local nx = math.ceil(ex * 2 / 4) + 1
+	local nz = math.ceil(ez * 2 / 4) + 1
+	local y0 = math.floor((h.base - 8) / 4) * 4
+	local ny = math.ceil((h.rise * 1.45 + 16) / 4)
+	-- Each column's surface height, once.
+	local tops = table.create(nx)
+	for i = 1, nx do
+		local row = table.create(nz)
+		for k = 1, nz do
+			local height = hillHeight(h, x0 + (i - 0.5) * 4, z0 + (k - 0.5) * 4)
+			row[k] = if height > 0 then h.base + height else -math.huge
+		end
+		tops[i] = row
+	end
+	local SLICE = 24
+	for i0 = 1, nx, SLICE do
+		-- (The level gone meanwhile: no more of it, so nothing is left behind after its terrain is cleared.)
+		if not alive() then
+			return
+		end
+		local i1 = math.min(nx, i0 + SLICE - 1)
+		local w = i1 - i0 + 1
+		local low = Vector3.new(x0 + (i0 - 1) * 4, y0, z0)
+		local high = low + Vector3.new(w * 4, ny * 4, nz * 4)
+		local region = Region3.new(low, high)
+		-- What is there already (a neighbouring hill's slope): only ever added to, never written over with air.
+		local materials, occupancy = terrain:ReadVoxels(region, 4)
+		for i = i0, i1 do
+			local mRow, oRow = materials[i - i0 + 1], occupancy[i - i0 + 1]
+			for k = 1, nz do
+				local top = tops[i][k]
+				if top > y0 then
+					-- Its slope, from its neighbours: grass, earth, rock by how steep it is; meadow in patches.
+					local function at(ii: number, kk: number): number
+						local row = tops[math.clamp(ii, 1, nx)]
+						local v = row[math.clamp(kk, 1, nz)]
+						return if v == -math.huge then h.base else v
+					end
+					local slope = math.max(math.abs(at(i + 1, k) - at(i - 1, k)), math.abs(at(i, k + 1) - at(i, k - 1))) / 8
+					local x, z = x0 + (i - 0.5) * 4, z0 + (k - 0.5) * 4
+					local surface = landAt(h, x, z, top - h.base, slope)
+					for j = 1, ny do
+						local bottom = y0 + (j - 1) * 4
+						local fill = math.clamp((top - bottom) / 4, 0, 1)
+						if fill > oRow[j][k] then
+							oRow[j][k] = fill
+							mRow[j][k] = if top - bottom > 10 then Enum.Material.Ground else surface
+						end
+					end
+				end
+			end
+		end
+		terrain:WriteVoxels(region, 4, materials, occupancy)
+		table.insert(filled, { cf = CFrame.new((low + high) / 2), size = high - low + Vector3.new(4, 4, 4) })
+		task.wait()
+	end
 end
 
 local function stBrigids(parent: Instance, ground: Vector3, facing: Vector3)
@@ -1195,16 +1321,23 @@ function HillHouseService.start(finish: CFrame, parent: Instance, centre: Vector
 	mistSheets(model, Vector3.new(centre.X, 0, centre.Z), killY + MIST_OVER_KILL)
 	local churchAt = top + seaward * 520 + Vector3.yAxis:Cross(seaward) * 260
 	churchAt = Vector3.new(churchAt.X, killY + MIST_OVER_KILL + 18, churchAt.Z)
-	farHill(model, churchAt - Vector3.new(0, 10, 0), 70, 32)
-	stBrigids(model, churchAt + Vector3.new(0, 18, 0), -seaward)
 	local towerAt = top + seaward * 640 - Vector3.yAxis:Cross(seaward) * 180
 	decoTower(model, Vector3.new(towerAt.X, killY + MIST_OVER_KILL - 40, towerAt.Z))
-	-- THE COUNTRY ROUND IT (the two-hundred-and-forty-first pass): St Brigid's hill was the only ground out of the mist,
-	-- so the walk up crossed a white plain with nothing on it. Hills stand out of it all the way round now, far off and
-	-- the haze taking the further ones, each with a wood on its crown, so the mist is over a country and not a floor. Laid by a fixed seed,
-	-- the same every run, and kept clear of the route (inside 700 studs of its middle) and of the church and the tower.
+	-- THE COUNTRY ROUND IT (passes 241 and 270): St Brigid's hill and hills all the way round, far off and the haze
+	-- taking the further ones, out of the mist so the mist is over a country and not a floor; each with a wood on it.
+	-- Laid by a fixed seed, the same every run, kept clear of the route (inside 700 studs of its middle) and of the
+	-- church and the tower; made of terrain (THE COUNTRY OUT OF THE MIST, above) in the background, the woods set on
+	-- the ground it makes. The church's hill first, and the church on its level crown.
+	local mistY = killY + MIST_OVER_KILL
+	local hills: { Hill } = {}
+	local churchGround = churchAt.Y + 18
+	-- (Seen in play: the feet of the hills showed a thin lip at the mist's top, so they stand 16 down in it; and the
+	-- church's crown was 3 studs over its floor.)
+	local foot = mistY - 16
+	table.insert(hills, { cx = churchAt.X, cz = churchAt.Z, base = foot, radius = 96, rise = churchGround - foot + 6,
+		seed = 7.3, along = seaward, stretch = 0.8, flat = churchGround - foot - 3 })
+	stBrigids(model, Vector3.new(churchAt.X, churchGround, churchAt.Z), -seaward)
 	do
-		local mistY = killY + MIST_OVER_KILL
 		local rng = Random.new(1979)
 		local count = 14
 		for index = 1, count do
@@ -1215,23 +1348,118 @@ function HillHouseService.start(finish: CFrame, parent: Instance, centre: Vector
 				and (Vector3.new(at.X, 0, at.Z) - Vector3.new(towerAt.X, 0, towerAt.Z)).Magnitude > 220
 			if clear then
 				local radius = rng:NextNumber(110, 240) * reach / 1100
-				local rise = radius * rng:NextNumber(0.3, 0.5)
-				local hillAt = Vector3.new(at.X, mistY - 6, at.Z)
-				farHill(model, hillAt, radius, rise)
-				-- A wood on its crown: canopy balls on the dome's upper half, set into it so none floats.
-				for _ = 1, rng:NextInteger(4, 8) do
-					local r = rng:NextNumber(0, radius * 0.55)
-					local t = rng:NextNumber(0, math.pi * 2)
-					local dx, dz = math.cos(t) * r, math.sin(t) * r
-					local ground = hillAt.Y + rise * math.sqrt(math.max(0, 1 - (r / radius) ^ 2))
-					local size = rng:NextNumber(16, 30) * reach / 1100
-					local tree = ball(model, "FarWood", size, Vector3.new(hillAt.X + dx, ground + size * 0.25, hillAt.Z + dz),
-						PALETTE.canopy:Lerp(Color3.fromRGB(60, 96, 58), rng:NextNumber(0, 0.7)), Enum.Material.Grass)
-					tree.CastShadow = false
-				end
+				local turn = rng:NextNumber(0, math.pi)
+				table.insert(hills, { cx = at.X, cz = at.Z, base = foot, radius = radius * 1.25,
+					rise = radius * rng:NextNumber(0.32, 0.55) + 10, seed = index * 1.37 + 0.5,
+					along = Vector3.new(math.cos(turn), 0, math.sin(turn)), stretch = rng:NextNumber(0.45, 0.75) })
 			end
 		end
 	end
+	-- THE FAR RANGES (pass 271): long blue ridges much further out, lost in the haze, so the country goes on past the
+	-- hills to the edge of seeing. Moor and rock, no woods, no fields.
+	do
+		local rng = Random.new(1981)
+		for index = 1, 5 do
+			local a = (index + rng:NextNumber(-0.25, 0.25)) / 5 * math.pi * 2 + 0.4
+			local reach = rng:NextNumber(2100, 2600)
+			local turn = a + math.pi / 2 + rng:NextNumber(-0.3, 0.3)
+			table.insert(hills, { cx = centre.X + math.cos(a) * reach, cz = centre.Z + math.sin(a) * reach, base = foot,
+				radius = rng:NextNumber(380, 480), rise = rng:NextNumber(100, 150), seed = 40 + index * 2.3,
+				along = Vector3.new(math.cos(turn), 0, math.sin(turn)), stretch = rng:NextNumber(0.28, 0.4), far = true })
+		end
+	end
+	-- A TOR: a heap of rounded rock on a hill's crest, sunk into it. A FARMHOUSE: white walls, a slate roof and a
+	-- chimney, on a gentle shoulder, its long side to the slope.
+	local function tor(hill: Hill, rng: Random)
+		local best, bx, bz = -1, hill.cx, hill.cz
+		for _ = 1, 24 do
+			local r = hill.radius * rng:NextNumber(0, 0.5)
+			local t = rng:NextNumber(0, math.pi * 2)
+			local x, z = hill.cx + math.cos(t) * r, hill.cz + math.sin(t) * r
+			local height = hillHeight(hill, x, z)
+			if height > best then
+				best, bx, bz = height, x, z
+			end
+		end
+		if best < 20 then
+			return
+		end
+		local size = hill.radius / 12
+		for _ = 1, rng:NextInteger(3, 5) do
+			local off = Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1)) * size
+			local radius = size * rng:NextNumber(0.45, 0.8)
+			fillBall(Vector3.new(bx, hill.base + best - radius * 0.35, bz) + off, radius,
+				if rng:NextNumber() < 0.5 then Enum.Material.Rock else Enum.Material.Slate)
+		end
+	end
+	local function farmhouse(hill: Hill, rng: Random)
+		for _ = 1, 20 do
+			local r = hill.radius * rng:NextNumber(0.35, 0.7)
+			local t = rng:NextNumber(0, math.pi * 2)
+			local x, z = hill.cx + math.cos(t) * r, hill.cz + math.sin(t) * r
+			local height = hillHeight(hill, x, z)
+			local ahead = hillHeight(hill, x + 6, z)
+			local side = hillHeight(hill, x, z + 6)
+			if height > 10 and math.abs(ahead - height) < 3 and math.abs(side - height) < 3 then
+				local scale = hill.radius / 110
+				local ground = hill.base + height - 1
+				local cf = CFrame.new(x, ground, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0)
+				local w, d, tall = 16 * scale, 7 * scale, 6 * scale
+				part(model, "FarHouse", Vector3.new(w, tall, d), cf * CFrame.new(0, tall / 2, 0), Color3.fromRGB(236, 232, 222),
+					Enum.Material.Plaster).CastShadow = false
+				for _, half in ipairs({ -1, 1 }) do
+					wedge(model, "FarHouseRoof", Vector3.new(w + 0.6 * scale, 3.2 * scale, d / 2 + 0.3 * scale),
+						cf * CFrame.new(0, tall + 1.6 * scale, half * (d / 4 + 0.15 * scale)) * CFrame.Angles(0, if half > 0 then math.pi else 0, 0),
+						PALETTE.slate, Enum.Material.Slate).CastShadow = false
+				end
+				part(model, "FarHouseChimney", Vector3.new(1.4 * scale, 3 * scale, 1.4 * scale),
+					cf * CFrame.new(w * 0.38, tall + 3 * scale, 0), Color3.fromRGB(150, 120, 104), Enum.Material.Brick).CastShadow = false
+				return
+			end
+		end
+	end
+	task.spawn(function()
+		local rng = Random.new(1980)
+		for index, hill in ipairs(hills) do
+			if not (model.Parent and built == model) then
+				return
+			end
+			local ok, err = pcall(writeHill, hill, function(): boolean
+				return model.Parent ~= nil and built == model
+			end)
+			if not ok then
+				warn("HillHouseService: a far hill: " .. tostring(err))
+			end
+			if index > 1 and not hill.far and model.Parent and built == model then
+				if index % 2 == 0 then
+					pcall(tor, hill, rng)
+				end
+				if index % 3 ~= 1 then
+					pcall(farmhouse, hill, rng)
+				end
+			end
+			-- A wood on it (not on the church's crown): canopy clumps on its upper slopes, set into the ground they stand
+			-- on, so none floats; darker and lighter greens.
+			if index > 1 and not hill.far and model.Parent then
+				for _ = 1, rng:NextInteger(5, 9) do
+					local r = hill.radius * rng:NextNumber(0.05, 0.5)
+					local t = rng:NextNumber(0, math.pi * 2)
+					local x, z = hill.cx + math.cos(t) * r, hill.cz + math.sin(t) * r * hill.stretch
+					local height = hillHeight(hill, x, z)
+					if height > 8 then
+						local size = rng:NextNumber(18, 34) * hill.radius / 220
+						for _ = 1, 3 do
+							local off = Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1)) * size * 0.5
+							local s = size * rng:NextNumber(0.6, 1)
+							local tree = ball(model, "FarWood", s, Vector3.new(x, hill.base + height + s * 0.22, z) + off,
+								PALETTE.canopy:Lerp(Color3.fromRGB(56, 90, 54), rng:NextNumber(0, 0.8)), Enum.Material.LeafyGrass)
+							tree.CastShadow = false
+						end
+					end
+				end
+			end
+		end
+	end)
 
 	-- THE DOOR: "Go in". The first time anyone opens it, it swings in, and stays open.
 	local hinge = model:FindFirstChild("DoorHinge", true)
@@ -1315,5 +1543,5 @@ function HillHouseService.stop()
 	clearTerrain()
 end
 
-HillHouseService.STAMP = "1d7a91bf"
+HillHouseService.STAMP = "2358394c"
 return HillHouseService

@@ -275,7 +275,7 @@ def check_pads_are_reachable():
         x, z, length, width, along_x = lobby_layout.walk(layout, w["to"])
         if length < 8:
             fail("LobbyLayout", "the walk to %s is %g long: the decks are not apart" % (w["to"], length))
-        for deck in (decks["plaza"], decks[w["to"]]):
+        for deck in (decks[w.get("frm", "plaza")], decks[w["to"]]):
             side = deck["d"] if along_x else deck["w"]
             if width + 2 * layout["margin"] + 8 > side:
                 fail("LobbyLayout", "the walk to %s is too wide for a deck's side" % w["to"])

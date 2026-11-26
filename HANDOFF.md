@@ -937,6 +937,192 @@ bite shot now shows the red jaws shutting (pass 251's "black blob" was the jaws 
 Repo: new screenshots and GIFs (screenshots/, all from 2026-11-24), the store icon and thumbnails (media/), README's
 top, a Hill House row and a Recent improvements section.
 
+Pass 253 (2026-11-24/25, "I don't like the shape of the tongue, improve the maw even more and close the gaps and weird
+stuff"): A MADE TONGUE, blender/gen_maw_tongue.py -> meshes/Maw_Tongue.fbx, uploaded as Model 121880441311893 (1 upload)
+into TileMeshes.Maw_Tongue (13.71 x 2.92 x 30): broad at the root, tapering to a rounded tip, grooved, flat beneath,
+papillae; placed root at the throat (TONGUE_TURN: the import arrived tip-first, measured with rays), plain wet red (the
+gums' texture came out in pale blotches under the green glow). Spheres stand in without the import. Pass 251's inner
+rows of fangs are gone (half buried in the roof, pale dashes; the made jaws carry their own rows), and so is the uvula
+(it filled the shot from inside the mouth). THE CHEEKS: wedge-triangle webbing from each corner's upper rim to its
+lower, sagging back to the throat, stretched by Maw.set (CHEEK_ANGLES, corners only: further round they stood as two
+grey walls in the inside shot). Ridden on video twice. Place saved. Backups ServerStorage.Pass253Backup.
+Thumbnails v3 (release/thumbs_v3.py, 2026-11-25): you mid-jump over City Shore's arcade buttons (SQUISH EVERYTHING!),
+diving into the Maw (DON'T FALL IN!), the five worlds as numbered cards, six materials as cards (28 MATERIALS!). Applied
+to the store page (4 image uploads; ids in release/store_drafts/STORE_PAGE.md); media/thumbnails and README updated.
+
+Pass 254 (2026-11-25, "polish the background of City Shore even more, add more detail"): BackdropService, BACKDROP_VERSION
+10 (3258 parts, was 2445). THE BEACH, busy (beachLife): umbrellas one to three every 1.7 degrees across the dry sand,
+beach huts by the promenade, cabanas, surfboards, flags, sandcastles at the water, a lifeguard's chair every seventh
+stretch (all modelled props, sized by propSized to a target width or height, standing on beachY, the sand's own ramp).
+THE HOTELS lived in (decoHotel): a coloured awning over the ground floor, a sign down a corner on some, and a rooftop
+pool or rooftop plant and a tank. INLAND (townBehind, parkTrees): houses with trees between the hotels and the towers,
+trees in the parks, street trees behind the promenade. AT SEA: a lighthouse at each harbour wall's mouth
+(harbourLights), sixteen sailing boats with coloured sails 1250 to 2400 out (sailboat: white sails were lost in the white
+haze; seen from the run zoomed in), dinghies in the bay, seven islands with sand rims 2300 to 3400 out, two with
+lighthouses (islands; at 4100 they were beyond the haze). docs/city_shore_beach_254.jpg, docs/city_shore_sea_254.jpg.
+
+Pass 255 (2026-11-25, "polish it a bit more"): BACKDROP_VERSION 13. Umbrellas: over half in a plain colour (prop()
+keeps lastProp; the textured stripe is cleared), so the beach is not all one red and white. AVENUES: nine roads inland
+from the promenade, dark (a mid grey did not read on the pale ground), dashed centre line, trees alternating along
+them, their ground claimed before the towers. LOW-RISE: up to 420 pastel blocks with white cornices and roof plant in
+what the towers leave (425 placed with the parks' and houses' share). Trees tinted green (treeGreen: the modelled tree
+is untextured and came out grey-white). docs/city_shore_town_255.jpg, docs/city_shore_above_255.jpg.
+
+Pass 256 (2026-11-25, "polish level 4th textures and models in the pools"): THE FLOODED HALLS' POOLS. Surfaces from
+Studio's material generator (no image uploads): HallsGlaze (LevelSurfaces; small glazed tiles in running bond, thin dark
+grout) is now the halls' CeramicTiles in MaterialAppearance.WORLD_SURFACES, where HallsTile's big khaki tiles with bright
+grout read as brick (HallsTile kept; a first HallsGlaze came out blank and sits in ServerStorage.Pass256Backup as
+HallsGlaze_blank). PoolMosaic (aqua and white squares) lines the pools: POOL_TILE_VARIANTS tries it, then
+PoolTileBackdrop. MODELS, blender/gen_pool_kit.py (2 uploads): Pool_LaneRope (Model 82364191761113, a cord threaded with
+ridged disc floats, stretched and coloured per run; the cylinder stays as the stand-in) and Pool_Ladder (Model
+84690785228763, steel grab rails over the coping and four treads down the wall, LADDER_GROW so the rails break the
+shallows' surface), one near each end of a long pool side on a bay line (8 in the level). PIERS finished (pier()): a
+cream plinth, a dark band at the water line, a cream necking and cap. check_surfaces reads the variant list. Seen in play;
+place saved (version 903). docs/flooded_pools_before_256.jpg, docs/flooded_pools_256.jpg, docs/flooded_pools_close_256.jpg.
+
+Pass 257 (2026-11-25, "fix the column bases too"): Hall_Column rebuilt in gen_flooded_halls.py (3064 tris, same size, so
+EXPECTED_SIZE is unchanged), uploaded as Model 130399612241164 into TileMeshes (3 uploads in all; the first two were steps
+on the way). Three faults at every column's foot: (1) a disc closing the turned part lay exactly on the plinth's top
+face, and the two fought (the zig-zag crescent); it is gone. (2) The torus was one ring, a sharp ridge that read as a
+sheet curling over the plinth; now a half-round roll, a scooped hollow between fillets and a smaller roll. (3) The tiles
+were mapped flat from three directions and tore into seams every eighth of a turn; the turned part is now mapped round
+by angle and up by distance along its profile, and smooth-shaded. Old column in ServerStorage.Pass256Backup. Seen in
+play; place saved (version 905). docs/column_base_before_257.jpg, docs/column_base_257.jpg. (The run also rewrote the
+other ten kit FBXs byte-identical in size; only Hall_Column changed shape.)
+
+Pass 258 (2026-11-25, "the columns are hollow, the lamp models are too simple, these light squares are out of place"):
+(1) HOLLOW COLUMNS: the turned part of Hall_Column is open at its top (under the abacus), so recalc_face_normals turned
+all 960 side faces INWARD and Roblox drew each column's inside (true since long before pass 257; once the base was
+fixed it showed). build_column now counts faces pointing in and flips them, and closes the bottom with a disc 0.4 down
+inside the plinth (not on its top face, where it fought it). Model 90497113976858. (2) LAMPS: blender/gen_hall_lamps.py,
+Hall_LampShade (89311437475491: dished enamel shade, rolled rim, fitter, bulb cup) and Hall_Chain (92681566600722: oval
+links a quarter-turn apart), a cream ceiling rose; LAMP_ENAMEL; the old rod and cylinder stand in without the imports.
+(3) WINDOWS, NOT LIT SQUARES: every wall lightPanel is glazed (glaze()): iron frame, mullions and transoms every
+WINDOW_PITCH studs, a cream sill and lintel, the pane a softer WINDOW_PANE; the light still comes from the PointLight.
+189 glazing bars in a run. 3 uploads. check_halls reads gen_hall_lamps.py. Seen in play; place saved (version 907).
+docs/column_solid_258.jpg, docs/hall_window_258.jpg, docs/hall_lamp_258.jpg, docs/passage_window_258.jpg.
+
+Pass 259 (2026-11-25, "the maw is so visible and sticking out of a square frame ... I can see what's inside the slide and
+the bottoms of it ... make the windows spill light rays inside, like the sun would, and improve the window model more"):
+(1) UNDER THE BOARDS (StoryClient peek): the mouth was lit by the SKY (the shaft is open to it through the oculus) and the
+pale square behind it was the shaft's far end in the halls' haze. For the look down the scene now turns the air black,
+the sky and ambient down (Lighting.Brightness 0), the halls' lights within 240 out, and a sinking grade; the mouth is 190
+down (at 320 its own lights were culled: too far from the camera) with a faint glow and a narrow cold spot over its jaws
+(PeekGlint, MAW_PEEK_GLINT) so only the teeth catch; all given back on the cut. NOT Atmosphere.Density 0: with no air the
+renderer drew the whole look black, lights and all. (2) THE FLUME GOES INTO THE DARK: staves, water, rims, flanges and
+steel lerp to FLUME_FADE.FLUME_DARK by depth (gloom(); 8% to 40% of the drop), so from the gangway the coil sinks into
+black. (3) SUNBEAMS: every wall window has rays (sunRays: two FaceCamera Beams, textures/halls/light_ray.png uploaded as
+Image 135226752616561, falling at WINDOW.RAY_DOWN with a shared lean WINDOW.RAY_LEAN; WINDOW.RAY_FADE how see-through).
+Callers pass the room's side (`inward`) to lightPanel. (4) WINDOWS: each pane its own part, each a slightly different
+tone, the odd one grimed, a warmer top row; a keystone. New tunables live in tables WINDOW, LAMP, LADDER, FLUME_FADE
+(the module was at Luau's 200-locals limit). 1 upload. Place saved (version 917).
+docs/peek_maw_259.jpg, docs/flume_dark_259.jpg, docs/hall_windows_259.jpg, docs/sunbeam_259.jpg.
+
+Pass 260 (2026-11-25, "infinite climb ... a leaderboard of the max height"; a fall is the bottom, best kept, the board
+global): THE CLIMB. ClimbService (server, new) and ClimbClient (client, new). The lobby's TOWER at the garden's east end
+(TOWER_AT, its door's prompt "Climb"; iron lattice, coloured steps up its outside, beacon, pennant) and its BOARD on its
+north side. The climb: a rock in the sky at (9000, 300, -9000) (courtyard, wall, lamps, a stone START pad, the lift home
+"HARROW BAY" with its prompt, a board and a sign), a stone column that grows, and real material steps (cloned from
+ChunkTemplates, one per material, registered with DeformationService) spiralling round it on iron arms and struts, a
+landing with its height every LANDING_EVERY; worked out from SEED step by step (spotFor), built only near climbers
+(KEEP_BOTTOM, BEHIND, AHEAD), harder up to HARDEST_AT (gap and rise always jumpable: tallest measured rise 3.1 of a 7.2
+jump), TURN_CLEAR headroom over the step a turn below. A fall FALL_DROP under your last step (or off the rock) = the
+bottom under a fade. Height in metres (METRE 0.28) on the player (ClimbHeight, ClimbBest); EconomyService.climbed saves
+ClimbBest and pays 5 tokens a new 25 m; the board is OrderedDataStore "ClimbHeight_v1" (decimetres, better-only
+UpdateAsync, read every 60 s; the people here where the store is unreachable). Climbers are out of the lobby's vote and
+story (HubService.hubPlayers, Bootstrap storyLevel), never put into a run on respawn, kept out of the back corridor; the
+pause menu's Leave says "Back to the lobby"; a reset is the bottom. ClimbClient: fade, the height pill (top), "New best!"
+and each 25 m with a chime (JournalAdd), the whoosh on a fall (CloudWhoosh), the wind (RoofWind) louder with height, a
+clear sky's light while climbing (SKY, AIR; a level's blur and grade off), all put back. Dev panel: "The climb / lobby".
+Tested: in, a step's height, a fall to the bottom, home to the tower door, the global board read back (my 14 m test is on
+the real board). Place saved (version 920). docs/climb_tower_260.jpg, climb_column_260.jpg, climb_landing_260.jpg,
+climb_board_260.jpg.
+
+Pass 261 (2026-11-26, the climb looked at again): ONLY UP: each climber's screen (ClimbClient.sortSteps) shows only the
+step they last stood on (ClimbStep, set by the server) and SHOW_AHEAD (2) more; every other step is undrawn for them, its
+lights and signs off, in the collision group ClimbHidden (no character collides with it), so a miss falls all the way;
+the server only counts a climber moving up (a lower step is never stood on) and FALL_DROP is 12; landing on the courtyard
+from FLOOR_FALL_FROM steps up is a fall too. Tested: up to step 10, dropped onto step 9, fell through it to the bottom.
+Server builds only BEHIND 2 / AHEAD 6 round each climber (KEEP_BOTTOM 6). THE ARRIVAL TERRACE (TERRACE, a round terrace of
+its own on the lift's side, with its own rock and wall, joined to the courtyard): the lift home, the board and the sign
+are on it, clear of the steps (the board stood in the spiral). THE TOWER: its little steps are real slabs of the climb's
+materials made small (miniature: tags and attributes stripped, ScaleTo) on iron brackets and struts; the entrance is
+rebuilt (buildEntrance: stone base and steps, cream walls on iron posts, a dado, pilasters, an arched doorway of warm
+light with a rim and brass keystone, two lanterns, a green gabled roof with a brass ridge, the sign in a brass frame).
+THE BOARD: a dark enamelled panel in an iron frame with brass trim and a brass crown and star, a gold header ("best
+height, every server"), striped rows with gold, silver and bronze medals. The wind's volume is capped (WIND.high at 120 m).
+Place saved (version 923). docs/climb_tower_261.jpg, climb_board_261.jpg, climb_terrace_261.jpg.
+
+Pass 262 (2026-11-26, "improve the surroundings of level 4 and the models inside the pools and the pools themselves, then
+the background skies in the forever climb"): FLOODED HALLS (dressPools, POOL_LIFE): caustics (textures/halls/caustics.png,
+Image 113790123785633) as drifting Textures on pool floors (two crossing layers), steps and walls, fainter on the
+shallows' floor; a ripple (the built-in water normal) on every water surface; FloodedHallsClient slides every texture
+tagged HallsDrift by its DriftU/DriftV. Backstroke flag lines across each pool near both ends (posts in the shallows,
+red/white/blue pennants of wedges). "11 m" and "NO DIVING" tiles in the coping. Drains (grate + bars) down the pool
+floors. Lost things: Pool_Ring (Model 111346760076485) and Pool_Kickboard (109916571266581), gen_pool_kit.py, on the
+bottom, a noodle, a ring afloat in every other pool. THE CLIMB'S SKY (ClimbClient STAGES): the later the day the higher
+you are: afternoon at 0 m, gold at 60, sunset at 130, dusk and first stars at 200, night with thousands of stars from 300
+(ClockTime, Brightness, ambients, air colour/decay/haze/glare/density, Sky.StarCount, blended by height every frame;
+ReplicatedStorage ClimbOriginY/ClimbMetre). Clouds are two-toned heaps (blue-grey base, white body, small crown), more
+and further out, and a deeper sea of cloud below. 3 uploads. Place saved (version 925). docs/pool_floor_262.jpg,
+pool_flags_262.jpg, climb_sunset_262.jpg, climb_night_262.jpg.
+
+Pass 263 (2026-11-26): THE LOBBY FOUNTAIN (HubService buildPool/buildFountain, FOUNTAIN): round basin on a stepped marble
+plinth, a lilac band and a broad rim to sit on (solid), PoolMosaic floor with the halls' caustics drifting, water as
+SmoothPlastic (no Glass), six lily pads with flowers, 26 wishing coins, six lamps in the floor, six brass spouts arcing
+water in; Hub_Fountain 1.35x on a marble plinth with a brass band, its jet and spills scaled. THE CLIMB: the lobby board
+moved into the open (LOBBY_BOARD_AT 50,1,94 turned to LOBBY_BOARD_FACES); the entrance's steps no longer overlap the base
+(they flickered); the lift home rebuilt (buildLift: base and step, marble columns, iron lattice sides, brass doors, a lit
+dial, cornice, green dome and finial, a brass-framed "LIFT TO HARROW BAY", lanterns, a call panel) and moved in off the
+terrace's edge (TERRACE.radius - 13). STEPS BUILD AND UNBUILD (ClimbClient BUILD): a step that comes to you rises into
+place from below, lowest pieces first, fading in with a little overshoot; one left behind sinks away top first and
+fades, not solid from its first frame; every piece put back where the server has it (checked). Place saved (version 927).
+docs/lobby_fountain_263.jpg, climb_board_263.jpg, climb_lift_263.jpg, climb_build_263.jpg.
+
+Pass 264 (2026-11-25): NO BALLOT IN THE CLIMB (HubVoteService climbing()): onTick/onIdle/onResult keep the tally but show
+nothing while InClimb, the card slides away the moment InClimb is set, and the countdown tick is silent (tested: entering,
+and falling back to the bottom, shows only the climb's pill). STEPS GATHERED OUT OF THE AIR (ClimbClient BUILD, rewritten):
+a coming step's pieces start scattered 7-12 studs round it, tumbled and see-through, and fly home on lifted arcs, middle
+first, turning square with an overshoot; on the last landing a legoClick, a warm ring of light running over its top and
+a sparkle puff (ring and sparkles off under Reduce Motion, where pieces only fade). A step left behind is BLOWN AWAY:
+pieces lift on one gust, tumble off and fall and fade, with a soft CloudWhoosh. THE PALS AS MONUMENTS (new shared module
+PetStatues: pet, pedestal, statue, cloud; the six Assets.Cosmetics.Pal_* meshes with their colours taken off):
+- clouds: one pal-shaped cloud per climb cloud band (the six in turn, 230-340 out, facing the column), four high over the
+  lobby (HubService, after the terrain Clouds; 430 out, 170-210 up, never under the deck);
+- marble fountains where there are pools: Wibble in Flooded Halls' first pool (lateral 10, inside the lane rope, on a
+  column from the pool floor), Nimbus in Sky Pools' last pool across from where the slide lands (finalPool's new
+  slideEnd argument); each jets a Beam arc into the water with a soft splash (particles alone read as faint glitter);
+- Gloop in mossy stone on a tall plinth rising out of the Sunken City's water, between the clock tower and the street;
+- Bumble as topiary in the Hill House garden at across -26, inward -8 (at -22,-2 it stood under the old apple tree);
+- Cinder, Wibble and Bumble as sand sculptures on City Shore's beach, 72-82 up from the shore line (nearer, the swell
+  covered them), own Random(264) so the beach did not move; BACKDROP_VERSION 14.
+All seen in play. Place saved (version 930). docs/pet_cloud_264.jpg, halls_statue_264.jpg, skypools_statue_264.jpg,
+hillhouse_topiary_264.jpg, climb_build_264.jpg.
+
+Passes 265 to 271 (2026-11-26), all pasted (byte-checked) and seen in play; place saved at version 949.
+- 265 THE LOBBY AND THE CLIMB: plaza benches moved back from the fountain (LobbyLayout.BENCHES); the fountain's water as
+  Beam ropes (HubService waterArc/ripples), veils off both bowls, a wish coin on the near rim (WishPrompt); the climb
+  moved to a deck of its own (LobbyLayout.DECKS.climb, walk `from = "gates"`; railDeck and lobby_layout.py know `from`),
+  a round dais, rising motes, an iron gateway arch (AT.climbGate); the tower's little steps build and blow away on a loop
+  (ClimbDemoStep tags, ClimbClient DEMO); pal clouds fade by height in the climb (ClimbClient FADE); a gathering swirl
+  and a dust puff as steps build; a ring of light every 25 m; pal cloud puffs are sphere MESHES (Ball parts are always
+  round); Bumble in marble where the tower stood (AT.gardenStatue); Gloop in Limestone (Rock is dressed as coursed stone).
+- 266 FIXES: climb Leave while the lobby is away respawns you into the run; being put into a level drops InClimb;
+  the Sunken City's sea dark and aquarium murk cancel their ease-in before putting the air back (the air stuck at 0.70);
+  Marsh's cut head at RenderFidelity Precise, and StalkerClient puts his whole MadeHead back if a piece loses its mesh.
+- 267 DARKNESS KEPT TO ITS LEVEL: LightingService writes each place's look on Lighting (Look* attributes, LookStamp);
+  LightGuard (new client module) restores it on a new place and clears any other place's darkness (OWNERS table);
+  CaughtDark only while Marsh has you; the fountain's glare cut (LightEmission 0, tinted water, fewer veils); the Maw has
+  a body (Maw.lua BODY, COLLAR) and new generated hide textures on Maw_UpperJaw/LowerJaw (old ids in OldTextureID).
+  The client script in StarterPlayerScripts is named BootStrap (capital S): paste to that name.
+- 268 FLUFF: a secret pal (PalDust, earn = "secret") in a mouse hole in the back rooms (BackRoomsService DUST, tile 1,33
+  west wall), EconomyService.foundDustBunny once a save (+50, dustTokens); the climb's deck moved south (z -100), its
+  board off the path, no festoons over its walk.
+- 269 the climb's sign is a made signboard (Assets/Props.Climb_Signboard; FaceZ/TextY/TextW/TextH attributes).
+- 270-271 the walks' lamps off the rails; Hill House's far hills are voxel terrain from a height field (HillHouseService
+  hillHeight/writeHill/landAt): fields and hedgerows, moor, earth and rock by slope, tors, farmhouses, five far ranges,
+  written in slices in the background and cleared with the level's terrain.
+
 ## The sea monsters' jaws (two-hundred-and-twenty-ninth pass, 2026-11-20)
 
 From "now do the serpent and leviathan mouths". MarshMouth.jaw(name) cuts a made head with jaws modelled open

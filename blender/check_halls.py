@@ -1070,7 +1070,10 @@ def main():
         for name in built:
             if name.lower().replace("hall_", "") == builder.replace("_", ""):
                 exported.add(name)
-    for name in sorted(wanted - built):
+    # The lamps have a generator of their own (pass 258): gen_hall_lamps.py exports each by name.
+    lamps_gen = (HERE / "gen_hall_lamps.py").read_text(encoding="utf-8") if (HERE / "gen_hall_lamps.py").exists() else ""
+    lamps = set(re.findall(r'G\.export\(\[obj\], "(Hall_[A-Za-z]+)"\)', lamps_gen))
+    for name in sorted(wanted - built - lamps):
         fail("%s is placed by the service but no generator builds it." % name)
     for name in sorted(wanted & built - exported):
         fail("%s is built but main() does not export it, so importing the kit will not "

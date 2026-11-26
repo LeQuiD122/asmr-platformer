@@ -35,6 +35,9 @@ def _num(value):
     m = re.match(r"^(-?)math\.pi\s*/\s*([\d.]+)$", value)
     if m:
         return (-1 if m.group(1) else 1) * math.pi / float(m.group(2))
+    m = re.match(r"^(-?)math\.pi\s*\*\s*([\d.]+)\s*/\s*([\d.]+)$", value)
+    if m:
+        return (-1 if m.group(1) else 1) * math.pi * float(m.group(2)) / float(m.group(3))
     return float(value)
 
 
@@ -50,8 +53,9 @@ def read():
                                        _block(text, "DECKS")):
         decks[name] = dict(x=float(x), z=float(z), w=float(w), d=float(d))
     layout["decks"] = decks
-    layout["walks"] = [dict(to=to, width=float(width))
-                       for to, width in re.findall(r'\{ to = "(\w+)", width = ([\d.]+) \}', _block(text, "WALKS"))]
+    layout["walks"] = [dict(to=to, width=float(width), frm=frm or "plaza")
+                       for to, width, frm in re.findall(r'\{ to = "(\w+)", width = ([\d.]+)(?:, from = "(\w+)")? \}',
+                                                       _block(text, "WALKS"))]
     at = {}
     for name, x, y, z in re.findall(r"(\w+) = Vector3\.new\((-?[\d.]+), (-?[\d.]+), (-?[\d.]+)\)", _block(text, "AT")):
         at[name] = (float(x), float(y), float(z))
@@ -95,8 +99,9 @@ def arc(layout, count):
 
 def walk(layout, to):
     """LobbyLayout.walk: (centre x, centre z, length, width, along x)."""
-    plaza, deck = layout["decks"]["plaza"], layout["decks"][to]
     width = next((w["width"] for w in layout["walks"] if w["to"] == to), 20)
+    frm = next((w["frm"] for w in layout["walks"] if w["to"] == to), "plaza")
+    plaza, deck = layout["decks"][frm], layout["decks"][to]
     if deck["x"] != plaza["x"]:
         sign = 1 if deck["x"] > plaza["x"] else -1
         a = plaza["x"] + sign * plaza["w"] / 2
@@ -305,7 +310,24 @@ def footprints(layout, hub_text=None, pads=None):
     for x, z in layout["planters"]:
         circle("planter", x, z, 3.8, group="planter %g %g" % (x, z))
     x, _, z = at["pool"]
-    rect("pool", x, z, 26, 13)
+    circle("pool", x, z, 13.6)  # FOUNTAIN.STEP, the plinth round the basin
+    # THE CLIMB'S DECK (pass 265): the tower (its legs 6 out, their feet, the entrance's steps 7.4 out toward -X) and
+    # the board of the highest climbers (13.2 across, turned to the way in).
+    if "climbTower" in at:
+        x, _, z = at["climbTower"]
+        circle("climb tower", x, z, 10.8)  # its round dais
+    if "climbGate" in at:
+        x, _, z = at["climbGate"]
+        for side in (-1, 1):
+            rect("climb gate pier", x, z + side * 12.4, 2.6, 2.6, group="climb gate")
+    if "gardenStatue" in at:
+        x, _, z = at["gardenStatue"]
+        rect("garden statue", x, z, 5, 5)
+    if "climbBoard" in at:
+        x, _, z = at["climbBoard"]
+        climb_deck = layout["decks"].get("climb", dict(x=x, z=z + 1, w=0))
+        fx, _, fz = at.get("climbBoardFaces", (climb_deck["x"] - climb_deck["w"] / 2, 1, climb_deck["z"]))
+        rect("climb board", x, z, 13.4, 1.6, _yaw_toward(x, z, fx, fz))
     x, _, z = at["viewer"]
     circle("viewer", x, z, 1.3)
     x, _, z = at["lift"]
@@ -315,6 +337,8 @@ def footprints(layout, hub_text=None, pads=None):
         circle("lamp post", x, z, 0.8, role, group="lamp %g %g" % (x, z))
     # THE FESTOONS' POLES (the hundred-and-ninth pass), their feet on the walks.
     for w in layout["walks"]:
+        if w["to"] == "climb":
+            continue  # (no festoons over the climb's walk, pass 268)
         for x, z in festoon_poles(layout, w["to"]):
             circle("festoon pole", x, z, 0.7, "walk", group="festoon %g %g" % (x, z))
     # THE PLAZA'S COLUMNS, on its trim band (2.5 in from the edge): the corners and the quarter points, so each

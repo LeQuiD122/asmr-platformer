@@ -24,7 +24,7 @@ been tested.
 
 | Icon | Thumbnails |
 |---|---|
-| <img src="media/icon.png" width="150" alt="Icon"> | <img src="media/thumbnails/thumbnail-1-squish.jpg" width="320" alt="Thumbnail: squish"> <img src="media/thumbnails/thumbnail-2-dive.jpg" width="320" alt="Thumbnail: the dive"> <img src="media/thumbnails/thumbnail-3-worlds.jpg" width="320" alt="Thumbnail: the worlds"> <img src="media/thumbnails/thumbnail-4-serpent.jpg" width="320" alt="Thumbnail: the serpent"> |
+| <img src="media/icon.png" width="150" alt="Icon"> | <img src="media/thumbnails/thumbnail-1-squish.jpg" width="320" alt="Thumbnail: squish everything"> <img src="media/thumbnails/thumbnail-2-maw.jpg" width="320" alt="Thumbnail: don't fall in"> <img src="media/thumbnails/thumbnail-3-worlds.jpg" width="320" alt="Thumbnail: five worlds"> <img src="media/thumbnails/thumbnail-4-materials.jpg" width="320" alt="Thumbnail: 28 materials"> |
 
 ## Screenshots
 

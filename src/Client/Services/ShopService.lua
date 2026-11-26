@@ -1072,6 +1072,11 @@ local function pressPrice(item: any, tile: GuiObject)
 		end)
 		return
 	end
+	-- HIDING IN THE BACK ROOMS (pass 268): a hint, never the way.
+	if item.earn == "secret" and not owned(item.id) then
+		toast("Something small is hiding somewhere in the back rooms.")
+		return
+	end
 	-- EARNED, NOT SOLD: said what it takes.
 	if item.earn and not owned(item.id) then
 		toast("Finish the story to get " .. item.name .. ".")
@@ -1171,6 +1176,7 @@ local EARN_WORDS: { [string]: string } = {
 	materials = "Not sold: stand on every material in the levels to get it.",
 	crate = "Not sold on its own: it comes out of the background crates.",
 	vip = "Not sold: it comes with VIP, as long as you have it.",
+	secret = "Not sold: something small is hiding somewhere in the back rooms.",
 }
 
 local function hideInfo()
@@ -1530,6 +1536,9 @@ local function makeTile(item: any, order: number): TextButton
 	elseif item.earn == "materials" and not owned(item.id) then
 		-- For every material found: what it takes, where a price would be.
 		fill, edge, ink, words = LOOK.soon, LOOK.soonEdge, LOOK.soonInk, ("Find all %d"):format(#ShopCatalog.MATERIALS)
+	elseif item.earn == "secret" and not owned(item.id) then
+		-- Hiding in the back rooms (pass 268): only that it is a secret.
+		fill, edge, ink, words = LOOK.soon, LOOK.soonEdge, LOOK.soonInk, "Secret"
 	elseif item.earn and not owned(item.id) then
 		-- Earned, never sold: what it takes, where a price would be.
 		fill, edge, ink, words = LOOK.soon, LOOK.soonEdge, LOOK.soonInk, "Finish the story"
@@ -2934,6 +2943,9 @@ local function showEarned(amount: number, info: any)
 	if type(info) == "table" and type(info.gift) == "string" then
 		ribbon = ("  and the %s trail"):format(string.lower(info.gift))
 	end
+	if type(info) == "table" and type(info.pal) == "string" then
+		ribbon = ("  and %s, a new pal (Pals)"):format(info.pal)
+	end
 	local words = label(pill, "Words", ("+%d tokens"):format(amount) .. (if #reasons > 0 then "  (" .. table.concat(reasons, ", ") .. ")" else "")
 		.. ribbon, CHUNKY, 22, LOOK.amberInk)
 	words.AutomaticSize = Enum.AutomaticSize.X
@@ -3306,5 +3318,5 @@ ShopService.kit = {
 	hold = hold,
 }
 
-ShopService.STAMP = "810e3dc0"
+ShopService.STAMP = "00321a71"
 return ShopService

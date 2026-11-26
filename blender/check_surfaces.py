@@ -308,8 +308,14 @@ for material, name in slab_names.items():
         fail("tools/make_variants.lua: does not make the slab variant %s on %s wearing the Slab maps" % (name, material))
 for constant, source in (("CONCRETE_VARIANT", "BackdropService.lua"), ("POOLTILE_VARIANT", "BackdropService.lua"),
                          ("POOL_TILE_VARIANT", "FloodedHallsService.lua"), ("TILE_VARIANT", "SkyPoolsService.lua")):
-    found = re.search(r'^local %s = "(\w+)"' % constant, read(SRC / "Server" / "Services" / source), re.M)
-    if not found or found.group(1) not in made:
+    text = read(SRC / "Server" / "Services" / source)
+    found = re.search(r'^local %s = "(\w+)"' % constant, text, re.M)
+    names = [found.group(1)] if found else []
+    # The halls' pool takes its own generated mosaic first and falls back to a made one (pass 256).
+    listed = re.search(r'^local %sS = \{([^}]*)\}' % constant, text, re.M)
+    if listed:
+        names = re.findall(r'"(\w+)"', listed.group(1))
+    if not any(name in made for name in names):
         fail("tools/make_variants.lua: does not make %s's %s" % (source, constant))
 for name, (_, _, wears) in made.items():
     if wears not in manifest or wears not in mapped:

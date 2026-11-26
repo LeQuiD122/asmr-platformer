@@ -54,7 +54,8 @@ type Seen = { real: Model, copy: Model, root: BasePart, motors: { [string]: Moto
 	speed: number, snapUntil: number, snap: CFrame, nextLook: number, look: Vector2, tilt: number, grab: number,
 	knuckles: { Knuckle }, tie: { weld: Weld, rest: CFrame, pivot: CFrame }?, spotted: number?,
 	mouth: { skull: { Weld }, jaw: { Weld }, base: CFrame, hinge: CFrame, lids: { { weld: Weld, i: number } },
-		scale: Vector3, teeth: { { part: BasePart, weld: Weld, frame: CFrame, len: number } } }?, open: number, eyes: number }
+		scale: Vector3, teeth: { { part: BasePart, weld: Weld, frame: CFrame, len: number } }, made: BasePart,
+		pieces: { BasePart } }?, open: number, eyes: number, checked: number? }
 local seen: { [Model]: Seen } = {}
 local failed = false
 
@@ -113,12 +114,14 @@ local function copyOf(real: Model): Seen?
 		end
 		if worn then
 			local scale = made.Size / cut.meshSize
+			local all: { BasePart } = {}
 			local base = worn.C0
 			made.Transparency = 1
 			local function on(part: BasePart, list: { Weld }): BasePart
 				local piece = part:Clone()
 				piece.Size = part.Size * scale
 				piece.Parent = copy
+				table.insert(all, piece)
 				local weld = Instance.new("Weld")
 				weld.Part0 = headPart
 				weld.Part1 = piece
@@ -139,6 +142,7 @@ local function copyOf(real: Model): Seen?
 				local lidPiece = lidPart:Clone()
 				lidPiece.Size = lidPart.Size * scale
 				lidPiece.Parent = copy
+				table.insert(all, lidPiece)
 				local weld = Instance.new("Weld")
 				weld.Part0 = skull
 				weld.Part1 = lidPiece
@@ -148,6 +152,7 @@ local function copyOf(real: Model): Seen?
 			end
 			for _, eyePart in ipairs(MarshMouth.eyeParts(scale)) do
 				eyePart.part.Parent = copy
+				table.insert(all, eyePart.part)
 				local weld = Instance.new("Weld")
 				weld.Part0 = skull
 				weld.Part1 = eyePart.part
@@ -178,9 +183,10 @@ local function copyOf(real: Model): Seen?
 				weld.C0 = MarshMouth.toothFrame(tooth, scale) * CFrame.new(0, long / 2, 0)
 				weld.Parent = part
 				table.insert(teeth, { part = part, weld = weld, frame = MarshMouth.toothFrame(tooth, scale), len = long })
+				table.insert(all, part)
 			end
 			mouth = { skull = skullWelds, jaw = jawWelds, base = base, hinge = CFrame.new(MarshMouth.HINGE * scale),
-				lids = lidWelds, scale = scale, teeth = teeth }
+				lids = lidWelds, scale = scale, teeth = teeth, made = made, pieces = all }
 		end
 	end
 	copy.Parent = workspace
@@ -437,6 +443,40 @@ local function animate(one: Seen, dt: number, now: number, camera: Camera?)
 	drive(one, "NeckJ", CFrame.Angles(0.04 * s * pace, 0, 0))
 end
 
+-- HIS HEAD NEVER GOES (pass 266, from your note: "head is not visible in the back rooms monster"). His cut head is
+-- drawn from meshes made on this screen, which share a small budget with the sea's monsters; one let go of draws as
+-- nothing, and he walked about headless. Twice a second, if any of his head's pieces has lost its mesh, they go and his
+-- whole made head (an uploaded mesh, always there) is put back on him, mouth shut.
+local function meshGone(part: BasePart): boolean
+	if not part:IsA("MeshPart") then
+		return false
+	end
+	local ok, gone = pcall(function()
+		local content = (part :: MeshPart).MeshContent
+		return content.SourceType == Enum.ContentSourceType.Object and content.Object == nil
+	end)
+	return ok and gone == true
+end
+
+local function keepHead(one: Seen, now: number)
+	local mouth = one.mouth
+	if not mouth or now < (one.checked or 0) then
+		return
+	end
+	one.checked = now + 0.5
+	for _, part in ipairs(mouth.pieces) do
+		if part.Parent == nil or meshGone(part) then
+			for _, other in ipairs(mouth.pieces) do
+				other:Destroy()
+			end
+			mouth.made.Transparency = 0
+			one.mouth = nil
+			warn("StalkerClient: his cut head lost its mesh; his whole head is back on him.")
+			return
+		end
+	end
+end
+
 local function step(dt: number)
 	local rooms = workspace:FindFirstChild("BackRooms")
 	if rooms then
@@ -457,6 +497,7 @@ local function step(dt: number)
 			seen[real] = nil
 			continue
 		end
+		keepHead(one, now)
 		animate(one, dt, now, camera)
 	end
 end
@@ -472,5 +513,5 @@ function StalkerClient.start()
 	print("StalkerClient: running, " .. StalkerClient.VERSION .. " for " .. Players.LocalPlayer.Name)
 end
 
-StalkerClient.STAMP = "a6823855"
+StalkerClient.STAMP = "a1c8d7eb"
 return StalkerClient

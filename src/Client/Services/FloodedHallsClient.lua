@@ -1697,6 +1697,27 @@ local function moveWater(clock: number)
 		end
 	end
 end
+-- THE LIGHT IN THE POOLS AND THE RIPPLE ON THE WATER (the two-hundred-and-sixty-second pass): every texture the halls tag
+-- HallsDrift slides by its own DriftU and DriftV studs a second, two caustic layers crossing on a pool's floor.
+local drifting: { [Texture]: boolean } = {}
+local function driftAdded(item: Instance)
+	if item:IsA("Texture") then
+		drifting[item] = true
+	end
+end
+local function moveDrift(clock: number)
+	for texture in pairs(drifting) do
+		if texture.Parent then
+			local u = tonumber(texture:GetAttribute("DriftU")) or 0
+			local v = tonumber(texture:GetAttribute("DriftV")) or 0
+			texture.OffsetStudsU = (clock * u) % texture.StudsPerTileU
+			texture.OffsetStudsV = (clock * v) % texture.StudsPerTileV
+		else
+			drifting[texture] = nil
+		end
+	end
+end
+
 local function waterAdded(part: Instance)
 	local flow = part:FindFirstChild("Flow")
 	if flow and flow:IsA("Texture") then
@@ -1934,9 +1955,14 @@ function FloodedHallsClient.start()
 		waterAdded(part)
 	end
 	CollectionService:GetInstanceAddedSignal("FlumeWater"):Connect(waterAdded)
+	for _, item in ipairs(CollectionService:GetTagged("HallsDrift")) do
+		driftAdded(item)
+	end
+	CollectionService:GetInstanceAddedSignal("HallsDrift"):Connect(driftAdded)
 	RunService.Heartbeat:Connect(function()
 		local ok, err = pcall(stepLamps)
 		pcall(moveWater, os.clock())
+		pcall(moveDrift, os.clock())
 		if not ok and not lampsWarned then
 			lampsWarned = true
 			warn("FloodedHallsClient: the lamps behind you stopped: " .. tostring(err))
@@ -1972,5 +1998,5 @@ function FloodedHallsClient.start()
 	print("FloodedHallsClient: running, " .. FloodedHallsClient.VERSION)
 end
 
-FloodedHallsClient.STAMP = "1c3a6b78"
+FloodedHallsClient.STAMP = "a780483b"
 return FloodedHallsClient

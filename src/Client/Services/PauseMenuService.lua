@@ -65,11 +65,20 @@ local function showFace()
 		where = tostring(face.runName or "-")
 	elseif me:GetAttribute("InSquishRoom") then
 		where = "The squish room"
+	elseif me:GetAttribute("InClimb") then
+		where = "The climb"
 	end
 	face.place.Text = where
 	face.chips.Visible = running
 	face.leave.Visible = level ~= nil
 	face.resume.Text = if level ~= nil then "Keep running" else "Back"
+	-- UP THE CLIMB (ClimbService): Leave takes you down to the lobby.
+	local climbing = me:GetAttribute("InClimb") == true and level == nil
+	face.leave.Text = if climbing then "Back to the lobby" else "Leave to the lobby"
+	if climbing then
+		face.leave.Visible = true
+		face.resume.Text = "Keep climbing"
+	end
 	local top = if running then 128 else 102
 	face.resume.Position = UDim2.new(0, 26, 0, top)
 	face.leave.Position = UDim2.new(0, 26, 0, top + 54)
@@ -360,7 +369,15 @@ local function build()
 		-- THE CLIENT ASKS. The server decides whether there is a run to leave, which is why
 		-- this carries no arguments: a request that cannot say anything cannot say anything
 		-- wrong, and the one on the other end already refuses when you are in the lobby.
-		if leaveRemote then
+		if Players.LocalPlayer:GetAttribute("InClimb") and Players.LocalPlayer:GetAttribute("InLevel") == nil then
+			local module = script.Parent and script.Parent:FindFirstChild("ClimbClient")
+			if module and module:IsA("ModuleScript") then
+				local ok, climb = pcall(require, module)
+				if ok and climb.leave then
+					climb.leave()
+				end
+			end
+		elseif leaveRemote then
 			leaveRemote:FireServer()
 		end
 	end)
@@ -510,6 +527,7 @@ task.spawn(function()
 	-- Where you are, as you go there (showFace).
 	Players.LocalPlayer:GetAttributeChangedSignal("InLevel"):Connect(showFace)
 	Players.LocalPlayer:GetAttributeChangedSignal("InSquishRoom"):Connect(showFace)
+	Players.LocalPlayer:GetAttributeChangedSignal("InClimb"):Connect(showFace)
 
 	-- The result of the vote is what this run IS, so the banner's announcement is also the
 	-- menu's summary. One source, two places it is shown.
@@ -536,5 +554,5 @@ task.spawn(function()
 	end, false, Enum.KeyCode.M, Enum.KeyCode.Escape, Enum.KeyCode.DPadDown)
 end)
 
-PauseMenuService.STAMP = "2c4c2fe2"
+PauseMenuService.STAMP = "ae2bbbf7"
 return PauseMenuService

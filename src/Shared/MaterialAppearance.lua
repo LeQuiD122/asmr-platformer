@@ -915,7 +915,10 @@ MaterialAppearance.WORLD_SURFACES = {
 	FloodedHalls = {
 		[Enum.Material.Concrete] = "HallsConcrete",
 		[Enum.Material.Metal] = "HallsPaint",
-		[Enum.Material.CeramicTiles] = "HallsTile",
+		-- HallsGlaze since the two-hundred-and-fifty-sixth pass ("polish level 4's textures and models in the pools"):
+		-- small cream glazed tiles in running bond. HallsTile's big khaki tiles with bright grout read as brick under the
+		-- halls' green light, on every wall and column. HallsTile is kept in LevelSurfaces to go back to.
+		[Enum.Material.CeramicTiles] = "HallsGlaze",
 	},
 	SunkenCity = {
 		-- (No CityStone since the two-hundred-and-forty-first pass: on a wall it read as blue-black camouflage
@@ -1037,5 +1040,5 @@ function MaterialAppearance.dress(root: Instance, only: { [Enum.Material]: boole
 	return root.DescendantAdded:Connect(one)
 end
 
-MaterialAppearance.STAMP = "9da9d575"
+MaterialAppearance.STAMP = "6bdd71ba"
 return MaterialAppearance

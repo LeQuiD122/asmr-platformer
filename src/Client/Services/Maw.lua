@@ -22,6 +22,7 @@ Maw.SIZE = {
 	Maw_LowerJaw = Vector3.new(51.22, 27.49, 97.72),
 	Maw_UpperTeeth = Vector3.new(54.5, 40.76, 107.57),
 	Maw_LowerTeeth = Vector3.new(49.94, 11.12, 95.81),
+	Maw_Tongue = Vector3.new(13.71, 2.92, 30.0), -- gen_maw_tongue.py
 }
 local LENGTH, HALF_W = 52, 27 -- gen_maw.py's jaw, for the stand-in
 -- THE MESHES COME IN BACK TO FRONT (the two-hundred-and-fifty-second pass, from your look at the frame where it first
@@ -42,7 +43,7 @@ export type Built = { model: Model, hinge: CFrame, upper: { { part: BasePart, of
 	gullet: PointLight, aura: { PointLight }, strands: { Strand }, breath: ParticleEmitter, upperAngle: number?,
 	lowerAngle: number?, throat: { Ring }, tongue: { { part: BasePart, offset: CFrame, base: CFrame } }, drool: ParticleEmitter?,
 	uvula: { { part: BasePart, offset: CFrame, base: CFrame, swing: number } }, grind: number, clockAt: number?,
-	hungry: number, reaching: number }
+	hungry: number, reaching: number, cheeks: { WedgePart }, body: { { part: BasePart, base: CFrame, k: number } } }
 -- One piece of a ring down the throat: a roll of gum (`long` 0) or a fang standing out of it, at `angle` round the ring.
 export type Ring = { part: BasePart, ring: number, angle: number, long: number }
 
@@ -58,12 +59,36 @@ local GRIND, SQUEEZE, FANG_LEAN = 0.22, 0.07, 0.55
 local HUNGRY_GRIND, HUNGRY_SQUEEZE = 4, 2.2
 -- REACHING (Maw.reach, 0 to 1): the tongue lifts off the floor of the mouth toward what falls into it, by this much.
 local REACH_LIFT = 0.55
--- THE INNER ROWS (the two-hundred-and-fifty-first pass, "improve the maw model even more"): a second row of fangs inside
--- each jaw's rim, shorter and raked back toward the throat, the way a shark's are, so nothing that goes in comes out.
--- { jaw scale, how far in from the rim (share of the jaw), fangs, length }
-local INNER_ROWS = { upper = { 1, 0.78, 16, 5.2 }, lower = { 0.93, 0.76, 14, 4.2 } }
-local VAULT, GUM_BAND = 6, 2.6 -- gen_maw.py's VAULT and GUM, to find the roof of the mouth
+-- THE TONGUE (Maw_Tongue, gen_maw_tongue.py): its length, its colour, and the turn that puts its root at the throat.
+local TONGUE_LENGTH = 30
+local TONGUE_RED = Color3.fromRGB(176, 56, 66)
+-- (Measured in Studio: the import's tip lay at the throat and its root at the lips, so it is turned round.)
+local TONGUE_TURN = CFrame.Angles(0, math.pi, 0)
+-- THE CHEEKS: where round each jaw's rim the webbing at the corners runs (radians from the jaw's tip; half pi is the
+-- hinge), and its colour.
+-- (Only the corners: run further round the rim they stood in the shot from inside the mouth as two grey walls.)
+local CHEEK_ANGLES = { math.pi / 2, math.rad(81), math.rad(72) }
+local CHEEK_RED = Color3.fromRGB(158, 46, 56)
+local VAULT = 6 -- gen_maw.py's VAULT, the depth of the roof of the mouth (where the uvula hangs)
 local GUM_RED = Color3.fromRGB(138, 40, 48)
+-- ITS BODY (pass 266, from your note: "I don't like how the Maw looks from behind ... it should have a body or
+-- something, at least a continuation that would fit into the frame"). From behind it was a mouth and the rings down its
+-- throat in the air, holes between them. Now the rings are inside a body: from the back of its skull a long wet body,
+-- thick as the skull and tapering, in overlapping segments like a lamprey's, a row of bone spines down its back, curving
+-- down and away into the dark out of the frame and swaying slowly as it breathes. Its first segment starts back past
+-- the rings, so from inside the mouth the throat ends in its own dark flesh, not a disc. Each:
+-- { middle past the hinge, half width, half height, half length }
+local BODY = { { 40, 25, 15, 20 }, { 64, 23.5, 14, 19 }, { 87, 22, 13, 18 }, { 109, 20, 12, 17 }, { 130, 18, 10.8, 16 },
+	{ 150, 16, 9.6, 15 }, { 169, 14, 8.4, 14 }, { 187, 12, 7.2, 13 }, { 204, 10, 6, 12 }, { 220, 8, 4.8, 11 },
+	{ 235, 6, 3.6, 10 }, { 249, 4.2, 2.6, 9 } }
+-- THE COLLAR (seen in play: between the back of its skull and the body the rings down its throat still showed, a ring of
+-- pink dots): a sleeve of flesh round the rings, hollow, so from inside the mouth you still see down the throat.
+local COLLAR = { rx = 24, ry = 13.5, z = 14, long = 34, pieces = 18 }
+local BODY_DROP = 0.0016 -- how fast it curves down, away from the mouth
+-- (From the mouth's own red flesh at the neck to near black at its tail.)
+local HIDE_NECK = Color3.fromRGB(92, 34, 40) -- (the jaws' own dark hide since pass 267)
+local HIDE = Color3.fromRGB(42, 16, 20)
+local HIDE_BELLY = Color3.fromRGB(110, 44, 48)
 
 local function template(name: string): MeshPart?
 	local assets = ReplicatedStorage:FindFirstChild("Assets")
@@ -178,76 +203,59 @@ function Maw.build(hinge: CFrame, parent: Instance): Built
 	-- floor, and from above, falling in, it was a flat dark disc across the mouth, an egg from the side. Now two long
 	-- lobes either side of a groove and a narrower tip, sunk into the hollow, in the gums' own red.)
 	local tongues = {}
-	-- (Both of those were made worse by the meshes lying back to front, MESH_TURN: the tongue stood in the air with no
-	-- jaw under it.) { across, along (toward the tip is -), width, length share, thickness }.
-	-- (One broad flat blade and a tip since the two-hundred-and-fifty-second pass: seen end-on from above, the two
-	-- lobes with a lump at their root read as something else entirely.)
-	for _, spec in ipairs({ { 0, 0, 14, 1.05, 2.4 }, { 0, -LENGTH * 0.2, 10, 0.55, 2.2 } }) do
-		local lobe = Instance.new("Part")
-		lobe.Name = "Tongue"
-		lobe.Size = Vector3.new(spec[3], spec[5], LENGTH * 0.46 * spec[4])
-		local lobeShape = Instance.new("SpecialMesh")
-		lobeShape.MeshType = Enum.MeshType.Sphere
-		lobeShape.Parent = lobe
-		dress(lobe, Color3.fromRGB(150, 50, 58), 0.12)
-		lobe.CastShadow = false
-		lobe.Parent = model
-		-- On the lower jaw's inner side (the lower jaw is the -Y one), in the hollow of its floor. It moves (Maw.set).
-		local entry = { part = lobe, offset = CFrame.identity, base = CFrame.new(spec[1], -4.2, -LENGTH * 0.3 + spec[2]) }
+	-- A MADE TONGUE (the two-hundred-and-fifty-third pass, from "I don't like the shape of the tongue"): parts' spheres
+	-- only ever read as ovals. blender/gen_maw_tongue.py makes one body, broad at the root, tapering to a rounded tip,
+	-- grooved down the middle, flat beneath; it lies in the hollow of the lower jaw's floor, its root at the throat.
+	-- Without the import, the old blade of spheres stands in.
+	local madeTongue = template("Maw_Tongue")
+	if madeTongue then
+		local tongue = madeTongue:Clone()
+		tongue.Name = "Tongue"
+		-- A plain wet red, no texture: the gums' texture on it came out in pale blotches under the green glow beside it.
+		dress(tongue, TONGUE_RED, 0.08)
+		tongue.TextureID = ""
+		tongue.CastShadow = false
+		tongue.Parent = model
+		local entry = { part = tongue, offset = CFrame.identity, base = CFrame.new(0, -4, -2 - TONGUE_LENGTH / 2) * TONGUE_TURN }
 		table.insert(lower, entry)
 		table.insert(tongues, entry)
+	else
+		for _, spec in ipairs({ { 0, 0, 14, 1.05, 2.4 }, { 0, -LENGTH * 0.2, 10, 0.55, 2.2 } }) do
+			local lobe = Instance.new("Part")
+			lobe.Name = "Tongue"
+			lobe.Size = Vector3.new(spec[3], spec[5], LENGTH * 0.46 * spec[4])
+			local lobeShape = Instance.new("SpecialMesh")
+			lobeShape.MeshType = Enum.MeshType.Sphere
+			lobeShape.Parent = lobe
+			dress(lobe, TONGUE_RED, 0.12)
+			lobe.CastShadow = false
+			lobe.Parent = model
+			local entry = { part = lobe, offset = CFrame.identity, base = CFrame.new(spec[1], -4.2, -LENGTH * 0.3 + spec[2]) }
+			table.insert(lower, entry)
+			table.insert(tongues, entry)
+		end
 	end
-	-- THE INNER ROWS (see INNER_ROWS), on the made jaws only: each fang's root sunk a stud into the roof (or floor) of the
-	-- mouth where gen_maw.py's vault puts it, standing toward the other jaw and raked back down the throat. A few are
-	-- missing, as in the outer rows.
+	-- (No inner rows of fangs since the two-hundred-and-fifty-third pass: the made jaws carry rows of their own inside,
+	-- and pass 251's, put where the roof was meant to be, lay half buried in it as pale dashes.)
+	-- THE CHEEKS (the two-hundred-and-fifty-third pass, "close the gaps"): open, the corners of the mouth were holes to
+	-- the sky either side of the throat. Webbing of flesh now runs from the upper jaw's rim to the lower's at each corner,
+	-- sagging back toward the throat, stretched as it opens (Maw.set). Wedge pairs, a triangle each.
+	local cheeks = {}
 	if meshes then
-		for _, jaw in ipairs({ { INNER_ROWS.upper, 1, upper }, { INNER_ROWS.lower, -1, lower } }) do
-			local spec, sign, list = jaw[1], jaw[2] :: number, jaw[3] :: { any }
-			local s, r, count, length = spec[1], spec[2], spec[3], spec[4]
-			for n = 1, count do
-				if (n * 5 + count) % 7 ~= 0 then
-					local th = -math.pi / 2 * 0.86 + math.pi * 0.86 * (n - 0.5) / count
-					local cap = math.sqrt(1 - r * r)
-					local back = 1 - r * math.cos(th)
-					local roof = GUM_BAND * 0.2 + VAULT * cap * (0.5 + 0.5 * back)
-					local root = Vector3.new(HALF_W * s * r * math.sin(th), sign * (roof + 1), -LENGTH * s * r * math.cos(th))
-					local dir = Vector3.new(-0.15 * math.sin(th), -sign * math.cos(0.5), math.sin(0.5)).Unit
-					local long = length * (0.75 + 0.5 * ((n * 3 + count) % 5) / 4)
-					local fang = Instance.new("Part")
-					fang.Name = "InnerFang"
-					fang.Size = Vector3.new(0.7, long, 0.7)
-					local spindle = Instance.new("SpecialMesh")
-					spindle.MeshType = Enum.MeshType.Sphere
-					spindle.Parent = fang
-					dress(fang, BONE, 0.14)
-					fang.CastShadow = false
-					fang.Parent = model
-					local across = (Vector3.xAxis - dir * dir.X).Unit
-					table.insert(list, { part = fang, offset = CFrame.fromMatrix(root + dir * long / 2, across, dir) })
-				end
+		for _, side in ipairs({ -1, 1 }) do
+			for _ = 1, (#CHEEK_ANGLES - 1) * 8 do
+				local w = Instance.new("WedgePart")
+				w.Name = "Cheek"
+				dress(w, CHEEK_RED, 0.03)
+				w.CastShadow = false
+				w.Parent = model
+				table.insert(cheeks, w)
 			end
 		end
 	end
-	-- THE UVULA, at the back of the roof of the mouth over the throat: a stalk and a heavy drop of flesh, hanging down
-	-- into the gullet and swinging (Maw.set). It catches the red from below.
+	-- (No uvula since the two-hundred-and-fifty-third pass: wherever it hung near the hinge, the shot from inside the
+	-- mouth looking up at you is taken there, and it filled that picture as a red ball on a stalk.)
 	local uvula = {}
-	-- (Back over the throat, not the mouth: the shot from inside the mouth looking up at you is taken just in front
-	-- of the hinge, and hung there it filled a third of that picture as a red ball on a stick.)
-	local hang = CFrame.fromMatrix(Vector3.new(0, VAULT, 1.5), Vector3.xAxis, Vector3.new(0, 0.35, -0.94).Unit)
-	for _, spec in ipairs({ { Vector3.new(0.8, 4, 0.8), 1.9 }, { Vector3.new(1.8, 2.4, 1.8), 4.5 } }) do
-		local flesh = Instance.new("Part")
-		flesh.Name = "Uvula"
-		flesh.Size = spec[1] :: Vector3
-		local blob = Instance.new("SpecialMesh")
-		blob.MeshType = Enum.MeshType.Sphere
-		blob.Parent = flesh
-		dress(flesh, GUM_RED, 0.12)
-		flesh.CastShadow = false
-		flesh.Parent = model
-		local entry = { part = flesh, offset = hang * CFrame.new(0, -(spec[2] :: number), 0), base = hang, swing = spec[2] :: number }
-		table.insert(upper, entry)
-		table.insert(uvula, entry)
-	end
 	-- THE RINGS DOWN ITS THROAT (see RINGS): a roll of gum per fang slot, long enough round to meet the next, deep
 	-- enough to meet the ring behind, and a fang standing out of each. No shadows from them, so the red down the
 	-- throat still comes up through them.
@@ -278,6 +286,59 @@ function Maw.build(hinge: CFrame, parent: Instance): Built
 			fang.CastShadow = false
 			fang.Parent = model
 			table.insert(throat, { part = fang, ring = k, angle = angle, long = long })
+		end
+	end
+	-- ITS BODY (see BODY): a segment of hide, a paler belly under it, two spines on its back.
+	local body = {}
+	for k, spec in ipairs(BODY) do
+		local z, rx, ry, rz = spec[1], spec[2], spec[3], spec[4]
+		local drop = -BODY_DROP * (z - BODY[1][1]) ^ 2
+		local function blob(name: string, size: Vector3, at: CFrame, colour: Color3, wet: number): BasePart
+			local p = Instance.new("Part")
+			p.Name = name
+			p.Size = size
+			local round = Instance.new("SpecialMesh")
+			round.MeshType = Enum.MeshType.Sphere
+			round.Parent = p
+			dress(p, colour, wet)
+			p.Parent = model
+			table.insert(body, { part = p, base = at, k = k })
+			return p
+		end
+		-- Turned along its curve, so each segment runs on into the next where it bends.
+		local middle = CFrame.new(0, drop, z) * CFrame.Angles(math.atan(2 * BODY_DROP * (z - BODY[1][1])), 0, 0)
+		local fade = math.clamp((k - 1) / 4, 0, 1)
+		-- Long and overlapping, so it is one body and not a string of beads.
+		blob("BodySegment", Vector3.new(rx * 2, ry * 2, rz * (3.3 + 0.12 * (k - 1))), middle, HIDE_NECK:Lerp(HIDE, fade), 0.09)
+		blob("BodyBelly", Vector3.new(rx * 1.5, ry * 1.1, rz * 3.1), middle * CFrame.new(0, -ry * 0.5, 0),
+			HIDE_BELLY:Lerp(HIDE, fade * 0.5), 0.05)
+		for _, along in ipairs({ -0.35, 0.3 }) do
+			local long = ry * 0.9 + 2
+			local spine = blob("BodySpine", Vector3.new(1.1 + rx * 0.04, long, 1.1 + rx * 0.04),
+				middle * CFrame.new(0, ry * 0.92, along * rz) * CFrame.Angles(math.rad(38), 0, 0) * CFrame.new(0, long * 0.42, 0),
+				BONE, 0.12)
+			spine.CastShadow = false
+		end
+	end
+	-- THE COLLAR (see COLLAR): flattened rolls of flesh round the throat, each facing out, overlapping.
+	do
+		local rx, ry = COLLAR.rx, COLLAR.ry
+		local round = math.pi * (3 * (rx + ry) - math.sqrt((3 * rx + ry) * (rx + 3 * ry)))
+		for n = 1, COLLAR.pieces do
+			local th = (n - 0.5) / COLLAR.pieces * math.pi * 2
+			local outward = Vector3.new(math.sin(th) / rx, math.cos(th) / ry, 0).Unit
+			local along = Vector3.new(outward.Y, -outward.X, 0)
+			local p = Instance.new("Part")
+			p.Name = "BodyCollar"
+			p.Size = Vector3.new(round / COLLAR.pieces * 1.9, 6, COLLAR.long)
+			local shape = Instance.new("SpecialMesh")
+			shape.MeshType = Enum.MeshType.Sphere
+			shape.Parent = p
+			dress(p, HIDE_NECK, 0.09)
+			p.CastShadow = false
+			p.Parent = model
+			table.insert(body, { part = p, base = CFrame.fromMatrix(Vector3.new(rx * math.sin(th), ry * math.cos(th), COLLAR.z),
+				along, outward), k = 0 })
 		end
 	end
 	local function lamp(name: string, at: CFrame): Part
@@ -403,9 +464,35 @@ function Maw.build(hinge: CFrame, parent: Instance): Built
 	model.Parent = parent
 	local built: Built = { model = model, hinge = hinge, upper = upper, lower = lower, glow = glow, rim = rim, meshes = meshes,
 		gullet = gullet, aura = aura, strands = strands, breath = breath, throat = throat, tongue = tongues,
-		drool = drool, uvula = uvula, grind = 0, hungry = 0, reaching = 0 }
+		drool = drool, uvula = uvula, grind = 0, hungry = 0, reaching = 0, cheeks = cheeks, body = body }
 	Maw.set(built, 0.05, 0.05)
 	return built
+end
+
+-- A triangle a, b, c drawn with two wedges (the usual way: split it at the foot of the height on its longest side).
+local function triangle(a: Vector3, b: Vector3, c: Vector3, w1: BasePart, w2: BasePart, thick: number)
+	local ab, ac, bc = b - a, c - a, c - b
+	local abd, acd, bcd = ab:Dot(ab), ac:Dot(ac), bc:Dot(bc)
+	if abd > acd and abd > bcd then
+		c, a = a, c
+	elseif acd > bcd and acd > abd then
+		a, b = b, a
+	end
+	ab, ac, bc = b - a, c - a, c - b
+	local cross = ac:Cross(ab)
+	if cross.Magnitude < 1e-4 or bc.Magnitude < 1e-4 then
+		w1.Transparency, w2.Transparency = 1, 1
+		return
+	end
+	w1.Transparency, w2.Transparency = 0, 0
+	local right = cross.Unit
+	local up = bc:Cross(right).Unit
+	local back = bc.Unit
+	local height = math.abs(ab:Dot(up))
+	w1.Size = Vector3.new(thick, math.max(height, 0.05), math.max(math.abs(ab:Dot(back)), 0.05))
+	w1.CFrame = CFrame.fromMatrix((a + b) / 2, right, up, back)
+	w2.Size = Vector3.new(thick, math.max(height, 0.05), math.max(math.abs(ac:Dot(back)), 0.05))
+	w2.CFrame = CFrame.fromMatrix((a + c) / 2, -right, up, -back)
 end
 
 -- The jaws open by `upperAngle` and `lowerAngle` (radians; 0 is shut).
@@ -452,6 +539,13 @@ function Maw.set(built: Built, upperAngle: number, lowerAngle: number)
 			piece.part.CFrame = built.hinge * CFrame.fromMatrix(at - outward * 1.2 + lean * piece.long / 2, round, lean)
 		end
 	end
+	-- Its body sways, a slow wave running back down it, harder the hungrier it is; the further back, the further it swings.
+	for _, seg in ipairs(built.body) do
+		local wave = math.sin(clock * (0.7 + 0.8 * hungry) - seg.k * 0.55)
+		local reach = math.min(seg.k, 7) * (0.45 + 0.5 * hungry)
+		seg.part.CFrame = built.hinge * CFrame.new(wave * reach, 0.4 * reach * math.cos(clock * 0.5 - seg.k * 0.4), 0)
+			* CFrame.Angles(0, wave * 0.04 * seg.k * 0.3, 0) * seg.base
+	end
 	local up = built.hinge * CFrame.Angles(upperAngle, 0, 0)
 	for _, entry in ipairs(built.upper) do
 		entry.part.CFrame = up * entry.offset
@@ -459,6 +553,30 @@ function Maw.set(built: Built, upperAngle: number, lowerAngle: number)
 	local down = built.hinge * CFrame.Angles(-lowerAngle, 0, 0)
 	for _, entry in ipairs(built.lower) do
 		entry.part.CFrame = down * entry.offset
+	end
+	-- The cheeks: from each corner's upper rim to its lower, sagging back toward the throat and in a little, the further
+	-- the jaws are apart the more.
+	if #built.cheeks > 0 then
+		local k = 1
+		local throatward = built.hinge:VectorToWorldSpace(Vector3.zAxis)
+		for _, side in ipairs({ -1, 1 }) do
+			local rows = {}
+			for _, th in ipairs(CHEEK_ANGLES) do
+				local a = up * Vector3.new(side * HALF_W * math.sin(th), 0.6, -LENGTH * math.cos(th))
+				local b = down * Vector3.new(side * HALF_W * 0.93 * math.sin(th), -0.6, -LENGTH * 0.93 * math.cos(th))
+				local inward = built.hinge:VectorToWorldSpace(Vector3.new(-side, 0, 0))
+				local mid = a:Lerp(b, 0.5) + throatward * math.clamp((a - b).Magnitude * 0.22, 0, 7) + inward * 1.5
+				table.insert(rows, { a, mid, b })
+			end
+			for i = 1, #rows - 1 do
+				local r1, r2 = rows[i], rows[i + 1]
+				for j = 1, 2 do
+					triangle(r1[j], r2[j], r1[j + 1], built.cheeks[k], built.cheeks[k + 1], 0.4)
+					triangle(r2[j], r2[j + 1], r1[j + 1], built.cheeks[k + 2], built.cheeks[k + 3], 0.4)
+					k += 4
+				end
+			end
+		end
 	end
 	-- The saliva, stretched between them: thinner the further it is pulled, sagging toward the throat, and
 	-- gone once it is pulled past what it holds.
@@ -543,5 +661,5 @@ function Maw.destroy(built: Built?)
 	end
 end
 
-Maw.STAMP = "31b25c99"
+Maw.STAMP = "b0412862"
 return Maw

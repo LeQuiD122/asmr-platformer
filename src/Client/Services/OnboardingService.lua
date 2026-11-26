@@ -117,7 +117,8 @@ end
 -- In the lobby itself: not on a level, and not in the squish room (where the lobby still stands, far away).
 local function inLobby(): boolean
 	local me = Players.LocalPlayer
-	return me:GetAttribute("InLevel") == nil and not me:GetAttribute("InSquishRoom") and workspace:FindFirstChild("Hub") ~= nil
+	return me:GetAttribute("InLevel") == nil and not me:GetAttribute("InSquishRoom") and not me:GetAttribute("InClimb")
+		and workspace:FindFirstChild("Hub") ~= nil
 end
 
 local function hubPart(name: string): BasePart?
@@ -848,5 +849,5 @@ function OnboardingService.start()
 	print("OnboardingService: running, " .. OnboardingService.VERSION)
 end
 
-OnboardingService.STAMP = "154bdcdc"
+OnboardingService.STAMP = "b1aed416"
 return OnboardingService

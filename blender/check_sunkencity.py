@@ -273,8 +273,12 @@ for needle, why in (
      "the murky rooms are never collected"),
     ("guard(\"the aquarium's murk\", aquarium.step, at)", "the murk is never stepped"),
     ("if at and under == nil then", "the murk fights the drain's own water"),
-    ("if atmosphere.Parent and math.abs(atmosphere.Density - MURK.density) < 0.05 then",
+    # (Pass 266: the murk's own is anywhere on the way from what the air was to the murk's, wherever its ease in had got
+    # to, its ease in stopped first: a fall puts you back before the murk is all in.)
+    ("if atmosphere.Parent and (a + line * along - p).Magnitude < 0.02 then",
      "the murk puts back air someone else has set since"),
+    ("for _, tween in ipairs((was :: any).tweens or {}) do\n\t\ttween:Cancel()",
+     "the murk's ease in runs on after the air is put back"),
 ):
     if needle not in CLIENT_SOURCE:
         fail("SunkenCityClient: " + why)

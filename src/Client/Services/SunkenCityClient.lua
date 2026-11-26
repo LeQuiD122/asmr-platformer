@@ -1287,6 +1287,10 @@ local aquarium = { rooms = {} :: { BasePart }, look = nil :: any,
 		tint = Color3.fromRGB(186, 222, 222), into = 1.2, out = 1.2 } }
 
 function aquarium.set(on: boolean)
+	-- (Taken away by LightGuard in another place: forgotten, so it can come again here.)
+	if aquarium.look and aquarium.look.grade.Parent == nil then
+		aquarium.look = nil
+	end
 	if on == (aquarium.look ~= nil) then
 		return
 	end
@@ -1303,21 +1307,35 @@ function aquarium.set(on: boolean)
 		grade.Parent = Lighting
 		aquarium.look = { atmosphere = atmosphere, made = found == nil, grade = grade, density = atmosphere.Density,
 			offset = atmosphere.Offset, colour = atmosphere.Color, decay = atmosphere.Decay, haze = atmosphere.Haze,
-			glare = atmosphere.Glare }
+			glare = atmosphere.Glare, tweens = {} }
 		local ease = TweenInfo.new(MURK.into, Enum.EasingStyle.Sine)
-		TweenService:Create(atmosphere, ease, { Density = MURK.density, Offset = 0, Color = MURK.colour, Decay = MURK.decay,
-			Haze = MURK.haze, Glare = 0 }):Play()
-		TweenService:Create(grade, ease, { TintColor = MURK.tint, Saturation = -0.1, Contrast = 0.06, Brightness = -0.03 }):Play()
+		for _, tween in ipairs({
+			TweenService:Create(atmosphere, ease, { Density = MURK.density, Offset = 0, Color = MURK.colour, Decay = MURK.decay,
+				Haze = MURK.haze, Glare = 0 }),
+			TweenService:Create(grade, ease, { TintColor = MURK.tint, Saturation = -0.1, Contrast = 0.06, Brightness = -0.03 }),
+		}) do
+			table.insert((aquarium.look :: any).tweens, tween)
+			tween:Play()
+		end
 		return
 	end
 	local was = aquarium.look
 	aquarium.look = nil
+	-- (Pass 266: stopped first, as the sea's dark is, or an ease in still running puts the murk back after this.)
+	for _, tween in ipairs((was :: any).tweens or {}) do
+		tween:Cancel()
+	end
 	local ease = TweenInfo.new(MURK.out, Enum.EasingStyle.Sine)
 	TweenService:Create(was.grade, ease, { TintColor = Color3.new(1, 1, 1), Saturation = 0, Contrast = 0, Brightness = 0 }):Play()
 	game:GetService("Debris"):AddItem(was.grade, MURK.out + 0.2)
 	local atmosphere = was.atmosphere
-	-- Only if the air is still the murk (nothing has set it since): a level torn down under it gets its own air.
-	if atmosphere.Parent and math.abs(atmosphere.Density - MURK.density) < 0.05 then
+	-- Only if the air is still the murk's (nothing has set it since): a level torn down under it gets its own air. The
+	-- murk's is anywhere on the way from what it was to the murk, wherever the ease in had got to.
+	local from, to, now = was.decay, MURK.decay, atmosphere.Decay
+	local a, b, p = Vector3.new(from.R, from.G, from.B), Vector3.new(to.R, to.G, to.B), Vector3.new(now.R, now.G, now.B)
+	local line = b - a
+	local along = if line.Magnitude > 1e-4 then math.clamp((p - a):Dot(line) / line:Dot(line), 0, 1) else 0
+	if atmosphere.Parent and (a + line * along - p).Magnitude < 0.02 then
 		TweenService:Create(atmosphere, ease, { Density = was.density, Offset = was.offset, Color = was.colour,
 			Decay = was.decay, Haze = was.haze, Glare = was.glare }):Play()
 		if was.made then
@@ -3026,7 +3044,8 @@ end
 -- (On `aquarium`, not a local of its own: this file is at Luau's two hundred locals.)
 aquarium.sea = {
 	look = nil :: { atmosphere: Atmosphere, made: boolean, grade: ColorCorrectionEffect, blur: BlurEffect,
-		silt: BasePart, density: number, offset: number, colour: Color3, decay: Color3, haze: number, glare: number }?,
+		silt: BasePart, density: number, offset: number, colour: Color3, decay: Color3, haze: number, glare: number,
+		tweens: { Tween } }?,
 	-- (First tried at 0.78 and -0.14: the serpent came out of black, but the drowned streets were gone with it.)
 	DEEP = { density = 0.7, colour = Color3.fromRGB(12, 38, 44), decay = Color3.fromRGB(4, 16, 22), haze = 2,
 		tint = Color3.fromRGB(150, 196, 200), brightness = -0.09, contrast = 0.2, saturation = -0.32, blur = 2,
@@ -3034,6 +3053,15 @@ aquarium.sea = {
 }
 
 function aquarium.sea.set(on: boolean)
+	-- (Taken away by LightGuard in another place: forgotten, so it can come again here.)
+	local held = aquarium.sea.look
+	if held and held.grade.Parent == nil then
+		pcall(function()
+			held.blur:Destroy()
+			held.silt:Destroy()
+		end)
+		aquarium.sea.look = nil
+	end
 	if on == (aquarium.sea.look ~= nil) then
 		return
 	end
@@ -3078,26 +3106,48 @@ function aquarium.sea.set(on: boolean)
 		specks.Parent = silt
 		aquarium.sea.look = { atmosphere = atmosphere, made = found == nil, grade = grade, blur = blur, silt = silt,
 			density = atmosphere.Density, offset = atmosphere.Offset, colour = atmosphere.Color, decay = atmosphere.Decay,
-			haze = atmosphere.Haze, glare = atmosphere.Glare }
+			haze = atmosphere.Haze, glare = atmosphere.Glare, tweens = {} }
 		local ease = TweenInfo.new(DEEP.into, Enum.EasingStyle.Sine)
-		TweenService:Create(atmosphere, ease, { Density = DEEP.density, Offset = 0, Color = DEEP.colour, Decay = DEEP.decay,
-			Haze = DEEP.haze, Glare = 0 }):Play()
-		TweenService:Create(grade, ease, { TintColor = DEEP.tint, Brightness = DEEP.brightness, Contrast = DEEP.contrast,
-			Saturation = DEEP.saturation }):Play()
-		TweenService:Create(blur, ease, { Size = DEEP.blur }):Play()
+		local tweens = (aquarium.sea.look :: any).tweens
+		for _, tween in ipairs({
+			TweenService:Create(atmosphere, ease, { Density = DEEP.density, Offset = 0, Color = DEEP.colour, Decay = DEEP.decay,
+				Haze = DEEP.haze, Glare = 0 }),
+			TweenService:Create(grade, ease, { TintColor = DEEP.tint, Brightness = DEEP.brightness, Contrast = DEEP.contrast,
+				Saturation = DEEP.saturation }),
+			TweenService:Create(blur, ease, { Size = DEEP.blur }),
+		}) do
+			table.insert(tweens, tween)
+			tween:Play()
+		end
 		return
 	end
 	local was = aquarium.sea.look :: any
 	aquarium.sea.look = nil
+	-- (Pass 266, from your note: "falling down into the dark water makes the whole game dark and can't be reversed". A
+	-- fall puts you back up before the dark has finished easing in: the ease went on to the full dark after this had
+	-- already put the air back, and it stayed. Now the ease in is stopped first.)
+	for _, tween in ipairs(was.tweens) do
+		tween:Cancel()
+	end
 	local ease = TweenInfo.new(DEEP.out, Enum.EasingStyle.Sine)
 	TweenService:Create(was.grade, ease, { TintColor = Color3.new(1, 1, 1), Brightness = 0, Contrast = 0, Saturation = 0 }):Play()
 	TweenService:Create(was.blur, ease, { Size = 0 }):Play()
 	game:GetService("Debris"):AddItem(was.grade, DEEP.out + 0.1)
 	game:GetService("Debris"):AddItem(was.blur, DEEP.out + 0.1)
 	was.silt:Destroy()
-	-- Only if the air is still this (nothing has set it since): a level torn down under it gets its own air.
+	-- Only if the air is still ours (nothing has set it since: a level torn down under it gets its own air). Ours is
+	-- anywhere on the way from what it was to the deep's, wherever the ease in had got to: its decay, a colour nothing
+	-- else uses, lies on that line.
 	local atmosphere = was.atmosphere
-	if atmosphere.Parent and math.abs(atmosphere.Density - DEEP.density) < 0.05 then
+	local function onTheWay(now: Color3, from: Color3, to: Color3): boolean
+		local a = Vector3.new(from.R, from.G, from.B)
+		local b = Vector3.new(to.R, to.G, to.B)
+		local p = Vector3.new(now.R, now.G, now.B)
+		local line = b - a
+		local t = if line.Magnitude > 1e-4 then math.clamp((p - a):Dot(line) / line:Dot(line), 0, 1) else 0
+		return (a + line * t - p).Magnitude < 0.02
+	end
+	if atmosphere.Parent and onTheWay(atmosphere.Decay, was.decay, DEEP.decay) then
 		TweenService:Create(atmosphere, ease, { Density = was.density, Offset = was.offset, Color = was.colour,
 			Decay = was.decay, Haze = was.haze, Glare = was.glare }):Play()
 		if was.made then
@@ -3785,5 +3835,5 @@ if (script :: any):IsA("LocalScript") then
 	task.spawn(SunkenCityClient.start)
 end
 
-SunkenCityClient.STAMP = "a76f5f25"
+SunkenCityClient.STAMP = "5ca31787"
 return SunkenCityClient

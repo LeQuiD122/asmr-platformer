@@ -47,6 +47,7 @@ local ChunkDefinitions = require(Shared:WaitForChild("ChunkDefinitions"))
 local Style = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Style"))
 -- WHERE EVERYTHING IN THE LOBBY STANDS (the hundredth pass): a promenade of decks and walks, from one table.
 local LobbyLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LobbyLayout"))
+local WaterSounds = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("WaterSounds")) :: any
 
 local HubService = {}
 
@@ -1678,6 +1679,10 @@ function HubService.hubPlayers(): { Player }
 		-- NOT ANYONE IN THE SQUISH ROOM (SquishRoomService): it is somewhere else, and a vote in the lobby
 		-- is not theirs to be pulled into a run by. NOR IN THE BACK ROOMS (BackRoomsService), gone there from the
 		-- lobby's back corridor: a countdown on their screen, in yellow rooms a long way off, was for nothing.
+		-- NOR ANYONE UP THE CLIMB (ClimbService), for the same reason as the squish room.
+		if player:GetAttribute("InClimb") then
+			continue
+		end
 		if not inRun[player] and not player:GetAttribute("InSquishRoom") and player:GetAttribute("InLevel") ~= "backRooms" then
 			table.insert(here, player)
 		end
@@ -4035,62 +4040,167 @@ end
 -- 0.2 studs ABOVE the basin it was supposed to be inside: water standing proud of its own
 -- container, which reads as a blue tile rather than as a pool. The rim is what makes water
 -- water -- you need to see that it is held.
+-- THE FOUNTAIN'S BASIN (the two-hundred-and-sixty-third pass, from your note: "improve the design of this central
+-- fountain"). It was a rectangle of four coping stones round a sheet of glass. Now a round basin, the plaza's centrepiece:
+-- a low stepped marble plinth, a wall with a lilac band and a broad rounded rim to sit on, an aqua mosaic floor with light
+-- drifting over it, water that is water (no glass), lily pads with flowers, wishing coins on the bottom, soft lamps set in
+-- the floor, and six brass spouts on the rim arcing water into the middle. Every piece stands on the plinth or in the
+-- basin. Heights from the deck at `centre`: floor 0 to 0.8, water to 1.9, wall to 2.2, rim to 2.6.
+local FOUNTAIN = {
+	BASIN = 11.2, -- the wall's middle, from the fountain's middle
+	STEP = 13.6, -- the plinth round it
+	WALL = 1.4,
+	SEGMENTS = 32,
+	BAND = Color3.fromRGB(176, 150, 196),
+	RIM = Color3.fromRGB(246, 240, 248),
+	BRASS = Color3.fromRGB(206, 168, 88),
+	CAUSTICS = "rbxassetid://113790123785633",
+	SPOUTS = 6,
+}
+
+local function roundPart(name: string, radius: number, height: number, centre: Vector3, parent: Folder): BasePart
+	local disc = decorPart(name, Vector3.new(height, radius * 2, radius * 2), centre, parent)
+	disc.Shape = Enum.PartType.Cylinder
+	disc.CFrame = CFrame.new(centre) * CFrame.Angles(0, 0, math.pi / 2)
+	return disc
+end
+
+-- ===== WATER THAT READS AS WATER (pass 265) =====
+--
+-- A rope of water: a Beam between two attachments on `holder`, leaving `from` along `out` and falling into `to` from above,
+-- `width0` at the spout and `width1` where it lands, a little see-through and catching the light; no texture, so it
+-- is never glitter. And RINGS ON THE WATER where something lands: flat soft rings lying on the surface, spreading and
+-- going, a few a second (smoke_main lying flat, VelocityPerpendicular).
+local function axisAt(position: Vector3, axis: Vector3): CFrame
+	-- A frame whose +X (a Beam's curve direction) is `axis`.
+	local safe = if math.abs(axis.Unit.Y) > 0.999 then (axis + Vector3.new(0, 0, 0.002)).Unit else axis.Unit
+	return CFrame.lookAt(position, position + safe) * CFrame.Angles(0, math.pi / 2, 0)
+end
+
+local function waterArc(holder: BasePart, from: Vector3, out: Vector3, to: Vector3, width0: number, width1: number): Beam
+	local reach = (to - from).Magnitude
+	local a0 = Instance.new("Attachment")
+	a0.Name = "WaterFrom"
+	a0.Parent = holder
+	a0.WorldCFrame = axisAt(from, out)
+	local a1 = Instance.new("Attachment")
+	a1.Name = "WaterInto"
+	a1.Parent = holder
+	a1.WorldCFrame = axisAt(to, Vector3.new(0, -1, 0))
+	local rope = Instance.new("Beam")
+	rope.Name = "WaterRope"
+	rope.Attachment0 = a0
+	rope.Attachment1 = a1
+	rope.CurveSize0 = reach * 0.5
+	rope.CurveSize1 = reach * 0.3
+	rope.FaceCamera = true
+	rope.Segments = 20
+	rope.Width0 = width0
+	rope.Width1 = width1
+	-- (Pass 266, from your note: "reduce its glow". Near-white ropes giving off light of their own stacked into a white
+	-- glare where they overlapped, and the bloom blew that out. Now water's own blue-green, lit by the day and giving
+	-- nothing off, see-through enough that the stone shows through it.)
+	rope.Color = ColorSequence.new(Color3.fromRGB(176, 216, 226), Color3.fromRGB(140, 196, 214))
+	rope.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(0.8, 0.55),
+		NumberSequenceKeypoint.new(1, 0.55) })
+	rope.LightEmission = 0
+	rope.LightInfluence = 1
+	rope.Parent = holder
+	return rope
+end
+
+local function ripples(holder: BasePart, at: Vector3, size: number, rate: number): ParticleEmitter
+	local spot = Instance.new("Attachment")
+	spot.Name = "Ripples"
+	spot.Parent = holder
+	spot.WorldCFrame = CFrame.new(at + Vector3.new(0, 0.04, 0))
+	local rings = Instance.new("ParticleEmitter")
+	rings.Name = "Ripples"
+	rings.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	rings.Color = ColorSequence.new(Color3.fromRGB(240, 252, 255))
+	rings.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+	rings.EmissionDirection = Enum.NormalId.Top
+	rings.Speed = NumberRange.new(0.01)
+	rings.SpreadAngle = Vector2.new(0, 0)
+	rings.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, size * 0.3), NumberSequenceKeypoint.new(1, size * 2.4) })
+	rings.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1) })
+	rings.Lifetime = NumberRange.new(0.9, 1.4)
+	rings.Rate = rate
+	rings.Rotation = NumberRange.new(0, 360)
+	rings.LightEmission = 0.1
+	rings.Parent = spot
+	return rings
+end
+
 local function buildPool(centre: Vector3, parent: Folder)
-	-- Heights, all measured from the deck surface at `centre`:
-	--   0.00 - 0.80   the basin floor
-	--   0.80 - 1.90   the water
-	--   0.00 - 2.40   the coping around it, so the surface sits 0.5 under the rim
-	local floorSlab = decorPart("PoolFloor", Vector3.new(22, 0.8, 9),
-		centre + Vector3.new(0, 0.4, 0), parent)
-	floorSlab.Material = Enum.Material.Slate
-	floorSlab.Color = Color3.fromRGB(38, 44, 58)
-
-	-- Four coping stones rather than a hollow box, so the corners are mitred by overlap and
-	-- there is no seam to see into.
-	for _, piece in ipairs({
-		{ Vector3.new(26, 2.4, 2), Vector3.new(0, 1.2, -5.5) },
-		{ Vector3.new(26, 2.4, 2), Vector3.new(0, 1.2, 5.5) },
-		{ Vector3.new(2, 2.4, 13), Vector3.new(-12, 1.2, 0) },
-		{ Vector3.new(2, 2.4, 13), Vector3.new(12, 1.2, 0) },
-	}) do
-		local stone = decorPart("PoolCoping", piece[1] :: Vector3,
-			centre + (piece[2] :: Vector3), parent)
-		stone.Material = Enum.Material.Marble
-		stone.Color = PALETTE.stone
-		-- The one piece of scenery here that IS solid: a rim you walk through is a rim that
-		-- is not holding anything.
-		stone.CanCollide = true
+	local up = Vector3.new(0, 1, 0)
+	-- The plinth: a low step all round, which the basin stands on.
+	local step = roundPart("PoolStep", FOUNTAIN.STEP, 0.5, centre + up * 0.25, parent)
+	step.Material = Enum.Material.Marble
+	step.Color = Color3.fromRGB(222, 214, 226)
+	step.CanCollide = true
+	-- The floor, mosaic, and the light drifting over it.
+	local floorDisc = roundPart("PoolFloor", FOUNTAIN.BASIN - FOUNTAIN.WALL / 2, 0.8, centre + up * 0.4, parent)
+	floorDisc.Material = Enum.Material.CeramicTiles
+	floorDisc.Color = Color3.fromRGB(236, 246, 244)
+	pcall(function()
+		if game:GetService("MaterialService"):FindFirstChild("PoolMosaic", true) then
+			floorDisc.MaterialVariant = "PoolMosaic"
+		end
+	end)
+	local light = Instance.new("Texture")
+	light.Name = "Caustics"
+	light.Face = Enum.NormalId.Right -- (a standing cylinder's top)
+	light.Texture = FOUNTAIN.CAUSTICS
+	light.StudsPerTileU = 10
+	light.StudsPerTileV = 10
+	light.Transparency = 0.35
+	light.Color3 = Color3.fromRGB(226, 255, 250)
+	light.Parent = floorDisc
+	-- The wall, in segments round the circle, with its band and its rim.
+	for k = 0, FOUNTAIN.SEGMENTS - 1 do
+		local a = (k + 0.5) / FOUNTAIN.SEGMENTS * math.pi * 2
+		local out = Vector3.new(math.cos(a), 0, math.sin(a))
+		local along = out:Cross(up)
+		local length = 2 * math.pi * (FOUNTAIN.BASIN + FOUNTAIN.WALL / 2) / FOUNTAIN.SEGMENTS + 0.3
+		local wall = decorPart("PoolCoping", Vector3.new(FOUNTAIN.WALL, 2.2, length), centre + out * FOUNTAIN.BASIN + up * 1.1,
+			parent)
+		wall.CFrame = CFrame.lookAt(wall.Position, wall.Position + along)
+		wall.Material = Enum.Material.Marble
+		wall.Color = PALETTE.stone
+		wall.CanCollide = true
+		local band = decorPart("PoolBand", Vector3.new(0.2, 0.35, length), centre + out * (FOUNTAIN.BASIN + FOUNTAIN.WALL / 2 + 0.05)
+			+ up * 1.55, parent)
+		band.CFrame = CFrame.lookAt(band.Position, band.Position + along)
+		band.Material = Enum.Material.SmoothPlastic
+		band.Color = FOUNTAIN.BAND
+		local rim = decorPart("PoolRim", Vector3.new(FOUNTAIN.WALL + 0.8, 0.4, length + 0.1), centre + out * FOUNTAIN.BASIN + up * 2.4,
+			parent)
+		rim.CFrame = CFrame.lookAt(rim.Position, rim.Position + along)
+		rim.Material = Enum.Material.Marble
+		rim.Color = FOUNTAIN.RIM
+		rim.CanCollide = true
 	end
-
-	local water = decorPart("PoolWater", Vector3.new(22, 1.1, 9),
-		centre + Vector3.new(0, 1.35, 0), parent)
-	water.Material = Enum.Material.Glass
+	-- The water: not glass (glass reads as a sheet of plastic), a translucent surface with a slow ripple on it.
+	local water = roundPart("PoolWater", FOUNTAIN.BASIN - FOUNTAIN.WALL / 2, 1.1, centre + up * 1.35, parent)
+	water.Material = Enum.Material.SmoothPlastic
 	water.Color = PALETTE.water
-	water.Transparency = 0.42
-	water.Reflectance = 0.45
-
+	water.Transparency = 0.36
+	water.Reflectance = 0.28
 	local glow = Instance.new("PointLight")
 	glow.Color = PALETTE.water
 	glow.Range = 18
 	glow.Brightness = 0.5
 	glow.Shadows = false
 	glow.Parent = water
-
-	-- WATER HAS TO MOVE, or it is a blue slab however reflective it is. Three things
-	-- together, none of them enough alone: a caustic pattern that drifts, a surface that
-	-- rises and falls, and mist at the rim.
-	--
-	-- The texture is the important one. A flat colour reads as painted, and a slowly sliding
-	-- pattern of light is what the eye actually uses to decide something is liquid.
 	local caustics = Instance.new("Texture")
 	caustics.Name = "Caustics"
-	caustics.Face = Enum.NormalId.Top
+	caustics.Face = Enum.NormalId.Right
 	caustics.Texture = "rbxasset://textures/water/normal_1.dds"
 	caustics.StudsPerTileU = 9
 	caustics.StudsPerTileV = 9
 	caustics.Transparency = 0.55
 	caustics.Parent = water
-
 	local mist = Instance.new("ParticleEmitter")
 	mist.Name = "PoolMist"
 	mist.Texture = "rbxasset://textures/particles/smoke_main.dds"
@@ -4103,11 +4213,68 @@ local function buildPool(centre: Vector3, parent: Folder)
 	mist.SpreadAngle = Vector2.new(30, 30)
 	mist.Acceleration = Vector3.new(0, 0.6, 0)
 	mist.Parent = water
+	-- LILY PADS with a flower or two, afloat; WISHING COINS on the bottom; LAMPS in the floor.
+	local rng = Random.new(263)
+	for k = 1, 6 do
+		local a = rng:NextNumber(0, math.pi * 2)
+		local r = rng:NextNumber(6, FOUNTAIN.BASIN - 2.6)
+		local at = centre + Vector3.new(math.cos(a) * r, 1.93, math.sin(a) * r)
+		local pad = roundPart("LilyPad", rng:NextNumber(1.1, 1.6), 0.08, at, parent)
+		pad.Material = Enum.Material.SmoothPlastic
+		pad.Color = Color3.fromRGB(96, 168, 98)
+		if k % 2 == 0 then
+			local flower = decorPart("LilyFlower", Vector3.new(0.7, 0.5, 0.7), at + up * 0.3, parent)
+			flower.Shape = Enum.PartType.Ball
+			flower.Material = Enum.Material.SmoothPlastic
+			flower.Color = Color3.fromRGB(252, 176, 206)
+		end
+	end
+	for _ = 1, 26 do
+		local a = rng:NextNumber(0, math.pi * 2)
+		local r = rng:NextNumber(4.6, FOUNTAIN.BASIN - 1.6)
+		local coin = roundPart("WishingCoin", 0.28, 0.06, centre + Vector3.new(math.cos(a) * r, 0.84, math.sin(a) * r), parent)
+		coin.CFrame = coin.CFrame * CFrame.Angles(rng:NextNumber(-0.3, 0.3), 0, rng:NextNumber(-0.3, 0.3))
+		coin.Material = Enum.Material.Metal
+		coin.Color = Color3.fromRGB(232, 190, 92)
+	end
+	for k = 1, 6 do
+		local a = k / 6 * math.pi * 2 + 0.3
+		local lamp = roundPart("PoolLamp", 0.45, 0.1, centre + Vector3.new(math.cos(a) * 8, 0.85, math.sin(a) * 8), parent)
+		lamp.Material = Enum.Material.SmoothPlastic
+		lamp.Color = Color3.fromRGB(220, 255, 246)
+		local glowLamp = Instance.new("PointLight")
+		glowLamp.Color = Color3.fromRGB(180, 240, 232)
+		glowLamp.Range = 7
+		glowLamp.Brightness = 0.5
+		glowLamp.Shadows = false
+		glowLamp.Parent = lamp
+	end
+	-- THE SPOUTS: brass on the rim, each arcing a stream into the middle.
+	for k = 1, FOUNTAIN.SPOUTS do
+		local a = (k - 0.5) / FOUNTAIN.SPOUTS * math.pi * 2
+		local out = Vector3.new(math.cos(a), 0, math.sin(a))
+		local base = centre + out * (FOUNTAIN.BASIN - 0.2) + up * 2.75
+		local tip = base - out * 1.1 + up * 0.25
+		local spout = decorPart("PoolSpout", Vector3.new(0.45, 0.45, 1.3), (base + tip) / 2, parent)
+		spout.Shape = Enum.PartType.Cylinder
+		spout.CFrame = CFrame.lookAt((base + tip) / 2, tip) * CFrame.Angles(0, math.pi / 2, 0)
+		spout.Material = Enum.Material.Metal
+		spout.Color = FOUNTAIN.BRASS
+		local collar = decorPart("PoolSpoutCollar", Vector3.new(0.85, 0.85, 0.85), base, parent)
+		collar.Shape = Enum.PartType.Ball
+		collar.Material = Enum.Material.Metal
+		collar.Color = FOUNTAIN.BRASS
+		local nozzle = decorPart("PoolSpoutJet", Vector3.new(0.2, 0.2, 0.2), tip, parent)
+		nozzle.Transparency = 1
+		-- (Pass 265, from your note: "improve the fountain even more". The stream was sparkles, which read as glitter: now a
+		-- rope of water, a Beam arcing from the spout over into the pool, and the water rings where it lands.)
+		local landing = centre + out * 5.6 + up * 1.92
+		waterArc(nozzle, tip, (-out + up * 0.95).Unit, landing, 0.34, 0.5)
+		ripples(nozzle, landing, 0.9, 3.2)
+	end
 
-	-- DRIVEN ON THE SERVER because everything in this room is: the hub is built once,
-	-- server-side, and a client script purely to slide a texture would be a second place the
-	-- lobby is defined. Heartbeat rather than a wait loop, so the drift is frame-rate
-	-- independent and stops cleanly if the pool is ever destroyed.
+	-- THE WATER MOVES: the ripple and the floor's light drift, the surface rises and falls (driven here, as the whole
+	-- lobby is built here).
 	local restY = water.Position.Y
 	RunService.Heartbeat:Connect(function()
 		if not water.Parent then
@@ -4116,8 +4283,10 @@ local function buildPool(centre: Vector3, parent: Folder)
 		local now = time()
 		caustics.OffsetStudsU = now * 0.35
 		caustics.OffsetStudsV = math.sin(now * 0.21) * 1.4
-		water.Position = Vector3.new(water.Position.X, restY + math.sin(now * 0.7) * 0.06,
-			water.Position.Z)
+		light.OffsetStudsU = now * 0.5
+		light.OffsetStudsV = now * 0.22
+		water.CFrame = CFrame.new(water.Position.X, restY + math.sin(now * 0.7) * 0.06, water.Position.Z)
+			* CFrame.Angles(0, 0, math.pi / 2)
 	end)
 end
 
@@ -4127,38 +4296,38 @@ end
 -- Particles rather than parts: a column of thin parts is visibly a column of thin parts, and
 -- water is the one material that never holds an edge.
 local function buildFountain(centre: Vector3, parent: Folder)
-	-- MODELLED, because a fountain is its RIMS.
-	--
-	-- This was a cylinder with two flat discs stacked on it, and from standing height a flat
-	-- disc is a line: what you saw was a glowing white lozenge hovering over the pool with a
-	-- wisp of particles above it. Hub_Fountain is two shallow bowls on a baluster stem, and
-	-- the tiers are what make the silhouette read as a fountain from across the room.
-	--
-	-- Heights are measured from the mesh, whose base sits at -0.10 and finial at 5.62, so its
-	-- bounding centre is 2.76 above the base. The pool floor is 0.80 above `centre`, giving a
-	-- centre offset of 0.80 + 2.86.
-	local body = propAt("Hub_Fountain", centre + Vector3.new(0, 3.66, 0), parent)
+	-- THE FOUNTAIN ITSELF (pass 263): Hub_Fountain, two bowls on a baluster stem, made larger (SCALE) and standing on a
+	-- round marble plinth in the middle of the water, a brass band round the plinth's top; the jet from its finial and the
+	-- spills off both bowls scaled with it.
+	local SCALE = 1.35
+	local base = 2.2 -- the plinth's top over the deck
+	local plinth = roundPart("FountainPlinth", 3.4, 1.4, centre + Vector3.new(0, 1.5, 0), parent)
+	plinth.Material = Enum.Material.Marble
+	plinth.Color = PALETTE.stone
+	plinth.CanCollide = true
+	local band = roundPart("FountainBand", 3.5, 0.3, centre + Vector3.new(0, 2.05, 0), parent)
+	band.Material = Enum.Material.Metal
+	band.Color = FOUNTAIN.BRASS
+	local body = propAt("Hub_Fountain", centre + Vector3.new(0, base + 2.86 * SCALE, 0), parent)
 	if body then
+		body.Size = body.Size * SCALE
 		body.Material = Enum.Material.Marble
 		body.Color = PALETTE.stone
 	end
+	local function height(old: number): number
+		return base + (old - 0.8) * SCALE
+	end
 
-	-- WATER IS PARTICLES, not parts. A column of thin parts is visibly a column of thin
-	-- parts, and water is the one material that never holds an edge.
-	--
-	-- Three emitters doing three different jobs, which is what a real fountain looks like: a
-	-- jet from the finial, a ring of spills over the upper rim, and a wider ring off the
-	-- lower rim into the basin.
 	local function emitter(at: Vector3, name: string, rate: number, speed: NumberRange,
 		size: number, spread: number, up: boolean): ParticleEmitter
 		local anchor = decorPart(name, Vector3.new(0.8, 0.8, 0.8), at, parent)
 		anchor.Transparency = 1
-
 		local jet = Instance.new("ParticleEmitter")
 		jet.Name = name
 		jet.Texture = "rbxasset://textures/particles/sparkles_main.dds"
 		jet.Color = ColorSequence.new(PALETTE.water)
-		jet.LightEmission = 0.5
+		jet.LightEmission = 0.1
+		jet.LightInfluence = 1
 		jet.Size = NumberSequence.new({
 			NumberSequenceKeypoint.new(0, size),
 			NumberSequenceKeypoint.new(1, size * 0.15),
@@ -4171,33 +4340,156 @@ local function buildFountain(centre: Vector3, parent: Folder)
 		jet.Rate = rate
 		jet.Speed = speed
 		jet.SpreadAngle = Vector2.new(spread, spread)
-		-- Thrown and pulled back down, so water ARCS. No acceleration gives a beam.
 		jet.Acceleration = Vector3.new(0, if up then -26 else -34, 0)
 		jet.EmissionDirection = Enum.NormalId.Top
 		jet.Parent = anchor
 		return jet
 	end
 
-	emitter(centre + Vector3.new(0, 6.4, 0), "FountainJet", 70, NumberRange.new(9, 11),
-		0.5, 7, true)
-
-	-- The rims: six spills over the upper bowl at radius 2.1, eight off the lower at 3.3.
-	-- Offset half a step from each other so the two rings do not line up into columns.
-	for index = 1, 6 do
-		local angle = (index / 6) * math.pi * 2
-		emitter(centre + Vector3.new(math.cos(angle) * 2.1, 5.5, math.sin(angle) * 2.1),
-			"FountainUpperSpill", 14, NumberRange.new(1.4, 2.2), 0.3, 4, false)
-	end
+	emitter(centre + Vector3.new(0, height(6.4), 0), "FountainJet", 80, NumberRange.new(10, 12), 0.6, 7, true)
 	for index = 1, 8 do
-		local angle = (index / 8) * math.pi * 2 + math.pi / 8
-		emitter(centre + Vector3.new(math.cos(angle) * 3.3, 3.1, math.sin(angle) * 3.3),
-			"FountainLowerSpill", 12, NumberRange.new(1.0, 1.7), 0.26, 4, false)
+		local angle = (index / 8) * math.pi * 2
+		local r = 2.1 * SCALE
+		emitter(centre + Vector3.new(math.cos(angle) * r, height(5.5), math.sin(angle) * r),
+			"FountainUpperSpill", 6, NumberRange.new(1.4, 2.2), 0.3, 4, false)
 	end
+	for index = 1, 10 do
+		local angle = (index / 10) * math.pi * 2 + math.pi / 10
+		local r = 3.3 * SCALE
+		emitter(centre + Vector3.new(math.cos(angle) * r, height(3.1), math.sin(angle) * r),
+			"FountainLowerSpill", 5, NumberRange.new(1.0, 1.7), 0.26, 4, false)
+	end
+
+	-- WATER POURING OFF THE BOWLS (pass 265): a veil of short ropes all round each bowl's lip, curling out and down, the
+	-- upper bowl's into the lower and the lower's into the pool, rings on the water where they fall; and a clear column
+	-- standing up out of the finial into the spray.
+	local holder = decorPart("FountainWater", Vector3.new(0.4, 0.4, 0.4), centre + Vector3.new(0, height(6.4), 0), parent)
+	holder.Transparency = 1
+	local up = Vector3.new(0, 1, 0)
+	for _, bowl in ipairs({
+		{ count = 8, r = 2.1 * SCALE, y = height(5.5), toR = 2.55 * SCALE, toY = height(3.5), w = 0.4 },
+		{ count = 10, r = 3.3 * SCALE, y = height(3.1), toR = 3.75 * SCALE + 0.6, toY = 1.92, w = 0.5 },
+	}) do
+		for k = 1, bowl.count do
+			local a = (k + 0.5 * (bowl.count % 2)) / bowl.count * math.pi * 2
+			local out = Vector3.new(math.cos(a), 0, math.sin(a))
+			local lip = centre + out * bowl.r + up * bowl.y
+			local foot = centre + out * bowl.toR + up * bowl.toY
+			local rope = waterArc(holder, lip, (out - up * 0.3).Unit, foot, bowl.w, bowl.w * 1.25)
+			rope.CurveSize0 = 0.9
+			rope.CurveSize1 = 0.5
+			rope.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 0.8) })
+			if bowl.toY < 2 and k % 2 == 0 then
+				ripples(holder, foot, 0.7, 1.6)
+			end
+		end
+	end
+	local columnTop = centre + up * (height(6.4) + 3.2)
+	local column = waterArc(holder, centre + up * height(6.4), up, columnTop, 0.5, 0.22)
+	column.CurveSize0 = 0
+	column.CurveSize1 = 0
+	column.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 0.92) })
+	-- A WISH (pass 265): on the near rim, "Make a wish": a coin flips out of your hand in an arc into the pool, lands
+	-- with a soft plip and rings on the water, and stays on the bottom with the others (the newest forty kept).
+	local rimAt = centre + Vector3.new(0, 0, -(FOUNTAIN.BASIN)) + up * 2.7
+	local wishSpot = decorPart("WishSpot", Vector3.new(3, 1, 1.6), rimAt, parent)
+	wishSpot.Transparency = 1
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "WishPrompt"
+	prompt.ActionText = "Make a wish"
+	prompt.ObjectText = "Fountain"
+	prompt.HoldDuration = 0.3
+	prompt.MaxActivationDistance = 9
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = wishSpot
+	local tossed: { BasePart } = {}
+	local lastToss: { [Player]: number } = {}
+	prompt.Triggered:Connect(function(player: Player)
+		local now = os.clock()
+		if now - (lastToss[player] or -10) < 1.5 then
+			return
+		end
+		lastToss[player] = now
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if not (root and root:IsA("BasePart")) then
+			return
+		end
+		local from = root.Position + root.CFrame.LookVector * 1.2 + up * 1.2
+		local angle = math.random() * math.pi * 2
+		local radius = 6 + math.random() * (FOUNTAIN.BASIN - 8.5)
+		local into = centre + Vector3.new(math.cos(angle) * radius, 1.92, math.sin(angle) * radius)
+		local coin = decorPart("WishCoin", Vector3.new(0.08, 0.6, 0.6), from, parent)
+		coin.Shape = Enum.PartType.Cylinder
+		coin.Material = Enum.Material.Metal
+		coin.Color = Color3.fromRGB(240, 198, 96)
+		coin.Reflectance = 0.15
+		local flight, apex = 0.75, math.max(from.Y, into.Y) + 4.5
+		task.spawn(function()
+			local t0 = os.clock()
+			while coin.Parent do
+				local t = math.min(1, (os.clock() - t0) / flight)
+				local flat = from:Lerp(into, t)
+				local y = (1 - t) * (1 - t) * from.Y + 2 * (1 - t) * t * apex + t * t * into.Y
+				coin.CFrame = CFrame.new(flat.X, y, flat.Z) * CFrame.Angles(t * 18, t * 3, 0)
+				if t >= 1 then
+					break
+				end
+				RunService.Heartbeat:Wait()
+			end
+			if not coin.Parent then
+				return
+			end
+			local plip = Instance.new("Sound")
+			plip.Volume = 0.45
+			plip.RollOffMaxDistance = 40
+			WaterSounds.dress(plip, "dip")
+			plip.Parent = coin
+			plip:Play()
+			local splashAt = Instance.new("Attachment")
+			splashAt.Parent = coin
+			local rings = ripples(coin, into, 0.8, 0)
+			rings:Emit(3)
+			local drops = Instance.new("ParticleEmitter")
+			drops.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+			drops.Color = ColorSequence.new(Color3.fromRGB(226, 246, 252))
+			drops.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.18), NumberSequenceKeypoint.new(1, 0.05) })
+			drops.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+			drops.Lifetime = NumberRange.new(0.4, 0.6)
+			drops.Speed = NumberRange.new(3, 5)
+			drops.SpreadAngle = Vector2.new(35, 35)
+			drops.Acceleration = Vector3.new(0, -24, 0)
+			drops.EmissionDirection = Enum.NormalId.Top
+			drops.Rate = 0
+			drops.Parent = splashAt
+			splashAt.WorldPosition = into
+			drops:Emit(10)
+			-- Down through the water, rocking, to lie on the bottom.
+			local bottom = Vector3.new(into.X, centre.Y + 0.84, into.Z)
+			local sink0 = os.clock()
+			while coin.Parent do
+				local t = math.min(1, (os.clock() - sink0) / 1.1)
+				coin.CFrame = CFrame.new(into:Lerp(bottom, t * (2 - t)))
+					* CFrame.Angles(math.sin(t * 9) * 0.5 * (1 - t), angle, math.pi / 2 * t)
+				if t >= 1 then
+					break
+				end
+				RunService.Heartbeat:Wait()
+			end
+			table.insert(tossed, coin)
+			if #tossed > 40 then
+				local oldest = table.remove(tossed, 1)
+				if oldest then
+					oldest:Destroy()
+				end
+			end
+		end)
+	end)
 
 	local splash = Instance.new("PointLight")
 	splash.Color = PALETTE.water
-	splash.Range = 14
-	splash.Brightness = 0.7
+	splash.Range = 16
+	splash.Brightness = 0.3
 	splash.Shadows = false
 	splash.Parent = parent:FindFirstChild("FountainJet") or parent
 end
@@ -5853,6 +6145,24 @@ local function buildSurroundings(folder: Folder)
 		sky.Parent = terrain
 	end
 
+	-- YOUR PALS IN THE SKY (pass 264: "the little pets as shapes in the sky ... floating like the clouds"). Not banks under
+	-- the deck (above: those read as boulders): four soft clouds shaped like four of the pals, high over the sea and far
+	-- out round the lobby, each turned to look in at it, the way you would spot a shape in the clouds.
+	local PetStatues = require(Shared:WaitForChild("PetStatues")) :: any
+	local petSky = Instance.new("Folder")
+	petSky.Name = "PetClouds"
+	petSky.Parent = folder
+	for index, pal in ipairs({ "Pal_Cloud", "Pal_Needoh", "Pal_Bee", "Pal_Jelly" }) do
+		local angle = (index - 1) * math.pi / 2 + 0.6
+		local middle = HUB_ORIGIN + Vector3.new(math.cos(angle) * 430, 170 + (index % 2) * 40, math.sin(angle) * 430)
+		PetStatues.cloud(petSky, pal, CFrame.lookAt(middle, Vector3.new(HUB_ORIGIN.X, middle.Y, HUB_ORIGIN.Z)), 64, 640 + index)
+	end
+	-- (Pass 265: where the climbing tower stood, before it went to the level gates, Bumble in marble on its pedestal in the
+	-- garden's east wing, turned to the garden's middle.)
+	local statueAt = HUB_ORIGIN + LobbyLayout.AT.gardenStatue
+	local gardenMiddle = HUB_ORIGIN + LobbyLayout.centre("garden") + Vector3.new(0, LobbyLayout.AT.gardenStatue.Y, 0)
+	PetStatues.statue(folder, "Pal_Bee", CFrame.lookAt(statueAt, gardenMiddle), 4.6, 3.6, "marble")
+
 	-- FOUR WAVING ARMS AND A LANTERN RING.
 	--
 	-- The outer band touches the columns, which is what makes it structural -- but a single
@@ -6177,7 +6487,8 @@ local function railDeck(folder: Folder, name: string)
 	-- Where a walk comes in: the side, and the stretch of it between the walk's own two rails.
 	local openings: { { side: string, from: number, to: number } } = {}
 	for _, w in ipairs(LobbyLayout.WALKS) do
-		if name == "plaza" or name == w.to then
+		-- (A walk runs from the plaza, or from its own `from`: the climb's, from the level gates, pass 265.)
+		if name == ((w :: any).from or "plaza") or name == w.to then
 			local centre, _, width, alongX = LobbyLayout.walk(w.to)
 			local half = width / 2 - 0.7
 			if alongX then
@@ -6390,6 +6701,10 @@ end
 local function buildFestoons(folder: Folder)
 	local hang = LobbyLayout.FESTOON
 	for index, w in ipairs(LobbyLayout.WALKS) do
+		-- (Not over the climb's walk, pass 268: its strings hung across the gateway's name, seen from the gates.)
+		if w.to == "climb" then
+			continue
+		end
 		local poles = LobbyLayout.festoonPoles(w.to)
 		local tops = {}
 		for _, at in ipairs(poles) do
@@ -7018,5 +7333,5 @@ function HubService.build(): { spawnPosition: Vector3 }
 	return { spawnPosition = HubService.spawnPosition() }
 end
 
-HubService.STAMP = "5f04e3a1"
+HubService.STAMP = "ac738805"
 return HubService

@@ -199,6 +199,12 @@ local function cutHead(template: MeshPart): Pieces
 	end
 	local function made(em: EditableMesh, name: string, textured: boolean, colour: Color3): MeshPart
 		local part = AssetService:CreateMeshPartAsync(Content.fromObject(em))
+		-- (Pass 266, from your note: "head is not visible in the back rooms monster". A mesh cut here has no simpler
+		-- versions for far away, so at its own Automatic detail it was drawn as nothing beyond a few studs: his head was
+		-- there up close and gone down a corridor. Always at full detail.)
+		pcall(function()
+			part.RenderFidelity = Enum.RenderFidelity.Precise
+		end)
 		part.Name = name
 		part.Anchored = false
 		part.Massless = true
@@ -497,6 +503,12 @@ local function cutJaw(template: MeshPart, spec: JawSpec): Jaw
 	end
 	local function made(em: EditableMesh, name: string): MeshPart
 		local part = AssetService:CreateMeshPartAsync(Content.fromObject(em))
+		-- (Pass 266, from your note: "head is not visible in the back rooms monster". A mesh cut here has no simpler
+		-- versions for far away, so at its own Automatic detail it was drawn as nothing beyond a few studs: his head was
+		-- there up close and gone down a corridor. Always at full detail.)
+		pcall(function()
+			part.RenderFidelity = Enum.RenderFidelity.Precise
+		end)
 		part.Name = name
 		part.Anchored = true
 		part.CanCollide, part.CanQuery, part.CanTouch = false, false, false
@@ -634,5 +646,5 @@ function MarshMouth.jawFrame(jaw: Jaw, at: CFrame, size: Vector3, turn: number):
 	return at * h * CFrame.Angles(-turn * -jaw.spec.snout, 0, 0) * h:Inverse() * CFrame.new(-jaw.centre * scale)
 end
 
-MarshMouth.STAMP = "a5ee35df"
+MarshMouth.STAMP = "ec4896a1"
 return MarshMouth

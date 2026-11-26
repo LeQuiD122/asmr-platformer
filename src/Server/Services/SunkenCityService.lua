@@ -5025,6 +5025,15 @@ function SunkenCityService.build(level: any, parent: Instance): Model?
 	local plazaSide = Vector3.yAxis:Cross(plazaDir)
 	local plaza = plazaAt + plazaSide * 230
 	clockTower(sea, Vector3.new(plaza.X, 0, plaza.Z), h.floor)
+	-- A DROWNED PAL ON THE PLAZA (pass 264: the pals as a structure on every level): Gloop in mossy stone on a tall plinth
+	-- that stands on the plaza and rises out of the water, between the clock tower and the street, turned to the street,
+	-- so it reads as the square's statue from the route.
+	do
+		local PetStatues = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PetStatues")) :: any
+		local toStreet = Vector3.new(plazaAt.X - plaza.X, 0, plazaAt.Z - plaza.Z).Unit
+		local foot = Vector3.new(plaza.X, h.floor + 0.6, plaza.Z) + toStreet * 36
+		PetStatues.statue(sea, "Pal_Slime", CFrame.lookAt(foot, foot + toStreet), 16, math.max(8, h.water + 3 - foot.Y), "stone")
+	end
 
 	-- ===== The city, round everything that has already claimed its space =====
 	local ferrisAt: Vector3? = nil
@@ -6760,5 +6769,5 @@ Players.PlayerRemoving:Connect(function(player: Player)
 	arrivedAt[player] = nil
 end)
 
-SunkenCityService.STAMP = "e6a3eb71"
+SunkenCityService.STAMP = "97568dff"
 return SunkenCityService

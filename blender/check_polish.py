@@ -499,7 +499,8 @@ if "function ShopService.closeCodes()\n\tcloseCodes()\nend" not in SHOP_SRC:
 
 fade_order = re.search(r"fadeGui\.DisplayOrder = (\d+)", UI)
 fade_order = int(fade_order.group(1)) if fade_order else 0
-OVER_THE_BLACK = {"SquishRoomClient.lua": "the squish room's own cover", "DevPanelClient.lua": "the Studio test panel"}
+OVER_THE_BLACK = {"SquishRoomClient.lua": "the squish room's own cover", "ClimbClient.lua": "the climb's own cover",
+                  "DevPanelClient.lua": "the Studio test panel"}
 for path in sorted((SRC / "Client" / "Services").glob("*.lua")):
     orders = [int(v) for v in re.findall(r"DisplayOrder = (\d+)", path.read_text(encoding="utf-8"))]
     if path.name == "UIService.lua":

@@ -81,6 +81,8 @@ ENUMS = {
     "ProductPurchaseDecision": {"NotProcessedYet", "PurchaseGranted"},
     "RaycastFilterType": {"Exclude", "Include", "Blacklist", "Whitelist"},
     "RenderPriority": {"First", "Input", "Camera", "Character", "Last"},
+    "RenderFidelity": {"Automatic", "Precise", "Performance"},
+    "ContentSourceType": {"None", "Uri", "Object", "Opaque"},
     "ReverbType": {"NoReverb", "GenericReverb", "PaddedCell", "Room", "Bathroom", "LivingRoom", "StoneRoom", "Auditorium",
                    "ConcertHall", "Cave", "Arena", "Hangar", "CarpettedHallway", "Hallway", "StoneCorridor", "Alley",
                    "Forest", "City", "Mountains", "Quarry", "Plain", "ParkingLot", "SewerPipe", "UnderWater"},

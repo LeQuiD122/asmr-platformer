@@ -841,6 +841,15 @@ end
 
 -- UNDER THE BOARDS: you leaning over the gap; then straight down into the shaft, where far below the mouth opens a
 -- little and breathes (and you jolt at it); then back to you, backing off, what you make of it over your head.
+-- ALMOST UNSEEN (pass 259, from your note: "the maw is so visible and sticking out of a square frame"). It was lit at
+-- nearly half its full glow 240 down, which lit the shaft's walls round it, and the halls' pale haze made the
+-- shaft's far end a bright square behind it. Now it is deeper, its glow is a faint glint (MAW_PEEK_GLOW), and for the
+-- look down the air turns black, so all there is is the dark and, just, teeth breathing in it.
+local MAW_PEEK_DEPTH = 190
+local MAW_PEEK_GLOW = 0.12
+local MAW_PEEK_GLINT = 3
+local PEEK_AIR = Color3.fromRGB(3, 4, 6)
+
 local function peek(data: { [string]: any })
 	local hole = data.eye
 	local takingOver = scene.prying
@@ -860,11 +869,86 @@ local function peek(data: { [string]: any })
 	faceToward(hole.Position)
 	act("peer")
 	local over = hole.Position + Vector3.new(0, 1.5, 0)
-	local mouth = if Maw then Maw.build(Maw.facing(over - Vector3.new(0, 240, 0), Vector3.yAxis, Vector3.xAxis), workspace) else nil
+	local mouth = if Maw then Maw.build(Maw.facing(over - Vector3.new(0, MAW_PEEK_DEPTH, 0), Vector3.yAxis, Vector3.xAxis), workspace) else nil
+	-- The air, saved, to be turned black for the look down and given back after.
+	local atmosphere = game:GetService("Lighting"):FindFirstChildOfClass("Atmosphere")
+	local air = if atmosphere then { atmosphere.Color, atmosphere.Decay, atmosphere.Haze, atmosphere.Glare, atmosphere.Density }
+		else nil
+	-- And a grade for the look down that sinks the darks, so the mouth is only just there in them.
+	local sink: ColorCorrectionEffect? = nil
+	-- And the halls' own lights over the shaft (the oculus throws its light straight down it, onto the mouth),
+	-- out for the look down, as the fall puts them out.
+	local doused: { Light } = {}
+	-- And the sky: the shaft is open to it through the oculus, so the sun and the outdoor light fall straight down
+	-- it onto the mouth. Turned down for the look, as the fall turns them down.
+	local Lighting = game:GetService("Lighting")
+	local sky: { any }? = nil
+	local function douse()
+		sky = { Lighting.Brightness, Lighting.OutdoorAmbient, Lighting.Ambient, Lighting.EnvironmentDiffuseScale,
+			Lighting.EnvironmentSpecularScale }
+		Lighting.Brightness = 0
+		Lighting.OutdoorAmbient = Color3.fromRGB(10, 11, 14)
+		Lighting.Ambient = Color3.fromRGB(10, 11, 14)
+		Lighting.EnvironmentDiffuseScale = 0
+		Lighting.EnvironmentSpecularScale = 0
+		local halls = workspace:FindFirstChild("FloodedHalls")
+		for _, item in ipairs(if halls then halls:GetDescendants() else {}) do
+			if item:IsA("Light") and item.Enabled then
+				local holder = item.Parent
+				local at = if holder and holder:IsA("BasePart") then holder.Position
+					elseif holder and holder:IsA("Attachment") then holder.WorldPosition else nil
+				if at and Vector3.new(at.X - hole.Position.X, 0, at.Z - hole.Position.Z).Magnitude < 240 then
+					item.Enabled = false
+					table.insert(doused, item)
+				end
+			end
+		end
+	end
+	local function giveAirBack()
+		if sky then
+			Lighting.Brightness, Lighting.OutdoorAmbient, Lighting.Ambient = sky[1], sky[2], sky[3]
+			Lighting.EnvironmentDiffuseScale, Lighting.EnvironmentSpecularScale = sky[4], sky[5]
+			sky = nil
+		end
+		for _, light in ipairs(doused) do
+			if light.Parent then
+				light.Enabled = true
+			end
+		end
+		table.clear(doused)
+		if atmosphere and air then
+			atmosphere.Color, atmosphere.Decay, atmosphere.Haze, atmosphere.Glare = air[1], air[2], air[3], air[4]
+			atmosphere.Density = air[5]
+			air = nil
+		end
+		if sink then
+			sink:Destroy()
+			sink = nil
+		end
+	end
 	if mouth then
 		Maw.set(mouth, 0.06, 0.05)
 		Maw.light(mouth, 0)
 	end
+	-- A faint cold light just over it, for this shot alone: with the sky and the halls' lamps out, its own glow does not
+	-- reach its teeth, and the look down was black. This catches the teeth and the wet of it and nothing round it.
+	local lamp = Instance.new("Part")
+	lamp.Name = "PeekGlint"
+	lamp.Anchored, lamp.CanCollide, lamp.CanQuery, lamp.CanTouch = true, false, false, false
+	lamp.Transparency = 1
+	lamp.Size = Vector3.new(1, 1, 1)
+	-- Over the jaws' tips (the model's pivot is its hinge, deep in it: a light there lit only its inside).
+	local mawAt = if mouth and mouth.model then mouth.model:GetPivot().Position else over - Vector3.new(0, MAW_PEEK_DEPTH, 0)
+	lamp.CFrame = CFrame.new(Vector3.new(over.X, mawAt.Y + 30, over.Z))
+	lamp.Parent = workspace
+	local glint = Instance.new("SpotLight")
+	glint.Face = Enum.NormalId.Bottom
+	glint.Angle = 38
+	glint.Range = 48
+	glint.Brightness = 0
+	glint.Color = Color3.fromRGB(150, 210, 200)
+	glint.Shadows = false
+	glint.Parent = lamp
 	sound("MawRumble", "rbxasset://sounds/bass.mp3", 0.5, 0.2)
 	local began = os.clock()
 	local captioned, jolted, back = false, false, false
@@ -873,6 +957,8 @@ local function peek(data: { [string]: any })
 		local t = os.clock() - began
 		if scene.token ~= token then
 			hook:Disconnect()
+			giveAirBack()
+			lamp:Destroy()
 			if Maw and mouth then
 				Maw.destroy(mouth)
 			end
@@ -881,8 +967,9 @@ local function peek(data: { [string]: any })
 		local breath = math.clamp(math.sin(math.clamp((t - 1.8) / 5, 0, 1) * math.pi), 0, 1)
 		if mouth then
 			Maw.set(mouth, 0.06 + 0.3 * breath, 0.05 + 0.25 * breath)
-			Maw.light(mouth, 0.45 * breath)
+			Maw.light(mouth, MAW_PEEK_GLOW * breath)
 		end
+		glint.Brightness = MAW_PEEK_GLINT * (0.35 + 0.65 * breath)
 		if t < 1.8 then
 			-- YOU, leaning over the gap to look.
 			local shot = twoShot(hole.Position, 0.35)
@@ -894,6 +981,18 @@ local function peek(data: { [string]: any })
 				captioned = true
 				Cinema.cut()
 				Cinema.caption(tostring(data.title), tostring(data.line), 6)
+				if atmosphere then
+					atmosphere.Color, atmosphere.Decay, atmosphere.Haze, atmosphere.Glare = PEEK_AIR, PEEK_AIR, 0, 0
+					-- (Not Density 0: with no air at all the renderer drew the whole look black, the mouth's lights and
+					-- all. Black air with the sky turned down, below, is what puts out the pale square.)
+				end
+				douse()
+				sink = Instance.new("ColorCorrectionEffect")
+				sink.Name = "PeekDark"
+				sink.Brightness = -0.03
+				sink.Contrast = 0.28
+				sink.Saturation = -0.35
+				sink.Parent = game:GetService("Lighting")
 			end
 			-- AT ITS WIDEST, it gets you: a jolt.
 			if not jolted and breath > 0.9 then
@@ -908,6 +1007,7 @@ local function peek(data: { [string]: any })
 			if not back then
 				back = true
 				Cinema.cut()
+				giveAirBack()
 				act("startle")
 				Cinema.think(character, tostring(data.think or "Is that... breathing?"), 2.4)
 			end
@@ -918,6 +1018,8 @@ local function peek(data: { [string]: any })
 		end
 		if t > 10 then
 			hook:Disconnect()
+			giveAirBack()
+			lamp:Destroy()
 			if Maw and mouth then
 				Maw.destroy(mouth)
 			end
@@ -1538,6 +1640,57 @@ local function roomAlong(mid: Vector3, way: Vector3, most: number, ignore: { Ins
 	return if hit then hit.Distance else most
 end
 
+-- THE DARK WHILE HE HAS YOU (pass 266, from your note: "I want my screen to darken the background when the back rooms
+-- monster catches me and eats me, and ONLY then"). From the moment he looms over you until the screen goes black: the
+-- rooms behind him swallowed by black air a few studs off, and the picture graded darker and colder, so it is him and
+-- you, lit, in the dark. Put back exactly as it was the moment it ends, however it ends (LightGuard clears it anywhere
+-- else too).
+local function caughtDark(on: boolean, state: { [string]: any })
+	if on then
+		if state.fx then
+			return
+		end
+		local fx = Instance.new("ColorCorrectionEffect")
+		fx.Name = "CaughtDark"
+		fx.Parent = Lighting
+		state.fx = fx
+		local air = Lighting:FindFirstChildOfClass("Atmosphere")
+		if air then
+			state.air = air
+			state.was = { Density = air.Density, Offset = air.Offset, Color = air.Color, Decay = air.Decay, Haze = air.Haze,
+				Glare = air.Glare }
+		end
+		local ease = TweenInfo.new(0.35, Enum.EasingStyle.Sine)
+		state.tweens = {
+			TweenService:Create(fx, ease, { Brightness = -0.2, Contrast = 0.42, Saturation = -0.45,
+				TintColor = Color3.fromRGB(226, 214, 214) }),
+		}
+		if air then
+			table.insert(state.tweens, TweenService:Create(air, ease, { Density = 0.78, Offset = 0, Color = Color3.fromRGB(8, 6, 8),
+				Decay = Color3.fromRGB(4, 2, 4), Haze = 0, Glare = 0 }))
+		end
+		for _, tween in ipairs(state.tweens) do
+			tween:Play()
+		end
+		return
+	end
+	for _, tween in ipairs(state.tweens or {}) do
+		tween:Cancel()
+	end
+	state.tweens = nil
+	if state.fx then
+		state.fx:Destroy()
+		state.fx = nil
+	end
+	local air, was = state.air, state.was
+	if air and was and air.Parent then
+		for key, value in pairs(was) do
+			(air :: any)[key] = value
+		end
+	end
+	state.air, state.was = nil, nil
+end
+
 local function caught(data: { [string]: any })
 	local at = data.at
 	if not Cinema or typeof(at) ~= "Vector3" then
@@ -1572,10 +1725,12 @@ local function caught(data: { [string]: any })
 	local loomed = false
 	local struck = false
 	local blacked = false
+	local dark = {}
 	local hook
 	hook = RunService.RenderStepped:Connect(function()
 		local t = os.clock() - began
 		if scene.token ~= token then
+			caughtDark(false, dark)
 			hook:Disconnect()
 			if face then
 				face.model:Destroy()
@@ -1596,6 +1751,7 @@ local function caught(data: { [string]: any })
 		if t >= CAUGHT.loom and not loomed then
 			-- A RED FLICKER BACK, low: him, over you.
 			loomed = true
+			caughtDark(true, dark)
 			for light, brightness in pairs(was) do
 				light.Brightness = brightness * 0.3
 			end
@@ -1726,6 +1882,10 @@ local function caught(data: { [string]: any })
 		if t > CAUGHT.black and not blacked then
 			blacked = true
 			Cinema.black(true, 0.04)
+			-- (Under the black, so the light coming back is never seen.)
+			task.delay(0.06, function()
+				caughtDark(false, dark)
+			end)
 			if face then
 				face.model:Destroy()
 				face = nil
@@ -2058,5 +2218,5 @@ function StoryClient.start()
 	print("StoryClient: running, " .. StoryClient.VERSION)
 end
 
-StoryClient.STAMP = "3da889d8"
+StoryClient.STAMP = "c0e12782"
 return StoryClient

@@ -133,10 +133,11 @@ task.spawn(CloudService.start)
 -- and taken out, because it swallowed the camera's right-click release when the cursor was over it. And YOUR HANDS
 -- (Haptics, the hundred-and-sixty-fourth pass): started here to feel a hard landing; the steps, the presses and the
 -- scenes ask it for the rest. And THE TELEPRINTER (the hundred-and-sixty-fifth): a creamy keyboard's strip of tape.
+-- And LIGHTGUARD (pass 266): every level's darkness kept to its own level.
 for _, name in ipairs({ "SkyPoolsClient", "SunkenCityClient", "CityShoreClient", "FloodedHallsClient",
 	"HillHouseClient", "AmbienceService", "StoryClient", "JournalService", "ViewModeService", "ShopService", "OnboardingService",
-	"StepService", "EmoteService", "SquishRoomClient", "DevPanelClient", "SearchlightClient", "CosmeticsClient",
-	"TalkClient", "LobbyLife", "PlayerLife", "GroundMarks", "DrawingBoard", "Haptics", "Teleprinter", "RunFeel", "StalkerClient" }) do
+	"StepService", "EmoteService", "SquishRoomClient", "ClimbClient", "DevPanelClient", "SearchlightClient", "CosmeticsClient",
+	"TalkClient", "LobbyLife", "PlayerLife", "GroundMarks", "DrawingBoard", "LightGuard", "Haptics", "Teleprinter", "RunFeel", "StalkerClient" }) do
 	task.spawn(function()
 		local module = Services:WaitForChild(name, 30)
 		if module and module:IsA("ModuleScript") then

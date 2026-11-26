@@ -200,6 +200,13 @@ local function build(): Frame
 	return panel
 end
 
+-- NO BALLOT IN THE CLIMB (the two-hundred-and-sixty-fourth pass: "when I spawn back from the fall in the climb, I have these
+-- 2 menus overlapping, I should not have the vote menu in the climb at all"). The tally keeps counting while you climb (the
+-- lobby's state is still kept), but its card is not shown; it leaves the moment you step in.
+local function climbing(): boolean
+	return Players.LocalPlayer:GetAttribute("InClimb") == true
+end
+
 -- Slides in from above rather than appearing. A card that pops into existence gets read as a
 -- glitch; a card that arrives gets read as an announcement.
 local function show(visible: boolean)
@@ -283,8 +290,18 @@ local function showSeconds(seconds: number)
 	end
 end
 
+Players.LocalPlayer:GetAttributeChangedSignal("InClimb"):Connect(function()
+	if climbing() then
+		dismissAt = 0
+		show(false)
+	end
+end)
+
 RunService.RenderStepped:Connect(function()
 	local deadline = endsAt
+	if deadline and climbing() then
+		return
+	end
 	if not deadline then
 		return
 	end
@@ -305,6 +322,9 @@ function HubVoteService.onTick(state)
 	build()
 	dismissAt = 0
 	lastState, lastKind = state, "tick"
+	if climbing() then
+		return
+	end
 	local seconds = tonumber(state.secondsLeft) or 0
 	local deadline = tonumber(state.endsAt)
 	if deadline then
@@ -334,6 +354,9 @@ function HubVoteService.onIdle(state)
 	dismissAt = 0
 	endsAt, shownSeconds = nil, nil
 	lastState, lastKind = state, "idle"
+	if climbing() then
+		return
+	end
 	if os.clock() < lockedUntil then
 		return
 	end
@@ -356,6 +379,10 @@ function HubVoteService.onIdle(state)
 end
 
 function HubVoteService.onResult(result)
+	if climbing() then
+		lastState, lastKind = nil, "idle"
+		return
+	end
 	build()
 	lockedUntil = 0
 	-- The ballot is over: nothing from it is shown again after a held message (a stale countdown would be).
@@ -1078,5 +1105,5 @@ task.spawn(function()
 	end)
 end)
 
-HubVoteService.STAMP = "9f52f1f8"
+HubVoteService.STAMP = "7c64d461"
 return HubVoteService

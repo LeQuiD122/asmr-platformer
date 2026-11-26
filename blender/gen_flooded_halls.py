@@ -338,13 +338,28 @@ def build_column():
     # flutes run through it. Mouldings are never fluted -- that is what makes them read as
     # separate members rather than as the shaft changing its mind.
     plinth_top = 2.2
-    profile = [
-        (plinth_top, 1.30, False),          # the base's bottom fillet
-        (plinth_top + 0.55, 1.34, False),   # torus, at its widest
-        (plinth_top + 1.05, 1.16, False),   # scotia, pinched in above it
-        (plinth_top + 1.5, 1.08, False),    # and out again to meet the shaft
-        (plinth_top + 1.9, 1.0, True),      # the shaft starts
-    ]
+    # ROUND MOULDINGS (the two-hundred-and-fifty-seventh pass, "fix the column bases too"). The torus was one ring:
+    # a single sharp ridge, which from the walkway read as the edge of a sheet curling over the plinth. Now each
+    # member is drawn as its curve: a full half-round roll sitting on the plinth, a hollow scooped between two
+    # fillets, a smaller roll above it, and the shaft.
+    # CLOSED, BELOW THE PLINTH'S TOP (the two-hundred-and-fifty-eighth pass, "the columns are hollow"). Taking the
+    # bottom disc away in pass 257 left the turned part open, and an open shell's normals can come out facing in:
+    # Roblox then drew the inside of the column and culled the outside. The turned part starts 0.4 down inside the
+    # plinth and is closed there, where its disc cannot fight the plinth's top face.
+    profile = [(plinth_top - 0.4, 1.20, False)]
+    steps = 8
+    for s in range(steps + 1):              # the lower torus, a half round 0.8 high
+        t = s / steps * math.pi
+        profile.append((plinth_top + 0.4 - 0.4 * math.cos(t), 1.20 + 0.15 * math.sin(t), False))
+    profile.append((plinth_top + 0.9, 1.17, False))         # fillet
+    for s in range(1, steps):               # the scotia, a hollow between the two rolls
+        t = s / steps
+        profile.append((plinth_top + 0.9 + 0.45 * t, 1.17 - 0.06 * t - 0.07 * math.sin(t * math.pi), False))
+    profile.append((plinth_top + 1.35, 1.11, False))        # fillet
+    for s in range(1, steps // 2 + 1):      # the upper torus, smaller
+        t = s / (steps // 2) * math.pi
+        profile.append((plinth_top + 1.35 + 0.22 - 0.22 * math.cos(t), 1.07 + 0.05 * math.sin(t), False))
+    profile.append((plinth_top + 1.9, 1.0, True))           # the shaft starts
     shaft_from = plinth_top + 1.9
     shaft_to = HEIGHT * 0.80
     stations = 10
@@ -367,8 +382,12 @@ def build_column():
         for j in range(around):
             k = (j + 1) % around
             bm.faces.new((lower[j], lower[k], upper[k], upper[j]))
+    # THE DISC UNDER IT, SUNK (passes 257 and 258). It once lay exactly on the plinth's top face and the two fought
+    # (the zig-zag crescent round every column's foot); now it is 0.4 down inside the plinth, and closes the shell.
     for k in range(1, around - 1):
         bm.faces.new((rings[0][0], rings[0][k + 1], rings[0][k]))
+    # Everything so far is turned; the two square blocks come after (see the UVs below).
+    turned = len(bm.faces)
 
     def block(half, z0, z1):
         """A square member: the plinth at the bottom, the abacus at the top."""
@@ -384,7 +403,52 @@ def build_column():
     block(radius * 1.45, 0.0, plinth_top)
     # The abacus carries the ceiling, so it runs to the full height of the order.
     block(radius * 1.52, shaft_to + 2.35, HEIGHT)
-    return finish(bm, "Hall_Column")
+    obj = finish(bm, "Hall_Column")
+
+    # ===== THE TILES WRAPPED ROUND IT (the two-hundred-and-fifty-seventh pass, "fix the column bases too") =====
+    #
+    # finish() maps every face flat from whichever axis it faces most. On a round column that tears the tile grid at
+    # every eighth of a turn into zig-zag seams, and on the base's roll and hollow -- faces that lean half up, half out
+    # -- it smeared the tiles into a curling crescent. The turned part is mapped as a turned thing is tiled: round it
+    # by the angle (at the shaft's radius, so the joints run straight up through base, shaft and capital) and up it by
+    # the distance along its own profile, so the roll and the hollow carry whole tiles over their curve. The plinth and
+    # abacus are square and keep finish()'s mapping. And it is smooth-shaded, so the flutes and the base's roll are
+    # curves rather than forty flat facets.
+    mesh = obj.data
+    # FACING OUT, MEASURED (pass 258, "the columns are hollow"). The turned part is open at its top, under the
+    # abacus, so finish()'s recalculation has nothing to go on and turned all 960 of its side faces inward: Roblox
+    # drew the inside of every column and culled the outside, and you looked into a hollow tube. Counted here and
+    # turned the right way round, rather than trusted.
+    inward = 0
+    for poly in mesh.polygons[:turned]:
+        c = poly.center
+        if abs(poly.normal.z) < 0.7 and c.x * poly.normal.x + c.y * poly.normal.y < 0:
+            inward += 1
+    if inward > turned // 2:
+        for poly in mesh.polygons[:turned]:
+            poly.flip()
+    along = {}
+    travelled = 0.0
+    previous = None
+    for z, r, _ in profile:
+        if previous is not None:
+            travelled += math.hypot(z - previous[0], radius * (r - previous[1]))
+        along[round(z, 4)] = travelled
+        previous = (z, r)
+    uv = mesh.uv_layers.active.data
+    for poly in mesh.polygons[:turned]:
+        poly.use_smooth = True
+        angles = []
+        for loop_index in poly.loop_indices:
+            co = mesh.vertices[mesh.loops[loop_index].vertex_index].co
+            angles.append(math.atan2(co.y, co.x) % math.tau)
+        # A face across the seam has corners either side of a whole turn; bring them onto one side.
+        if max(angles) - min(angles) > math.pi:
+            angles = [a + math.tau if a < math.pi else a for a in angles]
+        for loop_index, angle in zip(poly.loop_indices, angles):
+            co = mesh.vertices[mesh.loops[loop_index].vertex_index].co
+            uv[loop_index].uv = (angle * radius / BAY, along.get(round(co.z, 4), co.z) / BAY)
+    return obj
 
 
 def build_vault():

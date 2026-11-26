@@ -631,6 +631,11 @@ local DECO = {
 	Color3.fromRGB(246, 242, 234),
 }
 local TRIM = Color3.fromRGB(252, 250, 244)
+-- Awnings and signs on the hotels (decoHotel).
+local UMBRELLA_BRIGHT = {
+	Color3.fromRGB(240, 110, 110), Color3.fromRGB(255, 186, 80), Color3.fromRGB(80, 184, 222),
+	Color3.fromRGB(120, 200, 150), Color3.fromRGB(230, 130, 200),
+}
 
 local function decoHotel(parent: Instance, at: CFrame, width: number, depth: number, height: number)
 	local body = DECO[rng:NextInteger(1, #DECO)]
@@ -650,6 +655,32 @@ local function decoHotel(parent: Instance, at: CFrame, width: number, depth: num
 		at * CFrame.new(0, (height + fin) / 2, -depth * 0.3), TRIM, Enum.Material.SmoothPlastic)
 	pillar(parent, math.max(4, width * 0.035), fin * 0.5,
 		at * CFrame.new(0, height + fin * 1.25, -depth * 0.3), TRIM, Enum.Material.Metal)
+	-- LIVED IN (the two-hundred-and-fifty-fourth pass): an awning over the ground floor in a bright colour, a sign down
+	-- one corner on some, and on the roof a pool with a white rim or the plant and tanks every roof has.
+	local awning = UMBRELLA_BRIGHT[rng:NextInteger(1, #UMBRELLA_BRIGHT)]
+	piece(parent, Vector3.new(width * 0.86, 3, 26), at * CFrame.new(0, 30, -depth / 2 - 12) * CFrame.Angles(math.rad(14), 0, 0),
+		awning, Enum.Material.Fabric)
+	if rng:NextNumber() < 0.45 then
+		local side = if rng:NextNumber() < 0.5 then -1 else 1
+		piece(parent, Vector3.new(16, height * 0.42, 6), at * CFrame.new(side * width * 0.44, height * 0.6, -depth / 2 - 4),
+			TRIM, Enum.Material.SmoothPlastic)
+		piece(parent, Vector3.new(11, height * 0.38, 7), at * CFrame.new(side * width * 0.44, height * 0.6, -depth / 2 - 5),
+			awning, Enum.Material.SmoothPlastic)
+	end
+	if rng:NextNumber() < 0.5 then
+		piece(parent, Vector3.new(width * 0.5, 4, depth * 0.42), at * CFrame.new(0, height + 2, depth * 0.18), TRIM,
+			Enum.Material.SmoothPlastic)
+		piece(parent, Vector3.new(width * 0.44, 4.4, depth * 0.34), at * CFrame.new(0, height + 2.4, depth * 0.18),
+			Color3.fromRGB(96, 196, 222), Enum.Material.SmoothPlastic)
+	else
+		for _ = 1, rng:NextInteger(2, 4) do
+			local box = rng:NextNumber(12, 24)
+			piece(parent, Vector3.new(box, box * 0.7, box), at * CFrame.new(rng:NextNumber(-0.35, 0.35) * width,
+				height + box * 0.35, rng:NextNumber(0, 0.4) * depth), Color3.fromRGB(196, 198, 204), Enum.Material.Metal)
+		end
+		pillar(parent, 18, 22, at * CFrame.new(width * 0.3, height + 11, depth * 0.3), Color3.fromRGB(170, 140, 110),
+			Enum.Material.Wood)
+	end
 end
 
 -- === Speed, not period ===
@@ -1337,6 +1368,8 @@ local function propTemplate(name: string): BasePart?
 end
 
 -- Places a modelled prop, or returns false so the caller can fall back.
+-- The prop placed last, so a caller can finish it (the umbrellas in plain colours, beachLife).
+local lastProp: BasePart? = nil
 local function prop(parent: Instance, name: string, at: CFrame, scale: number, colour: Color3?): boolean
 	local template = propTemplate(name)
 	if not template then
@@ -1368,6 +1401,7 @@ local function prop(parent: Instance, name: string, at: CFrame, scale: number, c
 		copy.Color = colour
 	end
 	copy.Parent = parent
+	lastProp = copy
 	return true
 end
 
@@ -1442,6 +1476,335 @@ local function levelCentre(): Vector3
 end
 
 
+-- ===== MORE LIFE ON THE SHORE (the two-hundred-and-fifty-fourth pass, "polish the background of City Shore even more,
+-- add more detail") =====
+--
+-- Seen from the level the beach was a bare strip of sand, the land behind the hotels was empty ground with a few flat
+-- green discs for parks, and out to sea the water ran into a white haze with nothing in it. What a seaside town has and
+-- this did not: people's things on the sand, trees, houses up the slope, boats, the lighthouse at the harbour mouth,
+-- islands on the horizon. All of it at the backdrop's own size (palms are 150 studs; the hotels 150 to 340), or it
+-- would vanish from 700 up.
+
+-- How high the beach is `r` studs out at this stretch of shore: it ramps from 40 under the water at the wet edge up to
+-- the land's top at the promenade (land()).
+local function beachY(shore: number, r: number): number
+	local low = -40
+	return low + (r - (shore - BEACH_WET)) / (BEACH_WET + BEACH_DRY) * (LAND_TOP - low)
+end
+
+-- A prop scaled to stand `size` studs across (or tall, with `byHeight`), whatever size it was exported at.
+local function propSized(parent: Instance, name: string, at: CFrame, size: number, colour: Color3?, byHeight: boolean?): boolean
+	local wide, tall = propSpan(name .. "_Detail")
+	if wide <= 0 then
+		wide, tall = propSpan(name)
+	end
+	if wide <= 0 or tall <= 0 then
+		return false
+	end
+	local scale = size / (if byHeight then tall else wide)
+	return propBest(parent, name, at, scale, colour)
+end
+
+local UMBRELLA_COLOURS = {
+	Color3.fromRGB(250, 120, 120), Color3.fromRGB(255, 196, 92), Color3.fromRGB(96, 196, 230),
+	Color3.fromRGB(150, 220, 160), Color3.fromRGB(240, 150, 210), Color3.fromRGB(255, 250, 240),
+}
+
+-- THE BEACH, busy: umbrellas in loose rows on the dry sand, a beach hut or a cabana now and then by the promenade,
+-- surfboards stood up, flags, sandcastles at the water's edge, and a lifeguard's chair every so often.
+local function beachLife(parent: Instance)
+	local edge = CITY_HALF - math.rad(2)
+	local offset = -edge
+	local sinceChair = 99
+	while offset <= edge do
+		local shore = shoreAt(offset)
+		if shore then
+			local angle = cityBearing + offset
+			local out = Vector3.new(math.cos(angle), 0, math.sin(angle))
+			local function at(r: number): CFrame
+				local spot = out * r
+				return CFrame.new(spot.X, beachY(shore, r), spot.Z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+			end
+			-- Umbrellas: one to three across the dry sand.
+			for _ = 1, rng:NextInteger(1, 3) do
+				local colour = UMBRELLA_COLOURS[rng:NextInteger(1, #UMBRELLA_COLOURS)]
+				lastProp = nil
+				-- Half of them in a plain colour: the modelled umbrella's own stripes made the whole beach one red and white.
+				if propSized(parent, "Backdrop_Umbrella", at(shore + rng:NextNumber(40, 130)), rng:NextNumber(34, 48), colour)
+					and lastProp and lastProp:IsA("MeshPart") and rng:NextNumber() < 0.55
+				then
+					(lastProp :: MeshPart).TextureID = ""
+					lastProp.Color = colour
+				end
+			end
+			local roll = rng:NextNumber()
+			if roll < 0.14 then
+				propSized(parent, "Backdrop_BeachHut", at(shore + BEACH_DRY - 30), rng:NextNumber(46, 60), pick())
+			elseif roll < 0.24 then
+				propSized(parent, "Backdrop_Cabana", at(shore + rng:NextNumber(110, 140)), rng:NextNumber(44, 56), UMBRELLA_COLOURS[rng:NextInteger(1, #UMBRELLA_COLOURS)])
+			elseif roll < 0.36 then
+				propSized(parent, "Backdrop_Surfboard", at(shore + rng:NextNumber(60, 120)), rng:NextNumber(26, 34), pick(), true)
+			elseif roll < 0.46 then
+				propSized(parent, "Backdrop_Sandcastle", at(shore + rng:NextNumber(5, 30)), rng:NextNumber(24, 34))
+			elseif roll < 0.54 then
+				propSized(parent, "Backdrop_BeachFlags", at(shore + rng:NextNumber(30, 90)), rng:NextNumber(40, 56), nil, true)
+			end
+			sinceChair += 1
+			if sinceChair >= 7 then
+				sinceChair = 0
+				local y = beachY(shore, shore + 20)
+				propSized(parent, "Backdrop_LifeguardChair",
+					CFrame.lookAt(out * (shore + 20) + Vector3.new(0, y, 0), Vector3.new(0, y, 0)), 64, TRIM, true)
+			end
+		end
+		offset += math.rad(1.7) * rng:NextNumber(0.8, 1.2)
+	end
+	-- THE PALS IN SAND (pass 264: the pals as a structure on every level): three big sand sculptures up the beach from the water,
+	-- spread along the beach, on low heaps of sand and turned to the sea, the way a beach has its sand-sculpture contest.
+	-- Their own numbers (not the beach's rng), so nothing else on the beach moves.
+	local PetStatues = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PetStatues")) :: any
+	local sculpt = Random.new(264)
+	for index, pal in ipairs({ "Pal_Lava", "Pal_Jelly", "Pal_Bee" }) do
+		local along = -edge * 0.6 + (index - 1) * edge * 0.6 + sculpt:NextNumber(-0.02, 0.02)
+		local shore = shoreAt(along)
+		if shore then
+			local angle = cityBearing + along
+			local out = Vector3.new(math.cos(angle), 0, math.sin(angle))
+			-- (Seen in play: at 28 to 38 up from the shore line the sea's swell covered the heap. Up on the dry sand.)
+			local r = shore + sculpt:NextNumber(72, 82)
+			local foot = out * r + Vector3.new(0, beachY(shore, r) - 1.2, 0)
+			PetStatues.statue(parent, pal, CFrame.lookAt(foot, Vector3.new(0, foot.Y, 0)), sculpt:NextNumber(28, 34), 4, "sand")
+		end
+	end
+end
+
+-- Greens for the trees (the modelled tree is untextured and came out grey-white).
+local function treeGreen(): Color3
+	return Color3.fromRGB(96, 150, 92):Lerp(Color3.fromRGB(150, 190, 120), rng:NextNumber())
+end
+
+-- TREES in a park.
+local function parkTrees(parent: Instance, x: number, z: number, wide: number)
+	for _ = 1, math.clamp(math.floor(wide / 55), 3, 9) do
+		local a = rng:NextNumber(0, math.pi * 2)
+		local r = math.sqrt(rng:NextNumber()) * wide * 0.42
+		propSized(parent, "Backdrop_Tree", CFrame.new(x + math.cos(a) * r, LAND_TOP + 4, z + math.sin(a) * r)
+			* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0), rng:NextNumber(70, 110), treeGreen(), true)
+	end
+end
+
+-- HOUSES up the slope behind the hotels, under the towers, most with a tree; and street trees behind the promenade.
+local function townBehind(parent: Instance)
+	for _ = 1, 60 do
+		local wide = rng:NextNumber(70, 110)
+		local x, z = landSpot(1600, 2700, BEACH_DRY + PROMENADE + 260, wide * 0.7, 30)
+		if x and z then
+			local facing = CFrame.lookAt(Vector3.new(x, LAND_TOP, z), Vector3.new(0, LAND_TOP, 0))
+				* CFrame.Angles(0, rng:NextNumber(-0.3, 0.3), 0)
+			if propSized(parent, "Backdrop_House", facing, wide, pick()) then
+				occupy(x, z, wide * 0.6)
+				if rng:NextNumber() < 0.7 then
+					local side = if rng:NextNumber() < 0.5 then -1 else 1
+					propSized(parent, "Backdrop_Tree", facing * CFrame.new(side * wide * 0.75, 0, wide * 0.2),
+						rng:NextNumber(60, 95), treeGreen(), true)
+				end
+			end
+		end
+	end
+	local edge = CITY_HALF - math.rad(3)
+	local offset = -edge
+	while offset <= edge do
+		local shore = shoreAt(offset)
+		if shore then
+			local angle = cityBearing + offset
+			local r = shore + BEACH_DRY + PROMENADE + 20
+			local x, z = math.cos(angle) * r, math.sin(angle) * r
+			if clearOf(x, z, 30) then
+				propSized(parent, "Backdrop_Tree", CFrame.new(x, LAND_TOP, z) * CFrame.Angles(0, rng:NextNumber(0, 6.28), 0),
+					rng:NextNumber(55, 80), treeGreen(), true)
+			end
+		end
+		offset += math.rad(3.1) * rng:NextNumber(0.8, 1.2)
+	end
+end
+
+-- A LIGHTHOUSE: a plinth, a tapering tower in red and white bands, a gallery, a glazed lamp room with a low warm light
+-- in it, and a dark cap. `at` is its foot.
+local LIGHTHOUSE_RED = Color3.fromRGB(214, 86, 82)
+local function lighthouse(parent: Instance, at: CFrame, tall: number)
+	pillar(parent, tall * 0.34, tall * 0.08, at * CFrame.new(0, tall * 0.04, 0), QUAY, Enum.Material.Concrete)
+	local bands = 6
+	local base = tall * 0.08
+	for k = 1, bands do
+		local frac = (k - 0.5) / bands
+		local d = tall * (0.2 - 0.07 * frac)
+		pillar(parent, d, tall * 0.62 / bands + 0.5, at * CFrame.new(0, base + tall * 0.62 * frac, 0),
+			if k % 2 == 1 then LIGHTHOUSE_RED else TRIM, Enum.Material.SmoothPlastic)
+	end
+	local top = base + tall * 0.62
+	pillar(parent, tall * 0.19, tall * 0.03, at * CFrame.new(0, top + tall * 0.015, 0), Color3.fromRGB(60, 62, 70),
+		Enum.Material.Metal)
+	local lamp = pillar(parent, tall * 0.1, tall * 0.11, at * CFrame.new(0, top + tall * 0.085, 0),
+		Color3.fromRGB(255, 236, 180), Enum.Material.Glass)
+	lamp.Transparency = 0.25
+	local glow = Instance.new("PointLight")
+	glow.Color = Color3.fromRGB(255, 226, 160)
+	glow.Brightness = 0.8
+	glow.Range = 40
+	glow.Shadows = false
+	glow.Parent = lamp
+	local cap = piece(parent, Vector3.new(tall * 0.13, tall * 0.09, tall * 0.13), at * CFrame.new(0, top + tall * 0.17, 0),
+		Color3.fromRGB(70, 74, 86), Enum.Material.Metal)
+	local dome = Instance.new("SpecialMesh")
+	dome.MeshType = Enum.MeshType.Sphere
+	dome.Parent = cap
+end
+
+-- One at each harbour wall's mouth, where the wall meets the bay.
+local function harbourLights(parent: Instance)
+	local edge = CITY_HALF + math.rad(2)
+	for _, side in ipairs({ -1, 1 }) do
+		local angle = cityBearing + side * edge
+		local along = Vector3.new(math.cos(angle), 0, math.sin(angle))
+		local seaward = Vector3.new(-along.Z, 0, along.X) * side
+		local foot = along * (SHORE_NEAR - BEACH_WET + 40) + seaward * 20 + Vector3.new(0, LAND_TOP + 6, 0)
+		lighthouse(parent, CFrame.new(foot), rng:NextNumber(200, 240))
+	end
+end
+
+-- SAILING BOATS out on the open sea: a hull, a deck, a mast and a white sail, heeled a little.
+local HULLS = { Color3.fromRGB(250, 248, 242), Color3.fromRGB(40, 66, 110), Color3.fromRGB(214, 86, 82) }
+local function sailboat(parent: Instance, x: number, z: number, length: number)
+	local heading = rng:NextNumber(0, math.pi * 2)
+	-- onWave's X runs along the heading and its Y is the water's up.
+	local hull = onWave(x, z, heading, 2) * CFrame.Angles(rng:NextNumber(-0.12, 0.12), 0, 0)
+	piece(parent, Vector3.new(length, length * 0.16, length * 0.3), hull * CFrame.new(0, length * 0.05, 0),
+		HULLS[rng:NextInteger(1, #HULLS)], Enum.Material.SmoothPlastic)
+	piece(parent, Vector3.new(length * 0.7, length * 0.04, length * 0.24), hull * CFrame.new(-length * 0.05, length * 0.15, 0),
+		Color3.fromRGB(196, 160, 118), Enum.Material.Wood)
+	local mastTall = length * 1.25
+	pillar(parent, math.max(1.5, length * 0.035), mastTall, hull * CFrame.new(length * 0.08, length * 0.15 + mastTall / 2, 0),
+		Color3.fromRGB(230, 226, 220), Enum.Material.Metal)
+	-- The sail: a wedge in the plane of the hull, its tall edge on the mast, sloping down toward the stern.
+	local sail = Instance.new("WedgePart")
+	sail.Size = Vector3.new(length * 0.03 + 0.6, mastTall * 0.86, length * 0.62)
+	sail.CFrame = hull * CFrame.new(length * 0.08 - length * 0.31, length * 0.2 + mastTall * 0.43, 0)
+		* CFrame.Angles(0, math.pi / 2, 0)
+	-- Coloured: white sails were lost against the white of the haze they stand in.
+	sail.Color = UMBRELLA_COLOURS[rng:NextInteger(1, #UMBRELLA_COLOURS)]
+	sail.Material = Enum.Material.Fabric
+	sail.Anchored, sail.CanCollide, sail.CanTouch, sail.CanQuery, sail.CastShadow = true, false, false, false, false
+	sail.Parent = parent
+end
+
+local function boats(parent: Instance)
+	for _ = 1, 16 do
+		local length = rng:NextNumber(80, 125)
+		local x, z = waterSpot(1250, 2400, length, 40, true)
+		if x and z then
+			sailboat(parent, x, z, length)
+			occupy(x, z, length * 0.6)
+		end
+	end
+	-- And a few dinghies in the bay.
+	for _ = 1, 6 do
+		local x, z = waterSpot(820, 1080, 30, 30)
+		if x and z then
+			propSized(parent, "Backdrop_Dinghy", afloat(CFrame.new(x, 0, z) * CFrame.Angles(0, rng:NextNumber(0, 6.28), 0), 3),
+				rng:NextNumber(34, 46), pick())
+		end
+	end
+end
+
+-- ISLANDS ON THE HORIZON, out on the open sea: green humps going blue in the haze, each on a rim of sand, two of them
+-- with a lighthouse. Something for the eye to land on where the water met a flat white wall.
+local function islands(parent: Instance)
+	for k = 1, 7 do
+		-- (Within the haze, not beyond it: past about 3500 the white takes everything, and they were put at 4100 first.)
+		local wide = rng:NextNumber(480, 980)
+		local x, z = waterSpot(2300, 3400, wide * 0.4, 160, true)
+		if x and z then
+			local rise = wide * rng:NextNumber(0.16, 0.26)
+			local tall = math.min(rise * 2, 2048)
+			local hill = piece(parent, Vector3.new(math.min(wide, 2048), tall, math.min(wide * rng:NextNumber(0.55, 0.8), 2048)),
+				CFrame.new(x, rise - tall / 2, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0),
+				Color3.fromRGB(150, 182, 168):Lerp(Color3.fromRGB(170, 190, 204), rng:NextNumber(0, 0.6)),
+				Enum.Material.SmoothPlastic)
+			hill.Name = "Hill"
+			local mesh = Instance.new("SpecialMesh")
+			mesh.MeshType = Enum.MeshType.Sphere
+			mesh.Parent = hill
+			pillar(parent, wide * 1.08, 10, CFrame.new(x, 3, z), Color3.fromRGB(236, 222, 186), Enum.Material.Sand)
+			occupy(x, z, wide * 0.6)
+			if k <= 2 then
+				lighthouse(parent, CFrame.new(x + wide * 0.3, rise * 0.5, z), rng:NextNumber(170, 210))
+			end
+		end
+	end
+end
+
+-- AVENUES (the two-hundred-and-fifty-fifth pass, "polish it a bit more"): seen from the run the ground between the towers
+-- was one flat grey. Nine roads run inland from the promenade to the hills, grey with a dashed white line down the middle
+-- and trees along them, so the city has a grain to it; the ground they cross is claimed first, so the towers stand
+-- beside them and not on them.
+-- (Dark enough to read against the pale ground from the run: a mid grey on a light one was not there at all.)
+local ROAD = Color3.fromRGB(104, 106, 120)
+local function avenues(parent: Instance)
+	local count = 9
+	for k = 1, count do
+		local offset = -CITY_HALF * 0.88 + (k - 0.5) * (CITY_HALF * 1.76 / count) + rng:NextNumber(-0.03, 0.03)
+		local shore = shoreAt(offset)
+		if shore then
+			local angle = cityBearing + offset
+			local out = Vector3.new(math.cos(angle), 0, math.sin(angle))
+			local from = shore + BEACH_DRY + PROMENADE
+			local stop = LAND_FAR - 900
+			local r = from
+			local side = 1
+			while r < stop do
+				local to = math.min(r + 320, stop)
+				local mid = out * ((r + to) / 2) + Vector3.new(0, LAND_TOP + 0.6, 0)
+				local along = CFrame.lookAt(mid, mid + out)
+				piece(parent, Vector3.new(62, 1, to - r + 2), along, ROAD, Enum.Material.SmoothPlastic)
+				piece(parent, Vector3.new(4, 1.2, (to - r) * 0.4), along, TRIM, Enum.Material.SmoothPlastic)
+				for along2 = r, to, 130 do
+					occupy(out.X * along2, out.Z * along2, 40)
+				end
+				-- A tree to one side of each length, alternating.
+				local treeAt = along * CFrame.new(side * 48, -0.6, rng:NextNumber(-100, 100))
+				propSized(parent, "Backdrop_Tree", treeAt * CFrame.Angles(0, rng:NextNumber(0, 6.28), 0), rng:NextNumber(55, 80), treeGreen(), true)
+				side = -side
+				r = to
+			end
+		end
+	end
+end
+
+-- LOW-RISE: the ordinary four- and eight-storey blocks a city is mostly made of, in among the towers, pastel with a white
+-- cornice and something on the roof. Placed after the towers and facades, into what they leave.
+local function lowRise(parent: Instance)
+	for _ = 1, 420 do
+		local wide = rng:NextNumber(70, 150)
+		local x, z = landSpot(1600, 4400, 420, wide * 0.5, 40)
+		if x and z then
+			local tall = rng:NextNumber(40, 140)
+			local deep = wide * rng:NextNumber(0.6, 1)
+			local at = CFrame.lookAt(Vector3.new(x, LAND_TOP, z), Vector3.new(0, LAND_TOP, 0))
+				* CFrame.Angles(0, rng:NextNumber(-0.25, 0.25), 0)
+			local body = DECO[rng:NextInteger(1, #DECO)]
+			useVariant(piece(parent, Vector3.new(wide, tall, deep), at * CFrame.new(0, tall / 2, 0), body, Enum.Material.Concrete),
+				CONCRETE_VARIANT)
+			piece(parent, Vector3.new(wide + 4, 4, deep + 4), at * CFrame.new(0, tall + 1, 0), TRIM, Enum.Material.SmoothPlastic)
+			if rng:NextNumber() < 0.5 then
+				local box = rng:NextNumber(12, 22)
+				piece(parent, Vector3.new(box, box * 0.7, box), at * CFrame.new(rng:NextNumber(-0.3, 0.3) * wide, tall + 3 + box * 0.35,
+					rng:NextNumber(-0.2, 0.3) * deep), Color3.fromRGB(196, 198, 204), Enum.Material.Metal)
+			end
+			occupy(x, z, wide * 0.6)
+		end
+	end
+end
+
 local function build(): Model
 	local model = Instance.new("Model")
 	model.Name = "Backdrop"
@@ -1466,6 +1829,7 @@ local function build(): Model
 	land(model)
 	quays(model)
 	hills(model)
+	harbourLights(model)
 
 	-- Parks first, so the towers leave room for them: green in among the pastel, which is most of
 	-- what makes a skyline read as a place people live rather than a stack of blocks.
@@ -1475,6 +1839,7 @@ local function build(): Model
 		if x and z then
 			pillar(model, wide, 6, CFrame.new(x, LAND_TOP + 2, z), PARK, Enum.Material.SmoothPlastic)
 			occupy(x, z, wide * 0.5)
+			parkTrees(model, x, z, wide)
 		end
 	end
 
@@ -1524,6 +1889,12 @@ local function build(): Model
 		end
 	end
 
+	-- The beach and the streets, busy (beachLife, townBehind).
+	beachLife(model)
+	townBehind(model)
+	-- Avenues inland, claimed before the towers so they keep clear of them (avenues).
+	avenues(model)
+
 	-- === The city behind them: three bands of towers, deeper and taller going back ===
 	--
 	-- Denser than the first version's 46 all the way round, because they only stand on the
@@ -1540,6 +1911,8 @@ local function build(): Model
 			facade(model, CFrame.lookAt(Vector3.new(x, 0, z), Vector3.new(0, 0, 0)), width, rng:NextNumber(750, 1600))
 		end
 	end
+	-- And the low streets filling the ground the towers leave (lowRise).
+	lowRise(model)
 
 	-- === The aquapark, in the bay ===
 	--
@@ -1704,6 +2077,10 @@ local function build(): Model
 		end
 	end
 
+	-- Boats on the water, and islands on the horizon.
+	boats(model)
+	islands(model)
+
 	-- The wave mesh is looked up ONCE here rather than per tile, and nil is fine: sea() falls
 	-- back to flat plates. The sea runs under the land too; the land hides it.
 	sea(model, 6200, 1600, propTemplate("Sea_Tile"), propTemplate("Sea_Foam"))
@@ -1748,7 +2125,7 @@ end
 -- Stamping the model and comparing on build turns "delete workspace.Backdrop by hand and
 -- remember to do it every time" into something that happens on its own. Same trap as
 -- ServerStorage.ChunkTemplates, and the same fix.
-local BACKDROP_VERSION = 6
+local BACKDROP_VERSION = 14 -- 14: the pals in sand on the beach (pass 264)
 
 -- Built once per server, AFTER the level exists so its centre can be measured. Safe to call
 -- more than once: a second call with a matching version is a no-op rather than a second
@@ -1833,5 +2210,5 @@ function BackdropService.waterLevelAt(x: number, z: number): number?
 	return pivot.Y + height
 end
 
-BackdropService.STAMP = "74db258b"
+BackdropService.STAMP = "2f93d151"
 return BackdropService

@@ -175,6 +175,110 @@ function BackRoomsService.secretShot(): (CFrame?, Vector3?, BasePart?)
 	return eye, focus, plate
 end
 
+-- FLUFF (pass 268, from your notes: "a secret pet that can be found somewhere in the back rooms"). In the far corner of
+-- the bottom-left room, low in the west wall, a mouse hole in the skirting with a faint warm light inside it, and a dust
+-- bunny peeking out of it, breathing. Hold to pick it up: the first time, it is yours (Bootstrap hands it to
+-- EconomyService.foundDustBunny, through setDustHandler). Never pointed to anywhere; the shop only says it is hiding.
+local DUST = { x = 1, y = 33 } -- the tile in front of the hole; the hole is in that tile's west wall
+local dustHandler: ((Player) -> ())? = nil
+function BackRoomsService.setDustHandler(fn: (Player) -> ())
+	dustHandler = fn
+end
+
+local function buildDust(made: Instance)
+	local floor = tileAt(DUST.x, DUST.y, 0)
+	local face = floor - Vector3.new(TILE / 2, 0, 0) -- the wall's face, the room to its +X
+	local out = Vector3.new(1, 0, 0)
+	local function flat(name: string, size: Vector3, cf: CFrame, colour: Color3, material: Enum.Material): Part
+		local p = part(name, size, cf, colour, material, made)
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.CastShadow = false
+		return p
+	end
+	-- The hole: an arch of dark, a lintel of skirting over it, and a crumb of plaster on the carpet.
+	local holeAt = CFrame.lookAt(face + out * 0.02, face + out * 2)
+	flat("MouseHole", Vector3.new(1.7, 1.0, 0.04), holeAt * CFrame.new(0, 0.5, 0), Color3.fromRGB(14, 10, 8),
+		Enum.Material.SmoothPlastic)
+	local arch = flat("MouseHoleArch", Vector3.new(0.04, 1.7, 1.7), holeAt * CFrame.new(0, 1.0, 0) * CFrame.Angles(0, math.pi / 2, 0),
+		Color3.fromRGB(14, 10, 8), Enum.Material.SmoothPlastic)
+	arch.Shape = Enum.PartType.Cylinder
+	for k, at in ipairs({ Vector3.new(0.35, 0.03, 1.15), Vector3.new(0.6, 0.03, -1.05), Vector3.new(0.25, 0.03, 1.5) }) do
+		flat("MouseHoleCrumb", Vector3.new(0.18 + 0.05 * k, 0.06, 0.14 + 0.04 * k), CFrame.new(face + at), WALL, Enum.Material.Plaster)
+	end
+	local glowHost = flat("MouseHoleGlow", Vector3.new(0.2, 0.2, 0.2), CFrame.new(face - out * 0.3 + Vector3.new(0, 0.5, 0)), WALL,
+		Enum.Material.SmoothPlastic)
+	glowHost.Transparency = 1
+	local glow = Instance.new("PointLight")
+	glow.Color = Color3.fromRGB(255, 214, 160)
+	glow.Brightness = 0.45
+	glow.Range = 5
+	glow.Shadows = false
+	glow.Parent = glowHost
+	-- The bunny, peeking out (Assets.Cosmetics.Pal_Dust, the pal itself, a little smaller), its face to the room.
+	local assets = game:GetService("ReplicatedStorage"):FindFirstChild("Assets")
+	local cosmetics = assets and assets:FindFirstChild("Cosmetics")
+	local found = cosmetics and cosmetics:FindFirstChild("Pal_Dust")
+	local template = if found and found:IsA("BasePart") then found elseif found then found:FindFirstChildWhichIsA("BasePart", true) else nil
+	local host: BasePart
+	if template then
+		local bunny = template:Clone() :: BasePart
+		bunny.Name = "DustBunny"
+		bunny.Size = template.Size * (1.15 / template.Size.Y)
+		bunny.Anchored = true
+		bunny.CanCollide = false
+		bunny.CanTouch = false
+		bunny.CanQuery = true
+		bunny.Parent = made
+		host = bunny
+	else
+		-- (Without the model: a grey fluff ball.)
+		host = part("DustBunny", Vector3.new(0.9, 0.9, 0.9), CFrame.new(), Color3.fromRGB(196, 196, 206), Enum.Material.Fabric, made)
+		host.Shape = Enum.PartType.Ball
+		host.CanCollide = false
+	end
+	local rest = CFrame.lookAt(face + out * 0.75 + Vector3.new(0, host.Size.Y / 2, 0), face + out * 3 + Vector3.new(0, host.Size.Y / 2, 0))
+	host.CFrame = rest
+	local hush = game:GetService("SoundService"):FindFirstChild("MaterialSounds")
+	local squeak = hush and hush:FindFirstChild("cloudHush_2")
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "DustPrompt"
+	prompt.ActionText = "Pick up"
+	prompt.ObjectText = "A dust bunny"
+	prompt.HoldDuration = 0.8
+	prompt.MaxActivationDistance = 7
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = host
+	prompt.Triggered:Connect(function(player: Player)
+		if squeak and squeak:IsA("Sound") then
+			local s = squeak:Clone()
+			s.Volume = 0.6
+			s.PlaybackSpeed = 1.25
+			s.Parent = host
+			s:Play()
+			game:GetService("Debris"):AddItem(s, 3)
+		end
+		local give = dustHandler
+		if give then
+			local ok, err = pcall(give, player)
+			if not ok then
+				warn("BackRoomsService: Fluff: " .. tostring(err))
+			end
+		end
+	end)
+	-- Breathing, and now and then a little twitch toward the room.
+	task.spawn(function()
+		while host.Parent do
+			local t = os.clock()
+			local breath = 1 + 0.035 * math.sin(t * 2.3)
+			local peek = math.max(0, math.sin(t * 0.37)) ^ 8 * 0.18
+			host.CFrame = rest * CFrame.new(0, (breath - 1) * host.Size.Y * 0.5, -peek) * CFrame.Angles(0, 0.15 * math.sin(t * 0.6), 0)
+			task.wait(0.05)
+		end
+	end)
+end
+
 function BackRoomsService.isBuilt(): boolean
 	return folder ~= nil and (folder :: Folder).Parent ~= nil
 end
@@ -993,6 +1097,11 @@ function BackRoomsService.build(onExit: (Player) -> ())
 
 	-- THINGS THE HOLD HAS KEPT, sunk into the walls, the carpet and the ceiling.
 	sinkThings(made)
+	-- FLUFF, in its mouse hole (pass 268).
+	local dustOk, dustErr = pcall(buildDust, made)
+	if not dustOk then
+		warn("BackRoomsService: Fluff's hole: " .. tostring(dustErr))
+	end
 
 	-- THE PLACE LOOKED AT CLOSELY (the hundred-and-third pass, from your notes: "improve the looks of backrooms
 	-- greatly"): the ceiling's T-bar grid, every tile's edge, held up against the ceiling; a skirting board along the
@@ -1021,7 +1130,9 @@ function BackRoomsService.build(onExit: (Player) -> ())
 			if charAt(x, y) == "." or charAt(x, y) == "S" then
 				for _, step in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
 					-- (Not across the door you came in by, behind where you arrive.)
-					if charAt(x + step[1], y + step[2]) == "#" and not (charAt(x, y) == "S" and step[2] == -1) then
+					-- (Nor across Fluff's mouse hole, pass 268: the skirting is cut for it.)
+					local hole = x == DUST.x and y == DUST.y and step[1] == -1
+					if charAt(x + step[1], y + step[2]) == "#" and not (charAt(x, y) == "S" and step[2] == -1) and not hole then
 						local out = Vector3.new(-step[1], 0, -step[2])
 						local face = tileAt(x, y, 0) + Vector3.new(step[1], 0, step[2]) * (TILE / 2)
 						local across = Vector3.new(out.Z, 0, -out.X)
@@ -1232,5 +1343,5 @@ function BackRoomsService.build(onExit: (Player) -> ())
 	print(("BackRoomsService: built, %d lights, %d parts."):format(#lights, #made:GetDescendants()))
 end
 
-BackRoomsService.STAMP = "2b79ce56"
+BackRoomsService.STAMP = "5e2bfadd"
 return BackRoomsService

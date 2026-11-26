@@ -172,6 +172,11 @@ local ITEMS: { Item } = {
 		price = 850, colour = rgb(226, 236, 255), accent = rgb(60, 80, 140) },
 	{ id = "PalLava", tab = "Pals", kind = "pal", name = "Cinder", blurb = "A warm lava rock that glows and throws sparks",
 		price = 1200, colour = rgb(255, 150, 70), accent = rgb(90, 30, 12) },
+	-- FOUND, NEVER SOLD (pass 268, from your notes: "a secret pet that can be found somewhere in the back rooms"): Fluff,
+	-- a dust bunny, hiding in a mouse hole in the far corner of the back rooms (BackRoomsService's DUST). Reach in to
+	-- take it home (EconomyService.foundDustBunny).
+	{ id = "PalDust", tab = "Pals", kind = "pal", name = "Fluff", blurb = "A dust bunny. Something small hides in the back rooms",
+		earn = "secret", colour = rgb(214, 214, 224), accent = rgb(58, 58, 76) },
 
 	-- EMOTES: played from the emote picker (G, D-pad right, or the pause menu), seen by everyone
 	-- (EmoteService poses them on every client; moving ends one).
@@ -282,6 +287,7 @@ ShopCatalog.REWARD = {
 	-- THE DAILY CHEST (EconomyService.claimDaily), by day of the streak; day seven's from then on while it lasts.
 	DAILY = { 20, 30, 40, 50, 60, 80, 120 },
 	CACHE = 25, -- a hidden cache found (one a level, Interactables.cache), once a save
+	DUST = 50, -- Fluff found in the back rooms (EconomyService.foundDustBunny), once a save, with the pal
 	TELEPRINTER = 75, -- the teleprinter answered YES on a creamy keyboard (EconomyService.answeredTeleprinter), once a save
 	MATERIAL = 5, -- a material stood on in a level for the first time (EconomyService.foundMaterial), once a save
 	MATERIALS_ALL = 100, -- the last of them all found, on top of its own, with the swatch trail
@@ -1097,6 +1103,7 @@ local PALS: { [string]: Pal } = {
 	PalCloud = { mesh = "Pal_Cloud", size = 2.2, motion = "drift", side = 2.2, back = 1.8, height = 3.2, follow = 2.6 },
 	PalLava = { mesh = "Pal_Lava", size = 1.5, motion = "float", side = 2.6, back = 1.2, height = 1.1, follow = 5,
 		light = rgb(255, 140, 60), sparks = true },
+	PalDust = { mesh = "Pal_Dust", size = 1.5, motion = "hop", side = 2.6, back = 1.4, follow = 6, squash = 0.34 },
 }
 
 -- What a pal is made of and how it moves (nil for anything that is not one).
@@ -1605,5 +1612,5 @@ function ShopCatalog.reward(length: string, hardcore: boolean, best: boolean, do
 	return amount
 end
 
-ShopCatalog.STAMP = "4bba8e94"
+ShopCatalog.STAMP = "0ff72774"
 return ShopCatalog

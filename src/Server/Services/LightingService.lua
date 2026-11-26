@@ -423,6 +423,26 @@ function LightingService.apply(region: string?)
 	grade.Saturation = palette.saturation or 0.05
 	grade.TintColor = palette.tint or Color3.fromRGB(255, 252, 246)
 
+	-- THE LOOK, WRITTEN DOWN (pass 266, from your note: "every darkness should stay on its own level ... after which it
+	-- will no longer apply"). A level's own client darkens the air on that screen alone (under the sea, in the murk, the
+	-- peek). Setting the same values here again sends nothing, so a darkness left on a screen stayed there in the next
+	-- place. Now what this place's air and light are meant to be is kept on Lighting, with a stamp that changes every
+	-- time, so each screen's LightGuard puts its air back and clears every other place's darkness the moment a place
+	-- is set.
+	Lighting:SetAttribute("LookRegion", region or "default")
+	Lighting:SetAttribute("LookDensity", atmosphere.Density)
+	Lighting:SetAttribute("LookOffset", atmosphere.Offset)
+	Lighting:SetAttribute("LookColor", atmosphere.Color)
+	Lighting:SetAttribute("LookDecay", atmosphere.Decay)
+	Lighting:SetAttribute("LookGlare", atmosphere.Glare)
+	Lighting:SetAttribute("LookHaze", atmosphere.Haze)
+	Lighting:SetAttribute("LookBrightness", Lighting.Brightness)
+	Lighting:SetAttribute("LookExposure", Lighting.ExposureCompensation)
+	Lighting:SetAttribute("LookClock", Lighting.ClockTime)
+	Lighting:SetAttribute("LookAmbient", Lighting.Ambient)
+	Lighting:SetAttribute("LookOutdoor", Lighting.OutdoorAmbient)
+	Lighting:SetAttribute("LookStamp", (tonumber(Lighting:GetAttribute("LookStamp")) or 0) + 1)
+
 	-- NO Technology CHECK HERE.
 	--
 	-- Lighting.Technology cannot be read by a normal script either, not just written:
@@ -432,5 +452,5 @@ function LightingService.apply(region: string?)
 	-- to deliver a reminder. It stays documented in the header instead.
 end
 
-LightingService.STAMP = "6c4e1c71"
+LightingService.STAMP = "3a4d9d6b"
 return LightingService
